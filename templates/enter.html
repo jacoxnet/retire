@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Enter Data{% endblock %}
+
+{% block content %}
+<div class="container main-content">
+    <div class="pageheading">Enter Data</div>
+
+    <div class="container">
+        <form id='enterDataForm' action="{% url 'enter' %}" method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="initial_wealth">Initial Wealth</label>
+                <input type="number" class="form-control" id="initial_wealth" name="initial_wealth" value="100000">
+            </div>
+            <div class="form-group">
+                <label for="annual_return">Annual Return %</label>
+                <input type="number" class="form-control" id="annual_return" name="annual_return" value="6">
+            </div>
+            <div class="form-group">
+                <label for="return_std">Return Standard Deviation</label>
+                <input type="number" class="form-control" id="return_std" name="return_std" value="12">
+            </div>
+            <div class="form-group">
+                <label for="annual_withdrawal">Annual Withdrawal</label>
+                <input type="number" class="form-control" id="annual_withdrawal" name="annual_withdrawal" value="10000">
+            </div>
+            <div class="form-group">
+                <label for="inflation_rate">Inflation Rate %</label>
+                <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value="2.5">
+            </div>
+            <div class="form-group">
+                <label for="inflation_std">Inflation Standard Deviation</label>
+                <input type="number" class="form-control" id="inflation_std" name="inflation_std" value="2.5">
+            </div>
+            <div class="form-group">
+                <label for="years">Retirement Years</label>
+                <input type="number" class="form-control" id="years" name="years" value="20">
+            </div>
+            <div class="form-group">
+                <label for="runs">Number of Simulations</label>
+                <input type="number" class="form-control" id="runs" name="runs" value="100">
+            </div>
+            <button type="submit">Calculate</button>
+        </form>
+    </div>
+</div>
+
+
+{% endblock %}
