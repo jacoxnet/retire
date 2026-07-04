@@ -37,7 +37,15 @@
             </div>
         </div>
     </nav>
-
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-primary border text-center" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+        
     <main class="main-content">
         {% block content %}
         {% endblock %}

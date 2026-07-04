@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Results{% endblock %}
+
+{% block content %}
+<div class="container main-content">
+    <div class="pageheading">Retirement Simulation Results</div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <h2>Regular Simulation Results</h2>
+                <p>Initial Wealth: ${{ initial_wealth|floatformat:"0g" }}</p>
+                <p>Average Annual Return: {{ annual_return|floatformat:"1g" }}%</p>
+                <p>Annual Withdrawal: ${{ annual_withdrawal|floatformat:"0g" }}</p>
+                <p>Years: {{ years }}</p>
+                <p>Runs: {{ runs }}</p>
+                <hr>
+                <p>Mean Final Wealth: ${{ run_mean|floatformat:"0g" }}</p>
+                <p>Median Final Wealth: ${{ run_median|floatformat:"0g" }}</p>
+                <p>10th Percentile Wealth: ${{ run_10|floatformat:"0g" }}</p>
+                <p>25th Percentile Wealth: ${{ run_25|floatformat:"0g" }}</p>
+                <p>Maximum Wealth: ${{ run_max|floatformat:"0g" }}</p>
+                <p>Minimum Wealth: ${{ run_min|floatformat:"0g" }}</p>
+                <p>Failure Rate: {{ run_fail|floatformat:"1g" }}%</p>
+            </div>
+            <div class="col-md-6">
+                <h2>Goal-Seeking Simulation Results</h2>
+                <p>Goal seeking simulation not implemented yet</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
