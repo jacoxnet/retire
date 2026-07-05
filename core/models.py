@@ -2,15 +2,15 @@ from django.db import models
 
 class SimulationData(models.Model):
     goal_seeking = models.BooleanField(default=False)
-    initial_wealth = models.DecimalField(max_digits=10, decimal_places=2, default=100000)
-    annual_return = models.DecimalField(max_digits=5, decimal_places=2, default=6)
-    return_std = models.DecimalField(max_digits=5, decimal_places=2, default=12)
-    annual_withdrawal = models.DecimalField(max_digits=10, decimal_places=2, default=10000)
-    inflation_rate = models.DecimalField(max_digits=5, decimal_places=2, default=2.5)
-    inflation_std = models.DecimalField(max_digits=5, decimal_places=2, default=2.5)
+    initial_wealth = models.FloatField(default=1000000)
+    annual_return = models.FloatField(default=6)
+    return_std = models.FloatField(default=12)
+    annual_withdrawal = models.FloatField(default=40000)
+    inflation_rate = models.FloatField(default=2.5)
+    inflation_std = models.FloatField(default=2.5)
     years = models.IntegerField(default=30)
     runs = models.IntegerField(default=100)
-    target_success_rate = models.DecimalField(max_digits=5, decimal_places=2, default=80)
+    target_success_rate = models.FloatField(default=80)
     
     def to_dict(self):
         return {

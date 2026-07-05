@@ -1,4 +1,4 @@
-from core.runs import generate_runs
+from core.runs import generate_runs, binary_search
 from core.models import SimulationData
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
@@ -26,6 +26,9 @@ def enter_view(request):
         }
         # Save input
         SimulationData.objects.create(**data)
+        messages.success(request, "Simulation data saved")
+        # redirect to enter
+        return redirect(reverse('enter'))
     else:
         # request method is GET - load initial data from the model if possible
         # If no simulation has been run yet, create a new one with default model values
@@ -45,13 +48,11 @@ def results_view(request):
         # No simulation data, redirect to enter page
         messages.error(request, "No simulation data found. Please enter data first")
         return redirect(reverse('enter'))
-    the_runs = generate_runs(sim_input)
-    # calculate results from runs
-    if sim_input.goal_seeking:
-        messages.error(request, "Goal seeking not implemented yet.")
-        return redirect(reverse('enter'))
-    else:
+    if not sim_input.goal_seeking:
+        # regular simulation - generate runs and get stats
+        the_runs = generate_runs(sim_input)
         results = {
+            "goal_seeking": False,
             "initial_wealth": sim_input.initial_wealth,
             "annual_return": sim_input.annual_return,
             "annual_withdrawal": sim_input.annual_withdrawal,
@@ -67,3 +68,19 @@ def results_view(request):
         }
         print(f"DEBUG: results page sending {results}")
         return render(request, 'results.html', results)
+    else:
+        # goal-seeking simulation
+        achieved_withdrawal, achieved_success_rate, searches = binary_search(sim_input)
+        results = {
+            "goal_seeking": True,
+            "initial_wealth": sim_input.initial_wealth,
+            "annual_return": sim_input.annual_return,
+            "years": sim_input.years,
+            "runs": sim_input.runs,
+            "target_success_rate": sim_input.target_success_rate,
+            "achieved_withdrawal": achieved_withdrawal, 
+            "achieved_success_rate": achieved_success_rate,
+            "searches": searches,
+        }
+        return render(request, 'results.html', results)
+    
