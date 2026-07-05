@@ -64,7 +64,7 @@ def results_view(request):
             "run_25": np.percentile(the_runs[:, -1], 25),
             "run_min": np.min(the_runs[:, -1]),
             "run_max": np.max(the_runs[:, -1]),
-            "run_fail": 100 * np.count_nonzero(the_runs[:, -1] < 0) / sim_input.runs,
+            "run_success": 100 * np.count_nonzero(the_runs[:, -1] >= 0) / sim_input.runs,
         }
         print(f"DEBUG: results page sending {results}")
         return render(request, 'results.html', results)
