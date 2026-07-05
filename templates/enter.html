@@ -7,65 +7,70 @@
     <div class="pageheading">Enter Data</div>
 
     <div class="container">
-        <form 
-            id='enterDataForm' 
-            action="{% url 'enter' %}" 
-            method="post">
+        <form id='enterDataForm' action="{% url 'enter' %}" method="post">
             {% csrf_token %}
             <div class="simulation-mode-container">
                 <label class="mode-title">Simulation Mode</label>
                 <div class="mode-options">
                     <div class="mode-option-label">
-                        <input type="radio" name="simulation_type" id="simulation_type_regular" value="regular" 
-                        {% if not goal_seeking %} checked {% endif %}
-                        >
+                        <input type="radio" name="simulation_type" id="simulation_type_regular" value="regular" {% if
+                            not goal_seeking %} checked {% endif %}>
                         <label for="simulation_type_regular">Regular Simulation</label>
                     </div>
                     <div class="mode-option-label">
-                        <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking"
-                        {% if goal_seeking %} checked {% endif %}
-                        >
+                        <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking" {% if
+                            goal_seeking %} checked {% endif %}>
                         <label for="simulation_type_goal">Goal-Seeking Simulation</label>
                     </div>
                 </div>
             </div>
             <div class="form-group">
                 <label for="initial_wealth">Initial Wealth $</label>
-                <input type="number" class="form-control" id="initial_wealth" name="initial_wealth" value= {{ initial_wealth|floatformat:0 }}>
+                <input type="number" class="form-control" id="initial_wealth" name="initial_wealth" value={{
+                    initial_wealth|floatformat:0 }}>
             </div>
             <div class="form-group">
                 <label for="annual_return">Average Annual Return %</label>
-                <input type="number" class="form-control" id="annual_return" name="annual_return" value= {{ annual_return|floatformat:1 }} min="0" max="100" step="0.1" >
+                <input type="number" class="form-control" id="annual_return" name="annual_return" value={{
+                    annual_return|floatformat:1 }} min="0" max="100" step="0.1">
             </div>
             <div class="form-group">
                 <label for="return_std">Return Standard Deviation %</label>
-                <input type="number" class="form-control" id="return_std" name="return_std" value= {{ return_std|floatformat:1 }} min="0" max="100" step="0.1">
+                <input type="number" class="form-control" id="return_std" name="return_std" value={{
+                    return_std|floatformat:1 }} min="0" max="100" step="0.1">
             </div>
             <div class="form-group" id="annual_withdrawal_group">
                 <label for="annual_withdrawal">Annual Withdrawal $</label>
-                <input type="number" class="form-control" id="annual_withdrawal" name="annual_withdrawal" value= {{ annual_withdrawal|floatformat:0 }} >
+                <input type="number" class="form-control" id="annual_withdrawal" name="annual_withdrawal" value={{
+                    annual_withdrawal|floatformat:0 }}>
             </div>
             <div class="form-group">
                 <label for="inflation_rate">Inflation Rate %</label>
-                <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value= {{ inflation_rate|floatformat:1 }} min="0" max="100" step="0.1" >
+                <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value={{
+                    inflation_rate|floatformat:1 }} min="0" max="100" step="0.1">
             </div>
             <div class="form-group">
                 <label for="inflation_std">Inflation Standard Deviation %</label>
-                <input type="number" class="form-control" id="inflation_std" name="inflation_std" value= {{ inflation_std|floatformat:1 }} min="0" max="100" step="0.1" >
+                <input type="number" class="form-control" id="inflation_std" name="inflation_std" value={{
+                    inflation_std|floatformat:1 }} min="0" max="100" step="0.1">
             </div>
             <div class="form-group">
                 <label for="years">Retirement Years</label>
-                <input type="number" class="form-control" id="years" name="years" value= {{ years }} min="0" max="100" step="1" >
+                <input type="number" class="form-control" id="years" name="years" value={{ years }} min="0" max="100"
+                    step="1">
             </div>
             <div class="form-group">
                 <label for="runs">Number of Simulations</label>
-                <input type="number" class="form-control" id="runs" name="runs" value= {{ runs }} min="1" max="10000" step="1" >
+                <input type="number" class="form-control" id="runs" name="runs" value={{ runs }} min="1" max="10000"
+                    step="1">
             </div>
             <div class="form-group" id="target_success_rate_group" style="display: none;">
                 <label for="target_success_rate">Target Success Rate %</label>
-                <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value= {{ target_success_rate|floatformat:0 }} min="0" max="100" step="0.1">
+                <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value={{
+                    target_success_rate|floatformat:0 }} min="0" max="100" step="0.1">
             </div>
-            <button style="display: block; width: 30%; margin: auto;" class="btn btn-primary" type="submit">Calculate</button>
+            <button style="display: block; width: 30%; margin: auto;" class="btn btn-primary" type="submit">Save
+                Data</button>
         </form>
     </div>
 </div>
@@ -75,7 +80,7 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const regularRadio = document.getElementById('simulation_type_regular');
         const goalRadio = document.getElementById('simulation_type_goal');
         const annualWithdrawalGroup = document.getElementById('annual_withdrawal_group');
