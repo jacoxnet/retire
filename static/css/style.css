@@ -711,3 +711,82 @@ tbody tr:hover {
 .mode-option-label:hover {
   color: var(--text-primary);
 }
+
+/* Custom Tooltip Styling */
+.tooltip-trigger {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+  border-bottom: 1px dotted var(--accent-primary);
+}
+
+.tooltip-content {
+  visibility: hidden;
+  position: absolute;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+  min-width: 220px;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity var(--transition-fast), visibility var(--transition-fast);
+}
+
+.tooltip-content::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: var(--border-color) transparent transparent transparent;
+}
+
+.tooltip-trigger:hover .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Extra wizard and tab styling */
+.nav-pills .nav-link {
+  color: var(--text-secondary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  margin: 0 0.25rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.nav-pills .nav-link.active, 
+.nav-pills .show > .nav-link {
+  color: #fff;
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.nav-tabs .nav-link {
+  color: var(--text-secondary);
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--accent-primary);
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color) var(--border-color) transparent;
+}
+
+.font-weight-bold {
+  font-weight: 600;
+}

@@ -3,99 +3,970 @@
 {% block title %}Enter Data{% endblock %}
 
 {% block content %}
-<div class="container main-content">
-    <div class="pageheading">Enter Data</div>
+<div class="container main-content mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="pageheading mb-0">Retirement Planner Data Entry</h1>
+        <div class="d-flex gap-2">
+            <!-- JSON Import / Export Actions -->
+            <button type="button" class="btn btn-secondary btn-sm" id="btnExportJSON">
+                <i class="fa fa-download"></i> Save Plan (JSON)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('jsonFilePicker').click();">
+                <i class="fa fa-upload"></i> Load Plan (JSON)
+            </button>
+            <input type="file" id="jsonFilePicker" style="display: none;" accept=".json">
+        </div>
+    </div>
 
-    <div class="container">
-        <form 
-            id='enterDataForm' 
-            action="{% url 'enter' %}" 
-            method="post">
-            {% csrf_token %}
-            <div class="simulation-mode-container">
-                <label class="mode-title">Simulation Mode</label>
-                <div class="mode-options">
-                    <div class="mode-option-label">
-                        <input type="radio" name="simulation_type" id="simulation_type_regular" value="regular" 
-                        {% if not goal_seeking %} checked {% endif %}
-                        >
-                        <label for="simulation_type_regular">Regular Simulation</label>
+    <!-- Tab navigation -->
+    <ul class="nav nav-pills mb-4 justify-content-center" id="dataEntryTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="demographics-tab" data-bs-toggle="tab" data-bs-target="#demographics" type="button" role="tab" aria-controls="demographics" aria-selected="true">
+                1. Demographics & Basic Plan
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="assets-tab" data-bs-toggle="tab" data-bs-target="#assets" type="button" role="tab" aria-controls="assets" aria-selected="false">
+                2. Assets & Returns
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="income-spending-tab" data-bs-toggle="tab" data-bs-target="#income-spending" type="button" role="tab" aria-controls="income-spending" aria-selected="false">
+                3. Income & Additional Spending
+            </button>
+        </li>
+    </ul>
+
+    <form id="enterDataForm" action="{% url 'enter' %}" method="post">
+        {% csrf_token %}
+        <div class="tab-content" id="dataEntryTabsContent">
+
+            <!-- TAB 1: DEMOGRAPHICS -->
+            <div class="tab-pane fade show active" id="demographics" role="tabpanel" aria-labelledby="demographics-tab">
+                <div class="card p-4">
+                    <h3 class="mb-4">Demographics & Plan Details</h3>
+                    
+                    <div class="row">
+                        <!-- User Column -->
+                        <div class="col-md-6 border-end">
+                            <h4 class="text-primary mb-3">User (You)</h4>
+                            <div class="mb-3">
+                                <label for="user_name" class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="user_name" name="user_name" value="{{ user_name }}" required>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label for="user_age" class="form-label">Present Age</label>
+                                    <input type="number" class="form-control" id="user_age" name="user_age" value="{{ user_age }}" min="18" max="110" required>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label for="user_retirement_age" class="form-label">Retirement Age</label>
+                                    <input type="number" class="form-control" id="user_retirement_age" name="user_retirement_age" value="{{ user_retirement_age }}" min="18" max="110" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="user_age_death" class="form-label">Age at Death (Life Expectancy)</label>
+                                <input type="number" class="form-control" id="user_age_death" name="user_age_death" value="{{ user_age_death }}" min="18" max="120" required>
+                            </div>
+                            <div class="mb-3 form-check form-switch mt-4">
+                                <input class="form-check-input" type="checkbox" id="is_married" name="is_married" {% if is_married %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="is_married">Include Spouse in Plan</label>
+                            </div>
+                        </div>
+
+                        <!-- Spouse Column -->
+                        <div class="col-md-6" id="spouse_section" style="display: {% if is_married %}block{% else %}none{% endif %};">
+                            <h4 class="text-primary mb-3">Spouse Details</h4>
+                            <div class="mb-3">
+                                <label for="spouse_name" class="form-label">Spouse Name</label>
+                                <input type="text" class="form-control" id="spouse_name" name="spouse_name" value="{{ spouse_name }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label for="spouse_age" class="form-label">Present Age</label>
+                                    <input type="number" class="form-control" id="spouse_age" name="spouse_age" value="{{ spouse_age }}" min="18" max="110">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label for="spouse_retirement_age" class="form-label">Retirement Age</label>
+                                    <input type="number" class="form-control" id="spouse_retirement_age" name="spouse_retirement_age" value="{{ spouse_retirement_age }}" min="18" max="110">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="spouse_age_death" class="form-label">Age at Death (Life Expectancy)</label>
+                                <input type="number" class="form-control" id="spouse_age_death" name="spouse_age_death" value="{{ spouse_age_death }}" min="18" max="120">
+                            </div>
+                        </div>
                     </div>
-                    <div class="mode-option-label">
-                        <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking"
-                        {% if goal_seeking %} checked {% endif %}
-                        >
-                        <label for="simulation_type_goal">Goal-Seeking Simulation</label>
+
+                    <hr class="my-4">
+
+                    <!-- Plan settings -->
+                    <h3 class="mb-4">Basic Plan Details</h3>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="filing_status" class="form-label">Tax Filing Status</label>
+                            <select class="form-select" id="filing_status" name="filing_status">
+                                <option value="joint" {% if filing_status == 'joint' %}selected{% endif %}>Married Filing Jointly</option>
+                                <option value="single" {% if filing_status == 'single' %}selected{% endif %}>Single</option>
+                                <option value="hoh" {% if filing_status == 'hoh' %}selected{% endif %}>Head of Household</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="current_year" class="form-label">Current Year</label>
+                            <input type="number" class="form-control" id="current_year" name="current_year" value="{{ current_year }}" min="2020" max="2100" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="begin_spending_age_type" class="form-label">Start Age for Desired Spending</label>
+                            <select class="form-select" id="begin_spending_age_type" name="begin_spending_age_type">
+                                <option value="retirement" {% if begin_spending_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                <option value="spouse_retirement" {% if begin_spending_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
+                                <option value="specified" {% if begin_spending_age_type == 'specified' %}selected{% endif %}>Specified Age</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row align-items-end">
+                        <div class="col-md-4 mb-3" id="begin_spending_specified_group" style="display: {% if begin_spending_age_type == 'specified' %}block{% else %}none{% endif %};">
+                            <label for="begin_spending_age_specified" class="form-label">Specified Spending Start Age</label>
+                            <input type="number" class="form-control" id="begin_spending_age_specified" name="begin_spending_age_specified" value="{{ begin_spending_age_specified }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="desired_spending" class="form-label">Desired Recurring Annual Spending $</label>
+                            <input type="number" class="form-control" id="desired_spending" name="desired_spending" value="{{ desired_spending|floatformat:0 }}" required>
+                        </div>
+                        <div class="col-md-4 mb-3" id="survivor_spending_group" style="display: {% if is_married %}block{% else %}none{% endif %};">
+                            <label for="survivor_spending" class="form-label">Survivor Desired Spending $ (After First Death)</label>
+                            <input type="number" class="form-control" id="survivor_spending" name="survivor_spending" value="{{ survivor_spending|floatformat:0 }}">
+                        </div>
+                    </div>
+
+                    <div class="row mt-2 align-items-center">
+                        <div class="col-md-4 mb-3 form-check form-switch ps-5">
+                            <input class="form-check-input" type="checkbox" id="adjust_spending_inflation" name="adjust_spending_inflation" {% if adjust_spending_inflation %}checked{% endif %}>
+                            <label class="form-check-label font-weight-bold" for="adjust_spending_inflation">Adjust Desired Spending for Inflation</label>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="inflation_rate" class="form-label">Inflation Rate %</label>
+                            <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:1 }}" step="0.1" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="runs" class="form-label">Number of Simulations (MC Paths)</label>
+                            <input type="number" class="form-control" id="runs" name="runs" value="{{ runs }}" min="1" max="5000" required>
+                        </div>
+                    </div>
+
+                    <div class="simulation-mode-container mt-4">
+                        <label class="mode-title">Simulation Mode</label>
+                        <div class="mode-options">
+                            <div class="mode-option-label">
+                                <input type="radio" name="simulation_type" id="simulation_type_regular" value="regular" {% if not goal_seeking %}checked{% endif %}>
+                                <label for="simulation_type_regular">Regular Simulation (Calculates Success Rate)</label>
+                            </div>
+                            <div class="mode-option-label">
+                                <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking" {% if goal_seeking %}checked{% endif %}>
+                                <label for="simulation_type_goal">Goal-Seeking Simulation (Solves for Desired Spending)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-3 w-100" id="target_success_rate_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %};">
+                        <label for="target_success_rate">Target Success Rate %</label>
+                        <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="100" step="0.1">
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <button type="button" class="btn btn-primary" onclick="switchTab('assets-tab')">Next: Assets & Returns</button>
                     </div>
                 </div>
             </div>
-            <div class="form-group">
-                <label for="initial_wealth">Initial Wealth $</label>
-                <input type="number" class="form-control" id="initial_wealth" name="initial_wealth" value= {{ initial_wealth|floatformat:0 }}>
+
+            <!-- TAB 2: ASSETS & RETURNS -->
+            <div class="tab-pane fade" id="assets" role="tabpanel" aria-labelledby="assets-tab">
+                <div class="row">
+                    <!-- PRETAX ASSETS CARD -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card p-4 h-100">
+                            <h4 class="text-primary mb-3">Pretax Assets (Traditional IRA/401k)</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Present Balance $</label>
+                                <input type="number" class="form-control" id="pretax_present_balance" name="pretax_present_balance" value="{{ pretax_assets.present_balance|floatformat:0 }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Future Contributions $</label>
+                                    <input type="number" class="form-control" id="pretax_contrib_amount" name="pretax_contrib_amount" value="{{ pretax_assets.contrib_amount|floatformat:0 }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Frequency</label>
+                                    <select class="form-select" name="pretax_contrib_freq">
+                                        <option value="annual" {% if pretax_assets.contrib_freq == 'annual' %}selected{% endif %}>Annually</option>
+                                        <option value="monthly" {% if pretax_assets.contrib_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                        <option value="one-time" {% if pretax_assets.contrib_freq == 'one-time' %}selected{% endif %}>One-Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Start Age</label>
+                                    <input type="number" class="form-control" id="pretax_contrib_start_age" name="pretax_contrib_start_age" value="{{ pretax_assets.contrib_start_age }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">End Age Type</label>
+                                    <select class="form-select asset-end-age-type" name="pretax_contrib_end_age_type" data-prefix="pretax">
+                                        <option value="retirement" {% if pretax_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="spouse_retirement" {% if pretax_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
+                                        <option value="age" {% if pretax_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3 asset-end-age-spec-group" id="pretax_end_age_spec_group" style="display: {% if pretax_assets.contrib_end_age_type == 'age' %}block{% else %}none{% endif %};">
+                                <label class="form-label">Specified End Age</label>
+                                <input type="number" class="form-control" id="pretax_contrib_end_age_specified" name="pretax_contrib_end_age_specified" value="{{ pretax_assets.contrib_end_age_specified }}">
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="pretax_contrib_adjust_inflation" name="pretax_contrib_adjust_inflation" {% if pretax_assets.contrib_adjust_inflation %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="pretax_contrib_adjust_inflation">Adjust Contributions for Inflation</label>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Average Return %</label>
+                                    <input type="number" class="form-control" name="pretax_return_mean" value="{{ pretax_assets.return_mean|floatformat:1 }}" step="0.1">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Return Std Dev %</label>
+                                    <input type="number" class="form-control" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ROTH ASSETS CARD -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card p-4 h-100">
+                            <h4 class="text-primary mb-3">Roth Assets (Roth IRA/401k)</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Present Balance $</label>
+                                <input type="number" class="form-control" id="roth_present_balance" name="roth_present_balance" value="{{ roth_assets.present_balance|floatformat:0 }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Future Contributions $</label>
+                                    <input type="number" class="form-control" id="roth_contrib_amount" name="roth_contrib_amount" value="{{ roth_assets.contrib_amount|floatformat:0 }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Frequency</label>
+                                    <select class="form-select" name="roth_contrib_freq">
+                                        <option value="annual" {% if roth_assets.contrib_freq == 'annual' %}selected{% endif %}>Annually</option>
+                                        <option value="monthly" {% if roth_assets.contrib_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                        <option value="one-time" {% if roth_assets.contrib_freq == 'one-time' %}selected{% endif %}>One-Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Start Age</label>
+                                    <input type="number" class="form-control" id="roth_contrib_start_age" name="roth_contrib_start_age" value="{{ roth_assets.contrib_start_age }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">End Age Type</label>
+                                    <select class="form-select asset-end-age-type" name="roth_contrib_end_age_type" data-prefix="roth">
+                                        <option value="retirement" {% if roth_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="spouse_retirement" {% if roth_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
+                                        <option value="age" {% if roth_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3 asset-end-age-spec-group" id="roth_end_age_spec_group" style="display: {% if roth_assets.contrib_end_age_type == 'age' %}block{% else %}none{% endif %};">
+                                <label class="form-label">Specified End Age</label>
+                                <input type="number" class="form-control" id="roth_contrib_end_age_specified" name="roth_contrib_end_age_specified" value="{{ roth_assets.contrib_end_age_specified }}">
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="roth_contrib_adjust_inflation" name="roth_contrib_adjust_inflation" {% if roth_assets.contrib_adjust_inflation %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="roth_contrib_adjust_inflation">Adjust Contributions for Inflation</label>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Average Return %</label>
+                                    <input type="number" class="form-control" name="roth_return_mean" value="{{ roth_assets.return_mean|floatformat:1 }}" step="0.1">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Return Std Dev %</label>
+                                    <input type="number" class="form-control" name="roth_return_std" value="{{ roth_assets.return_std|floatformat:1 }}" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <!-- TAXABLE ASSETS CARD -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card p-4 h-100">
+                            <h4 class="text-primary mb-3">Taxable Assets (Brokerage/Savings)</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Present Balance $</label>
+                                <input type="number" class="form-control" id="taxable_present_balance" name="taxable_present_balance" value="{{ taxable_assets.present_balance|floatformat:0 }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Future Contributions $</label>
+                                    <input type="number" class="form-control" id="taxable_contrib_amount" name="taxable_contrib_amount" value="{{ taxable_assets.contrib_amount|floatformat:0 }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Frequency</label>
+                                    <select class="form-select" name="taxable_contrib_freq">
+                                        <option value="annual" {% if taxable_assets.contrib_freq == 'annual' %}selected{% endif %}>Annually</option>
+                                        <option value="monthly" {% if taxable_assets.contrib_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                        <option value="one-time" {% if taxable_assets.contrib_freq == 'one-time' %}selected{% endif %}>One-Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Start Age</label>
+                                    <input type="number" class="form-control" id="taxable_contrib_start_age" name="taxable_contrib_start_age" value="{{ taxable_assets.contrib_start_age }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">End Age Type</label>
+                                    <select class="form-select asset-end-age-type" name="taxable_contrib_end_age_type" data-prefix="taxable">
+                                        <option value="retirement" {% if taxable_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="spouse_retirement" {% if taxable_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
+                                        <option value="first_death" {% if taxable_assets.contrib_end_age_type == 'first_death' %}selected{% endif %}>First Death (Insurance)</option>
+                                        <option value="age" {% if taxable_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3 asset-end-age-spec-group" id="taxable_end_age_spec_group" style="display: {% if taxable_assets.contrib_end_age_type == 'age' %}block{% else %}none{% endif %};">
+                                <label class="form-label">Specified End Age</label>
+                                <input type="number" class="form-control" id="taxable_contrib_end_age_specified" name="taxable_contrib_end_age_specified" value="{{ taxable_assets.contrib_end_age_specified }}">
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="taxable_contrib_adjust_inflation" name="taxable_contrib_adjust_inflation" {% if taxable_assets.contrib_adjust_inflation %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="taxable_contrib_adjust_inflation">Adjust Contributions for Inflation</label>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Average Return %</label>
+                                    <input type="number" class="form-control" name="taxable_return_mean" value="{{ taxable_assets.return_mean|floatformat:1 }}" step="0.1">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Return Std Dev %</label>
+                                    <input type="number" class="form-control" name="taxable_return_std" value="{{ taxable_assets.return_std|floatformat:1 }}" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- HSA ASSETS CARD -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card p-4 h-100">
+                            <h4 class="text-primary mb-3">Health Savings Account (HSA)</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Present Balance $</label>
+                                <input type="number" class="form-control" id="hsa_present_balance" name="hsa_present_balance" value="{{ hsa_assets.present_balance|floatformat:0 }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Future Contributions $</label>
+                                    <input type="number" class="form-control" id="hsa_contrib_amount" name="hsa_contrib_amount" value="{{ hsa_assets.contrib_amount|floatformat:0 }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Frequency</label>
+                                    <select class="form-select" name="hsa_contrib_freq">
+                                        <option value="annual" {% if hsa_assets.contrib_freq == 'annual' %}selected{% endif %}>Annually</option>
+                                        <option value="monthly" {% if hsa_assets.contrib_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                        <option value="one-time" {% if hsa_assets.contrib_freq == 'one-time' %}selected{% endif %}>One-Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Start Age</label>
+                                    <input type="number" class="form-control" id="hsa_contrib_start_age" name="hsa_contrib_start_age" value="{{ hsa_assets.contrib_start_age }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">End Age Type</label>
+                                    <select class="form-select asset-end-age-type" name="hsa_contrib_end_age_type" data-prefix="hsa">
+                                        <option value="retirement" {% if hsa_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="spouse_retirement" {% if hsa_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
+                                        <option value="age" {% if hsa_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3 asset-end-age-spec-group" id="hsa_end_age_spec_group" style="display: {% if hsa_assets.contrib_end_age_type == 'age' %}block{% else %}none{% endif %};">
+                                <label class="form-label">Specified End Age</label>
+                                <input type="number" class="form-control" id="hsa_contrib_end_age_specified" name="hsa_contrib_end_age_specified" value="{{ hsa_assets.contrib_end_age_specified }}">
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="hsa_contrib_adjust_inflation" name="hsa_contrib_adjust_inflation" {% if hsa_assets.contrib_adjust_inflation %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="hsa_contrib_adjust_inflation">Adjust Contributions for Inflation</label>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Average Return %</label>
+                                    <input type="number" class="form-control" name="hsa_return_mean" value="{{ hsa_assets.return_mean|floatformat:1 }}" step="0.1">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Return Std Dev %</label>
+                                    <input type="number" class="form-control" name="hsa_return_std" value="{{ hsa_assets.return_std|floatformat:1 }}" step="0.1">
+                                </div>
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="hsa_for_medical" name="hsa_for_medical" {% if hsa_assets.hsa_for_medical %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="hsa_for_medical">Used for Qualified Medical Expenses</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-secondary me-2" onclick="switchTab('demographics-tab')">Back</button>
+                    <button type="button" class="btn btn-primary" onclick="switchTab('income-spending-tab')">Next: Income & Extra Spending</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="annual_return">Average Annual Return %</label>
-                <input type="number" class="form-control" id="annual_return" name="annual_return" value= {{ annual_return|floatformat:1 }} min="0" max="100" step="0.1" >
+
+            <!-- TAB 3: INCOME & ADDITIONAL SPENDING -->
+            <div class="tab-pane fade" id="income-spending" role="tabpanel" aria-labelledby="income-spending-tab">
+                <div class="card p-4 mb-4">
+                    <h3 class="mb-3">Additional Spending (Non-Recurring)</h3>
+                    <p class="text-secondary small mb-3">Enter spending items that do not occur every year (e.g. car purchase every 10 years, college, weddings).</p>
+                    
+                    <div class="table-container mb-3">
+                        <table class="table align-middle" id="additionalSpendingTable">
+                            <thead>
+                                <tr>
+                                    <th>Amount $ (Current)</th>
+                                    <th>Start Age</th>
+                                    <th>Interval (Years) <small class="text-muted">(0 for one-time)</small></th>
+                                    <th>Adjust for Inflation?</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- JS populated rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnAddSpendingRow">
+                        <i class="fa fa-plus"></i> Add Spending Item
+                    </button>
+                </div>
+
+                <div class="card p-4 mb-4">
+                    <h3 class="mb-3">Income Streams</h3>
+                    <p class="text-secondary small mb-3">Enter Social Security, pensions, annuity payments, or other sources of non-portfolio income.</p>
+                    
+                    <div class="table-container mb-3" style="overflow-x: auto;">
+                        <table class="table align-middle" id="incomeStreamsTable" style="min-width: 1000px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%;">Name</th>
+                                    <th style="width: 10%;">Amount $</th>
+                                    <th style="width: 15%;">Start Age Type</th>
+                                    <th style="width: 10%;">Start Age</th>
+                                    <th style="width: 15%;">End Age Type</th>
+                                    <th style="width: 10%;">End Age</th>
+                                    <th style="width: 8%;">Taxable?</th>
+                                    <th style="width: 8%;">Social Security?</th>
+                                    <th style="width: 18%;">Adjustment</th>
+                                    <th style="width: 8%;">Rate %</th>
+                                    <th style="width: 5%;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- JS populated rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnAddIncomeRow">
+                        <i class="fa fa-plus"></i> Add Income Source
+                    </button>
+                </div>
+
+                <div class="card bg-light p-3 mb-4">
+                    <p class="mb-0 text-secondary small">
+                        <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
+                        1) Required Minimum Distributions (RMDs) from Pretax accounts;
+                        2) Taxable accounts;
+                        3) Pretax accounts (with tax gross-up / circular solver);
+                        4) Roth accounts;
+                        5) Health Savings Accounts (HSA).
+                    </p>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Back</button>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">Save and Run Simulation</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="return_std">Return Standard Deviation %</label>
-                <input type="number" class="form-control" id="return_std" name="return_std" value= {{ return_std|floatformat:1 }} min="0" max="100" step="0.1">
-            </div>
-            <div class="form-group" id="annual_withdrawal_group">
-                <label for="annual_withdrawal">Annual Withdrawal $</label>
-                <input type="number" class="form-control" id="annual_withdrawal" name="annual_withdrawal" value= {{ annual_withdrawal|floatformat:0 }} >
-            </div>
-            <div class="form-group">
-                <label for="inflation_rate">Inflation Rate %</label>
-                <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value= {{ inflation_rate|floatformat:1 }} min="0" max="100" step="0.1" >
-            </div>
-            <div class="form-group">
-                <label for="inflation_std">Inflation Standard Deviation %</label>
-                <input type="number" class="form-control" id="inflation_std" name="inflation_std" value= {{ inflation_std|floatformat:1 }} min="0" max="100" step="0.1" >
-            </div>
-            <div class="form-group">
-                <label for="years">Retirement Years</label>
-                <input type="number" class="form-control" id="years" name="years" value= {{ years }} min="0" max="100" step="1" >
-            </div>
-            <div class="form-group">
-                <label for="runs">Number of Simulations</label>
-                <input type="number" class="form-control" id="runs" name="runs" value= {{ runs }} min="1" max="10000" step="1" >
-            </div>
-            <div class="form-group" id="target_success_rate_group" style="display: none;">
-                <label for="target_success_rate">Target Success Rate %</label>
-                <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value= {{ target_success_rate|floatformat:0 }} min="0" max="100" step="0.1">
-            </div>
-            <button style="display: block; width: 30%; margin: auto;" class="btn btn-primary" type="submit">Save Data</button>
-        </form>
-    </div>
+
+        </div>
+    </form>
 </div>
 
+<!-- Raw data script tags for initial lists from database -->
+{{ additional_spending|json_script:"initial-additional-spending" }}
+{{ income_sources|json_script:"initial-income-sources" }}
 
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // Tab Switching Helper
+    function switchTab(tabId) {
+        var nextTab = document.getElementById(tabId);
+        if (nextTab) {
+            bootstrap.Tab.getInstance(nextTab).show();
+            window.scrollTo(0, 0);
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        // Initial Tab activation
+        var triggerTabList = [].slice.call(document.querySelectorAll('#dataEntryTabs button'))
+        triggerTabList.forEach(function (triggerEl) {
+            var tabTrigger = new bootstrap.Tab(triggerEl)
+            triggerEl.addEventListener('click', function (event) {
+                event.preventDefault()
+                tabTrigger.show()
+            })
+        });
+
+        // 1. Dynamic Spouse Section Toggle
+        const isMarriedCheckbox = document.getElementById('is_married');
+        const spouseSection = document.getElementById('spouse_section');
+        const survivorSpendingGroup = document.getElementById('survivor_spending_group');
+        
+        function toggleSpouseSection() {
+            if (isMarriedCheckbox.checked) {
+                spouseSection.style.display = 'block';
+                survivorSpendingGroup.style.display = 'block';
+                // Adjust filing status dropdown list to allow joint
+                document.getElementById('filing_status').value = 'joint';
+            } else {
+                spouseSection.style.display = 'none';
+                survivorSpendingGroup.style.display = 'none';
+                document.getElementById('filing_status').value = 'single';
+            }
+        }
+        isMarriedCheckbox.addEventListener('change', toggleSpouseSection);
+
+        // 2. Spending Start Age Specified Field Toggle
+        const beginSpendingAgeType = document.getElementById('begin_spending_age_type');
+        const beginSpendingSpecifiedGroup = document.getElementById('begin_spending_specified_group');
+        
+        function toggleSpendingStartAge() {
+            if (beginSpendingAgeType.value === 'specified') {
+                beginSpendingSpecifiedGroup.style.display = 'block';
+            } else {
+                beginSpendingSpecifiedGroup.style.display = 'none';
+            }
+        }
+        beginSpendingAgeType.addEventListener('change', toggleSpendingStartAge);
+
+        // 3. Goal-Seeking Target Success Rate Field Toggle
         const regularRadio = document.getElementById('simulation_type_regular');
         const goalRadio = document.getElementById('simulation_type_goal');
-        const annualWithdrawalGroup = document.getElementById('annual_withdrawal_group');
         const targetSuccessRateGroup = document.getElementById('target_success_rate_group');
-
-        function toggleInputs() {
+        
+        function toggleGoalSeekingFields() {
             if (goalRadio.checked) {
-                annualWithdrawalGroup.style.display = 'none';
-                targetSuccessRateGroup.style.display = 'inline-block';
+                targetSuccessRateGroup.style.display = 'block';
             } else {
-                annualWithdrawalGroup.style.display = 'inline-block';
                 targetSuccessRateGroup.style.display = 'none';
             }
         }
+        regularRadio.addEventListener('change', toggleGoalSeekingFields);
+        goalRadio.addEventListener('change', toggleGoalSeekingFields);
 
-        regularRadio.addEventListener('change', toggleInputs);
-        goalRadio.addEventListener('change', toggleInputs);
+        // 4. Asset End Age Type Listeners
+        document.querySelectorAll('.asset-end-age-type').forEach(el => {
+            el.addEventListener('change', function() {
+                var prefix = this.dataset.prefix;
+                var targetGroup = document.getElementById(prefix + '_end_age_spec_group');
+                if (this.value === 'age') {
+                    targetGroup.style.display = 'block';
+                } else {
+                    targetGroup.style.display = 'none';
+                }
+            });
+        });
 
-        // Run initially to set the correct state
-        toggleInputs();
+        // 5. Additional Spending List Manager
+        const btnAddSpendingRow = document.getElementById('btnAddSpendingRow');
+        const additionalSpendingTableBody = document.querySelector('#additionalSpendingTable tbody');
+        
+        function addSpendingRow(data = {}) {
+            var amount = data.amount !== undefined ? data.amount : 10000;
+            var startAge = data.start_age !== undefined ? data.start_age : 65;
+            var interval = data.interval !== undefined ? data.interval : 0;
+            var adjustInflation = data.adjust_inflation !== undefined ? data.adjust_inflation : true;
+            
+            var row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="number" class="form-control" name="add_spending_amount[]" value="${amount}" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control" name="add_spending_start_age[]" value="${startAge}" min="18" max="110" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control" name="add_spending_interval[]" value="${interval}" min="0" max="50" required>
+                </td>
+                <td>
+                    <select class="form-select" name="add_spending_adjust_inflation[]">
+                        <option value="true" ${adjustInflation ? 'selected' : ''}>Yes</option>
+                        <option value="false" ${!adjustInflation ? 'selected' : ''}>No</option>
+                    </select>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-danger btn-sm btnDeleteRow"><i class="fa fa-trash"></i> Delete</button>
+                </td>
+            `;
+            
+            row.querySelector('.btnDeleteRow').addEventListener('click', function() {
+                row.remove();
+            });
+            additionalSpendingTableBody.appendChild(row);
+        }
+        
+        btnAddSpendingRow.addEventListener('click', function() {
+            addSpendingRow();
+        });
+
+        // 6. Income Streams List Manager
+        const btnAddIncomeRow = document.getElementById('btnAddIncomeRow');
+        const incomeStreamsTableBody = document.querySelector('#incomeStreamsTable tbody');
+        
+        function addIncomeRow(data = {}) {
+            var name = data.name !== undefined ? data.name : 'Social Security';
+            var amount = data.amount !== undefined ? data.amount : 20000;
+            var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
+            var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
+            var endType = data.end_age_type !== undefined ? data.end_age_type : 'death';
+            var endAge = data.end_age_specified !== undefined ? data.end_age_specified : 90;
+            var subjectToTax = data.subject_to_tax !== undefined ? data.subject_to_tax : true;
+            var isSS = data.is_social_security !== undefined ? data.is_social_security : false;
+            var adjustType = data.adjust_type !== undefined ? data.adjust_type : 'inflation';
+            var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
+            
+            var row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="text" class="form-control" name="income_name[]" value="${name}" required>
+                </td>
+                <td>
+                    <input type="number" class="form-control" name="income_amount[]" value="${amount}" required>
+                </td>
+                <td>
+                    <select class="form-select inc-start-type" name="income_start_age_type[]">
+                        <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement</option>
+                        <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement</option>
+                        <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specified Age</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="number" class="form-control inc-start-spec" name="income_start_age_specified[]" value="${startAge}" style="display: ${startType === 'specified' ? 'block' : 'none'};">
+                </td>
+                <td>
+                    <select class="form-select inc-end-type" name="income_end_age_type[]">
+                        <option value="death" ${endType === 'death' ? 'selected' : ''}>At Death</option>
+                        <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
+                        <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specified Age</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="number" class="form-control inc-end-spec" name="income_end_age_specified[]" value="${endAge}" style="display: ${endType === 'specified' ? 'block' : 'none'};">
+                </td>
+                <td>
+                    <select class="form-select" name="income_subject_to_tax[]">
+                        <option value="true" ${subjectToTax ? 'selected' : ''}>Yes</option>
+                        <option value="false" ${!subjectToTax ? 'selected' : ''}>No</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select" name="income_is_ss[]">
+                        <option value="false" ${!isSS ? 'selected' : ''}>No</option>
+                        <option value="true" ${isSS ? 'selected' : ''}>Yes</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select inc-adjust-type" name="income_adjust_type[]">
+                        <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Adjust for Inflation</option>
+                        <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>Fixed Percentage</option>
+                        <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation Less Fixed %</option>
+                        <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No Adjustment</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="number" class="form-control inc-adjust-val" name="income_adjust_val[]" value="${adjustVal}" step="0.1" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'};">
+                </td>
+                <td>
+                    <button type="button" class="btn btn-danger btn-sm btnDeleteRow"><i class="fa fa-trash"></i> Delete</button>
+                </td>
+            `;
+            
+            // Adjust dropdown display logic
+            row.querySelector('.inc-start-type').addEventListener('change', function() {
+                var specInput = row.querySelector('.inc-start-spec');
+                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            });
+            
+            row.querySelector('.inc-end-type').addEventListener('change', function() {
+                var specInput = row.querySelector('.inc-end-spec');
+                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            });
+            
+            row.querySelector('.inc-adjust-type').addEventListener('change', function() {
+                var valInput = row.querySelector('.inc-adjust-val');
+                valInput.style.display = ['fixed_pct', 'inflation_less_pct'].includes(this.value) ? 'block' : 'none';
+            });
+            
+            row.querySelector('.btnDeleteRow').addEventListener('click', function() {
+                row.remove();
+            });
+            
+            incomeStreamsTableBody.appendChild(row);
+        }
+        
+        btnAddIncomeRow.addEventListener('click', function() {
+            addIncomeRow();
+        });
+
+        // 7. Load Initial Lists passed from Backend JSON blocks
+        try {
+            var initialAddSpending = JSON.parse(document.getElementById('initial-additional-spending').textContent);
+            initialAddSpending.forEach(function(item) {
+                addSpendingRow(item);
+            });
+        } catch(e) { console.log("No initial spending items"); }
+
+        try {
+            var initialIncome = JSON.parse(document.getElementById('initial-income-sources').textContent);
+            initialIncome.forEach(function(item) {
+                addIncomeRow(item);
+            });
+        } catch(e) { console.log("No initial income sources"); }
+
+        // Run toggles initially
+        toggleSpouseSection();
+        toggleSpendingStartAge();
+        toggleGoalSeekingFields();
+
+        // 8. JSON Save & Load Functionality
+        const btnExportJSON = document.getElementById('btnExportJSON');
+        const jsonFilePicker = document.getElementById('jsonFilePicker');
+        
+        btnExportJSON.addEventListener('click', function() {
+            // Build the data object
+            var dataBlock = {
+                'simulation_type': document.getElementById('simulation_type_goal').checked ? 'goal_seeking' : 'regular',
+                'user_name': document.getElementById('user_name').value,
+                'user_age': parseInt(document.getElementById('user_age').value),
+                'user_retirement_age': parseInt(document.getElementById('user_retirement_age').value),
+                'user_age_death': parseInt(document.getElementById('user_age_death').value),
+                'is_married': document.getElementById('is_married').checked,
+                'spouse_name': document.getElementById('spouse_name').value,
+                'spouse_age': parseInt(document.getElementById('spouse_age').value || 0),
+                'spouse_retirement_age': parseInt(document.getElementById('spouse_retirement_age').value || 0),
+                'spouse_age_death': parseInt(document.getElementById('spouse_age_death').value || 0),
+                'filing_status': document.getElementById('filing_status').value,
+                'current_year': parseInt(document.getElementById('current_year').value),
+                'begin_spending_age_type': document.getElementById('begin_spending_age_type').value,
+                'begin_spending_age_specified': parseInt(document.getElementById('begin_spending_age_specified').value || 0),
+                'desired_spending': parseFloat(document.getElementById('desired_spending').value || 0),
+                'survivor_spending': parseFloat(document.getElementById('survivor_spending').value || 0),
+                'adjust_spending_inflation': document.getElementById('adjust_spending_inflation').checked,
+                'inflation_rate': parseFloat(document.getElementById('inflation_rate').value || 0),
+                'runs': parseInt(document.getElementById('runs').value || 100),
+                'target_success_rate': parseFloat(document.getElementById('target_success_rate').value || 80.0),
+                
+                'pretax_assets': {
+                    'present_balance': parseFloat(document.getElementById('pretax_present_balance').value || 0),
+                    'contrib_amount': parseFloat(document.getElementById('pretax_contrib_amount').value || 0),
+                    'contrib_freq': document.querySelector('[name="pretax_contrib_freq"]').value,
+                    'contrib_start_age': parseInt(document.getElementById('pretax_contrib_start_age').value || 0),
+                    'contrib_end_age_type': document.querySelector('[name="pretax_contrib_end_age_type"]').value,
+                    'contrib_end_age_specified': parseInt(document.getElementById('pretax_contrib_end_age_specified').value || 0),
+                    'contrib_adjust_inflation': document.getElementById('pretax_contrib_adjust_inflation').checked,
+                    'return_mean': parseFloat(document.querySelector('[name="pretax_return_mean"]').value || 0),
+                    'return_std': parseFloat(document.querySelector('[name="pretax_return_std"]').value || 0)
+                },
+                'roth_assets': {
+                    'present_balance': parseFloat(document.getElementById('roth_present_balance').value || 0),
+                    'contrib_amount': parseFloat(document.getElementById('roth_contrib_amount').value || 0),
+                    'contrib_freq': document.querySelector('[name="roth_contrib_freq"]').value,
+                    'contrib_start_age': parseInt(document.getElementById('roth_contrib_start_age').value || 0),
+                    'contrib_end_age_type': document.querySelector('[name="roth_contrib_end_age_type"]').value,
+                    'contrib_end_age_specified': parseInt(document.getElementById('roth_contrib_end_age_specified').value || 0),
+                    'contrib_adjust_inflation': document.getElementById('roth_contrib_adjust_inflation').checked,
+                    'return_mean': parseFloat(document.querySelector('[name="roth_return_mean"]').value || 0),
+                    'return_std': parseFloat(document.querySelector('[name="roth_return_std"]').value || 0)
+                },
+                'taxable_assets': {
+                    'present_balance': parseFloat(document.getElementById('taxable_present_balance').value || 0),
+                    'contrib_amount': parseFloat(document.getElementById('taxable_contrib_amount').value || 0),
+                    'contrib_freq': document.querySelector('[name="taxable_contrib_freq"]').value,
+                    'contrib_start_age': parseInt(document.getElementById('taxable_contrib_start_age').value || 0),
+                    'contrib_end_age_type': document.querySelector('[name="taxable_contrib_end_age_type"]').value,
+                    'contrib_end_age_specified': parseInt(document.getElementById('taxable_contrib_end_age_specified').value || 0),
+                    'contrib_adjust_inflation': document.getElementById('taxable_contrib_adjust_inflation').checked,
+                    'return_mean': parseFloat(document.querySelector('[name="taxable_return_mean"]').value || 0),
+                    'return_std': parseFloat(document.querySelector('[name="taxable_return_std"]').value || 0)
+                },
+                'hsa_assets': {
+                    'present_balance': parseFloat(document.getElementById('hsa_present_balance').value || 0),
+                    'contrib_amount': parseFloat(document.getElementById('hsa_contrib_amount').value || 0),
+                    'contrib_freq': document.querySelector('[name="hsa_contrib_freq"]').value,
+                    'contrib_start_age': parseInt(document.getElementById('hsa_contrib_start_age').value || 0),
+                    'contrib_end_age_type': document.querySelector('[name="hsa_contrib_end_age_type"]').value,
+                    'contrib_end_age_specified': parseInt(document.getElementById('hsa_contrib_end_age_specified').value || 0),
+                    'contrib_adjust_inflation': document.getElementById('hsa_contrib_adjust_inflation').checked,
+                    'return_mean': parseFloat(document.querySelector('[name="hsa_return_mean"]').value || 0),
+                    'return_std': parseFloat(document.querySelector('[name="hsa_return_std"]').value || 0),
+                    'hsa_for_medical': document.getElementById('hsa_for_medical').checked
+                },
+                
+                'additional_spending': [],
+                'income_sources': []
+            };
+            
+            // Collect dynamic spending items
+            var spendingRows = additionalSpendingTableBody.querySelectorAll('tr');
+            spendingRows.forEach(row => {
+                var amt = parseFloat(row.querySelector('[name="add_spending_amount[]"]').value || 0);
+                var age = parseInt(row.querySelector('[name="add_spending_start_age[]"]').value || 0);
+                var val = parseInt(row.querySelector('[name="add_spending_interval[]"]').value || 0);
+                var inf = row.querySelector('[name="add_spending_adjust_inflation[]"]').value === 'true';
+                dataBlock.additional_spending.push({
+                    'amount': amt,
+                    'start_age': age,
+                    'interval': val,
+                    'adjust_inflation': inf
+                });
+            });
+            
+            // Collect dynamic income streams
+            var incomeRows = incomeStreamsTableBody.querySelectorAll('tr');
+            incomeRows.forEach(row => {
+                dataBlock.income_sources.push({
+                    'name': row.querySelector('[name="income_name[]"]').value,
+                    'amount': parseFloat(row.querySelector('[name="income_amount[]"]').value || 0),
+                    'start_age_type': row.querySelector('[name="income_start_age_type[]"]').value,
+                    'start_age_specified': parseInt(row.querySelector('[name="income_start_age_specified[]"]').value || 0),
+                    'end_age_type': row.querySelector('[name="income_end_age_type[]"]').value,
+                    'end_age_specified': parseInt(row.querySelector('[name="income_end_age_specified[]"]').value || 0),
+                    'subject_to_tax': row.querySelector('[name="income_subject_to_tax[]"]').value === 'true',
+                    'is_social_security': row.querySelector('[name="income_is_ss[]"]').value === 'true',
+                    'adjust_type': row.querySelector('[name="income_adjust_type[]"]').value,
+                    'adjust_val': parseFloat(row.querySelector('[name="income_adjust_val[]"]').value || 0.0)
+                });
+            });
+
+            // Trigger download
+            var jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataBlock, null, 4));
+            var downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", jsonString);
+            downloadAnchor.setAttribute("download", (dataBlock.user_name || "retirement").toLowerCase().replace(/\s+/g, '_') + "_plan.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+        
+        // Import file picker handler
+        jsonFilePicker.addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var data = JSON.parse(e.target.result);
+                    
+                    // Populate basic parameters
+                    if (data.simulation_type === 'goal_seeking') {
+                        document.getElementById('simulation_type_goal').checked = true;
+                    } else {
+                        document.getElementById('simulation_type_regular').checked = true;
+                    }
+                    
+                    document.getElementById('user_name').value = data.user_name || '';
+                    document.getElementById('user_age').value = data.user_age || 60;
+                    document.getElementById('user_retirement_age').value = data.user_retirement_age || 65;
+                    document.getElementById('user_age_death').value = data.user_age_death || 90;
+                    
+                    document.getElementById('is_married').checked = !!data.is_married;
+                    document.getElementById('spouse_name').value = data.spouse_name || '';
+                    document.getElementById('spouse_age').value = data.spouse_age || '';
+                    document.getElementById('spouse_retirement_age').value = data.spouse_retirement_age || '';
+                    document.getElementById('spouse_age_death').value = data.spouse_age_death || '';
+                    
+                    document.getElementById('filing_status').value = data.filing_status || 'single';
+                    document.getElementById('current_year').value = data.current_year || 2026;
+                    
+                    document.getElementById('begin_spending_age_type').value = data.begin_spending_age_type || 'retirement';
+                    document.getElementById('begin_spending_age_specified').value = data.begin_spending_age_specified || '';
+                    document.getElementById('desired_spending').value = data.desired_spending || '';
+                    document.getElementById('survivor_spending').value = data.survivor_spending || '';
+                    document.getElementById('adjust_spending_inflation').checked = data.adjust_spending_inflation !== false;
+                    document.getElementById('inflation_rate').value = data.inflation_rate || 2.5;
+                    document.getElementById('runs').value = data.runs || 100;
+                    document.getElementById('target_success_rate').value = data.target_success_rate || 80;
+                    
+                    // Populate assets
+                    var assetClasses = ['pretax', 'roth', 'taxable', 'hsa'];
+                    assetClasses.forEach(function(ac) {
+                        var acData = data[ac + '_assets'] || {};
+                        document.getElementById(ac + '_present_balance').value = acData.present_balance || 0;
+                        document.getElementById(ac + '_contrib_amount').value = acData.contrib_amount || 0;
+                        document.querySelector('[name="' + ac + '_contrib_freq"]').value = acData.contrib_freq || 'annual';
+                        document.getElementById(ac + '_contrib_start_age').value = acData.contrib_start_age || data.user_age || 60;
+                        document.querySelector('[name="' + ac + '_contrib_end_age_type"]').value = acData.contrib_end_age_type || 'retirement';
+                        document.getElementById(ac + '_contrib_end_age_specified').value = acData.contrib_end_age_specified || '';
+                        document.getElementById(ac + '_contrib_adjust_inflation').checked = acData.contrib_adjust_inflation !== false;
+                        document.querySelector('[name="' + ac + '_return_mean"]').value = acData.return_mean || 6.0;
+                        document.querySelector('[name="' + ac + '_return_std"]').value = acData.return_std || 10.0;
+                        
+                        // Fire change events to update layouts
+                        var endTypeSelect = document.querySelector('[name="' + ac + '_contrib_end_age_type"]');
+                        var event = new Event('change');
+                        endTypeSelect.dispatchEvent(event);
+                    });
+                    
+                    if (data.hsa_assets) {
+                        document.getElementById('hsa_for_medical').checked = !!data.hsa_assets.hsa_for_medical;
+                    }
+                    
+                    // Clear and Populate Additional Spending
+                    additionalSpendingTableBody.innerHTML = '';
+                    if (Array.isArray(data.additional_spending)) {
+                        data.additional_spending.forEach(function(item) {
+                            addSpendingRow(item);
+                        });
+                    }
+                    
+                    // Clear and Populate Income Sources
+                    incomeStreamsTableBody.innerHTML = '';
+                    if (Array.isArray(data.income_sources)) {
+                        data.income_sources.forEach(function(item) {
+                            addIncomeRow(item);
+                        });
+                    }
+                    
+                    // Refresh interactive fields
+                    toggleSpouseSection();
+                    toggleSpendingStartAge();
+                    toggleGoalSeekingFields();
+                    
+                    alert("Plan loaded successfully!");
+                } catch(err) {
+                    alert("Error parsing plan JSON. Make sure the file format is correct.");
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+        });
+
     });
 </script>
 {% endblock %}

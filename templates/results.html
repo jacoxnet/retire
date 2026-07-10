@@ -3,60 +3,460 @@
 {% block title %}Results{% endblock %}
 
 {% block content %}
-<div class="container main-content">
-    <div class="pageheading">Retirement Simulation Results</div>
+<div class="container main-content mt-4">
+    <div class="pageheading mb-4">Retirement Simulation Results</div>
 
-    <div class="container">
-        <div class="row">
-            <div class="col-md-6">
-                <h2>Regular Simulation Results</h2>
+    <!-- Results Tab Navigation -->
+    <ul class="nav nav-tabs mb-4 justify-content-center" id="resultsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab" aria-controls="stats" aria-selected="true">
+                Monte Carlo Simulation
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="projection-tab" data-bs-toggle="tab" data-bs-target="#projection" type="button" role="tab" aria-controls="projection" aria-selected="false">
+                Deterministic Projection
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="cashflow-tab" data-bs-toggle="tab" data-bs-target="#cashflow" type="button" role="tab" aria-controls="cashflow" aria-selected="false">
+                Deterministic Cash Flow
+            </button>
+        </li>
+    </ul>
 
-                {% if not goal_seeking %}
+    <div class="tab-content" id="resultsTabsContent">
 
-                <p>Initial Wealth: {{ initial_wealth|floatformat:"0g" }}</p>
-                <p>Average Annual Return: {{ annual_return|floatformat:"1g" }}%</p>
-                <p>Annual Withdrawal: {{ annual_withdrawal|floatformat:"0g" }}</p>
-                <p>Years: {{ years }}</p>
-                <p>Runs: {{ runs }}</p>
-                <hr>
-                <p>Mean Final Wealth: {{ run_mean|floatformat:"0g" }}</p>
-                <p>Median Final Wealth: {{ run_median|floatformat:"0g" }}</p>
-                <p>10th Percentile Wealth: {{ run_10|floatformat:"0g" }}</p>
-                <p>25th Percentile Wealth: {{ run_25|floatformat:"0g" }}</p>
-                <p>Maximum Wealth: {{ run_max|floatformat:"0g" }}</p>
-                <p>Minimum Wealth: {{ run_min|floatformat:"0g" }}</p>
-                <p>Success Rate: {{ run_success|floatformat:"1g" }}%</p>
+        <!-- TAB 1: MONTE CARLO STATISTICS -->
+        <div class="tab-pane fade show active" id="stats" role="tabpanel" aria-labelledby="stats-tab">
+            <div class="row">
+                <!-- Parameters Card -->
+                <div class="col-md-5 mb-4">
+                    <div class="card p-4 h-100">
+                        <h3 class="border-bottom pb-2 text-primary">Simulation Inputs</h3>
+                        <div class="mt-3">
+                            <p class="mb-2"><strong>Initial Wealth:</strong> <span class="dollar-amount-static">${{ initial_wealth|floatformat:"0"|intcomma }}</span></p>
+                            <p class="mb-2"><strong>Projection Years:</strong> {{ years }} years</p>
+                            <p class="mb-2"><strong>Simulations Run:</strong> {{ runs }} runs</p>
+                            <p class="mb-2"><strong>Inflation Rate:</strong> {{ inflation_rate }}% <span class="text-muted">(Deterministic)</span></p>
+                            
+                            <h5 class="mt-4 border-bottom pb-1 text-secondary">Asset Allocations & Returns</h5>
+                            <p class="mb-1 small"><strong>Pretax:</strong> ${{ pretax_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ pretax_assets.return_mean }}% mean, {{ pretax_assets.return_std }}% std)</span></p>
+                            <p class="mb-1 small"><strong>Roth:</strong> ${{ roth_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ roth_assets.return_mean }}% mean, {{ roth_assets.return_std }}% std)</span></p>
+                            <p class="mb-1 small"><strong>Taxable:</strong> ${{ taxable_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ taxable_assets.return_mean }}% mean, {{ taxable_assets.return_std }}% std)</span></p>
+                            <p class="mb-1 small"><strong>HSA:</strong> ${{ hsa_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ hsa_assets.return_mean }}% mean, {{ hsa_assets.return_std }}% std)</span></p>
+                        </div>
+                    </div>
+                </div>
 
-                {% else %}
+                <!-- Simulation Output Card -->
+                <div class="col-md-7 mb-4">
+                    <div class="card p-4 h-100">
+                        {% if not goal_seeking %}
+                            <!-- Regular Sim Results -->
+                            <h3 class="border-bottom pb-2 text-success">Regular Simulation Results</h3>
+                            <div class="mt-3">
+                                <div class="alert alert-success border text-center py-3 mb-4">
+                                    <h4 class="mb-1">Success Rate</h4>
+                                    <span class="display-5 font-weight-bold">{{ run_success|floatformat:1 }}%</span>
+                                </div>
 
-                <p>Regular simulation not selected</p>
+                                <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static">${{ desired_spending|floatformat:"0"|intcomma }}</span></p>
+                                <hr>
+                                <h5 class="text-secondary mt-3">Ending Wealth Percentiles (Nominal)</h5>
+                                <div class="row">
+                                    <div class="col-6 mb-2"><strong>Mean Ending Wealth:</strong></div>
+                                    <div class="col-6 text-end">${{ run_mean|floatformat:"0"|intcomma }}</div>
+                                    
+                                    <div class="col-6 mb-2"><strong>Median (50th Pct):</strong></div>
+                                    <div class="col-6 text-end font-weight-bold">${{ run_median|floatformat:"0"|intcomma }}</div>
 
-                {% endif %}
+                                    <div class="col-6 mb-2"><strong>25th Percentile:</strong></div>
+                                    <div class="col-6 text-end">${{ run_25|floatformat:"0"|intcomma }}</div>
 
-            </div>
-            <div class="col-md-6">
-                <h2>Goal-Seeking Simulation Results</h2>
+                                    <div class="col-6 mb-2"><strong>10th Percentile:</strong></div>
+                                    <div class="col-6 text-end text-danger font-weight-bold">${{ run_10|floatformat:"0"|intcomma }}</div>
 
-                {% if goal_seeking %}
+                                    <div class="col-6 mb-2"><strong>Maximum Wealth:</strong></div>
+                                    <div class="col-6 text-end text-success">${{ run_max|floatformat:"0"|intcomma }}</div>
 
-                <p>Initial Wealth: {{ initial_wealth|floatformat:"0g" }}</p>
-                <p>Average Annual Return: {{ annual_return|floatformat:"1g" }}%</p>
-                <p>Target Success Rate: {{ target_success_rate|floatformat:"1g" }}%</p>
-                <p>Years: {{ years }}</p>
-                <p>Simulation Runs: {{ runs }}</p>
-                <hr>
-                <p>Achieved Withdrawal: {{ achieved_withdrawal|floatformat:"0g" }}</p>
-                <p>Achieved Success Rate: {{ achieved_success_rate|floatformat:"1g" }}%</p>
-                <p>Number of Searches: {{ searches }}</p>
+                                    <div class="col-6 mb-2"><strong>Minimum Wealth:</strong></div>
+                                    <div class="col-6 text-end text-danger">${{ run_min|floatformat:"0"|intcomma }}</div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <!-- Goal Seeking Results -->
+                            <h3 class="border-bottom pb-2 text-primary">Goal-Seeking Simulation Results</h3>
+                            <div class="mt-3">
+                                <div class="alert alert-primary border text-center py-3 mb-4">
+                                    <h4 class="mb-1">Max Achieved Desired Spending</h4>
+                                    <span class="display-5 font-weight-bold">${{ achieved_spending|floatformat:"0"|intcomma }}</span>
+                                    <p class="small text-muted mb-0">Initial annual value</p>
+                                </div>
 
-                {% else %}
+                                <div class="row">
+                                    <div class="col-7 mb-3"><strong>Achieved Spending (Year 1 Net Cash Flow):</strong></div>
+                                    <div class="col-5 text-end font-weight-bold">${{ achieved_spending_y1|floatformat:"0"|intcomma }}</div>
+                                    
+                                    <div class="col-7 mb-3"><strong>Target Success Rate:</strong></div>
+                                    <div class="col-5 text-end">{{ target_success_rate|floatformat:1 }}%</div>
 
-                <p>Goal-seeking simulation not selected</p>
+                                    <div class="col-7 mb-3"><strong>Achieved Success Rate:</strong></div>
+                                    <div class="col-5 text-end text-success font-weight-bold">{{ achieved_success_rate|floatformat:1 }}%</div>
 
-                {% endif %}
+                                    <div class="col-7 mb-3"><strong>Bisection Searches Done:</strong></div>
+                                    <div class="col-5 text-end">{{ searches }} searches</div>
+                                </div>
+                                <hr>
+                                <p class="text-secondary small">
+                                    <strong>Definition:</strong> The <em>Achieved Spending (Year 1 Net Cash Flow)</em> represents the sum of the solved portfolio withdrawal and non-portfolio income sources, minus federal income taxes in the first year. It equals the achieved Desired Recurring Spending plus any Additional Spending occurring in Year 1.
+                                </p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
 
+        <!-- TAB 2: DETERMINISTIC PROJECTION -->
+        <div class="tab-pane fade" id="projection" role="tabpanel" aria-labelledby="projection-tab">
+            <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h3 class="text-primary mb-1">Deterministic Account Projections</h3>
+                        <p class="text-secondary small mb-0">Assuming average asset class returns, with inflation and tax brackets indexed.</p>
+                    </div>
+                    <div class="btn-group" role="group" aria-label="Nominal/Real dollar toggle">
+                        <input type="radio" class="btn-check" name="proj_dollar_mode" id="proj_nominal" autocomplete="off" checked onclick="setDollarMode('nominal')">
+                        <label class="btn btn-outline-secondary btn-sm" for="proj_nominal">Nominal Dollars</label>
+
+                        <input type="radio" class="btn-check" name="proj_dollar_mode" id="proj_real" autocomplete="off" onclick="setDollarMode('real')">
+                        <label class="btn btn-outline-secondary btn-sm" for="proj_real">Real Dollars</label>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Year</th>
+                                <th>Age</th>
+                                <th>Spouse</th>
+                                <th>Beginning Assets</th>
+                                <th>Contributions</th>
+                                <th>Asset Growth</th>
+                                <th>Income Sources</th>
+                                <th>Taxes & Pen.</th>
+                                <th>Desired Spend</th>
+                                <th>Additional Spend</th>
+                                <th>Ending Assets</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in det_rows %}
+                                <tr>
+                                    <td>{{ row.year }}</td>
+                                    <td>{{ row.user_age|default:"-" }}</td>
+                                    <td>{{ row.spouse_age|default:"-" }}</td>
+                                    <td>
+                                        <!-- Hover Tooltip for Beginning Assets -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-primary font-weight-bold" 
+                                                  data-nominal="{{ row.beg_assets.total }}" 
+                                                  data-real="{{ row.beg_assets.total }}">
+                                                ${{ row.beg_assets.total|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Asset Breakdown</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Pretax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.beg_assets.pretax }}" data-real="{{ row.beg_assets.pretax }}">
+                                                        ${{ row.beg_assets.pretax|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Roth:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.beg_assets.roth }}" data-real="{{ row.beg_assets.roth }}">
+                                                        ${{ row.beg_assets.roth|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Taxable:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.beg_assets.taxable }}" data-real="{{ row.beg_assets.taxable }}">
+                                                        ${{ row.beg_assets.taxable|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small">
+                                                    <span>HSA:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.beg_assets.hsa }}" data-real="{{ row.beg_assets.hsa }}">
+                                                        ${{ row.beg_assets.hsa|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount" data-nominal="{{ row.contribs.total }}" data-real="{{ row.contribs.total }}">
+                                            ${{ row.contribs.total|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount {% if row.growth.total < 0 %}text-danger{% else %}text-success{% endif %}" data-nominal="{{ row.growth.total }}" data-real="{{ row.growth.total }}">
+                                            ${{ row.growth.total|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount text-success" data-nominal="{{ row.income }}" data-real="{{ row.income }}">
+                                            ${{ row.income|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount text-danger" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
+                                            ${{ row.taxes|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount" data-nominal="{{ row.desired_spending }}" data-real="{{ row.desired_spending }}">
+                                            ${{ row.desired_spending|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount" data-nominal="{{ row.additional_spending }}" data-real="{{ row.additional_spending }}">
+                                            ${{ row.additional_spending|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <!-- Hover Tooltip for Ending Assets -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-primary font-weight-bold" 
+                                                  data-nominal="{{ row.ending_assets.total }}" 
+                                                  data-real="{{ row.ending_assets.total }}">
+                                                ${{ row.ending_assets.total|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Asset Breakdown</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Pretax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.ending_assets.pretax }}" data-real="{{ row.ending_assets.pretax }}">
+                                                        ${{ row.ending_assets.pretax|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Roth:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.ending_assets.roth }}" data-real="{{ row.ending_assets.roth }}">
+                                                        ${{ row.ending_assets.roth|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Taxable:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.ending_assets.taxable }}" data-real="{{ row.ending_assets.taxable }}">
+                                                        ${{ row.ending_assets.taxable|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small">
+                                                    <span>HSA:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.ending_assets.hsa }}" data-real="{{ row.ending_assets.hsa }}">
+                                                        ${{ row.ending_assets.hsa|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: DETERMINISTIC CASH FLOW -->
+        <div class="tab-pane fade" id="cashflow" role="tabpanel" aria-labelledby="cashflow-tab">
+            <div class="card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h3 class="text-primary mb-1">Deterministic Cash Flows</h3>
+                        <p class="text-secondary small mb-0">Shows the year-by-year cash inflow, outflow, and net withdrawals from the portfolio.</p>
+                    </div>
+                    <div class="btn-group" role="group" aria-label="Nominal/Real dollar toggle">
+                        <input type="radio" class="btn-check" name="cf_dollar_mode" id="cf_nominal" autocomplete="off" checked onclick="setDollarMode('nominal')">
+                        <label class="btn btn-outline-secondary btn-sm" for="cf_nominal">Nominal Dollars</label>
+
+                        <input type="radio" class="btn-check" name="cf_dollar_mode" id="cf_real" autocomplete="off" onclick="setDollarMode('real')">
+                        <label class="btn btn-outline-secondary btn-sm" for="cf_real">Real Dollars</label>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Year</th>
+                                <th>Desired Spending</th>
+                                <th>Additional Spending</th>
+                                <th>Taxes & Penalties</th>
+                                <th>Income Sources <small class="text-muted">(Hover)</small></th>
+                                <th>Portfolio Withdrawals <small class="text-muted">(Hover)</small></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in det_rows %}
+                                <tr>
+                                    <td>{{ row.year }}</td>
+                                    <td>
+                                        <span class="dollar-amount text-danger" data-nominal="{{ row.desired_spending }}" data-real="{{ row.desired_spending }}">
+                                            ${{ row.desired_spending|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount text-danger" data-nominal="{{ row.additional_spending }}" data-real="{{ row.additional_spending }}">
+                                            ${{ row.additional_spending|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="dollar-amount text-danger" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
+                                            ${{ row.taxes|floatformat:"0"|intcomma }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <!-- Hover Tooltip for Income Sources Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-success font-weight-bold" 
+                                                  data-nominal="{{ row.income }}" 
+                                                  data-real="{{ row.income }}">
+                                                ${{ row.income|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Income Breakdown</h6>
+                                                {% if row.income_breakdown.items %}
+                                                    {% for name, val in row.income_breakdown.items %}
+                                                        <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                            <span>{{ name }}:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ val }}" data-real="{{ val }}">
+                                                                ${{ val|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div class="text-muted text-center small">No income streams active</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <!-- Hover Tooltip for Withdrawals Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-primary font-weight-bold" 
+                                                  data-nominal="{{ row.withdrawals.total }}" 
+                                                  data-real="{{ row.withdrawals.total }}">
+                                                ${{ row.withdrawals.total|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Withdrawal Sources</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Taxable:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.taxable }}" data-real="{{ row.withdrawals.taxable }}">
+                                                        ${{ row.withdrawals.taxable|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Pretax (RMD):</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.pretax_rmd }}" data-real="{{ row.withdrawals.pretax_rmd }}">
+                                                        ${{ row.withdrawals.pretax_rmd|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Pretax (Extra):</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.pretax_extra }}" data-real="{{ row.withdrawals.pretax_extra }}">
+                                                        ${{ row.withdrawals.pretax_extra|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Roth:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.roth }}" data-real="{{ row.withdrawals.roth }}">
+                                                        ${{ row.withdrawals.roth|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small">
+                                                    <span>HSA:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.hsa }}" data-real="{{ row.withdrawals.hsa }}">
+                                                        ${{ row.withdrawals.hsa|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Client-side Nominal / Real scaling
+    const inflationRate = {{ inflation_rate|default:2.5 }};
+    
+    // Cache the nominal values on load to calculate real values accurately
+    document.addEventListener('DOMContentLoaded', function() {
+        // Find all cells with dollar-amount class
+        const elements = document.querySelectorAll('.dollar-amount');
+        elements.forEach(el => {
+            const nominalVal = parseFloat(el.getAttribute('data-nominal'));
+            
+            // Find parent tr to find year index
+            let tr = el.closest('tr');
+            let yearIndex = 0;
+            if (tr) {
+                // Determine year index based on index in tbody or a specific row attribute
+                // Let's search if there's a year index
+                const yearIndexCell = tr.querySelector('td'); // usually the first td holds the year
+                const year = parseInt(yearIndexCell ? yearIndexCell.textContent : 2026);
+                const startYear = {{ det_rows.0.year|default:2026 }};
+                yearIndex = Math.max(0, year - startYear);
+            }
+            
+            // Calculate real value
+            const realVal = nominalVal / Math.pow(1.0 + inflationRate / 100.0, yearIndex);
+            el.setAttribute('data-real', realVal.toFixed(2));
+        });
+        
+        // Make sure it starts in nominal mode
+        setDollarMode('nominal');
+    });
+
+    const currencyFormatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+    });
+
+    function setDollarMode(mode) {
+        // Toggle checkboxes / radios state
+        if (mode === 'nominal') {
+            document.getElementById('proj_nominal').checked = true;
+            document.getElementById('cf_nominal').checked = true;
+        } else {
+            document.getElementById('proj_real').checked = true;
+            document.getElementById('cf_real').checked = true;
+        }
+        
+        const elements = document.querySelectorAll('.dollar-amount');
+        elements.forEach(el => {
+            const val = parseFloat(el.getAttribute('data-' + mode));
+            // Add negative check
+            if (val < 0) {
+                el.textContent = '-' + currencyFormatter.format(Math.abs(val));
+            } else {
+                el.textContent = currencyFormatter.format(val);
+            }
+        });
+    }
+</script>
 {% endblock %}

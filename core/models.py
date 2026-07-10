@@ -1,30 +1,10 @@
 from django.db import models
 
 class SimulationData(models.Model):
-    goal_seeking = models.BooleanField(default=False)
-    initial_wealth = models.FloatField(default=1000000)
-    annual_return = models.FloatField(default=6)
-    return_std = models.FloatField(default=12)
-    annual_withdrawal = models.FloatField(default=40000)
-    inflation_rate = models.FloatField(default=2.5)
-    inflation_std = models.FloatField(default=2.5)
-    years = models.IntegerField(default=30)
-    runs = models.IntegerField(default=100)
-    target_success_rate = models.FloatField(default=80)
+    data = models.JSONField(default=dict)
     
     def to_dict(self):
-        return {
-            'goal_seeking': self.goal_seeking,
-            'initial_wealth': self.initial_wealth,
-            'annual_return': self.annual_return,
-            'return_std': self.return_std,
-            'annual_withdrawal': self.annual_withdrawal,
-            'inflation_rate': self.inflation_rate,
-            'inflation_std': self.inflation_std,
-            'years': self.years,
-            'runs': self.runs,
-            'target_success_rate': self.target_success_rate,
-        }
+        return self.data or {}
 
     def __str__(self):
         return str(self.to_dict())
