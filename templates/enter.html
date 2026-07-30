@@ -51,7 +51,7 @@
                         <div class="col-md-6 border-end">
                             <h4 class="text-primary mb-3">User (You)</h4>
                             <div class="mb-3">
-                                <label for="user_name" class="form-label">Full Name</label>
+                                <label for="user_name" class="form-label">Name</label>
                                 <input type="text" class="form-control" id="user_name" name="user_name" value="{{ user_name }}" required>
                             </div>
                             <div class="row">
@@ -102,6 +102,26 @@
 
                     <!-- Plan settings -->
                     <h3 class="mb-4">Basic Plan Details</h3>
+
+                    <div class="simulation-mode-container mb-4">
+                        <label class="mode-title">Simulation Mode</label>
+                        <div class="mode-options">
+                            <div class="mode-option-label">
+                                <input type="radio" name="simulation_type" id="simulation_type_regular" value="regular" {% if not goal_seeking %}checked{% endif %}>
+                                <label for="simulation_type_regular">Regular Simulation (Calculates Success Rate)</label>
+                            </div>
+                            <div class="mode-option-label">
+                                <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking" {% if goal_seeking %}checked{% endif %}>
+                                <label for="simulation_type_goal">Goal-Seeking Simulation (Solves for Spending Amount)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-4" id="target_success_rate_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %}; max-width: 300px;">
+                        <label for="target_success_rate" class="form-label">Target Success Rate %</label>
+                        <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="100" step="0.1">
+                    </div>
+
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label for="filing_status" class="form-label">Tax Filing Status</label>
@@ -116,7 +136,7 @@
                             <input type="number" class="form-control" id="current_year" name="current_year" value="{{ current_year }}" min="2020" max="2100" required>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label for="begin_spending_age_type" class="form-label">Start Age for Desired Spending</label>
+                            <label for="begin_spending_age_type" class="form-label">Start Age for Retirement Spending</label>
                             <select class="form-select" id="begin_spending_age_type" name="begin_spending_age_type">
                                 <option value="retirement" {% if begin_spending_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                 <option value="spouse_retirement" {% if begin_spending_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
@@ -131,11 +151,11 @@
                             <input type="number" class="form-control" id="begin_spending_age_specified" name="begin_spending_age_specified" value="{{ begin_spending_age_specified }}">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label for="desired_spending" class="form-label">Desired Recurring Annual Spending $</label>
+                            <label for="desired_spending" class="form-label">Desired Recurring Annual Spending in Today’s Dollars $</label>
                             <input type="number" class="form-control" id="desired_spending" name="desired_spending" value="{{ desired_spending|floatformat:0 }}" required>
                         </div>
                         <div class="col-md-4 mb-3" id="survivor_spending_group" style="display: {% if is_married %}block{% else %}none{% endif %};">
-                            <label for="survivor_spending" class="form-label">Survivor Desired Spending $ (After First Death)</label>
+                            <label for="survivor_spending" class="form-label">Amount of Regular Retirement Spending After First Death</label>
                             <input type="number" class="form-control" id="survivor_spending" name="survivor_spending" value="{{ survivor_spending|floatformat:0 }}">
                         </div>
                     </div>
@@ -155,25 +175,6 @@
                         </div>
                     </div>
 
-                    <div class="simulation-mode-container mt-4">
-                        <label class="mode-title">Simulation Mode</label>
-                        <div class="mode-options">
-                            <div class="mode-option-label">
-                                <input type="radio" name="simulation_type" id="simulation_type_regular" value="regular" {% if not goal_seeking %}checked{% endif %}>
-                                <label for="simulation_type_regular">Regular Simulation (Calculates Success Rate)</label>
-                            </div>
-                            <div class="mode-option-label">
-                                <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking" {% if goal_seeking %}checked{% endif %}>
-                                <label for="simulation_type_goal">Goal-Seeking Simulation (Solves for Desired Spending)</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group mt-3 w-100" id="target_success_rate_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %};">
-                        <label for="target_success_rate">Target Success Rate %</label>
-                        <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="100" step="0.1">
-                    </div>
-
                     <div class="text-center mt-4">
                         <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Next: Assets & Returns</button>
                         <button type="submit" class="btn btn-primary px-4 me-2">Run Simulation</button>
@@ -187,7 +188,7 @@
                     <!-- PRETAX ASSETS CARD -->
                     <div class="col-md-6 mb-4">
                         <div class="card p-4 h-100">
-                            <h4 class="text-primary mb-3">Pretax Assets (Traditional IRA/401k)</h4>
+                            <h4 class="text-primary mb-3">Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
                                 <input type="number" class="form-control" id="pretax_present_balance" name="pretax_present_balance" value="{{ pretax_assets.present_balance|floatformat:0 }}">
@@ -244,7 +245,7 @@
                     <!-- ROTH ASSETS CARD -->
                     <div class="col-md-6 mb-4">
                         <div class="card p-4 h-100">
-                            <h4 class="text-primary mb-3">Roth Assets (Roth IRA/401k)</h4>
+                            <h4 class="text-primary mb-3">Roth Assets (Roth IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
                                 <input type="number" class="form-control" id="roth_present_balance" name="roth_present_balance" value="{{ roth_assets.present_balance|floatformat:0 }}">
@@ -425,12 +426,10 @@
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('income-spending-tab')">Next: Income & Extra Spending</button>
                     <button type="submit" class="btn btn-primary px-4 me-2">Run Simulation</button>
                 </div>
-            </div>
-
-            <!-- TAB 3: INCOME & ADDITIONAL SPENDING -->
+            </div>             <!-- TAB 3: INCOME & ADDITIONAL SPENDING -->
             <div class="tab-pane fade" id="income-spending" role="tabpanel" aria-labelledby="income-spending-tab">
                 <div class="card p-4 mb-4">
-                    <h3 class="mb-3">Additional Spending (Non-Recurring)</h3>
+                    <h3 class="mb-3">Additional Spending</h3>
                     <p class="text-secondary small mb-3">Enter spending items that do not occur every year (e.g. car purchase every 10 years, college, weddings).</p>
                     
                     <div class="table-container mb-3">
@@ -463,7 +462,7 @@
                             <thead>
                                 <tr>
                                     <th style="width: 14%;">Name</th>
-                                    <th style="width: 10%;">Amount $</th>
+                                    <th style="width: 10%;">Monthly Amount</th>
                                     <th style="width: 13%;">Start Age Type</th>
                                     <th style="width: 7%;">Start Age</th>
                                     <th style="width: 13%;">End Age Type</th>
@@ -641,7 +640,7 @@
         const incomeStreamsTableBody = document.querySelector('#incomeStreamsTable tbody');
         
         function addIncomeRow(data = {}) {
-            var name = data.name !== undefined ? data.name : 'Social Security';
+            var name = data.name !== undefined ? data.name : '[Add a Name]';
             var amount = data.amount !== undefined ? data.amount : 20000;
             var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
             var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
@@ -733,6 +732,7 @@
             });
             
             incomeStreamsTableBody.appendChild(row);
+            updateSpouseDropdownOptions();
         }
         
         btnAddIncomeRow.addEventListener('click', function() {
@@ -919,8 +919,10 @@
             clean.adjust_spending_inflation = raw.adjust_spending_inflation !== false;
 
             clean.inflation_rate = clampNum(raw.inflation_rate, -10, 50, 2.5);
-            clean.runs = clampInt(raw.runs, 1, 5000, 100);
+            clean.runs = clampInt(raw.runs, 1, 5000, 1000);
             clean.target_success_rate = clampNum(raw.target_success_rate, 1, 100, 80);
+
+            var minStartAge = clean.is_married ? Math.min(clean.user_age, clean.spouse_age) : clean.user_age;
 
             var assetClasses = ['pretax', 'roth', 'taxable', 'hsa'];
             assetClasses.forEach(function(ac) {
@@ -929,7 +931,7 @@
                     present_balance: clampNum(rawAc.present_balance, 0, null, 0),
                     contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
                     contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
-                    contrib_start_age: clampInt(rawAc.contrib_start_age, 18, 110, clean.user_age),
+                    contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, clean.user_age),
                     contrib_end_age_type: ['retirement', 'spouse_retirement', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : 'retirement',
                     contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, clean.user_retirement_age),
                     contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
@@ -1062,6 +1064,7 @@
                     toggleSpouseSection();
                     toggleSpendingStartAge();
                     toggleGoalSeekingFields();
+                    updateAssetStartAgeMin();
                     
                     dataChanged = true;
                     alert("Plan loaded successfully!");
@@ -1072,6 +1075,69 @@
             };
             reader.readAsText(file);
         });
+
+        // Dynamic minimum start age check for assets
+        function updateAssetStartAgeMin() {
+            var userAge = parseInt(document.getElementById('user_age').value) || 18;
+            var isMarried = document.getElementById('is_married').checked;
+            var spouseAge = isMarried ? (parseInt(document.getElementById('spouse_age').value) || 18) : Infinity;
+            var minStartAge = Math.min(userAge, spouseAge);
+
+            var startAgeInputs = [
+                'pretax_contrib_start_age',
+                'roth_contrib_start_age',
+                'taxable_contrib_start_age',
+                'hsa_contrib_start_age'
+            ];
+            startAgeInputs.forEach(function(id) {
+                var input = document.getElementById(id);
+                if (input) {
+                    input.min = minStartAge;
+                }
+            });
+        }
+        
+        document.getElementById('user_age').addEventListener('input', updateAssetStartAgeMin);
+        document.getElementById('is_married').addEventListener('change', updateAssetStartAgeMin);
+        document.getElementById('spouse_age').addEventListener('input', updateAssetStartAgeMin);
+        updateAssetStartAgeMin();
+
+        function updateSpouseDropdownOptions() {
+             var isMarried = document.getElementById('is_married').checked;
+             
+             var selects = [
+                 document.getElementById('begin_spending_age_type'),
+                 document.querySelector('[name="pretax_contrib_end_age_type"]'),
+                 document.querySelector('[name="roth_contrib_end_age_type"]'),
+                 document.querySelector('[name="taxable_contrib_end_age_type"]'),
+                 document.querySelector('[name="hsa_contrib_end_age_type"]')
+             ];
+             
+             document.querySelectorAll('.inc-start-type, .inc-end-type').forEach(function(s) {
+                 selects.push(s);
+             });
+             
+             selects.forEach(function(select) {
+                 if (!select) return;
+                 var options = select.options;
+                 for (var i = 0; i < options.length; i++) {
+                     var opt = options[i];
+                     var isSpouseRelated = opt.value.includes('spouse');
+                     if (isSpouseRelated) {
+                         opt.style.display = isMarried ? 'block' : 'none';
+                         opt.disabled = !isMarried;
+                         if (!isMarried && opt.selected) {
+                             select.value = opt.value === 'spouse_death' ? 'death' : 'retirement';
+                             var event = new Event('change');
+                             select.dispatchEvent(event);
+                         }
+                     }
+                 }
+             });
+         }
+
+         document.getElementById('is_married').addEventListener('change', updateSpouseDropdownOptions);
+         updateSpouseDropdownOptions();
 
         // 9. Data Change Tracker & Navigation Interception
         var dataChanged = false;

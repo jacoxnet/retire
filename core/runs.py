@@ -210,7 +210,7 @@ def simulate_step(
                 active = True
                 
         if active:
-            amt = inc.get('amount', 0.0)
+            amt = inc.get('amount', 0.0) * 12.0
             adj_type = inc.get('adjust_type', 'inflation')
             adj_val = inc.get('adjust_val', 0.0)
             

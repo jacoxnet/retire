@@ -48,7 +48,7 @@ def get_default_data():
         'survivor_spending': 40000.0,
         'adjust_spending_inflation': True,
         'inflation_rate': 2.5,
-        'runs': 100,
+        'runs': 1000,
         'target_success_rate': 80.0,
         'pretax_assets': {
             'present_balance': 500000.0,
@@ -128,23 +128,30 @@ def enter_view(request):
         user_age_death = get_int(request.POST.get('user_age_death'), 90)
         
         is_married = get_bool(request.POST.get('is_married'))
-        spouse_name = request.POST.get('spouse_name', 'Spouse')
-        spouse_age = get_int(request.POST.get('spouse_age'), 60)
-        spouse_retirement_age = get_int(request.POST.get('spouse_retirement_age'), 65)
-        spouse_age_death = get_int(request.POST.get('spouse_age_death'), 92)
+        spouse_name = request.POST.get('spouse_name', 'Spouse') if is_married else ""
+        spouse_age = get_int(request.POST.get('spouse_age'), 60) if is_married else 0
+        spouse_retirement_age = get_int(request.POST.get('spouse_retirement_age'), 65) if is_married else 0
+        spouse_age_death = get_int(request.POST.get('spouse_age_death'), 92) if is_married else 0
+        
+        min_start_age = min(user_age, spouse_age) if is_married else user_age
         
         filing_status = request.POST.get('filing_status', 'single')
+        if not is_married and filing_status == 'joint':
+            filing_status = 'single'
+            
         current_year = get_int(request.POST.get('current_year'), 2026)
         
         begin_spending_age_type = request.POST.get('begin_spending_age_type', 'retirement')
+        if not is_married and begin_spending_age_type == 'spouse_retirement':
+            begin_spending_age_type = 'retirement'
         begin_spending_age_specified = get_int(request.POST.get('begin_spending_age_specified'), 65)
         
         desired_spending = get_float(request.POST.get('desired_spending'), 40000.0)
-        survivor_spending = get_float(request.POST.get('survivor_spending'), desired_spending)
+        survivor_spending = get_float(request.POST.get('survivor_spending'), desired_spending) if is_married else 0.0
         adjust_spending_inflation = get_bool(request.POST.get('adjust_spending_inflation'))
         
         inflation_rate = get_float(request.POST.get('inflation_rate'), 2.5)
-        runs = get_int(request.POST.get('runs'), 100)
+        runs = get_int(request.POST.get('runs'), 1000)
         target_success_rate = get_float(request.POST.get('target_success_rate'), 80.0)
         
         # Assets (Pretax, Roth, Taxable, HSA)
@@ -152,7 +159,7 @@ def enter_view(request):
             'present_balance': get_float(request.POST.get('pretax_present_balance'), 500000.0),
             'contrib_amount': get_float(request.POST.get('pretax_contrib_amount'), 0.0),
             'contrib_freq': request.POST.get('pretax_contrib_freq', 'annual'),
-            'contrib_start_age': get_int(request.POST.get('pretax_contrib_start_age'), user_age),
+            'contrib_start_age': max(min_start_age, get_int(request.POST.get('pretax_contrib_start_age'), user_age)),
             'contrib_end_age_type': request.POST.get('pretax_contrib_end_age_type', 'retirement'),
             'contrib_end_age_specified': get_int(request.POST.get('pretax_contrib_end_age_specified'), user_retirement_age),
             'contrib_adjust_inflation': get_bool(request.POST.get('pretax_contrib_adjust_inflation')),
@@ -164,7 +171,7 @@ def enter_view(request):
             'present_balance': get_float(request.POST.get('roth_present_balance'), 0.0),
             'contrib_amount': get_float(request.POST.get('roth_contrib_amount'), 0.0),
             'contrib_freq': request.POST.get('roth_contrib_freq', 'annual'),
-            'contrib_start_age': get_int(request.POST.get('roth_contrib_start_age'), user_age),
+            'contrib_start_age': max(min_start_age, get_int(request.POST.get('roth_contrib_start_age'), user_age)),
             'contrib_end_age_type': request.POST.get('roth_contrib_end_age_type', 'retirement'),
             'contrib_end_age_specified': get_int(request.POST.get('roth_contrib_end_age_specified'), user_retirement_age),
             'contrib_adjust_inflation': get_bool(request.POST.get('roth_contrib_adjust_inflation')),
@@ -176,7 +183,7 @@ def enter_view(request):
             'present_balance': get_float(request.POST.get('taxable_present_balance'), 100000.0),
             'contrib_amount': get_float(request.POST.get('taxable_contrib_amount'), 0.0),
             'contrib_freq': request.POST.get('taxable_contrib_freq', 'annual'),
-            'contrib_start_age': get_int(request.POST.get('taxable_contrib_start_age'), user_age),
+            'contrib_start_age': max(min_start_age, get_int(request.POST.get('taxable_contrib_start_age'), user_age)),
             'contrib_end_age_type': request.POST.get('taxable_contrib_end_age_type', 'retirement'),
             'contrib_end_age_specified': get_int(request.POST.get('taxable_contrib_end_age_specified'), user_retirement_age),
             'contrib_adjust_inflation': get_bool(request.POST.get('taxable_contrib_adjust_inflation')),
@@ -188,7 +195,7 @@ def enter_view(request):
             'present_balance': get_float(request.POST.get('hsa_present_balance'), 0.0),
             'contrib_amount': get_float(request.POST.get('hsa_contrib_amount'), 0.0),
             'contrib_freq': request.POST.get('hsa_contrib_freq', 'annual'),
-            'contrib_start_age': get_int(request.POST.get('hsa_contrib_start_age'), user_age),
+            'contrib_start_age': max(min_start_age, get_int(request.POST.get('hsa_contrib_start_age'), user_age)),
             'contrib_end_age_type': request.POST.get('hsa_contrib_end_age_type', 'retirement'),
             'contrib_end_age_specified': get_int(request.POST.get('hsa_contrib_end_age_specified'), user_retirement_age),
             'contrib_adjust_inflation': get_bool(request.POST.get('hsa_contrib_adjust_inflation')),

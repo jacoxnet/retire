@@ -738,6 +738,18 @@ tbody tr:hover {
   transition: opacity var(--transition-fast), visibility var(--transition-fast);
 }
 
+.tooltip-content-right-align {
+  left: auto !important;
+  right: 0 !important;
+  transform: none !important;
+}
+
+.tooltip-content-right-align::after {
+  left: auto !important;
+  right: 20px !important;
+  margin-left: 0 !important;
+}
+
 .tooltip-content::after {
   content: "";
   position: absolute;

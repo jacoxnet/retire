@@ -147,8 +147,8 @@
                                 <th>Asset Growth</th>
                                 <th>Income Sources</th>
                                 <th>Taxes & Pen.</th>
-                                <th>Desired Spend</th>
-                                <th>Additional Spend</th>
+                                <th>Regular Retirement Spending</th>
+                                <th>Additional Spending</th>
                                 <th>Ending Assets</th>
                             </tr>
                         </thead>
@@ -233,7 +233,7 @@
                                                   data-real="{{ row.ending_assets.total }}">
                                                 ${{ row.ending_assets.total|floatformat:"0"|intcomma }}
                                             </span>
-                                            <div class="tooltip-content">
+                                            <div class="tooltip-content tooltip-content-right-align">
                                                 <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Asset Breakdown</h6>
                                                 <div class="d-flex justify-content-between gap-3 small mb-1">
                                                     <span>Pretax:</span>
@@ -292,7 +292,7 @@
                         <thead>
                             <tr>
                                 <th>Year</th>
-                                <th>Desired Spending</th>
+                                <th>Regular Retirement Spending</th>
                                 <th>Additional Spending</th>
                                 <th>Taxes & Penalties</th>
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
