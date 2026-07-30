@@ -504,7 +504,12 @@ def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year
 
 def extract_sim_inputs(sim_input):
     # Extracts a flat or structured clean input dict with fallbacks
-    raw = sim_input.to_dict()
+    if hasattr(sim_input, 'to_dict'):
+        raw = sim_input.to_dict()
+    elif isinstance(sim_input, dict):
+        raw = sim_input
+    else:
+        raw = {}
     
     # Demographics
     user_age = int(raw.get('user_age', 60))

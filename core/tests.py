@@ -70,3 +70,63 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(SimulationData.objects.count(), 1)
         self.assertEqual(sim.to_dict()['user_name'], 'Alice')
         self.assertEqual(sim.to_dict()['user_age'], 55)
+
+    def test_session_clear_data_view(self):
+        # Verify clear_data resets session data and redirects to enter
+        session = self.client.session
+        session['simulation_data'] = {'user_name': 'Custom User', 'user_age': 70}
+        session.save()
+
+        response = self.client.get('/clear/')
+        self.assertRedirects(response, '/')
+        
+        # Verify default data re-initialized on enter view GET
+        enter_response = self.client.get('/')
+        self.assertEqual(enter_response.status_code, 200)
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'John Doe')
+
+    def test_enter_view_post_redirects_to_results(self):
+        # Verify form submit redirects directly to results view
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'Bob Smith',
+            'user_age': '62',
+            'user_retirement_age': '67',
+            'user_age_death': '95',
+            'desired_spending': '45000',
+            'inflation_rate': '2.5',
+            'runs': '50',
+            'pretax_present_balance': '600000',
+            'pretax_contrib_amount': '10000',
+            'pretax_contrib_freq': 'annual',
+            'pretax_contrib_start_age': '62',
+            'pretax_contrib_end_age_type': 'retirement',
+            'pretax_contrib_end_age_specified': '67',
+            'pretax_return_mean': '6.0',
+            'pretax_return_std': '10.0',
+            'roth_present_balance': '0',
+            'taxable_present_balance': '0',
+            'hsa_present_balance': '0'
+        }
+        response = self.client.post('/', post_data)
+        self.assertRedirects(response, '/results/')
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'Bob Smith')
+        self.assertEqual(self.client.session['simulation_data']['user_age'], 62)
+
+    def test_early_suzie_plan_simulation(self):
+        import json, os
+        from django.conf import settings
+        file_path = os.path.join(settings.BASE_DIR, 'saved json files', 'early_suzie_plan.json')
+        with open(file_path, 'r') as f:
+            plan_data = json.load(f)
+        
+        session = self.client.session
+        session['simulation_data'] = plan_data
+        session['data_version'] = 1
+        session.save()
+        
+        response = self.client.get('/results/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('det_rows', response.context)
+
+

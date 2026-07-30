@@ -37,7 +37,7 @@
         </li>
     </ul>
 
-    <form id="enterDataForm" action="{% url 'enter' %}" method="post">
+    <form id="enterDataForm" action="{% url 'enter' %}" method="post" novalidate>
         {% csrf_token %}
         <div class="tab-content" id="dataEntryTabsContent">
 
@@ -175,7 +175,8 @@
                     </div>
 
                     <div class="text-center mt-4">
-                        <button type="button" class="btn btn-primary" onclick="switchTab('assets-tab')">Next: Assets & Returns</button>
+                        <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Next: Assets & Returns</button>
+                        <button type="submit" class="btn btn-primary px-4 me-2">Run Simulation</button>
                     </div>
                 </div>
             </div>
@@ -421,7 +422,8 @@
 
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('demographics-tab')">Back</button>
-                    <button type="button" class="btn btn-primary" onclick="switchTab('income-spending-tab')">Next: Income & Extra Spending</button>
+                    <button type="button" class="btn btn-secondary me-2" onclick="switchTab('income-spending-tab')">Next: Income & Extra Spending</button>
+                    <button type="submit" class="btn btn-primary px-4 me-2">Run Simulation</button>
                 </div>
             </div>
 
@@ -460,16 +462,16 @@
                         <table class="table align-middle" id="incomeStreamsTable" style="min-width: 1000px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 15%;">Name</th>
+                                    <th style="width: 14%;">Name</th>
                                     <th style="width: 10%;">Amount $</th>
-                                    <th style="width: 15%;">Start Age Type</th>
-                                    <th style="width: 10%;">Start Age</th>
-                                    <th style="width: 15%;">End Age Type</th>
-                                    <th style="width: 10%;">End Age</th>
-                                    <th style="width: 8%;">Taxable?</th>
-                                    <th style="width: 8%;">Social Security?</th>
-                                    <th style="width: 18%;">Adjustment</th>
-                                    <th style="width: 8%;">Rate %</th>
+                                    <th style="width: 13%;">Start Age Type</th>
+                                    <th style="width: 7%;">Start Age</th>
+                                    <th style="width: 13%;">End Age Type</th>
+                                    <th style="width: 7%;">End Age</th>
+                                    <th style="width: 7%;">Taxable?</th>
+                                    <th style="width: 7%;">Social Security?</th>
+                                    <th style="width: 12%;">Adjustment</th>
+                                    <th style="width: 10%; min-width: 90px;">Rate %</th>
                                     <th style="width: 5%;">Action</th>
                                 </tr>
                             </thead>
@@ -496,7 +498,7 @@
 
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Back</button>
-                    <button type="submit" class="btn btn-primary btn-lg px-5">Save and Run Simulation</button>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">Run Simulation</button>
                 </div>
             </div>
 
@@ -699,7 +701,7 @@
                     </select>
                 </td>
                 <td>
-                    <input type="number" class="form-control inc-adjust-val" name="income_adjust_val[]" value="${adjustVal}" step="0.1" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'};">
+                    <input type="number" class="form-control inc-adjust-val" name="income_adjust_val[]" value="${adjustVal}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; width: 100%; min-width: 80px; padding: 0.375rem 0.5rem;">
                 </td>
                 <td>
                     <button type="button" class="btn btn-danger btn-sm btnDeleteRow"><i class="fa fa-trash"></i> Delete</button>
@@ -719,7 +721,11 @@
             
             row.querySelector('.inc-adjust-type').addEventListener('change', function() {
                 var valInput = row.querySelector('.inc-adjust-val');
-                valInput.style.display = ['fixed_pct', 'inflation_less_pct'].includes(this.value) ? 'block' : 'none';
+                var show = ['fixed_pct', 'inflation_less_pct'].includes(this.value);
+                valInput.style.display = show ? 'block' : 'none';
+                if (show) {
+                    valInput.focus();
+                }
             });
             
             row.querySelector('.btnDeleteRow').addEventListener('click', function() {
@@ -873,6 +879,104 @@
             downloadAnchor.remove();
         });
         
+        // JSON Sanitization & Validation helper to ensure loaded files contain valid data
+        function sanitizeJSONData(raw) {
+            if (typeof raw !== 'object' || raw === null) return {};
+
+            function clampNum(val, min, max, fallback) {
+                var num = parseFloat(val);
+                if (isNaN(num)) return fallback;
+                if (min !== null && num < min) return min;
+                if (max !== null && num > max) return max;
+                return num;
+            }
+
+            function clampInt(val, min, max, fallback) {
+                return Math.round(clampNum(val, min, max, fallback));
+            }
+
+            var clean = {};
+            clean.simulation_type = raw.simulation_type === 'goal_seeking' ? 'goal_seeking' : 'regular';
+            clean.user_name = (raw.user_name || 'User').trim();
+            clean.user_age = clampInt(raw.user_age, 18, 110, 60);
+            clean.user_retirement_age = clampInt(raw.user_retirement_age, 18, 110, 65);
+            clean.user_age_death = clampInt(raw.user_age_death, 18, 120, 90);
+
+            clean.is_married = !!raw.is_married;
+            clean.spouse_name = (raw.spouse_name || 'Spouse').trim();
+            clean.spouse_age = clampInt(raw.spouse_age, 18, 110, 60);
+            clean.spouse_retirement_age = clampInt(raw.spouse_retirement_age, 18, 110, 65);
+            clean.spouse_age_death = clampInt(raw.spouse_age_death, 18, 120, 90);
+
+            clean.filing_status = ['single', 'joint', 'hoh'].includes(raw.filing_status) ? raw.filing_status : (clean.is_married ? 'joint' : 'single');
+            clean.current_year = clampInt(raw.current_year, 2020, 2100, 2026);
+
+            clean.begin_spending_age_type = ['retirement', 'spouse_retirement', 'specified'].includes(raw.begin_spending_age_type) ? raw.begin_spending_age_type : 'retirement';
+            clean.begin_spending_age_specified = clampInt(raw.begin_spending_age_specified, 18, 110, 65);
+
+            clean.desired_spending = clampNum(raw.desired_spending, 0, null, 40000);
+            clean.survivor_spending = clampNum(raw.survivor_spending, 0, null, clean.desired_spending);
+            clean.adjust_spending_inflation = raw.adjust_spending_inflation !== false;
+
+            clean.inflation_rate = clampNum(raw.inflation_rate, -10, 50, 2.5);
+            clean.runs = clampInt(raw.runs, 1, 5000, 100);
+            clean.target_success_rate = clampNum(raw.target_success_rate, 1, 100, 80);
+
+            var assetClasses = ['pretax', 'roth', 'taxable', 'hsa'];
+            assetClasses.forEach(function(ac) {
+                var rawAc = raw[ac + '_assets'] || {};
+                clean[ac + '_assets'] = {
+                    present_balance: clampNum(rawAc.present_balance, 0, null, 0),
+                    contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
+                    contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
+                    contrib_start_age: clampInt(rawAc.contrib_start_age, 18, 110, clean.user_age),
+                    contrib_end_age_type: ['retirement', 'spouse_retirement', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : 'retirement',
+                    contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, clean.user_retirement_age),
+                    contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
+                    return_mean: clampNum(rawAc.return_mean, -50, 100, 6.0),
+                    return_std: clampNum(rawAc.return_std, 0, 100, 10.0),
+                    hsa_for_medical: rawAc.hsa_for_medical !== false
+                };
+            });
+
+            clean.additional_spending = [];
+            if (Array.isArray(raw.additional_spending)) {
+                raw.additional_spending.forEach(function(item) {
+                    clean.additional_spending.push({
+                        amount: clampNum(item.amount, 0, null, 0),
+                        start_age: clampInt(item.start_age, 18, 110, 65),
+                        interval: clampInt(item.interval, 0, 50, 0),
+                        adjust_inflation: item.adjust_inflation !== false
+                    });
+                });
+            }
+
+            clean.income_sources = [];
+            if (Array.isArray(raw.income_sources)) {
+                raw.income_sources.forEach(function(item) {
+                    var adjType = ['inflation', 'fixed_pct', 'inflation_less_pct', 'none'].includes(item.adjust_type) ? item.adjust_type : 'inflation';
+                    var adjVal = clampNum(item.adjust_val, 0, 100, 0.0);
+                    if (adjType === 'none' || adjType === 'inflation') {
+                        adjVal = 0.0;
+                    }
+                    clean.income_sources.push({
+                        name: (item.name || 'Income Source').trim(),
+                        amount: clampNum(item.amount, 0, null, 0),
+                        start_age_type: ['retirement', 'spouse_retirement', 'specified'].includes(item.start_age_type) ? item.start_age_type : 'retirement',
+                        start_age_specified: clampInt(item.start_age_specified, 18, 110, 65),
+                        end_age_type: ['death', 'spouse_death', 'specified'].includes(item.end_age_type) ? item.end_age_type : 'death',
+                        end_age_specified: clampInt(item.end_age_specified, 18, 120, 90),
+                        subject_to_tax: item.subject_to_tax !== false,
+                        is_social_security: !!item.is_social_security,
+                        adjust_type: adjType,
+                        adjust_val: adjVal
+                    });
+                });
+            }
+
+            return clean;
+        }
+
         // Import file picker handler
         jsonFilePicker.addEventListener('change', function(event) {
             var file = event.target.files[0];
@@ -881,7 +985,8 @@
             var reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    var data = JSON.parse(e.target.result);
+                    var rawData = JSON.parse(e.target.result);
+                    var data = sanitizeJSONData(rawData);
                     
                     // Populate basic parameters
                     if (data.simulation_type === 'goal_seeking') {
@@ -890,42 +995,42 @@
                         document.getElementById('simulation_type_regular').checked = true;
                     }
                     
-                    document.getElementById('user_name').value = data.user_name || '';
-                    document.getElementById('user_age').value = data.user_age || 60;
-                    document.getElementById('user_retirement_age').value = data.user_retirement_age || 65;
-                    document.getElementById('user_age_death').value = data.user_age_death || 90;
+                    document.getElementById('user_name').value = data.user_name;
+                    document.getElementById('user_age').value = data.user_age;
+                    document.getElementById('user_retirement_age').value = data.user_retirement_age;
+                    document.getElementById('user_age_death').value = data.user_age_death;
                     
-                    document.getElementById('is_married').checked = !!data.is_married;
-                    document.getElementById('spouse_name').value = data.spouse_name || '';
-                    document.getElementById('spouse_age').value = data.spouse_age || '';
-                    document.getElementById('spouse_retirement_age').value = data.spouse_retirement_age || '';
-                    document.getElementById('spouse_age_death').value = data.spouse_age_death || '';
+                    document.getElementById('is_married').checked = data.is_married;
+                    document.getElementById('spouse_name').value = data.spouse_name;
+                    document.getElementById('spouse_age').value = data.spouse_age;
+                    document.getElementById('spouse_retirement_age').value = data.spouse_retirement_age;
+                    document.getElementById('spouse_age_death').value = data.spouse_age_death;
                     
-                    document.getElementById('filing_status').value = data.filing_status || 'single';
-                    document.getElementById('current_year').value = data.current_year || 2026;
+                    document.getElementById('filing_status').value = data.filing_status;
+                    document.getElementById('current_year').value = data.current_year;
                     
-                    document.getElementById('begin_spending_age_type').value = data.begin_spending_age_type || 'retirement';
-                    document.getElementById('begin_spending_age_specified').value = data.begin_spending_age_specified || '';
-                    document.getElementById('desired_spending').value = data.desired_spending || '';
-                    document.getElementById('survivor_spending').value = data.survivor_spending || '';
-                    document.getElementById('adjust_spending_inflation').checked = data.adjust_spending_inflation !== false;
-                    document.getElementById('inflation_rate').value = data.inflation_rate || 2.5;
-                    document.getElementById('runs').value = data.runs || 100;
-                    document.getElementById('target_success_rate').value = data.target_success_rate || 80;
+                    document.getElementById('begin_spending_age_type').value = data.begin_spending_age_type;
+                    document.getElementById('begin_spending_age_specified').value = data.begin_spending_age_specified;
+                    document.getElementById('desired_spending').value = data.desired_spending;
+                    document.getElementById('survivor_spending').value = data.survivor_spending;
+                    document.getElementById('adjust_spending_inflation').checked = data.adjust_spending_inflation;
+                    document.getElementById('inflation_rate').value = data.inflation_rate;
+                    document.getElementById('runs').value = data.runs;
+                    document.getElementById('target_success_rate').value = data.target_success_rate;
                     
                     // Populate assets
                     var assetClasses = ['pretax', 'roth', 'taxable', 'hsa'];
                     assetClasses.forEach(function(ac) {
                         var acData = data[ac + '_assets'] || {};
-                        document.getElementById(ac + '_present_balance').value = acData.present_balance || 0;
-                        document.getElementById(ac + '_contrib_amount').value = acData.contrib_amount || 0;
-                        document.querySelector('[name="' + ac + '_contrib_freq"]').value = acData.contrib_freq || 'annual';
-                        document.getElementById(ac + '_contrib_start_age').value = acData.contrib_start_age || data.user_age || 60;
-                        document.querySelector('[name="' + ac + '_contrib_end_age_type"]').value = acData.contrib_end_age_type || 'retirement';
-                        document.getElementById(ac + '_contrib_end_age_specified').value = acData.contrib_end_age_specified || '';
-                        document.getElementById(ac + '_contrib_adjust_inflation').checked = acData.contrib_adjust_inflation !== false;
-                        document.querySelector('[name="' + ac + '_return_mean"]').value = acData.return_mean || 6.0;
-                        document.querySelector('[name="' + ac + '_return_std"]').value = acData.return_std || 10.0;
+                        document.getElementById(ac + '_present_balance').value = acData.present_balance;
+                        document.getElementById(ac + '_contrib_amount').value = acData.contrib_amount;
+                        document.querySelector('[name="' + ac + '_contrib_freq"]').value = acData.contrib_freq;
+                        document.getElementById(ac + '_contrib_start_age').value = acData.contrib_start_age;
+                        document.querySelector('[name="' + ac + '_contrib_end_age_type"]').value = acData.contrib_end_age_type;
+                        document.getElementById(ac + '_contrib_end_age_specified').value = acData.contrib_end_age_specified;
+                        document.getElementById(ac + '_contrib_adjust_inflation').checked = acData.contrib_adjust_inflation;
+                        document.querySelector('[name="' + ac + '_return_mean"]').value = acData.return_mean;
+                        document.querySelector('[name="' + ac + '_return_std"]').value = acData.return_std;
                         
                         // Fire change events to update layouts
                         var endTypeSelect = document.querySelector('[name="' + ac + '_contrib_end_age_type"]');
@@ -934,7 +1039,7 @@
                     });
                     
                     if (data.hsa_assets) {
-                        document.getElementById('hsa_for_medical').checked = !!data.hsa_assets.hsa_for_medical;
+                        document.getElementById('hsa_for_medical').checked = data.hsa_assets.hsa_for_medical;
                     }
                     
                     // Clear and Populate Additional Spending
@@ -958,6 +1063,7 @@
                     toggleSpendingStartAge();
                     toggleGoalSeekingFields();
                     
+                    dataChanged = true;
                     alert("Plan loaded successfully!");
                 } catch(err) {
                     alert("Error parsing plan JSON. Make sure the file format is correct.");
@@ -966,6 +1072,68 @@
             };
             reader.readAsText(file);
         });
+
+        // 9. Data Change Tracker & Navigation Interception
+        var dataChanged = false;
+        const enterDataForm = document.getElementById('enterDataForm');
+
+        function isElementVisible(el) {
+            return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+        }
+
+        function handleCustomValidation(form) {
+            var invalidEls = form.querySelectorAll(':invalid');
+            var firstVisibleInvalid = null;
+            
+            for (var i = 0; i < invalidEls.length; i++) {
+                if (isElementVisible(invalidEls[i])) {
+                    firstVisibleInvalid = invalidEls[i];
+                    break;
+                }
+            }
+            
+            if (firstVisibleInvalid) {
+                var tabPane = firstVisibleInvalid.closest('.tab-pane');
+                if (tabPane) {
+                    switchTab(tabPane.id + '-tab');
+                }
+                setTimeout(function() {
+                    firstVisibleInvalid.focus();
+                    firstVisibleInvalid.reportValidity();
+                }, 50);
+                return false;
+            }
+            return true;
+        }
+
+        if (enterDataForm) {
+            enterDataForm.addEventListener('input', function() {
+                dataChanged = true;
+            });
+            enterDataForm.addEventListener('change', function() {
+                dataChanged = true;
+            });
+
+            // Form submit validation helper across hidden tabs
+            enterDataForm.addEventListener('submit', function(e) {
+                if (!handleCustomValidation(enterDataForm)) {
+                    e.preventDefault();
+                }
+            });
+        }
+
+        // Intercept View Results nav link click
+        const viewResultsNav = document.getElementById('viewResultsNav');
+        if (viewResultsNav && enterDataForm) {
+            viewResultsNav.addEventListener('click', function(e) {
+                if (dataChanged) {
+                    e.preventDefault();
+                    if (handleCustomValidation(enterDataForm)) {
+                        enterDataForm.submit();
+                    }
+                }
+            });
+        }
 
     });
 </script>

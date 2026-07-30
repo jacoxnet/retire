@@ -1,0 +1,82 @@
+{
+    "simulation_type": "regular",
+    "user_name": "Early Suzie",
+    "user_age": 32,
+    "user_retirement_age": 58,
+    "user_age_death": 95,
+    "is_married": false,
+    "spouse_name": "Patsy Doe",
+    "spouse_age": 61,
+    "spouse_retirement_age": 65,
+    "spouse_age_death": 100,
+    "filing_status": "single",
+    "current_year": 2026,
+    "begin_spending_age_type": "retirement",
+    "begin_spending_age_specified": 60,
+    "desired_spending": 45000,
+    "survivor_spending": 70000,
+    "adjust_spending_inflation": true,
+    "inflation_rate": 3.5,
+    "runs": 5000,
+    "target_success_rate": 85,
+    "pretax_assets": {
+        "present_balance": 0,
+        "contrib_amount": 0,
+        "contrib_freq": "monthly",
+        "contrib_start_age": 63,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10
+    },
+    "roth_assets": {
+        "present_balance": 257000,
+        "contrib_amount": 10400,
+        "contrib_freq": "annual",
+        "contrib_start_age": 32,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10
+    },
+    "taxable_assets": {
+        "present_balance": 10000,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 32,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10
+    },
+    "hsa_assets": {
+        "present_balance": 58000,
+        "contrib_amount": 4400,
+        "contrib_freq": "annual",
+        "contrib_start_age": 32,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10,
+        "hsa_for_medical": true
+    },
+    "additional_spending": [],
+    "income_sources": [
+        {
+            "name": "Pension",
+            "amount": 55545,
+            "start_age_type": "retirement",
+            "start_age_specified": 65,
+            "end_age_type": "death",
+            "end_age_specified": 90,
+            "subject_to_tax": true,
+            "is_social_security": false,
+            "adjust_type": "none",
+            "adjust_val": 22022
+        }
+    ]
+}

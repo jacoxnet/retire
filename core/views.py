@@ -1,3 +1,4 @@
+import copy
 from core.runs import generate_runs, binary_search, run_deterministic
 from core.models import SimulationData
 from django.shortcuts import render, redirect
@@ -26,6 +27,94 @@ def get_bool(val):
     if val in ['on', 'true', 'True', True]:
         return True
     return False
+
+def get_default_data():
+    return {
+        'goal_seeking': False,
+        'user_name': 'John Doe',
+        'user_age': 60,
+        'user_retirement_age': 65,
+        'user_age_death': 90,
+        'is_married': False,
+        'spouse_name': 'Jane Doe',
+        'spouse_age': 60,
+        'spouse_retirement_age': 65,
+        'spouse_age_death': 90,
+        'filing_status': 'single',
+        'current_year': 2026,
+        'begin_spending_age_type': 'retirement',
+        'begin_spending_age_specified': 65,
+        'desired_spending': 40000.0,
+        'survivor_spending': 40000.0,
+        'adjust_spending_inflation': True,
+        'inflation_rate': 2.5,
+        'runs': 100,
+        'target_success_rate': 80.0,
+        'pretax_assets': {
+            'present_balance': 500000.0,
+            'contrib_amount': 5000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        },
+        'roth_assets': {
+            'present_balance': 100000.0,
+            'contrib_amount': 2000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        },
+        'taxable_assets': {
+            'present_balance': 200000.0,
+            'contrib_amount': 1000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0
+        },
+        'hsa_assets': {
+            'present_balance': 20000.0,
+            'contrib_amount': 1000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+            'hsa_for_medical': True
+        },
+        'additional_spending': [],
+        'income_sources': []
+    }
+
+def get_session_sim_data(request):
+    if 'simulation_data' not in request.session or not request.session['simulation_data']:
+        request.session['simulation_data'] = get_default_data()
+        request.session['data_version'] = 1
+        request.session['cached_results'] = None
+        request.session['cached_version'] = -1
+    return request.session['simulation_data']
+
+@require_http_methods(["GET", "POST"])
+def clear_data_view(request):
+    request.session['simulation_data'] = get_default_data()
+    request.session['data_version'] = request.session.get('data_version', 0) + 1
+    request.session['cached_results'] = None
+    request.session['cached_version'] = -1
+    messages.success(request, "All simulation data has been cleared.")
+    return redirect(reverse('enter'))
 
 @require_http_methods(["GET", "POST"])
 def enter_view(request):
@@ -186,102 +275,30 @@ def enter_view(request):
             'income_sources': income_sources
         }
         
+        request.session['simulation_data'] = data_block
+        request.session['data_version'] = request.session.get('data_version', 0) + 1
         SimulationData.objects.create(data=data_block)
         messages.success(request, "Simulation data saved successfully!")
-        return redirect(reverse('enter'))
+        return redirect(reverse('results'))
     else:
-        # GET request
-        sim_input = SimulationData.objects.last()
-        if not sim_input:
-            # Create a default dict to load into the template
-            default_data = {
-                'goal_seeking': False,
-                'user_name': 'John Doe',
-                'user_age': 60,
-                'user_retirement_age': 65,
-                'user_age_death': 90,
-                'is_married': False,
-                'spouse_name': 'Jane Doe',
-                'spouse_age': 60,
-                'spouse_retirement_age': 65,
-                'spouse_age_death': 90,
-                'filing_status': 'single',
-                'current_year': 2026,
-                'begin_spending_age_type': 'retirement',
-                'begin_spending_age_specified': 65,
-                'desired_spending': 40000.0,
-                'survivor_spending': 40000.0,
-                'adjust_spending_inflation': True,
-                'inflation_rate': 2.5,
-                'runs': 100,
-                'target_success_rate': 80.0,
-                'pretax_assets': {
-                    'present_balance': 500000.0,
-                    'contrib_amount': 5000.0,
-                    'contrib_freq': 'annual',
-                    'contrib_start_age': 60,
-                    'contrib_end_age_type': 'retirement',
-                    'contrib_end_age_specified': 65,
-                    'contrib_adjust_inflation': True,
-                    'return_mean': 6.0,
-                    'return_std': 10.0
-                },
-                'roth_assets': {
-                    'present_balance': 100000.0,
-                    'contrib_amount': 2000.0,
-                    'contrib_freq': 'annual',
-                    'contrib_start_age': 60,
-                    'contrib_end_age_type': 'retirement',
-                    'contrib_end_age_specified': 65,
-                    'contrib_adjust_inflation': True,
-                    'return_mean': 6.0,
-                    'return_std': 10.0
-                },
-                'taxable_assets': {
-                    'present_balance': 200000.0,
-                    'contrib_amount': 1000.0,
-                    'contrib_freq': 'annual',
-                    'contrib_start_age': 60,
-                    'contrib_end_age_type': 'retirement',
-                    'contrib_end_age_specified': 65,
-                    'contrib_adjust_inflation': True,
-                    'return_mean': 5.0,
-                    'return_std': 8.0
-                },
-                'hsa_assets': {
-                    'present_balance': 20000.0,
-                    'contrib_amount': 1000.0,
-                    'contrib_freq': 'annual',
-                    'contrib_start_age': 60,
-                    'contrib_end_age_type': 'retirement',
-                    'contrib_end_age_specified': 65,
-                    'contrib_adjust_inflation': True,
-                    'return_mean': 5.0,
-                    'return_std': 8.0,
-                    'hsa_for_medical': True
-                },
-                'additional_spending': [],
-                'income_sources': []
-            }
-            sim_input = SimulationData.objects.create(data=default_data)
-        
-        data = sim_input.to_dict()
-    return render(request, 'enter.html', data)
+        data = get_session_sim_data(request)
+        return render(request, 'enter.html', data)
 
 @require_http_methods(["GET"])
 def results_view(request):
-    sim_input = SimulationData.objects.last()
-    if not sim_input:
-        messages.error(request, "No simulation data found. Please enter data first.")
-        return redirect(reverse('enter'))
-        
-    data = sim_input.to_dict()
-    is_goal_seeking = data.get('goal_seeking', False)
+    sim_input = get_session_sim_data(request)
+    data = sim_input if isinstance(sim_input, dict) else sim_input.to_dict()
     
-    # Run deterministic projection for tables
+    data_ver = request.session.get('data_version', 1)
+    cached_ver = request.session.get('cached_version', -1)
+    cached_res = request.session.get('cached_results')
+    
+    if cached_ver == data_ver and cached_res is not None:
+        return render(request, 'results.html', cached_res)
+
+    is_goal_seeking = data.get('goal_seeking', False)
     det_rows = run_deterministic(sim_input)
     
-    # Extract general statistics
     pretax_bal = data.get('pretax_assets', {}).get('present_balance', 0.0)
     roth_bal = data.get('roth_assets', {}).get('present_balance', 0.0)
     taxable_bal = data.get('taxable_assets', {}).get('present_balance', 0.0)
@@ -303,18 +320,18 @@ def results_view(request):
     }
     
     if not is_goal_seeking:
-        # Regular simulation
         mc_stats = generate_runs(sim_input)
         results.update(mc_stats)
     else:
-        # Goal-seeking simulation
         achieved_spending, achieved_success_rate, searches, achieved_spending_y1 = binary_search(sim_input)
         results.update({
             "target_success_rate": data.get('target_success_rate', 80.0),
-            "achieved_spending": achieved_spending, # The solved maximum Desired Spending
+            "achieved_spending": achieved_spending,
             "achieved_success_rate": achieved_success_rate,
             "searches": searches,
-            "achieved_spending_y1": achieved_spending_y1 # Sum of withdrawals + income - taxes
+            "achieved_spending_y1": achieved_spending_y1
         })
         
+    request.session['cached_results'] = results
+    request.session['cached_version'] = data_ver
     return render(request, 'results.html', results)
