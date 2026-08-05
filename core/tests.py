@@ -162,6 +162,42 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Number of Simulations must be an integer between 1 and 100,000.")
 
+    def test_reset_session_data(self):
+        session = self.client.session
+        session['simulation_data'] = {'user_name': 'Old Name', 'user_age': 99}
+        session.save()
+        
+        response = self.client.get('/?reset=1')
+        self.assertRedirects(response, '/')
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'John Doe')
+
+    def test_income_stream_frequencies(self):
+        from core.runs import run_deterministic
+        data = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 70,
+            'is_married': False,
+            'current_year': 2026,
+            'desired_spending': 0,
+            'inflation_rate': 0.0,
+            'adjust_spending_inflation': False,
+            'income_sources': [
+                {'name': 'Monthly Stream', 'amount': 1000, 'frequency': 'monthly', 'start_age_type': 'specified', 'start_age_specified': 60, 'end_age_type': 'specified', 'end_age_specified': 70, 'subject_to_tax': False, 'adjust_type': 'none'},
+                {'name': 'Annual Stream', 'amount': 5000, 'frequency': 'annual', 'start_age_type': 'specified', 'start_age_specified': 60, 'end_age_type': 'specified', 'end_age_specified': 70, 'subject_to_tax': False, 'adjust_type': 'none'},
+                {'name': 'One-Time Stream', 'amount': 25000, 'frequency': 'one_time', 'start_age_type': 'specified', 'start_age_specified': 62, 'end_age_type': 'specified', 'end_age_specified': 70, 'subject_to_tax': False, 'adjust_type': 'none'}
+            ]
+        }
+        rows = run_deterministic(data)
+        # Year 0 (Age 60): 1000*12 + 5000 = 17000
+        self.assertEqual(rows[0]['income'], 17000)
+        # Year 2 (Age 62): 1000*12 + 5000 + 25000 = 42000
+        self.assertEqual(rows[2]['income'], 42000)
+        # Year 3 (Age 63): 1000*12 + 5000 = 17000
+        self.assertEqual(rows[3]['income'], 17000)
+
+
+
 
 
 

@@ -205,13 +205,19 @@ def simulate_step(
     
     for inc in income_sources_list:
         name = inc.get('name', 'Income')
+        freq = inc.get('frequency', 'monthly')
+        raw_amt = inc.get('amount', 0.0)
+        
         # resolve start/end age
         start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death) # fallback to spending start or ret age
         end_age = resolve_age(inc.get('end_age_type', 'death'), inc.get('end_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
         
         # Check active
         active = False
-        if start_age <= user_age_t <= end_age:
+        is_one_time = (freq in ['one_time', 'one-time'])
+        in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
+        
+        if in_age_range:
             # check survivor rules if spouse dies or user dies
             # If User is dead, only spouse-related stream or streams ending at spouse death are active
             if not user_alive and inc.get('end_age_type') in ['death', 'retirement']:
@@ -222,7 +228,11 @@ def simulate_step(
                 active = True
                 
         if active:
-            amt = inc.get('amount', 0.0) * 12.0
+            if freq == 'annual' or is_one_time:
+                amt = raw_amt
+            else:
+                amt = raw_amt * 12.0
+                
             adj_type = inc.get('adjust_type', 'inflation')
             adj_val = inc.get('adjust_val', 0.0)
             
@@ -1007,18 +1017,29 @@ def prepare_numba_inputs(inputs, test_spending=None):
         ss_inc = 0.0
         nontax_inc = 0.0
         for inc in inputs['income_sources']:
+            freq = inc.get('frequency', 'monthly')
+            raw_amt = inc.get('amount', 0.0)
             start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
             end_age = resolve_age(inc.get('end_age_type', 'death'), inc.get('end_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            
             active = False
-            if start_age <= user_age_t <= end_age:
+            is_one_time = (freq in ['one_time', 'one-time'])
+            in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
+            
+            if in_age_range:
                 if not user_alive and inc.get('end_age_type') in ['death', 'retirement']:
                     active = False
                 elif not spouse_alive and inc.get('end_age_type') in ['spouse_death', 'spouse_retirement']:
                     active = False
                 else:
                     active = True
+                    
             if active:
-                amt = inc.get('amount', 0.0) * 12.0
+                if freq == 'annual' or is_one_time:
+                    amt = raw_amt
+                else:
+                    amt = raw_amt * 12.0
+                    
                 adj_type = inc.get('adjust_type', 'inflation')
                 adj_val = inc.get('adjust_val', 0.0)
                 if adj_type == 'inflation':

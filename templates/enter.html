@@ -473,34 +473,19 @@
                 </div>
 
                 <div class="card p-4 mb-4">
-                    <h3 class="mb-3">Income Streams</h3>
-                    <p class="text-secondary small mb-3">Enter Social Security, pensions, annuity payments, or other sources of non-portfolio income.</p>
-                    
-                    <div class="table-container mb-3" style="overflow-x: auto;">
-                        <table class="table align-middle" id="incomeStreamsTable" style="min-width: 1050px;">
-                            <thead>
-                                <tr>
-                                    <th style="width: 14%;">Name</th>
-                                    <th style="width: 15%; min-width: 130px;">Monthly Amount</th>
-                                    <th style="width: 12%;">Start Age Type</th>
-                                    <th style="width: 6%; min-width: 65px;">Start Age</th>
-                                    <th style="width: 12%;">End Age Type</th>
-                                    <th style="width: 6%; min-width: 65px;">End Age</th>
-                                    <th style="width: 7%;">Taxable?</th>
-                                    <th style="width: 8%;">Social Security?</th>
-                                    <th style="width: 12%;">Adjustment</th>
-                                    <th style="width: 5%; min-width: 75px;">Rate %</th>
-                                    <th style="width: 3%; min-width: 45px;">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- JS populated rows -->
-                            </tbody>
-                        </table>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h3 class="mb-1">Other Income Streams & Benefits</h3>
+                            <p class="text-secondary small mb-0">Enter Social Security, pensions, annuity payments, or other sources of non-portfolio income.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnAddIncomeRow">
+                            <i class="fa fa-plus me-1"></i> Add Income Source
+                        </button>
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" id="btnAddIncomeRow">
-                        <i class="fa fa-plus"></i> Add Income Source
-                    </button>
+                    
+                    <div id="incomeStreamsContainer" class="mb-2">
+                        <!-- JS populated multi-line card items -->
+                    </div>
                 </div>
 
                 <div class="card bg-light p-3 mb-4">
@@ -661,11 +646,12 @@
 
         // 6. Income Streams List Manager
         const btnAddIncomeRow = document.getElementById('btnAddIncomeRow');
-        const incomeStreamsTableBody = document.querySelector('#incomeStreamsTable tbody');
+        const incomeStreamsContainer = document.getElementById('incomeStreamsContainer');
         
         function addIncomeRow(data = {}) {
-            var name = data.name !== undefined ? data.name : '[Add a Name]';
+            var name = data.name !== undefined ? data.name : '';
             var amount = data.amount !== undefined ? data.amount : 20000;
+            var frequency = data.frequency !== undefined ? data.frequency : 'monthly';
             var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
             var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
             var endType = data.end_age_type !== undefined ? data.end_age_type : 'death';
@@ -675,80 +661,115 @@
             var adjustType = data.adjust_type !== undefined ? data.adjust_type : 'inflation';
             var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
             
-            var row = document.createElement('tr');
-            row.innerHTML = `
-                <td>
-                    <input type="text" class="form-control" name="income_name[]" value="${name}" required>
-                </td>
-                <td>
-                    <input type="number" class="form-control" name="income_amount[]" value="${amount}" required style="min-width: 110px;">
-                </td>
-                <td>
-                    <select class="form-select inc-start-type" name="income_start_age_type[]">
-                        <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement</option>
-                        <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement</option>
-                        <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specified Age</option>
-                    </select>
-                </td>
-                <td>
-                    <input type="number" class="form-control inc-start-spec" name="income_start_age_specified[]" value="${startAge}" style="display: ${startType === 'specified' ? 'block' : 'none'}; min-width: 60px;">
-                </td>
-                <td>
-                    <select class="form-select inc-end-type" name="income_end_age_type[]">
-                        <option value="death" ${endType === 'death' ? 'selected' : ''}>At Death</option>
-                        <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
-                        <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specified Age</option>
-                    </select>
-                </td>
-                <td>
-                    <input type="number" class="form-control inc-end-spec" name="income_end_age_specified[]" value="${endAge}" style="display: ${endType === 'specified' ? 'block' : 'none'}; min-width: 60px;">
-                </td>
-                <td>
-                    <select class="form-select" name="income_subject_to_tax[]">
-                        <option value="true" ${subjectToTax ? 'selected' : ''}>Yes</option>
-                        <option value="false" ${!subjectToTax ? 'selected' : ''}>No</option>
-                    </select>
-                </td>
-                <td>
-                    <select class="form-select" name="income_is_ss[]">
-                        <option value="false" ${!isSS ? 'selected' : ''}>No</option>
-                        <option value="true" ${isSS ? 'selected' : ''}>Yes</option>
-                    </select>
-                </td>
-                <td>
-                    <select class="form-select inc-adjust-type" name="income_adjust_type[]">
-                        <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Adjust for Inflation</option>
-                        <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>Fixed Percentage</option>
-                        <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation Less Fixed %</option>
-                        <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No Adjustment</option>
-                    </select>
-                </td>
-                <td>
-                    <input type="number" class="form-control inc-adjust-val" name="income_adjust_val[]" value="${adjustVal}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; width: 100%; min-width: 80px; padding: 0.375rem 0.5rem;">
-                </td>
-                <td>
-                    <button type="button" class="btn btn-outline-danger btn-sm btnDeleteRow" title="Delete" aria-label="Delete">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
-                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
-                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
-                        </svg>
+            var card = document.createElement('div');
+            card.className = 'card border shadow-sm mb-3 income-stream-card';
+            card.innerHTML = `
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                    <div class="d-flex align-items-center gap-2 flex-grow-1 me-3" style="max-width: 450px;">
+                        <label class="form-label mb-0 fw-bold text-nowrap">Stream Name:</label>
+                        <input type="text" class="form-control form-control-sm" name="income_name[]" value="${name}" placeholder="e.g. Social Security, Pension" required>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm btnDeleteRow" title="Remove Income Stream">
+                        <i class="fa fa-trash me-1"></i> Delete
                     </button>
-                </td>
+                </div>
+                <div class="card-body p-3">
+                    <!-- Row 1: Amount, Frequency & Annual Adjustment Rule -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Amount $</label>
+                            <input type="number" class="form-control" name="income_amount[]" value="${amount}" step="any" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Frequency</label>
+                            <select class="form-select inc-frequency" name="income_frequency[]">
+                                <option value="monthly" ${frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                <option value="annual" ${frequency === 'annual' ? 'selected' : ''}>Annual</option>
+                                <option value="one_time" ${frequency === 'one_time' || frequency === 'one-time' ? 'selected' : ''}>One-Time Payment</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Annual Adjustment Rule</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select inc-adjust-type" name="income_adjust_type[]">
+                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Adjust for Inflation</option>
+                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>Fixed Percentage</option>
+                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation Less Fixed %</option>
+                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No Adjustment</option>
+                                </select>
+                                <input type="number" class="form-control inc-adjust-val" name="income_adjust_val[]" value="${adjustVal}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Row 2: Timing / Duration -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Starts At</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select inc-start-type" name="income_start_age_type[]">
+                                    <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                    <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                    <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specified Age</option>
+                                </select>
+                                <input type="number" class="form-control inc-start-spec" name="income_start_age_specified[]" value="${startAge}" min="18" max="120" style="display: ${startType === 'specified' ? 'block' : 'none'}; max-width: 110px;">
+                            </div>
+                        </div>
+                        <div class="col-md-6 inc-end-group" style="display: ${frequency === 'one_time' || frequency === 'one-time' ? 'none' : 'block'};">
+                            <label class="form-label fw-semibold">Ends At</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select inc-end-type" name="income_end_age_type[]">
+                                    <option value="death" ${endType === 'death' ? 'selected' : ''}>At Death</option>
+                                    <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
+                                    <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specified Age</option>
+                                </select>
+                                <input type="number" class="form-control inc-end-spec" name="income_end_age_specified[]" value="${endAge}" min="18" max="120" style="display: ${endType === 'specified' ? 'block' : 'none'}; max-width: 110px;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Row 3: Tax Status -->
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Subject to Income Tax?</label>
+                            <select class="form-select" name="income_subject_to_tax[]">
+                                <option value="true" ${subjectToTax ? 'selected' : ''}>Yes (Taxable)</option>
+                                <option value="false" ${!subjectToTax ? 'selected' : ''}>No (Tax-Free)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Social Security Stream?</label>
+                            <select class="form-select" name="income_is_ss[]">
+                                <option value="false" ${!isSS ? 'selected' : ''}>No</option>
+                                <option value="true" ${isSS ? 'selected' : ''}>Yes</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             `;
             
-            // Adjust dropdown display logic
-            row.querySelector('.inc-start-type').addEventListener('change', function() {
-                var specInput = row.querySelector('.inc-start-spec');
+            // Frequency listener: toggle Ends At visibility for One-Time streams
+            card.querySelector('.inc-frequency').addEventListener('change', function() {
+                var endGroup = card.querySelector('.inc-end-group');
+                if (this.value === 'one_time' || this.value === 'one-time') {
+                    endGroup.style.display = 'none';
+                } else {
+                    endGroup.style.display = 'block';
+                }
+            });
+            
+            card.querySelector('.inc-start-type').addEventListener('change', function() {
+                var specInput = card.querySelector('.inc-start-spec');
                 specInput.style.display = this.value === 'specified' ? 'block' : 'none';
             });
             
-            row.querySelector('.inc-end-type').addEventListener('change', function() {
-                var specInput = row.querySelector('.inc-end-spec');
+            card.querySelector('.inc-end-type').addEventListener('change', function() {
+                var specInput = card.querySelector('.inc-end-spec');
                 specInput.style.display = this.value === 'specified' ? 'block' : 'none';
             });
             
-            row.querySelector('.inc-adjust-type').addEventListener('change', function() {
-                var valInput = row.querySelector('.inc-adjust-val');
+            card.querySelector('.inc-adjust-type').addEventListener('change', function() {
+                var valInput = card.querySelector('.inc-adjust-val');
                 var show = ['fixed_pct', 'inflation_less_pct'].includes(this.value);
                 valInput.style.display = show ? 'block' : 'none';
                 if (show) {
@@ -756,17 +777,21 @@
                 }
             });
             
-            row.querySelector('.btnDeleteRow').addEventListener('click', function() {
-                row.remove();
+            card.querySelector('.btnDeleteRow').addEventListener('click', function() {
+                card.remove();
             });
             
-            incomeStreamsTableBody.appendChild(row);
+            if (incomeStreamsContainer) {
+                incomeStreamsContainer.appendChild(card);
+            }
             updateSpouseDropdownOptions();
         }
         
-        btnAddIncomeRow.addEventListener('click', function() {
-            addIncomeRow();
-        });
+        if (btnAddIncomeRow) {
+            btnAddIncomeRow.addEventListener('click', function() {
+                addIncomeRow();
+            });
+        }
 
         // 7. Load Initial Lists passed from Backend JSON blocks
         try {
@@ -882,19 +907,20 @@
             });
             
             // Collect dynamic income streams
-            var incomeRows = incomeStreamsTableBody.querySelectorAll('tr');
-            incomeRows.forEach(row => {
+            var incomeCards = incomeStreamsContainer.querySelectorAll('.income-stream-card');
+            incomeCards.forEach(card => {
                 dataBlock.income_sources.push({
-                    'name': row.querySelector('[name="income_name[]"]').value,
-                    'amount': parseFloat(row.querySelector('[name="income_amount[]"]').value || 0),
-                    'start_age_type': row.querySelector('[name="income_start_age_type[]"]').value,
-                    'start_age_specified': parseInt(row.querySelector('[name="income_start_age_specified[]"]').value || 0),
-                    'end_age_type': row.querySelector('[name="income_end_age_type[]"]').value,
-                    'end_age_specified': parseInt(row.querySelector('[name="income_end_age_specified[]"]').value || 0),
-                    'subject_to_tax': row.querySelector('[name="income_subject_to_tax[]"]').value === 'true',
-                    'is_social_security': row.querySelector('[name="income_is_ss[]"]').value === 'true',
-                    'adjust_type': row.querySelector('[name="income_adjust_type[]"]').value,
-                    'adjust_val': parseFloat(row.querySelector('[name="income_adjust_val[]"]').value || 0.0)
+                    'name': card.querySelector('[name="income_name[]"]').value,
+                    'amount': parseFloat(card.querySelector('[name="income_amount[]"]').value || 0),
+                    'frequency': card.querySelector('[name="income_frequency[]"]').value,
+                    'start_age_type': card.querySelector('[name="income_start_age_type[]"]').value,
+                    'start_age_specified': parseInt(card.querySelector('[name="income_start_age_specified[]"]').value || 0),
+                    'end_age_type': card.querySelector('[name="income_end_age_type[]"]').value,
+                    'end_age_specified': parseInt(card.querySelector('[name="income_end_age_specified[]"]').value || 0),
+                    'subject_to_tax': card.querySelector('[name="income_subject_to_tax[]"]').value === 'true',
+                    'is_social_security': card.querySelector('[name="income_is_ss[]"]').value === 'true',
+                    'adjust_type': card.querySelector('[name="income_adjust_type[]"]').value,
+                    'adjust_val': parseFloat(card.querySelector('[name="income_adjust_val[]"]').value || 0.0)
                 });
             });
 

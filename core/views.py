@@ -227,6 +227,7 @@ def enter_view(request):
         income_sources = []
         inc_names = request.POST.getlist('income_name[]')
         inc_amounts = request.POST.getlist('income_amount[]')
+        inc_freqs = request.POST.getlist('income_frequency[]')
         inc_start_types = request.POST.getlist('income_start_age_type[]')
         inc_start_specs = request.POST.getlist('income_start_age_specified[]')
         inc_end_types = request.POST.getlist('income_end_age_type[]')
@@ -238,9 +239,11 @@ def enter_view(request):
         
         for i in range(len(inc_names)):
             try:
+                freq = inc_freqs[i] if i < len(inc_freqs) else 'monthly'
                 income_sources.append({
                     'name': inc_names[i],
                     'amount': get_float(inc_amounts[i]),
+                    'frequency': freq,
                     'start_age_type': inc_start_types[i],
                     'start_age_specified': get_int(inc_start_specs[i]),
                     'end_age_type': inc_end_types[i],
@@ -327,6 +330,13 @@ def enter_view(request):
         messages.success(request, "Simulation data saved successfully!")
         return redirect(reverse('results'))
     else:
+        if request.GET.get('new_session') == '1' or request.GET.get('reset') == '1':
+            request.session['simulation_data'] = get_default_data()
+            request.session['data_version'] = request.session.get('data_version', 0) + 1
+            request.session['cached_results'] = None
+            request.session['cached_version'] = -1
+            messages.success(request, "New session started. Simulation data reset to default values.")
+            return redirect(reverse('enter'))
         data = get_session_sim_data(request)
         return render(request, 'enter.html', data)
 
