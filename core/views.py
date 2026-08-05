@@ -152,7 +152,8 @@ def enter_view(request):
         
         inflation_rate = get_float(request.POST.get('inflation_rate'), 2.5)
         runs = get_int(request.POST.get('runs'), 1000)
-        target_success_rate = get_float(request.POST.get('target_success_rate'), 80.0)
+        raw_target_srate = get_float(request.POST.get('target_success_rate'), 80.0)
+        target_success_rate = min(99.0, max(1.0, raw_target_srate))
         
         # Assets (Pretax, Roth, Taxable, HSA)
         pretax_assets = {
@@ -252,9 +253,39 @@ def enter_view(request):
             except IndexError:
                 pass
                 
+        is_goal_seeking = (simulation_type == 'goal_seeking')
+        
+        # Validation checks
+        validation_errors = []
+        raw_runs = request.POST.get('runs')
+        try:
+            runs_val = int(raw_runs)
+            if runs_val < 1 or runs_val > 100000:
+                validation_errors.append("Number of Simulations must be an integer between 1 and 100,000.")
+        except (TypeError, ValueError):
+            validation_errors.append("Number of Simulations must be a valid number between 1 and 100,000.")
+            
+        if is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0):
+            validation_errors.append("Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.")
+            
+        if user_age < 18 or user_age > 120:
+            validation_errors.append("Present Age must be an integer between 18 and 120.")
+        if user_retirement_age < user_age or user_retirement_age > 120:
+            validation_errors.append(f"Retirement Age must be between Present Age ({user_age}) and 120.")
+        if user_age_death <= user_age or user_age_death > 120:
+            validation_errors.append(f"Age at Death must be an integer greater than Present Age ({user_age}) up to 120.")
+            
+        if is_married:
+            if spouse_age < 18 or spouse_age > 120:
+                validation_errors.append("Spouse Present Age must be an integer between 18 and 120.")
+            if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
+                validation_errors.append(f"Spouse Retirement Age must be between Spouse Present Age ({spouse_age}) and 120.")
+            if spouse_age_death <= spouse_age or spouse_age_death > 120:
+                validation_errors.append(f"Spouse Age at Death must be an integer greater than Spouse Present Age ({spouse_age}) up to 120.")
+                
         # Store in JSON block
         data_block = {
-            'goal_seeking': simulation_type == 'goal_seeking',
+            'goal_seeking': is_goal_seeking,
             'user_name': user_name,
             'user_age': user_age,
             'user_retirement_age': user_retirement_age,
@@ -273,7 +304,7 @@ def enter_view(request):
             'adjust_spending_inflation': adjust_spending_inflation,
             'inflation_rate': inflation_rate,
             'runs': runs,
-            'target_success_rate': target_success_rate,
+            'target_success_rate': raw_target_srate if is_goal_seeking else target_success_rate,
             'pretax_assets': pretax_assets,
             'roth_assets': roth_assets,
             'taxable_assets': taxable_assets,
@@ -282,6 +313,14 @@ def enter_view(request):
             'income_sources': income_sources
         }
         
+        if validation_errors:
+            for err in validation_errors:
+                messages.error(request, err)
+            data_block['target_success_rate_error'] = is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0)
+            data_block['runs_error'] = (runs < 1 or runs > 100000)
+            request.session['simulation_data'] = data_block
+            return render(request, 'enter.html', data_block)
+            
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         SimulationData.objects.create(data=data_block)

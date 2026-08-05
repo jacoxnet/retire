@@ -18,6 +18,19 @@
         </div>
     </div>
 
+    <!-- Validation & Notification Alert Container -->
+    <div id="validationAlertContainer" class="mb-3">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags %}{{ message.tags }}{% else %}primary{% endif %} alert-dismissible fade show text-center" role="alert">
+                    <i class="fa {% if message.tags == 'error' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %} me-2"></i>
+                    <strong>{{ message }}</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
     <!-- Tab navigation -->
     <ul class="nav nav-pills mb-4 justify-content-center" id="dataEntryTabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -57,11 +70,11 @@
                             <div class="row">
                                 <div class="col-6 mb-3">
                                     <label for="user_age" class="form-label">Present Age</label>
-                                    <input type="number" class="form-control" id="user_age" name="user_age" value="{{ user_age }}" min="18" max="110" required>
+                                    <input type="number" class="form-control" id="user_age" name="user_age" value="{{ user_age }}" min="18" max="120" required>
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label for="user_retirement_age" class="form-label">Retirement Age</label>
-                                    <input type="number" class="form-control" id="user_retirement_age" name="user_retirement_age" value="{{ user_retirement_age }}" min="18" max="110" required>
+                                    <input type="number" class="form-control" id="user_retirement_age" name="user_retirement_age" value="{{ user_retirement_age }}" min="18" max="120" required>
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -84,11 +97,11 @@
                             <div class="row">
                                 <div class="col-6 mb-3">
                                     <label for="spouse_age" class="form-label">Present Age</label>
-                                    <input type="number" class="form-control" id="spouse_age" name="spouse_age" value="{{ spouse_age }}" min="18" max="110">
+                                    <input type="number" class="form-control" id="spouse_age" name="spouse_age" value="{{ spouse_age }}" min="18" max="120">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label for="spouse_retirement_age" class="form-label">Retirement Age</label>
-                                    <input type="number" class="form-control" id="spouse_retirement_age" name="spouse_retirement_age" value="{{ spouse_retirement_age }}" min="18" max="110">
+                                    <input type="number" class="form-control" id="spouse_retirement_age" name="spouse_retirement_age" value="{{ spouse_retirement_age }}" min="18" max="120">
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -117,9 +130,12 @@
                         </div>
                     </div>
 
-                    <div class="form-group mb-4" id="target_success_rate_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %}; max-width: 300px;">
+                    <div class="form-group mb-4" id="target_success_rate_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %}; max-width: 350px;">
                         <label for="target_success_rate" class="form-label">Target Success Rate %</label>
-                        <input type="number" class="form-control" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="100" step="0.1">
+                        <input type="number" class="form-control {% if target_success_rate_error %}is-invalid{% endif %}" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="99" step="0.1">
+                        <div class="invalid-feedback" id="target_success_rate_feedback">
+                            Target Success Rate must be between 1% and 99%.
+                        </div>
                     </div>
 
                     <div class="row">
@@ -171,7 +187,10 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="runs" class="form-label">Number of Simulations (MC Paths)</label>
-                            <input type="number" class="form-control" id="runs" name="runs" value="{{ runs }}" min="1" max="5000" required>
+                            <input type="number" class="form-control {% if runs_error %}is-invalid{% endif %}" id="runs" name="runs" value="{{ runs }}" min="1" max="100000" required>
+                            <div class="invalid-feedback" id="runs_feedback">
+                                Number of Simulations must be an integer between 1 and 100,000.
+                            </div>
                         </div>
                     </div>
 
@@ -1157,32 +1176,232 @@
             return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
         }
 
+        function setFieldInvalid(el, msg) {
+            if (!el) return;
+            el.classList.add('is-invalid');
+            var feedback = el.nextElementSibling;
+            if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+                feedback = document.createElement('div');
+                feedback.className = 'invalid-feedback';
+                el.parentNode.insertBefore(feedback, el.nextSibling);
+            }
+            feedback.textContent = msg;
+            feedback.style.display = 'block';
+        }
+
+        function clearFieldInvalid(el) {
+            if (!el) return;
+            el.classList.remove('is-invalid');
+            var feedback = el.nextElementSibling;
+            if (feedback && feedback.classList.contains('invalid-feedback')) {
+                feedback.style.display = '';
+            }
+        }
+
         function handleCustomValidation(form) {
-            var invalidEls = form.querySelectorAll(':invalid');
-            var firstVisibleInvalid = null;
-            
-            for (var i = 0; i < invalidEls.length; i++) {
-                if (isElementVisible(invalidEls[i])) {
-                    firstVisibleInvalid = invalidEls[i];
-                    break;
+            var alertContainer = document.getElementById('validationAlertContainer');
+            var errors = [];
+
+            // Clear all previous invalid styles
+            var allControls = form.querySelectorAll('.form-control, .form-select');
+            allControls.forEach(function(input) { clearFieldInvalid(input); });
+
+            // 1. User Demographics
+            var userNameInput = document.getElementById('user_name');
+            var userAgeInput = document.getElementById('user_age');
+            var userRetInput = document.getElementById('user_retirement_age');
+            var userDeathInput = document.getElementById('user_age_death');
+
+            if (userNameInput && !userNameInput.value.trim()) {
+                setFieldInvalid(userNameInput, 'Please enter your name.');
+                errors.push({ element: userNameInput, tab: 'demographics-tab', message: 'Name is required.' });
+            }
+
+            var uAge = userAgeInput ? parseInt(userAgeInput.value, 10) : 0;
+            var uRet = userRetInput ? parseInt(userRetInput.value, 10) : 0;
+            var uDeath = userDeathInput ? parseInt(userDeathInput.value, 10) : 0;
+
+            if (userAgeInput && (isNaN(uAge) || uAge < 18 || uAge > 120)) {
+                setFieldInvalid(userAgeInput, 'Present Age must be an integer between 18 and 120.');
+                errors.push({ element: userAgeInput, tab: 'demographics-tab', message: 'Present Age must be an integer between 18 and 120.' });
+            }
+
+            if (userRetInput && (isNaN(uRet) || uRet < uAge || uRet > 120)) {
+                var retMsg = 'Retirement Age must be between Present Age (' + (isNaN(uAge) ? 18 : uAge) + ') and 120.';
+                setFieldInvalid(userRetInput, retMsg);
+                errors.push({ element: userRetInput, tab: 'demographics-tab', message: retMsg });
+            }
+
+            if (userDeathInput && (isNaN(uDeath) || uDeath <= uAge || uDeath > 120)) {
+                var deathMsg = 'Age at Death must be an integer greater than Present Age (' + (isNaN(uAge) ? 18 : uAge) + ') up to 120.';
+                setFieldInvalid(userDeathInput, deathMsg);
+                errors.push({ element: userDeathInput, tab: 'demographics-tab', message: deathMsg });
+            }
+
+            // 2. Spouse Demographics (if Married)
+            var isMarried = document.getElementById('is_married') && document.getElementById('is_married').checked;
+            if (isMarried) {
+                var spouseAgeInput = document.getElementById('spouse_age');
+                var spouseRetInput = document.getElementById('spouse_retirement_age');
+                var spouseDeathInput = document.getElementById('spouse_age_death');
+
+                var sAge = spouseAgeInput ? parseInt(spouseAgeInput.value, 10) : 0;
+                var sRet = spouseRetInput ? parseInt(spouseRetInput.value, 10) : 0;
+                var sDeath = spouseDeathInput ? parseInt(spouseDeathInput.value, 10) : 0;
+
+                if (spouseAgeInput && (isNaN(sAge) || sAge < 18 || sAge > 120)) {
+                    setFieldInvalid(spouseAgeInput, 'Spouse Present Age must be an integer between 18 and 120.');
+                    errors.push({ element: spouseAgeInput, tab: 'demographics-tab', message: 'Spouse Present Age must be an integer between 18 and 120.' });
+                }
+                if (spouseRetInput && (isNaN(sRet) || sRet < sAge || sRet > 120)) {
+                    var sRetMsg = 'Spouse Retirement Age must be between Spouse Present Age (' + (isNaN(sAge) ? 18 : sAge) + ') and 120.';
+                    setFieldInvalid(spouseRetInput, sRetMsg);
+                    errors.push({ element: spouseRetInput, tab: 'demographics-tab', message: sRetMsg });
+                }
+                if (spouseDeathInput && (isNaN(sDeath) || sDeath <= sAge || sDeath > 120)) {
+                    var sDeathMsg = 'Spouse Age at Death must be an integer greater than Spouse Present Age (' + (isNaN(sAge) ? 18 : sAge) + ') up to 120.';
+                    setFieldInvalid(spouseDeathInput, sDeathMsg);
+                    errors.push({ element: spouseDeathInput, tab: 'demographics-tab', message: sDeathMsg });
                 }
             }
-            
-            if (firstVisibleInvalid) {
-                var tabPane = firstVisibleInvalid.closest('.tab-pane');
-                if (tabPane) {
-                    switchTab(tabPane.id + '-tab');
+
+            // 3. Goal Seeking Target Success Rate
+            var isGoalSeeking = document.getElementById('simulation_type_goal') && document.getElementById('simulation_type_goal').checked;
+            var targetInput = document.getElementById('target_success_rate');
+            if (isGoalSeeking && targetInput) {
+                var val = parseFloat(targetInput.value);
+                if (isNaN(val) || val < 1.0 || val > 99.0) {
+                    setFieldInvalid(targetInput, 'Target Success Rate must be a number between 1% and 99%.');
+                    errors.push({ element: targetInput, tab: 'demographics-tab', message: 'Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.' });
                 }
+            }
+
+            // 4. Number of Simulations (Runs)
+            var runsInput = document.getElementById('runs');
+            if (runsInput) {
+                var runsVal = parseInt(runsInput.value, 10);
+                if (isNaN(runsVal) || runsVal < 1 || runsVal > 100000) {
+                    setFieldInvalid(runsInput, 'Number of Simulations must be an integer between 1 and 100,000.');
+                    errors.push({ element: runsInput, tab: 'demographics-tab', message: 'Number of Simulations must be an integer between 1 and 100,000.' });
+                }
+            }
+
+            // 5. Current Year & Inflation Rate & Spending
+            var currentYearInput = document.getElementById('current_year');
+            if (currentYearInput) {
+                var cYr = parseInt(currentYearInput.value, 10);
+                if (isNaN(cYr) || cYr < 2020 || cYr > 2100) {
+                    setFieldInvalid(currentYearInput, 'Current Year must be an integer between 2020 and 2100.');
+                    errors.push({ element: currentYearInput, tab: 'demographics-tab', message: 'Current Year must be between 2020 and 2100.' });
+                }
+            }
+
+            var inflationInput = document.getElementById('inflation_rate');
+            if (inflationInput) {
+                var infVal = parseFloat(inflationInput.value);
+                if (isNaN(infVal) || infVal < 0.0 || infVal > 50.0) {
+                    setFieldInvalid(inflationInput, 'Inflation Rate % must be a number between 0% and 50%.');
+                    errors.push({ element: inflationInput, tab: 'demographics-tab', message: 'Inflation Rate % must be between 0% and 50%.' });
+                }
+            }
+
+            var desiredSpendingInput = document.getElementById('desired_spending');
+            if (desiredSpendingInput) {
+                var spendVal = parseFloat(desiredSpendingInput.value);
+                if (isNaN(spendVal) || spendVal < 0) {
+                    setFieldInvalid(desiredSpendingInput, 'Desired Annual Spending must be a valid non-negative number.');
+                    errors.push({ element: desiredSpendingInput, tab: 'demographics-tab', message: 'Desired Annual Spending must be a valid non-negative number.' });
+                }
+            }
+
+            // 6. Asset Returns & Balances (Tab 2)
+            ['pretax', 'roth', 'taxable', 'hsa'].forEach(function(prefix) {
+                var meanInput = form.querySelector('[name="' + prefix + '_return_mean"]');
+                if (meanInput && meanInput.value !== '') {
+                    var mVal = parseFloat(meanInput.value);
+                    if (isNaN(mVal) || mVal < -100.0 || mVal > 100.0) {
+                        setFieldInvalid(meanInput, 'Average Return % must be between -100% and 100%.');
+                        errors.push({ element: meanInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Average Return % must be between -100% and 100%.' });
+                    }
+                }
+                var stdInput = form.querySelector('[name="' + prefix + '_return_std"]');
+                if (stdInput && stdInput.value !== '') {
+                    var sVal = parseFloat(stdInput.value);
+                    if (isNaN(sVal) || sVal < 0.0 || sVal > 100.0) {
+                        setFieldInvalid(stdInput, 'Return Std Dev % must be a non-negative number up to 100%.');
+                        errors.push({ element: stdInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Return Std Dev % must be between 0% and 100%.' });
+                    }
+                }
+                var balInput = document.getElementById(prefix + '_present_balance');
+                if (balInput && balInput.value !== '') {
+                    var bVal = parseFloat(balInput.value);
+                    if (isNaN(bVal) || bVal < 0) {
+                        setFieldInvalid(balInput, 'Present Balance cannot be negative.');
+                        errors.push({ element: balInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Present Balance cannot be negative.' });
+                    }
+                }
+            });
+
+            // 7. General catch-all for any other native invalid elements
+            var invalidEls = form.querySelectorAll(':invalid');
+            for (var i = 0; i < invalidEls.length; i++) {
+                var el = invalidEls[i];
+                if (!el.classList.contains('is-invalid')) {
+                    var labelEl = el.previousElementSibling;
+                    var labelText = (labelEl && labelEl.tagName === 'LABEL') ? labelEl.textContent.trim() : 'field';
+                    setFieldInvalid(el, 'Please enter a valid value for ' + labelText + '.');
+                    var tabPane = el.closest('.tab-pane');
+                    var tabId = tabPane ? tabPane.id + '-tab' : 'demographics-tab';
+                    errors.push({
+                        element: el,
+                        tab: tabId,
+                        message: 'Please enter a valid value for ' + labelText + '.'
+                    });
+                }
+            }
+
+            if (errors.length > 0) {
+                var firstError = errors[0];
+                switchTab(firstError.tab);
+
+                var errorListHtml = '<ul class="mb-0 text-start d-inline-block ps-4">';
+                errors.forEach(function(err) {
+                    errorListHtml += '<li>' + err.message + '</li>';
+                });
+                errorListHtml += '</ul>';
+
+                if (alertContainer) {
+                    alertContainer.innerHTML = '<div class="alert alert-danger alert-dismissible fade show text-center mb-3" role="alert">' +
+                        '<div class="mb-1"><i class="fa fa-exclamation-triangle me-2"></i><strong>Simulation Cannot Be Run - Please Correct The Following Errors:</strong></div>' +
+                        errorListHtml +
+                        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                        '</div>';
+                }
+
                 setTimeout(function() {
-                    firstVisibleInvalid.focus();
-                    firstVisibleInvalid.reportValidity();
-                }, 50);
+                    firstError.element.focus();
+                    firstError.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+
                 return false;
+            }
+
+            if (alertContainer) {
+                alertContainer.innerHTML = '';
             }
             return true;
         }
 
         if (enterDataForm) {
+            enterDataForm.querySelectorAll('.form-control, .form-select').forEach(function(input) {
+                input.addEventListener('input', function() {
+                    clearFieldInvalid(this);
+                });
+                input.addEventListener('change', function() {
+                    clearFieldInvalid(this);
+                });
+            });
+
             enterDataForm.addEventListener('input', function() {
                 dataChanged = true;
             });

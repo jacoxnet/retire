@@ -129,4 +129,39 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('det_rows', response.context)
 
+    def test_invalid_goal_seeking_target_success_rate(self):
+        post_data = {
+            'simulation_type': 'goal_seeking',
+            'user_name': 'Bob Smith',
+            'user_age': '62',
+            'user_retirement_age': '67',
+            'user_age_death': '95',
+            'desired_spending': '45000',
+            'inflation_rate': '2.5',
+            'runs': '50',
+            'target_success_rate': '100.0',
+            'pretax_present_balance': '600000',
+        }
+        response = self.client.post('/', post_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.")
+
+    def test_invalid_runs_exceeds_max(self):
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'Bob Smith',
+            'user_age': '62',
+            'user_retirement_age': '67',
+            'user_age_death': '95',
+            'desired_spending': '45000',
+            'inflation_rate': '2.5',
+            'runs': '200000',
+            'pretax_present_balance': '600000',
+        }
+        response = self.client.post('/', post_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Number of Simulations must be an integer between 1 and 100,000.")
+
+
+
 
