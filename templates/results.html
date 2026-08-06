@@ -192,7 +192,7 @@
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
                                 <th>Taxes & Pen.</th>
                                 <th>Regular Retirement Spending</th>
-                                <th>Additional Spending</th>
+                                <th>Additional Spending <small class="text-muted">(Hover)</small></th>
                                 <th>Ending Assets <small class="text-muted">(Hover)</small></th>
                             </tr>
                         </thead>
@@ -349,9 +349,29 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount" data-nominal="{{ row.additional_spending }}" data-real="{{ row.additional_spending }}">
-                                            ${{ row.additional_spending|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Additional Spending Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount font-weight-bold text-danger" 
+                                                  data-nominal="{{ row.additional_spending }}" 
+                                                  data-real="{{ row.additional_spending }}">
+                                                ${{ row.additional_spending|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Additional Spending</h6>
+                                                {% if row.additional_spending_breakdown.items %}
+                                                    {% for name, val in row.additional_spending_breakdown.items %}
+                                                        <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                            <span>{{ name }}:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ val }}" data-real="{{ val }}">
+                                                                ${{ val|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div class="text-muted text-center small">No additional spending this year</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         <!-- Hover Tooltip for Ending Assets -->
@@ -421,7 +441,7 @@
                             <tr>
                                 <th>Year</th>
                                 <th>Regular Retirement Spending</th>
-                                <th>Additional Spending</th>
+                                <th>Additional Spending <small class="text-muted">(Hover)</small></th>
                                 <th>Taxes & Penalties</th>
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
                                 <th>Portfolio Withdrawals <small class="text-muted">(Hover)</small></th>
@@ -437,9 +457,29 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount text-danger" data-nominal="{{ row.additional_spending }}" data-real="{{ row.additional_spending }}">
-                                            ${{ row.additional_spending|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Additional Spending Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-danger font-weight-bold" 
+                                                  data-nominal="{{ row.additional_spending }}" 
+                                                  data-real="{{ row.additional_spending }}">
+                                                ${{ row.additional_spending|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Additional Spending</h6>
+                                                {% if row.additional_spending_breakdown.items %}
+                                                    {% for name, val in row.additional_spending_breakdown.items %}
+                                                        <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                            <span>{{ name }}:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ val }}" data-real="{{ val }}">
+                                                                ${{ val|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div class="text-muted text-center small">No additional spending this year</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         <span class="dollar-amount text-danger" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
@@ -674,6 +714,7 @@
         if (Array.isArray(raw.additional_spending)) {
             raw.additional_spending.forEach(function(item) {
                 clean.additional_spending.push({
+                    name: (item.name || 'Additional Expense').trim(),
                     amount: clampNum(item.amount, 0, null, 0),
                     start_age: clampInt(item.start_age, 18, 110, 65),
                     interval: clampInt(item.interval, 0, 50, 0),

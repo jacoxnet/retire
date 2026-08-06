@@ -250,11 +250,33 @@
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Average Return %</label>
+                                    <label class="form-label">
+                                        Average Return %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Expected Annual Return (%)" 
+                                           data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="pretax_return_mean" value="{{ pretax_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Return Std Dev %</label>
+                                    <label class="form-label">
+                                        Return Std Dev %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Annual Volatility / Risk (%)" 
+                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
@@ -307,11 +329,33 @@
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Average Return %</label>
+                                    <label class="form-label">
+                                        Average Return %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Expected Annual Return (%)" 
+                                           data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="roth_return_mean" value="{{ roth_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Return Std Dev %</label>
+                                    <label class="form-label">
+                                        Return Std Dev %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Annual Volatility / Risk (%)" 
+                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="roth_return_std" value="{{ roth_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
@@ -367,11 +411,33 @@
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Average Return %</label>
+                                    <label class="form-label">
+                                        Average Return %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Expected Annual Return (%)" 
+                                           data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="taxable_return_mean" value="{{ taxable_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Return Std Dev %</label>
+                                    <label class="form-label">
+                                        Return Std Dev %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Annual Volatility / Risk (%)" 
+                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="taxable_return_std" value="{{ taxable_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
@@ -424,11 +490,33 @@
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Average Return %</label>
+                                    <label class="form-label">
+                                        Average Return %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Expected Annual Return (%)" 
+                                           data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="hsa_return_mean" value="{{ hsa_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Return Std Dev %</label>
+                                    <label class="form-label">
+                                        Return Std Dev %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Annual Volatility / Risk (%)" 
+                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                        </i>
+                                    </label>
                                     <input type="number" class="form-control" name="hsa_return_std" value="{{ hsa_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
@@ -452,14 +540,15 @@
                     <p class="text-secondary small mb-3">Enter spending items that do not occur every year (e.g. car purchase every 10 years, college, weddings).</p>
                     
                     <div class="table-container mb-3" style="overflow-x: auto;">
-                        <table class="table align-middle" id="additionalSpendingTable" style="min-width: 750px;">
+                        <table class="table align-middle" id="additionalSpendingTable" style="min-width: 800px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 25%; min-width: 130px;">Amount $ (Current)</th>
+                                    <th style="width: 25%; min-width: 140px;">Spending Item Name</th>
+                                    <th style="width: 20%; min-width: 110px;">Amount $ (Current)</th>
                                     <th style="width: 15%; min-width: 80px;">Start Age</th>
-                                    <th style="width: 30%; min-width: 140px;">Interval (Years) <small class="text-muted">(0 for one-time)</small></th>
-                                    <th style="width: 20%; min-width: 110px;">Adjust for Inflation?</th>
-                                    <th style="width: 10%; min-width: 50px;">Action</th>
+                                    <th style="width: 20%; min-width: 130px;">Interval (Years) <small class="text-muted">(0 for one-time)</small></th>
+                                    <th style="width: 15%; min-width: 110px;">Adjust for Inflation?</th>
+                                    <th style="width: 5%; min-width: 50px;">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -602,6 +691,7 @@
         const additionalSpendingTableBody = document.querySelector('#additionalSpendingTable tbody');
         
         function addSpendingRow(data = {}) {
+            var name = data.name !== undefined ? data.name : '';
             var amount = data.amount !== undefined ? data.amount : 10000;
             var startAge = data.start_age !== undefined ? data.start_age : 65;
             var interval = data.interval !== undefined ? data.interval : 0;
@@ -609,6 +699,9 @@
             
             var row = document.createElement('tr');
             row.innerHTML = `
+                <td>
+                    <input type="text" class="form-control" name="add_spending_name[]" value="${name}" placeholder="e.g. Car, World Cruise" required style="min-width: 130px;">
+                </td>
                 <td>
                     <input type="number" class="form-control" name="add_spending_amount[]" value="${amount}" required style="min-width: 110px;">
                 </td>
@@ -894,11 +987,14 @@
             // Collect dynamic spending items
             var spendingRows = additionalSpendingTableBody.querySelectorAll('tr');
             spendingRows.forEach(row => {
+                var nameInput = row.querySelector('[name="add_spending_name[]"]');
+                var name = nameInput ? nameInput.value.trim() : 'Additional Expense';
                 var amt = parseFloat(row.querySelector('[name="add_spending_amount[]"]').value || 0);
                 var age = parseInt(row.querySelector('[name="add_spending_start_age[]"]').value || 0);
                 var val = parseInt(row.querySelector('[name="add_spending_interval[]"]').value || 0);
                 var inf = row.querySelector('[name="add_spending_adjust_inflation[]"]').value === 'true';
                 dataBlock.additional_spending.push({
+                    'name': name || 'Additional Expense',
                     'amount': amt,
                     'start_age': age,
                     'interval': val,
@@ -1000,6 +1096,7 @@
             if (Array.isArray(raw.additional_spending)) {
                 raw.additional_spending.forEach(function(item) {
                     clean.additional_spending.push({
+                        name: (item.name || 'Additional Expense').trim(),
                         amount: clampNum(item.amount, 0, null, 0),
                         start_age: clampInt(item.start_age, 18, 110, 65),
                         interval: clampInt(item.interval, 0, 50, 0),
@@ -1458,6 +1555,12 @@
                 }
             });
         }
+
+        // Initialize Bootstrap Popovers
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
 
     });
 </script>

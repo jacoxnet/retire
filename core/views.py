@@ -260,6 +260,7 @@ def enter_view(request):
         
         # Additional Spending Lists
         additional_spending = []
+        add_names = request.POST.getlist('add_spending_name[]')
         add_amounts = request.POST.getlist('add_spending_amount[]')
         add_start_ages = request.POST.getlist('add_spending_start_age[]')
         add_intervals = request.POST.getlist('add_spending_interval[]')
@@ -267,7 +268,9 @@ def enter_view(request):
         
         for i in range(len(add_amounts)):
             try:
+                name_val = add_names[i].strip() if i < len(add_names) and add_names[i] else "Additional Expense"
                 additional_spending.append({
+                    'name': name_val,
                     'amount': get_float(add_amounts[i]),
                     'start_age': get_int(add_start_ages[i]),
                     'interval': get_int(add_intervals[i]),

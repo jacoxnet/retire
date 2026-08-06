@@ -178,7 +178,9 @@ def simulate_step(
         
     # 5. Calculate Additional Spending
     add_spending_t = 0.0
+    add_spending_breakdown_t = {}
     for item in additional_spending_list:
+        name = item.get('name') or 'Additional Expense'
         start_age = item.get('start_age', 0)
         interval = item.get('interval', 0)
         amount = item.get('amount', 0.0)
@@ -193,7 +195,9 @@ def simulate_step(
                 
         if occurs:
             spending_factor = (1.0 + inflation_rate / 100.0) ** t if adjust_inf else 1.0
-            add_spending_t += amount * spending_factor
+            item_amt = amount * spending_factor
+            add_spending_t += item_amt
+            add_spending_breakdown_t[name] = add_spending_breakdown_t.get(name, 0.0) + item_amt
             
     total_spending_target = desired_spending_t + add_spending_t
     
@@ -476,6 +480,7 @@ def simulate_step(
         'taxes_paid': final_tax_and_penalty,
         'desired_spending': desired_spending_t,
         'additional_spending': add_spending_t,
+        'additional_spending_breakdown': add_spending_breakdown_t,
         'withdrawals': withdrawals
     }
 
@@ -1267,6 +1272,7 @@ def run_deterministic(sim_input):
             'taxes': res['taxes_paid'],
             'desired_spending': res['desired_spending'],
             'additional_spending': res['additional_spending'],
+            'additional_spending_breakdown': res['additional_spending_breakdown'],
             'ending_assets': res['ending_assets'],
             'withdrawals': res['withdrawals']
         })

@@ -170,6 +170,38 @@ class RetirementCalculationTests(TestCase):
         self.assertRedirects(response, '/results/')
         self.assertFalse(self.client.session['simulation_data']['goal_seeking'])
 
+    def test_named_additional_spending_breakdown(self):
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'Spending Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '40000',
+            'inflation_rate': '2.5',
+            'runs': '10',
+            'pretax_present_balance': '500000',
+            'add_spending_name[]': ['Car Purchase', 'World Cruise'],
+            'add_spending_amount[]': ['50000', '40000'],
+            'add_spending_start_age[]': ['65', '65'],
+            'add_spending_interval[]': ['10', '0'],
+            'add_spending_adjust_inflation[]': ['true', 'true']
+        }
+        response = self.client.post('/', post_data)
+        self.assertRedirects(response, '/results/')
+        
+        # Access results page
+        res = self.client.get('/results/')
+        det_rows = res.context['det_rows']
+        
+        # At age 65 (year_index 5), both Car Purchase and World Cruise occur
+        row_65 = [r for r in det_rows if r['user_age'] == 65][0]
+        self.assertIn('Car Purchase', row_65['additional_spending_breakdown'])
+        self.assertIn('World Cruise', row_65['additional_spending_breakdown'])
+        self.assertGreater(row_65['additional_spending_breakdown']['Car Purchase'], 50000)
+        self.assertGreater(row_65['additional_spending_breakdown']['World Cruise'], 40000)
+
+
 
 
 
