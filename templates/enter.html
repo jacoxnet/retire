@@ -183,7 +183,7 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="inflation_rate" class="form-label">Inflation Rate %</label>
-                            <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:1 }}" step="0.1" required>
+                            <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:"-2" }}" step="0.01" required>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="runs" class="form-label">Number of Simulations (MC Paths)</label>

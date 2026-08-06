@@ -3,8 +3,25 @@
 {% block title %}Results{% endblock %}
 
 {% block content %}
-<div class="container main-content mt-4">
-    <div class="pageheading mb-4">Retirement Simulation Results</div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="pageheading mb-0">Retirement Simulation Results</h1>
+        <div class="d-flex gap-2">
+            <!-- JSON Import / Export Actions -->
+            <button type="button" class="btn btn-secondary btn-sm" id="btnExportJSON">
+                <i class="fa fa-download"></i> Save Plan (JSON)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('jsonFilePicker').click();">
+                <i class="fa fa-upload"></i> Load Plan (JSON)
+            </button>
+            <input type="file" id="jsonFilePicker" style="display: none;" accept=".json">
+        </div>
+    </div>
+
+    <!-- Hidden form to post loaded plan data -->
+    <form id="loadPlanForm" method="POST" action="{% url 'load_plan' %}" style="display: none;">
+        {% csrf_token %}
+        <input type="hidden" name="json_data" id="loadPlanInput">
+    </form>
 
     <!-- Results Tab Navigation -->
     <ul class="nav nav-tabs mb-4 justify-content-center" id="resultsTabs" role="tablist">
@@ -32,7 +49,7 @@
             <div class="row">
                 <!-- Parameters Card -->
                 <div class="col-md-5 mb-4">
-                    <div class="card p-4 h-100">
+                    <div class="card p-4">
                         <h3 class="border-bottom pb-2 text-primary">Simulation Inputs</h3>
                         <div class="mt-3">
                             <p class="mb-2"><strong>Initial Wealth:</strong> <span class="dollar-amount-static">${{ initial_wealth|floatformat:"0"|intcomma }}</span></p>
@@ -46,6 +63,33 @@
                             <p class="mb-1 small"><strong>Taxable:</strong> ${{ taxable_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ taxable_assets.return_mean }}% mean, {{ taxable_assets.return_std }}% std)</span></p>
                             <p class="mb-1 small"><strong>HSA:</strong> ${{ hsa_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ hsa_assets.return_mean }}% mean, {{ hsa_assets.return_std }}% std)</span></p>
                         </div>
+                    </div>
+
+                    <!-- Simulation Mode Selection Card -->
+                    <div class="card p-4 mt-4 shadow-sm">
+                        <h4 class="border-bottom pb-2 text-primary">Simulation Mode</h4>
+                        <form method="POST" action="{% url 'change_mode' %}" id="resultsModeForm" class="mt-2">
+                            {% csrf_token %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_regular" value="regular" {% if not goal_seeking %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="results_sim_type_regular">
+                                    Regular Simulation <span class="text-muted fw-normal small">(Calculates Success Rate)</span>
+                                </label>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_goal" value="goal_seeking" {% if goal_seeking %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="results_sim_type_goal">
+                                    Goal-Seeking Simulation <span class="text-muted fw-normal small">(Solves for Spending)</span>
+                                </label>
+                            </div>
+                            <div class="mb-3" id="results_target_success_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %};">
+                                <label for="results_target_success_rate" class="form-label fw-semibold">Target Success Rate %</label>
+                                <input type="number" class="form-control" id="results_target_success_rate" name="target_success_rate" value="{{ target_success_rate|default:80.0|floatformat:"-2" }}" min="1" max="99" step="0.1">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fa fa-refresh me-1"></i> Update Simulation Mode
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -457,6 +501,170 @@
                 el.textContent = currencyFormatter.format(val);
             }
         });
+    }
+</script>
+
+{{ plan_data_json|json_script:"plan-data-json" }}
+
+<script>
+    // Save Plan (JSON)
+    const btnExportJSON = document.getElementById('btnExportJSON');
+    if (btnExportJSON) {
+        btnExportJSON.addEventListener('click', function() {
+            var rawScript = document.getElementById('plan-data-json');
+            var dataBlock = rawScript ? JSON.parse(rawScript.textContent) : {};
+            var jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataBlock, null, 4));
+            var downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", jsonString);
+            downloadAnchor.setAttribute("download", (dataBlock.user_name || "retirement").toLowerCase().replace(/\s+/g, '_') + "_plan.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+    }
+
+    // JSON Sanitization & Load Plan (JSON)
+    function sanitizeJSONData(raw) {
+        if (typeof raw !== 'object' || raw === null) return {};
+
+        function clampNum(val, min, max, fallback) {
+            var num = parseFloat(val);
+            if (isNaN(num)) return fallback;
+            if (min !== null && num < min) return min;
+            if (max !== null && num > max) return max;
+            return num;
+        }
+
+        function clampInt(val, min, max, fallback) {
+            return Math.round(clampNum(val, min, max, fallback));
+        }
+
+        var clean = {};
+        clean.simulation_type = raw.simulation_type === 'goal_seeking' || raw.goal_seeking ? 'goal_seeking' : 'regular';
+        clean.goal_seeking = clean.simulation_type === 'goal_seeking';
+        clean.user_name = (raw.user_name || 'User').trim();
+        clean.user_age = clampInt(raw.user_age, 18, 110, 60);
+        clean.user_retirement_age = clampInt(raw.user_retirement_age, 18, 110, 65);
+        clean.user_age_death = clampInt(raw.user_age_death, 18, 120, 90);
+
+        clean.is_married = !!raw.is_married;
+        clean.spouse_name = (raw.spouse_name || 'Spouse').trim();
+        clean.spouse_age = clampInt(raw.spouse_age, 18, 110, 60);
+        clean.spouse_retirement_age = clampInt(raw.spouse_retirement_age, 18, 110, 65);
+        clean.spouse_age_death = clampInt(raw.spouse_age_death, 18, 120, 90);
+
+        clean.filing_status = ['single', 'joint', 'hoh'].includes(raw.filing_status) ? raw.filing_status : (clean.is_married ? 'joint' : 'single');
+        clean.current_year = clampInt(raw.current_year, 2020, 2100, 2026);
+
+        clean.begin_spending_age_type = ['retirement', 'spouse_retirement', 'specified'].includes(raw.begin_spending_age_type) ? raw.begin_spending_age_type : 'retirement';
+        clean.begin_spending_age_specified = clampInt(raw.begin_spending_age_specified, 18, 110, 65);
+
+        clean.desired_spending = clampNum(raw.desired_spending, 0, null, 40000);
+        clean.survivor_spending = clampNum(raw.survivor_spending, 0, null, clean.desired_spending);
+        clean.adjust_spending_inflation = raw.adjust_spending_inflation !== false;
+
+        clean.inflation_rate = clampNum(raw.inflation_rate, -10, 50, 2.5);
+        clean.runs = clampInt(raw.runs, 1, 5000, 1000);
+        clean.target_success_rate = clampNum(raw.target_success_rate, 1, 100, 80);
+
+        var minStartAge = clean.is_married ? Math.min(clean.user_age, clean.spouse_age) : clean.user_age;
+
+        var assetClasses = ['pretax', 'roth', 'taxable', 'hsa'];
+        assetClasses.forEach(function(ac) {
+            var rawAc = raw[ac + '_assets'] || {};
+            clean[ac + '_assets'] = {
+                present_balance: clampNum(rawAc.present_balance, 0, null, 0),
+                contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
+                contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
+                contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, clean.user_age),
+                contrib_end_age_type: ['retirement', 'spouse_retirement', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : 'retirement',
+                contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, clean.user_retirement_age),
+                contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
+                return_mean: clampNum(rawAc.return_mean, -50, 100, 6.0),
+                return_std: clampNum(rawAc.return_std, 0, 100, 10.0),
+                hsa_for_medical: rawAc.hsa_for_medical !== false
+            };
+        });
+
+        clean.additional_spending = [];
+        if (Array.isArray(raw.additional_spending)) {
+            raw.additional_spending.forEach(function(item) {
+                clean.additional_spending.push({
+                    amount: clampNum(item.amount, 0, null, 0),
+                    start_age: clampInt(item.start_age, 18, 110, 65),
+                    interval: clampInt(item.interval, 0, 50, 0),
+                    adjust_inflation: item.adjust_inflation !== false
+                });
+            });
+        }
+
+        clean.income_sources = [];
+        if (Array.isArray(raw.income_sources)) {
+            raw.income_sources.forEach(function(item) {
+                var adjType = ['inflation', 'fixed_pct', 'inflation_less_pct', 'none'].includes(item.adjust_type) ? item.adjust_type : 'inflation';
+                var adjVal = clampNum(item.adjust_val, 0, 100, 0.0);
+                if (adjType === 'none' || adjType === 'inflation') {
+                    adjVal = 0.0;
+                }
+                clean.income_sources.push({
+                    name: (item.name || 'Income Source').trim(),
+                    amount: clampNum(item.amount, 0, null, 0),
+                    frequency: ['monthly', 'annual', 'one_time', 'one-time'].includes(item.frequency) ? item.frequency : 'monthly',
+                    start_age_type: ['retirement', 'spouse_retirement', 'specified'].includes(item.start_age_type) ? item.start_age_type : 'retirement',
+                    start_age_specified: clampInt(item.start_age_specified, 18, 110, 65),
+                    end_age_type: ['death', 'spouse_death', 'specified'].includes(item.end_age_type) ? item.end_age_type : 'death',
+                    end_age_specified: clampInt(item.end_age_specified, 18, 120, 90),
+                    subject_to_tax: item.subject_to_tax !== false,
+                    is_social_security: !!item.is_social_security,
+                    adjust_type: adjType,
+                    adjust_val: adjVal
+                });
+            });
+        }
+
+        return clean;
+    }
+
+    const jsonFilePicker = document.getElementById('jsonFilePicker');
+    if (jsonFilePicker) {
+        jsonFilePicker.addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var rawData = JSON.parse(e.target.result);
+                    var cleanData = sanitizeJSONData(rawData);
+                    document.getElementById('loadPlanInput').value = JSON.stringify(cleanData);
+                    document.getElementById('loadPlanForm').submit();
+                } catch(err) {
+                    alert("Error parsing plan JSON. Make sure the file format is correct.");
+                    console.error(err);
+                } finally {
+                    jsonFilePicker.value = '';
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    // Toggle target success rate field visibility in Results mode selector
+    const resultsRegRadio = document.getElementById('results_sim_type_regular');
+    const resultsGoalRadio = document.getElementById('results_sim_type_goal');
+    const resultsTargetGroup = document.getElementById('results_target_success_group');
+
+    function toggleResultsModeFields() {
+        if (resultsGoalRadio && resultsGoalRadio.checked) {
+            resultsTargetGroup.style.display = 'block';
+        } else if (resultsTargetGroup) {
+            resultsTargetGroup.style.display = 'none';
+        }
+    }
+
+    if (resultsRegRadio && resultsGoalRadio) {
+        resultsRegRadio.addEventListener('change', toggleResultsModeFields);
+        resultsGoalRadio.addEventListener('change', toggleResultsModeFields);
     }
 </script>
 {% endblock %}

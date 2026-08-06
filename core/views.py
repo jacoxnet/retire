@@ -1,4 +1,5 @@
 import copy
+import json
 from core.runs import generate_runs, binary_search, run_deterministic
 from core.models import SimulationData
 from django.shortcuts import render, redirect
@@ -115,6 +116,58 @@ def clear_data_view(request):
     request.session['cached_version'] = -1
     messages.success(request, "All simulation data has been cleared.")
     return redirect(reverse('enter'))
+
+@require_http_methods(["POST"])
+def load_plan_view(request):
+    raw_json = request.POST.get('json_data')
+    if not raw_json:
+        messages.error(request, "No plan data provided.")
+        return redirect(reverse('results'))
+    
+    try:
+        data = json.loads(raw_json)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid JSON format")
+            
+        if 'goal_seeking' not in data and 'simulation_type' in data:
+            data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
+        elif 'simulation_type' not in data and 'goal_seeking' in data:
+            data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
+
+        request.session['simulation_data'] = data
+        request.session['data_version'] = request.session.get('data_version', 0) + 1
+        request.session['cached_results'] = None
+        request.session['cached_version'] = -1
+        SimulationData.objects.create(data=data)
+        messages.success(request, "Plan loaded successfully!")
+    except Exception as e:
+        messages.error(request, f"Error loading plan: {str(e)}")
+        
+    return redirect(reverse('results'))
+
+@require_http_methods(["POST"])
+def change_mode_view(request):
+    sim_type = request.POST.get('simulation_type', 'regular')
+    is_goal = (sim_type == 'goal_seeking')
+    
+    session_data = get_session_sim_data(request)
+    data = session_data if isinstance(session_data, dict) else session_data.to_dict()
+        
+    data['simulation_type'] = 'goal_seeking' if is_goal else 'regular'
+    data['goal_seeking'] = is_goal
+    
+    if is_goal:
+        target_rate = get_float(request.POST.get('target_success_rate'), data.get('target_success_rate', 80.0))
+        data['target_success_rate'] = min(99.0, max(1.0, target_rate))
+
+    request.session['simulation_data'] = data
+    request.session['data_version'] = request.session.get('data_version', 0) + 1
+    request.session['cached_results'] = None
+    request.session['cached_version'] = -1
+    
+    mode_label = "Goal-Seeking Simulation" if is_goal else "Regular Simulation"
+    messages.success(request, f"Simulation mode updated to {mode_label}.")
+    return redirect(reverse('results'))
 
 @require_http_methods(["GET", "POST"])
 def enter_view(request):
@@ -368,11 +421,13 @@ def results_view(request):
         "runs": data.get('runs', 100),
         "inflation_rate": data.get('inflation_rate', 2.5),
         "desired_spending": data.get('desired_spending', 40000.0),
+        "target_success_rate": data.get('target_success_rate', 80.0),
         "det_rows": det_rows,
         "pretax_assets": data.get('pretax_assets', {}),
         "roth_assets": data.get('roth_assets', {}),
         "taxable_assets": data.get('taxable_assets', {}),
-        "hsa_assets": data.get('hsa_assets', {})
+        "hsa_assets": data.get('hsa_assets', {}),
+        "plan_data_json": json.dumps(data, indent=4)
     }
     
     if not is_goal_seeking:

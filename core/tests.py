@@ -113,6 +113,66 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(self.client.session['simulation_data']['user_name'], 'Bob Smith')
         self.assertEqual(self.client.session['simulation_data']['user_age'], 62)
 
+    def test_hundredths_inflation_rate(self):
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'Inflation Test',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '50000',
+            'inflation_rate': '2.25',
+            'runs': '10',
+            'pretax_present_balance': '500000',
+            'pretax_contrib_amount': '0',
+            'pretax_contrib_freq': 'annual',
+            'pretax_contrib_start_age': '60',
+            'pretax_contrib_end_age_type': 'retirement',
+            'pretax_contrib_end_age_specified': '65',
+            'pretax_return_mean': '6.0',
+            'pretax_return_std': '10.0',
+            'roth_present_balance': '0',
+            'taxable_present_balance': '0',
+            'hsa_present_balance': '0'
+        }
+        response = self.client.post('/', post_data)
+        self.assertRedirects(response, '/results/')
+        self.assertEqual(self.client.session['simulation_data']['inflation_rate'], 2.25)
+
+    def test_load_plan_view(self):
+        import json, os
+        from django.conf import settings
+        file_path = os.path.join(settings.BASE_DIR, 'saved json files', 'aug_5_smith_plan.json')
+        with open(file_path, 'r') as f:
+            raw_json = f.read()
+        
+        response = self.client.post('/load_plan/', {'json_data': raw_json})
+        self.assertRedirects(response, '/results/')
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'Aug 5 Smith')
+
+    def test_change_mode_view(self):
+        # Initialize default session
+        self.client.get('/')
+        
+        # Switch to Goal-Seeking Mode
+        response = self.client.post('/change_mode/', {
+            'simulation_type': 'goal_seeking',
+            'target_success_rate': '85.0'
+        })
+        self.assertRedirects(response, '/results/')
+        self.assertTrue(self.client.session['simulation_data']['goal_seeking'])
+        self.assertEqual(self.client.session['simulation_data']['target_success_rate'], 85.0)
+
+        # Switch back to Regular Mode
+        response = self.client.post('/change_mode/', {
+            'simulation_type': 'regular'
+        })
+        self.assertRedirects(response, '/results/')
+        self.assertFalse(self.client.session['simulation_data']['goal_seeking'])
+
+
+
+
     def test_early_suzie_plan_simulation(self):
         import json, os
         from django.conf import settings
