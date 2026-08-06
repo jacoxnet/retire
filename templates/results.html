@@ -186,14 +186,14 @@
                                 <th>Year</th>
                                 <th>Age</th>
                                 <th>Spouse</th>
-                                <th>Beginning Assets</th>
-                                <th>Contributions</th>
-                                <th>Asset Growth</th>
-                                <th>Income Sources</th>
+                                <th>Beginning Assets <small class="text-muted">(Hover)</small></th>
+                                <th>Contributions <small class="text-muted">(Hover)</small></th>
+                                <th>Asset Growth <small class="text-muted">(Hover)</small></th>
+                                <th>Income Sources <small class="text-muted">(Hover)</small></th>
                                 <th>Taxes & Pen.</th>
                                 <th>Regular Retirement Spending</th>
                                 <th>Additional Spending</th>
-                                <th>Ending Assets</th>
+                                <th>Ending Assets <small class="text-muted">(Hover)</small></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -240,19 +240,103 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount" data-nominal="{{ row.contribs.total }}" data-real="{{ row.contribs.total }}">
-                                            ${{ row.contribs.total|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Contributions Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount" 
+                                                  data-nominal="{{ row.contribs.total }}" 
+                                                  data-real="{{ row.contribs.total }}">
+                                                ${{ row.contribs.total|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Contributions Breakdown</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Pretax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.contribs.pretax }}" data-real="{{ row.contribs.pretax }}">
+                                                        ${{ row.contribs.pretax|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Roth:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.contribs.roth }}" data-real="{{ row.contribs.roth }}">
+                                                        ${{ row.contribs.roth|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Taxable:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.contribs.taxable }}" data-real="{{ row.contribs.taxable }}">
+                                                        ${{ row.contribs.taxable|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small">
+                                                    <span>HSA:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.contribs.hsa }}" data-real="{{ row.contribs.hsa }}">
+                                                        ${{ row.contribs.hsa|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount {% if row.growth.total < 0 %}text-danger{% else %}text-success{% endif %}" data-nominal="{{ row.growth.total }}" data-real="{{ row.growth.total }}">
-                                            ${{ row.growth.total|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Asset Growth Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount {% if row.growth.total < 0 %}text-danger{% else %}text-success{% endif %}" 
+                                                  data-nominal="{{ row.growth.total }}" 
+                                                  data-real="{{ row.growth.total }}">
+                                                ${{ row.growth.total|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Asset Growth Breakdown</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Pretax:</span>
+                                                    <span class="dollar-amount {% if row.growth.pretax < 0 %}text-danger{% else %}text-success{% endif %}" data-nominal="{{ row.growth.pretax }}" data-real="{{ row.growth.pretax }}">
+                                                        ${{ row.growth.pretax|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Roth:</span>
+                                                    <span class="dollar-amount {% if row.growth.roth < 0 %}text-danger{% else %}text-success{% endif %}" data-nominal="{{ row.growth.roth }}" data-real="{{ row.growth.roth }}">
+                                                        ${{ row.growth.roth|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Taxable:</span>
+                                                    <span class="dollar-amount {% if row.growth.taxable < 0 %}text-danger{% else %}text-success{% endif %}" data-nominal="{{ row.growth.taxable }}" data-real="{{ row.growth.taxable }}">
+                                                        ${{ row.growth.taxable|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small">
+                                                    <span>HSA:</span>
+                                                    <span class="dollar-amount {% if row.growth.hsa < 0 %}text-danger{% else %}text-success{% endif %}" data-nominal="{{ row.growth.hsa }}" data-real="{{ row.growth.hsa }}">
+                                                        ${{ row.growth.hsa|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount text-success" data-nominal="{{ row.income }}" data-real="{{ row.income }}">
-                                            ${{ row.income|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Income Sources Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-success font-weight-bold" 
+                                                  data-nominal="{{ row.income }}" 
+                                                  data-real="{{ row.income }}">
+                                                ${{ row.income|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Income Breakdown</h6>
+                                                {% if row.income_breakdown.items %}
+                                                    {% for name, val in row.income_breakdown.items %}
+                                                        <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                            <span>{{ name }}:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ val }}" data-real="{{ val }}">
+                                                                ${{ val|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div class="text-muted text-center small">No income streams active</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         <span class="dollar-amount text-danger" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
