@@ -129,6 +129,23 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('det_rows', response.context)
 
+    def test_aug_5_smith_plan_simulation(self):
+        import json, os
+        from django.conf import settings
+        file_path = os.path.join(settings.BASE_DIR, 'saved json files', 'aug_5_smith_plan.json')
+        with open(file_path, 'r') as f:
+            plan_data = json.load(f)
+        
+        session = self.client.session
+        session['simulation_data'] = plan_data
+        session['data_version'] = 1
+        session.save()
+        
+        response = self.client.get('/results/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('det_rows', response.context)
+
+
     def test_invalid_goal_seeking_target_success_rate(self):
         post_data = {
             'simulation_type': 'goal_seeking',

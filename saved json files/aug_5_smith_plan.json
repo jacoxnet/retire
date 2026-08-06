@@ -1,0 +1,103 @@
+{
+    "simulation_type": "goal_seeking",
+    "user_name": "Aug 5 Smith",
+    "user_age": 60,
+    "user_retirement_age": 65,
+    "user_age_death": 95,
+    "is_married": true,
+    "spouse_name": "Mrs Smith",
+    "spouse_age": 57,
+    "spouse_retirement_age": 60,
+    "spouse_age_death": 95,
+    "filing_status": "joint",
+    "current_year": 2026,
+    "begin_spending_age_type": "retirement",
+    "begin_spending_age_specified": 65,
+    "desired_spending": 120000,
+    "survivor_spending": 100000,
+    "adjust_spending_inflation": true,
+    "inflation_rate": 3,
+    "runs": 25000,
+    "target_success_rate": 85,
+    "pretax_assets": {
+        "present_balance": 1000000,
+        "contrib_amount": 5000,
+        "contrib_freq": "monthly",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10
+    },
+    "roth_assets": {
+        "present_balance": 100000,
+        "contrib_amount": 2000,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10
+    },
+    "taxable_assets": {
+        "present_balance": 75000,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 5,
+        "return_std": 8
+    },
+    "hsa_assets": {
+        "present_balance": 0,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 5,
+        "return_std": 8,
+        "hsa_for_medical": true
+    },
+    "additional_spending": [
+        {
+            "amount": 50000,
+            "start_age": 65,
+            "interval": 10,
+            "adjust_inflation": true
+        }
+    ],
+    "income_sources": [
+        {
+            "name": "Social Security",
+            "amount": 3000,
+            "frequency": "monthly",
+            "start_age_type": "retirement",
+            "start_age_specified": 65,
+            "end_age_type": "spouse_death",
+            "end_age_specified": 90,
+            "subject_to_tax": true,
+            "is_social_security": true,
+            "adjust_type": "inflation",
+            "adjust_val": 0
+        },
+        {
+            "name": "Spouse Soc Sec",
+            "amount": 1300,
+            "frequency": "monthly",
+            "start_age_type": "spouse_retirement",
+            "start_age_specified": 65,
+            "end_age_type": "death",
+            "end_age_specified": 90,
+            "subject_to_tax": true,
+            "is_social_security": true,
+            "adjust_type": "inflation",
+            "adjust_val": 0
+        }
+    ]
+}

@@ -1019,6 +1019,7 @@
                     clean.income_sources.push({
                         name: (item.name || 'Income Source').trim(),
                         amount: clampNum(item.amount, 0, null, 0),
+                        frequency: ['monthly', 'annual', 'one_time', 'one-time'].includes(item.frequency) ? item.frequency : 'monthly',
                         start_age_type: ['retirement', 'spouse_retirement', 'specified'].includes(item.start_age_type) ? item.start_age_type : 'retirement',
                         start_age_specified: clampInt(item.start_age_specified, 18, 110, 65),
                         end_age_type: ['death', 'spouse_death', 'specified'].includes(item.end_age_type) ? item.end_age_type : 'death',
@@ -1108,7 +1109,7 @@
                     }
                     
                     // Clear and Populate Income Sources
-                    incomeStreamsTableBody.innerHTML = '';
+                    incomeStreamsContainer.innerHTML = '';
                     if (Array.isArray(data.income_sources)) {
                         data.income_sources.forEach(function(item) {
                             addIncomeRow(item);
@@ -1126,6 +1127,8 @@
                 } catch(err) {
                     alert("Error parsing plan JSON. Make sure the file format is correct.");
                     console.error(err);
+                } finally {
+                    jsonFilePicker.value = '';
                 }
             };
             reader.readAsText(file);
