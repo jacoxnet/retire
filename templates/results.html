@@ -375,7 +375,7 @@
                                     </td>
                                     <td>
                                         <!-- Hover Tooltip for Ending Assets -->
-                                        <div class="tooltip-trigger">
+                                        <div class="tooltip-trigger ending-assets-group">
                                             <span class="dollar-amount text-primary font-weight-bold" 
                                                   data-nominal="{{ row.ending_assets.total }}" 
                                                   data-real="{{ row.ending_assets.total }}">
@@ -590,8 +590,12 @@
                 yearIndex = Math.max(0, year - startYear);
             }
             
+            // Check if element belongs to Ending Assets (end of year balance)
+            const isEndingAsset = el.classList.contains('is-ending-asset') || !!el.closest('.ending-assets-group');
+            const exp = isEndingAsset ? (yearIndex + 1) : yearIndex;
+            
             // Calculate real value
-            const realVal = nominalVal / Math.pow(1.0 + inflationRate / 100.0, yearIndex);
+            const realVal = nominalVal / Math.pow(1.0 + inflationRate / 100.0, exp);
             el.setAttribute('data-real', realVal.toFixed(2));
         });
         
