@@ -305,6 +305,60 @@ class RetirementCalculationTests(TestCase):
         # Year 3 (Age 63): 1000*12 + 5000 = 17000
         self.assertEqual(rows[3]['income'], 17000)
 
+    def test_formatted_currency_input_parsing(self):
+        # Verify post values formatted with $ and commas are parsed correctly
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'Formatted Currency User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '$120,000',
+            'inflation_rate': '2.5',
+            'runs': '10',
+            'pretax_present_balance': '$500,000',
+            'pretax_contrib_amount': '$12,500',
+            'roth_present_balance': '$150,000',
+            'taxable_present_balance': '$250,000',
+            'hsa_present_balance': '$25,000'
+        }
+        response = self.client.post('/', post_data)
+        self.assertRedirects(response, '/results/')
+        sim_data = self.client.session['simulation_data']
+        self.assertEqual(sim_data['desired_spending'], 120000.0)
+        self.assertEqual(sim_data['pretax_assets']['present_balance'], 500000.0)
+        self.assertEqual(sim_data['pretax_assets']['contrib_amount'], 12500.0)
+        self.assertEqual(sim_data['roth_assets']['present_balance'], 150000.0)
+        self.assertEqual(sim_data['taxable_assets']['present_balance'], 250000.0)
+        self.assertEqual(sim_data['hsa_assets']['present_balance'], 25000.0)
+
+    def test_formatted_percent_input_parsing(self):
+        # Verify post values formatted with % sign are parsed correctly
+        post_data = {
+            'simulation_type': 'goal_seeking',
+            'user_name': 'Formatted Percent User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '$40,000',
+            'inflation_rate': '2.25%',
+            'target_success_rate': '85.5%',
+            'runs': '10',
+            'pretax_present_balance': '$500,000',
+            'pretax_return_mean': '6.5%',
+            'pretax_return_std': '10.5%',
+            'roth_present_balance': '0',
+            'taxable_present_balance': '0',
+            'hsa_present_balance': '0'
+        }
+        response = self.client.post('/', post_data)
+        self.assertRedirects(response, '/results/')
+        sim_data = self.client.session['simulation_data']
+        self.assertEqual(sim_data['inflation_rate'], 2.25)
+        self.assertEqual(sim_data['target_success_rate'], 85.5)
+        self.assertEqual(sim_data['pretax_assets']['return_mean'], 6.5)
+        self.assertEqual(sim_data['pretax_assets']['return_std'], 10.5)
+
 
 
 

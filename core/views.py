@@ -12,6 +12,8 @@ import numpy as np
 # Helper to get float with fallback
 def get_float(val, default=0.0):
     try:
+        if isinstance(val, str):
+            val = val.replace('$', '').replace('%', '').replace(',', '').strip()
         return float(val)
     except (TypeError, ValueError):
         return default
@@ -19,7 +21,9 @@ def get_float(val, default=0.0):
 # Helper to get int with fallback
 def get_int(val, default=0):
     try:
-        return int(val)
+        if isinstance(val, str):
+            val = val.replace('$', '').replace('%', '').replace(',', '').strip()
+        return int(float(val))
     except (TypeError, ValueError):
         return default
 

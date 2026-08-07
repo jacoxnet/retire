@@ -132,7 +132,7 @@
 
                     <div class="form-group mb-4" id="target_success_rate_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %}; max-width: 350px;">
                         <label for="target_success_rate" class="form-label">Target Success Rate %</label>
-                        <input type="number" class="form-control {% if target_success_rate_error %}is-invalid{% endif %}" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="99" step="0.1">
+                        <input type="text" inputmode="decimal" class="form-control percent-input {% if target_success_rate_error %}is-invalid{% endif %}" id="target_success_rate" name="target_success_rate" value="{{ target_success_rate|floatformat:1 }}" min="1" max="99" step="0.1">
                         <div class="invalid-feedback" id="target_success_rate_feedback">
                             Target Success Rate must be between 1% and 99%.
                         </div>
@@ -168,11 +168,11 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="desired_spending" class="form-label">Desired Recurring Annual Spending in Today’s Dollars $</label>
-                            <input type="number" class="form-control" id="desired_spending" name="desired_spending" value="{{ desired_spending|floatformat:0 }}" required>
+                            <input type="text" inputmode="numeric" class="form-control currency-input" id="desired_spending" name="desired_spending" value="{{ desired_spending|floatformat:0 }}" required>
                         </div>
                         <div class="col-md-4 mb-3" id="survivor_spending_group" style="display: {% if is_married %}block{% else %}none{% endif %};">
                             <label for="survivor_spending" class="form-label">Amount of Regular Retirement Spending After First Death</label>
-                            <input type="number" class="form-control" id="survivor_spending" name="survivor_spending" value="{{ survivor_spending|floatformat:0 }}">
+                            <input type="text" inputmode="numeric" class="form-control currency-input" id="survivor_spending" name="survivor_spending" value="{{ survivor_spending|floatformat:0 }}">
                         </div>
                     </div>
 
@@ -183,7 +183,7 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="inflation_rate" class="form-label">Inflation Rate %</label>
-                            <input type="number" class="form-control" id="inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:"-2" }}" step="0.01" required>
+                            <input type="text" inputmode="decimal" class="form-control percent-input" id="inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:"-2" }}" step="0.01" required>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="runs" class="form-label">Number of Simulations (MC Paths)</label>
@@ -210,12 +210,12 @@
                             <h4 class="text-primary mb-3">Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
-                                <input type="number" class="form-control" id="pretax_present_balance" name="pretax_present_balance" value="{{ pretax_assets.present_balance|floatformat:0 }}">
+                                <input type="text" inputmode="numeric" class="form-control currency-input" id="pretax_present_balance" name="pretax_present_balance" value="{{ pretax_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Future Contributions $</label>
-                                    <input type="number" class="form-control" id="pretax_contrib_amount" name="pretax_contrib_amount" value="{{ pretax_assets.contrib_amount|floatformat:0 }}">
+                                    <input type="text" inputmode="numeric" class="form-control currency-input" id="pretax_contrib_amount" name="pretax_contrib_amount" value="{{ pretax_assets.contrib_amount|floatformat:0 }}">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Frequency</label>
@@ -262,7 +262,7 @@
                                            data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="pretax_return_mean" value="{{ pretax_assets.return_mean|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="pretax_return_mean" value="{{ pretax_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
@@ -277,7 +277,7 @@
                                            data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
                         </div>
@@ -289,12 +289,12 @@
                             <h4 class="text-primary mb-3">Roth Assets (Roth IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
-                                <input type="number" class="form-control" id="roth_present_balance" name="roth_present_balance" value="{{ roth_assets.present_balance|floatformat:0 }}">
+                                <input type="text" inputmode="numeric" class="form-control currency-input" id="roth_present_balance" name="roth_present_balance" value="{{ roth_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Future Contributions $</label>
-                                    <input type="number" class="form-control" id="roth_contrib_amount" name="roth_contrib_amount" value="{{ roth_assets.contrib_amount|floatformat:0 }}">
+                                    <input type="text" inputmode="numeric" class="form-control currency-input" id="roth_contrib_amount" name="roth_contrib_amount" value="{{ roth_assets.contrib_amount|floatformat:0 }}">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Frequency</label>
@@ -341,7 +341,7 @@
                                            data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="roth_return_mean" value="{{ roth_assets.return_mean|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="roth_return_mean" value="{{ roth_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
@@ -356,7 +356,7 @@
                                            data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="roth_return_std" value="{{ roth_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="roth_return_std" value="{{ roth_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
                         </div>
@@ -370,12 +370,12 @@
                             <h4 class="text-primary mb-3">Taxable Assets (Brokerage/Savings)</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
-                                <input type="number" class="form-control" id="taxable_present_balance" name="taxable_present_balance" value="{{ taxable_assets.present_balance|floatformat:0 }}">
+                                <input type="text" inputmode="numeric" class="form-control currency-input" id="taxable_present_balance" name="taxable_present_balance" value="{{ taxable_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Future Contributions $</label>
-                                    <input type="number" class="form-control" id="taxable_contrib_amount" name="taxable_contrib_amount" value="{{ taxable_assets.contrib_amount|floatformat:0 }}">
+                                    <input type="text" inputmode="numeric" class="form-control currency-input" id="taxable_contrib_amount" name="taxable_contrib_amount" value="{{ taxable_assets.contrib_amount|floatformat:0 }}">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Frequency</label>
@@ -423,7 +423,7 @@
                                            data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="taxable_return_mean" value="{{ taxable_assets.return_mean|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="taxable_return_mean" value="{{ taxable_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
@@ -438,7 +438,7 @@
                                            data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="taxable_return_std" value="{{ taxable_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="taxable_return_std" value="{{ taxable_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
                         </div>
@@ -450,12 +450,12 @@
                             <h4 class="text-primary mb-3">Health Savings Account (HSA)</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
-                                <input type="number" class="form-control" id="hsa_present_balance" name="hsa_present_balance" value="{{ hsa_assets.present_balance|floatformat:0 }}">
+                                <input type="text" inputmode="numeric" class="form-control currency-input" id="hsa_present_balance" name="hsa_present_balance" value="{{ hsa_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Future Contributions $</label>
-                                    <input type="number" class="form-control" id="hsa_contrib_amount" name="hsa_contrib_amount" value="{{ hsa_assets.contrib_amount|floatformat:0 }}">
+                                    <input type="text" inputmode="numeric" class="form-control currency-input" id="hsa_contrib_amount" name="hsa_contrib_amount" value="{{ hsa_assets.contrib_amount|floatformat:0 }}">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">Frequency</label>
@@ -502,7 +502,7 @@
                                            data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="hsa_return_mean" value="{{ hsa_assets.return_mean|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="hsa_return_mean" value="{{ hsa_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
@@ -517,7 +517,7 @@
                                            data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="number" class="form-control" name="hsa_return_std" value="{{ hsa_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="hsa_return_std" value="{{ hsa_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
                             <div class="mb-3 form-check form-switch ps-5">
@@ -606,6 +606,204 @@
 
 {% block extra_js %}
 <script>
+    // Currency Input Formatting & Parsing Utilities
+    function parseMoney(val) {
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        if (!val) return 0;
+        var cleaned = val.toString().replace(/[\$,]/g, '').trim();
+        var num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+
+    function formatMoney(val) {
+        if (val === null || val === undefined || val === '') return '';
+        var rawStr = val.toString().replace(/[^0-9.]/g, '');
+        if (!rawStr) return '';
+        var parts = rawStr.split('.');
+        var intPart = parts[0] || '0';
+        if (intPart.length > 1) {
+            intPart = intPart.replace(/^0+/, '') || '0';
+        }
+        var formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        var result = '$' + formattedInt;
+        if (parts.length > 1) {
+            result += '.' + parts[1];
+        }
+        return result;
+    }
+
+    function formatCurrencyInput(el) {
+        var rawValue = el.value;
+        if (rawValue === '' || rawValue === null || rawValue === undefined) {
+            return;
+        }
+        var selStart = el.selectionStart || 0;
+        var digitsBeforeCursor = (rawValue.substring(0, selStart).match(/\d/g) || []).length;
+        
+        var formatted = formatMoney(rawValue);
+        el.value = formatted;
+        
+        if (typeof el.setSelectionRange === 'function' && document.activeElement === el) {
+            var newPos = 0;
+            var digitsFound = 0;
+            for (var i = 0; i < formatted.length; i++) {
+                if (/\d/.test(formatted[i])) {
+                    digitsFound++;
+                }
+                if (digitsFound >= digitsBeforeCursor) {
+                    newPos = i + 1;
+                    break;
+                }
+            }
+            if (digitsBeforeCursor === 0) {
+                newPos = formatted.startsWith('$') ? 1 : 0;
+            }
+            el.setSelectionRange(newPos, newPos);
+        }
+    }
+
+    function attachCurrencyInputListeners(el) {
+        if (!el || el.dataset.currencyBound === 'true') return;
+        el.dataset.currencyBound = 'true';
+        
+        if (el.value) {
+            el.value = formatMoney(el.value);
+        }
+        
+        el.addEventListener('input', function() {
+            formatCurrencyInput(this);
+        });
+
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace') {
+                var start = this.selectionStart;
+                var end = this.selectionEnd;
+                if (start === end && start > 1 && this.value[start - 1] === ',') {
+                    e.preventDefault();
+                    var val = this.value;
+                    this.value = val.substring(0, start - 2) + val.substring(start - 1);
+                    formatCurrencyInput(this);
+                }
+            }
+        });
+
+        el.addEventListener('blur', function() {
+            if (this.value.trim() === '$' || this.value.trim() === '') {
+                this.value = '';
+            } else if (this.value) {
+                this.value = formatMoney(this.value);
+            }
+        });
+    }
+
+    function formatAllCurrencyInputs() {
+        document.querySelectorAll('.currency-input').forEach(function(el) {
+            attachCurrencyInputListeners(el);
+            if (el.value) {
+                el.value = formatMoney(el.value);
+            }
+        });
+    }
+
+    // Percentage Input Formatting & Parsing Utilities
+    function parsePercent(val) {
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        if (!val) return 0;
+        var cleaned = val.toString().replace(/[%]/g, '').trim();
+        var num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+
+    function formatPercent(val) {
+        if (val === null || val === undefined || val === '') return '';
+        var str = val.toString().replace(/[^0-9.-]/g, '');
+        if (!str || str === '-') return str ? str + '%' : '';
+        
+        var parts = str.split('.');
+        var intPart = parts[0] || '0';
+        var decPart = parts.length > 1 ? parts.slice(1).join('') : null;
+        
+        var result = intPart;
+        if (decPart !== null) {
+            result += '.' + decPart;
+        }
+        return result + '%';
+    }
+
+    function formatPercentInput(el) {
+        var rawValue = el.value;
+        if (rawValue === '' || rawValue === null || rawValue === undefined) {
+            return;
+        }
+        var selStart = el.selectionStart || 0;
+        var digitsBeforeCursor = (rawValue.substring(0, selStart).match(/[0-9.-]/g) || []).length;
+        
+        var formatted = formatPercent(rawValue);
+        el.value = formatted;
+        
+        if (typeof el.setSelectionRange === 'function' && document.activeElement === el) {
+            var newPos = 0;
+            var digitsFound = 0;
+            for (var i = 0; i < formatted.length; i++) {
+                if (/[0-9.-]/.test(formatted[i])) {
+                    digitsFound++;
+                }
+                if (digitsFound >= digitsBeforeCursor) {
+                    newPos = i + 1;
+                    break;
+                }
+            }
+            var pctIdx = formatted.indexOf('%');
+            if (pctIdx !== -1 && newPos > pctIdx) {
+                newPos = pctIdx;
+            }
+            el.setSelectionRange(newPos, newPos);
+        }
+    }
+
+    function attachPercentInputListeners(el) {
+        if (!el || el.dataset.percentBound === 'true') return;
+        el.dataset.percentBound = 'true';
+        
+        if (el.value && !el.value.endsWith('%')) {
+            el.value = formatPercent(el.value);
+        }
+        
+        el.addEventListener('input', function() {
+            formatPercentInput(this);
+        });
+
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace') {
+                var start = this.selectionStart;
+                var end = this.selectionEnd;
+                if (start === end && start > 0 && this.value[start - 1] === '%') {
+                    e.preventDefault();
+                    var val = this.value;
+                    this.value = val.substring(0, start - 2) + val.substring(start - 1);
+                    formatPercentInput(this);
+                }
+            }
+        });
+
+        el.addEventListener('blur', function() {
+            if (this.value.trim() === '%' || this.value.trim() === '') {
+                this.value = '';
+            } else if (this.value) {
+                this.value = formatPercent(this.value);
+            }
+        });
+    }
+
+    function formatAllPercentInputs() {
+        document.querySelectorAll('.percent-input').forEach(function(el) {
+            attachPercentInputListeners(el);
+            if (el.value) {
+                el.value = formatPercent(el.value);
+            }
+        });
+    }
+
     // Tab Switching Helper
     function switchTab(tabId) {
         var nextTab = document.getElementById(tabId);
@@ -616,6 +814,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        formatAllCurrencyInputs();
+        formatAllPercentInputs();
         // Initial Tab activation
         var triggerTabList = [].slice.call(document.querySelectorAll('#dataEntryTabs button'))
         triggerTabList.forEach(function (triggerEl) {
@@ -697,13 +897,15 @@
             var interval = data.interval !== undefined ? data.interval : 0;
             var adjustInflation = data.adjust_inflation !== undefined ? data.adjust_inflation : true;
             
+            var formattedAmt = formatMoney(amount);
+
             var row = document.createElement('tr');
             row.innerHTML = `
                 <td>
                     <input type="text" class="form-control" name="add_spending_name[]" value="${name}" placeholder="e.g. Car, World Cruise" required style="min-width: 130px;">
                 </td>
                 <td>
-                    <input type="number" class="form-control" name="add_spending_amount[]" value="${amount}" required style="min-width: 110px;">
+                    <input type="text" inputmode="numeric" class="form-control currency-input" name="add_spending_amount[]" value="${formattedAmt}" required style="min-width: 110px;">
                 </td>
                 <td>
                     <input type="number" class="form-control" name="add_spending_start_age[]" value="${startAge}" min="18" max="110" required>
@@ -731,6 +933,7 @@
                 row.remove();
             });
             additionalSpendingTableBody.appendChild(row);
+            attachCurrencyInputListeners(row.querySelector('[name="add_spending_amount[]"]'));
         }
         
         btnAddSpendingRow.addEventListener('click', function() {
@@ -754,6 +957,8 @@
             var adjustType = data.adjust_type !== undefined ? data.adjust_type : 'inflation';
             var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
             
+            var formattedAmt = formatMoney(amount);
+
             var card = document.createElement('div');
             card.className = 'card border shadow-sm mb-3 income-stream-card';
             card.innerHTML = `
@@ -771,7 +976,7 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">Amount $</label>
-                            <input type="number" class="form-control" name="income_amount[]" value="${amount}" step="any" required>
+                            <input type="text" inputmode="numeric" class="form-control currency-input" name="income_amount[]" value="${formattedAmt}" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">Frequency</label>
@@ -790,7 +995,7 @@
                                     <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation Less Fixed %</option>
                                     <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No Adjustment</option>
                                 </select>
-                                <input type="number" class="form-control inc-adjust-val" name="income_adjust_val[]" value="${adjustVal}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
+                                <input type="text" inputmode="decimal" class="form-control inc-adjust-val percent-input" name="income_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
                             </div>
                         </div>
                     </div>
@@ -877,6 +1082,8 @@
             if (incomeStreamsContainer) {
                 incomeStreamsContainer.appendChild(card);
             }
+            attachCurrencyInputListeners(card.querySelector('[name="income_amount[]"]'));
+            attachPercentInputListeners(card.querySelector('.inc-adjust-val'));
             updateSpouseDropdownOptions();
         }
         
@@ -927,56 +1134,56 @@
                 'current_year': parseInt(document.getElementById('current_year').value),
                 'begin_spending_age_type': document.getElementById('begin_spending_age_type').value,
                 'begin_spending_age_specified': parseInt(document.getElementById('begin_spending_age_specified').value || 0),
-                'desired_spending': parseFloat(document.getElementById('desired_spending').value || 0),
-                'survivor_spending': parseFloat(document.getElementById('survivor_spending').value || 0),
+                'desired_spending': parseMoney(document.getElementById('desired_spending').value || 0),
+                'survivor_spending': parseMoney(document.getElementById('survivor_spending').value || 0),
                 'adjust_spending_inflation': document.getElementById('adjust_spending_inflation').checked,
-                'inflation_rate': parseFloat(document.getElementById('inflation_rate').value || 0),
+                'inflation_rate': parsePercent(document.getElementById('inflation_rate').value || 0),
                 'runs': parseInt(document.getElementById('runs').value || 100),
-                'target_success_rate': parseFloat(document.getElementById('target_success_rate').value || 80.0),
+                'target_success_rate': parsePercent(document.getElementById('target_success_rate').value || 80.0),
                 
                 'pretax_assets': {
-                    'present_balance': parseFloat(document.getElementById('pretax_present_balance').value || 0),
-                    'contrib_amount': parseFloat(document.getElementById('pretax_contrib_amount').value || 0),
+                    'present_balance': parseMoney(document.getElementById('pretax_present_balance').value || 0),
+                    'contrib_amount': parseMoney(document.getElementById('pretax_contrib_amount').value || 0),
                     'contrib_freq': document.querySelector('[name="pretax_contrib_freq"]').value,
                     'contrib_start_age': parseInt(document.getElementById('pretax_contrib_start_age').value || 0),
                     'contrib_end_age_type': document.querySelector('[name="pretax_contrib_end_age_type"]').value,
                     'contrib_end_age_specified': parseInt(document.getElementById('pretax_contrib_end_age_specified').value || 0),
                     'contrib_adjust_inflation': document.getElementById('pretax_contrib_adjust_inflation').checked,
-                    'return_mean': parseFloat(document.querySelector('[name="pretax_return_mean"]').value || 0),
-                    'return_std': parseFloat(document.querySelector('[name="pretax_return_std"]').value || 0)
+                    'return_mean': parsePercent(document.querySelector('[name="pretax_return_mean"]').value || 0),
+                    'return_std': parsePercent(document.querySelector('[name="pretax_return_std"]').value || 0)
                 },
                 'roth_assets': {
-                    'present_balance': parseFloat(document.getElementById('roth_present_balance').value || 0),
-                    'contrib_amount': parseFloat(document.getElementById('roth_contrib_amount').value || 0),
+                    'present_balance': parseMoney(document.getElementById('roth_present_balance').value || 0),
+                    'contrib_amount': parseMoney(document.getElementById('roth_contrib_amount').value || 0),
                     'contrib_freq': document.querySelector('[name="roth_contrib_freq"]').value,
                     'contrib_start_age': parseInt(document.getElementById('roth_contrib_start_age').value || 0),
                     'contrib_end_age_type': document.querySelector('[name="roth_contrib_end_age_type"]').value,
                     'contrib_end_age_specified': parseInt(document.getElementById('roth_contrib_end_age_specified').value || 0),
                     'contrib_adjust_inflation': document.getElementById('roth_contrib_adjust_inflation').checked,
-                    'return_mean': parseFloat(document.querySelector('[name="roth_return_mean"]').value || 0),
-                    'return_std': parseFloat(document.querySelector('[name="roth_return_std"]').value || 0)
+                    'return_mean': parsePercent(document.querySelector('[name="roth_return_mean"]').value || 0),
+                    'return_std': parsePercent(document.querySelector('[name="roth_return_std"]').value || 0)
                 },
                 'taxable_assets': {
-                    'present_balance': parseFloat(document.getElementById('taxable_present_balance').value || 0),
-                    'contrib_amount': parseFloat(document.getElementById('taxable_contrib_amount').value || 0),
+                    'present_balance': parseMoney(document.getElementById('taxable_present_balance').value || 0),
+                    'contrib_amount': parseMoney(document.getElementById('taxable_contrib_amount').value || 0),
                     'contrib_freq': document.querySelector('[name="taxable_contrib_freq"]').value,
                     'contrib_start_age': parseInt(document.getElementById('taxable_contrib_start_age').value || 0),
                     'contrib_end_age_type': document.querySelector('[name="taxable_contrib_end_age_type"]').value,
                     'contrib_end_age_specified': parseInt(document.getElementById('taxable_contrib_end_age_specified').value || 0),
                     'contrib_adjust_inflation': document.getElementById('taxable_contrib_adjust_inflation').checked,
-                    'return_mean': parseFloat(document.querySelector('[name="taxable_return_mean"]').value || 0),
-                    'return_std': parseFloat(document.querySelector('[name="taxable_return_std"]').value || 0)
+                    'return_mean': parsePercent(document.querySelector('[name="taxable_return_mean"]').value || 0),
+                    'return_std': parsePercent(document.querySelector('[name="taxable_return_std"]').value || 0)
                 },
                 'hsa_assets': {
-                    'present_balance': parseFloat(document.getElementById('hsa_present_balance').value || 0),
-                    'contrib_amount': parseFloat(document.getElementById('hsa_contrib_amount').value || 0),
+                    'present_balance': parseMoney(document.getElementById('hsa_present_balance').value || 0),
+                    'contrib_amount': parseMoney(document.getElementById('hsa_contrib_amount').value || 0),
                     'contrib_freq': document.querySelector('[name="hsa_contrib_freq"]').value,
                     'contrib_start_age': parseInt(document.getElementById('hsa_contrib_start_age').value || 0),
                     'contrib_end_age_type': document.querySelector('[name="hsa_contrib_end_age_type"]').value,
                     'contrib_end_age_specified': parseInt(document.getElementById('hsa_contrib_end_age_specified').value || 0),
                     'contrib_adjust_inflation': document.getElementById('hsa_contrib_adjust_inflation').checked,
-                    'return_mean': parseFloat(document.querySelector('[name="hsa_return_mean"]').value || 0),
-                    'return_std': parseFloat(document.querySelector('[name="hsa_return_std"]').value || 0),
+                    'return_mean': parsePercent(document.querySelector('[name="hsa_return_mean"]').value || 0),
+                    'return_std': parsePercent(document.querySelector('[name="hsa_return_std"]').value || 0),
                     'hsa_for_medical': document.getElementById('hsa_for_medical').checked
                 },
                 
@@ -989,7 +1196,7 @@
             spendingRows.forEach(row => {
                 var nameInput = row.querySelector('[name="add_spending_name[]"]');
                 var name = nameInput ? nameInput.value.trim() : 'Additional Expense';
-                var amt = parseFloat(row.querySelector('[name="add_spending_amount[]"]').value || 0);
+                var amt = parseMoney(row.querySelector('[name="add_spending_amount[]"]').value || 0);
                 var age = parseInt(row.querySelector('[name="add_spending_start_age[]"]').value || 0);
                 var val = parseInt(row.querySelector('[name="add_spending_interval[]"]').value || 0);
                 var inf = row.querySelector('[name="add_spending_adjust_inflation[]"]').value === 'true';
@@ -1007,7 +1214,7 @@
             incomeCards.forEach(card => {
                 dataBlock.income_sources.push({
                     'name': card.querySelector('[name="income_name[]"]').value,
-                    'amount': parseFloat(card.querySelector('[name="income_amount[]"]').value || 0),
+                    'amount': parseMoney(card.querySelector('[name="income_amount[]"]').value || 0),
                     'frequency': card.querySelector('[name="income_frequency[]"]').value,
                     'start_age_type': card.querySelector('[name="income_start_age_type[]"]').value,
                     'start_age_specified': parseInt(card.querySelector('[name="income_start_age_specified[]"]').value || 0),
@@ -1016,7 +1223,7 @@
                     'subject_to_tax': card.querySelector('[name="income_subject_to_tax[]"]').value === 'true',
                     'is_social_security': card.querySelector('[name="income_is_ss[]"]').value === 'true',
                     'adjust_type': card.querySelector('[name="income_adjust_type[]"]').value,
-                    'adjust_val': parseFloat(card.querySelector('[name="income_adjust_val[]"]').value || 0.0)
+                    'adjust_val': parsePercent(card.querySelector('[name="income_adjust_val[]"]').value || 0.0)
                 });
             });
 
@@ -1218,6 +1425,8 @@
                     toggleSpendingStartAge();
                     toggleGoalSeekingFields();
                     updateAssetStartAgeMin();
+                    formatAllCurrencyInputs();
+                    formatAllPercentInputs();
                     
                     dataChanged = true;
                     alert("Plan loaded successfully!");
@@ -1395,7 +1604,7 @@
             var isGoalSeeking = document.getElementById('simulation_type_goal') && document.getElementById('simulation_type_goal').checked;
             var targetInput = document.getElementById('target_success_rate');
             if (isGoalSeeking && targetInput) {
-                var val = parseFloat(targetInput.value);
+                var val = parsePercent(targetInput.value);
                 if (isNaN(val) || val < 1.0 || val > 99.0) {
                     setFieldInvalid(targetInput, 'Target Success Rate must be a number between 1% and 99%.');
                     errors.push({ element: targetInput, tab: 'demographics-tab', message: 'Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.' });
@@ -1424,7 +1633,7 @@
 
             var inflationInput = document.getElementById('inflation_rate');
             if (inflationInput) {
-                var infVal = parseFloat(inflationInput.value);
+                var infVal = parsePercent(inflationInput.value);
                 if (isNaN(infVal) || infVal < 0.0 || infVal > 50.0) {
                     setFieldInvalid(inflationInput, 'Inflation Rate % must be a number between 0% and 50%.');
                     errors.push({ element: inflationInput, tab: 'demographics-tab', message: 'Inflation Rate % must be between 0% and 50%.' });
@@ -1433,7 +1642,7 @@
 
             var desiredSpendingInput = document.getElementById('desired_spending');
             if (desiredSpendingInput) {
-                var spendVal = parseFloat(desiredSpendingInput.value);
+                var spendVal = parseMoney(desiredSpendingInput.value);
                 if (isNaN(spendVal) || spendVal < 0) {
                     setFieldInvalid(desiredSpendingInput, 'Desired Annual Spending must be a valid non-negative number.');
                     errors.push({ element: desiredSpendingInput, tab: 'demographics-tab', message: 'Desired Annual Spending must be a valid non-negative number.' });
@@ -1444,7 +1653,7 @@
             ['pretax', 'roth', 'taxable', 'hsa'].forEach(function(prefix) {
                 var meanInput = form.querySelector('[name="' + prefix + '_return_mean"]');
                 if (meanInput && meanInput.value !== '') {
-                    var mVal = parseFloat(meanInput.value);
+                    var mVal = parsePercent(meanInput.value);
                     if (isNaN(mVal) || mVal < -100.0 || mVal > 100.0) {
                         setFieldInvalid(meanInput, 'Average Return % must be between -100% and 100%.');
                         errors.push({ element: meanInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Average Return % must be between -100% and 100%.' });
@@ -1452,7 +1661,7 @@
                 }
                 var stdInput = form.querySelector('[name="' + prefix + '_return_std"]');
                 if (stdInput && stdInput.value !== '') {
-                    var sVal = parseFloat(stdInput.value);
+                    var sVal = parsePercent(stdInput.value);
                     if (isNaN(sVal) || sVal < 0.0 || sVal > 100.0) {
                         setFieldInvalid(stdInput, 'Return Std Dev % must be a non-negative number up to 100%.');
                         errors.push({ element: stdInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Return Std Dev % must be between 0% and 100%.' });
@@ -1460,7 +1669,7 @@
                 }
                 var balInput = document.getElementById(prefix + '_present_balance');
                 if (balInput && balInput.value !== '') {
-                    var bVal = parseFloat(balInput.value);
+                    var bVal = parseMoney(balInput.value);
                     if (isNaN(bVal) || bVal < 0) {
                         setFieldInvalid(balInput, 'Present Balance cannot be negative.');
                         errors.push({ element: balInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Present Balance cannot be negative.' });
