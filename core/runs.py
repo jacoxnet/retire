@@ -150,13 +150,13 @@ def simulate_step(
     # 2. Add Contributions
     pretax_before = max(0.0, pretax + contrib_pretax)
     roth_before = max(0.0, roth + contrib_roth)
-    taxable_before = max(0.0, taxable + contrib_taxable)
+    taxable_before = taxable + contrib_taxable
     hsa_before = max(0.0, hsa + contrib_hsa)
     
     # 3. Apply growth
     growth_pre = pretax_before * r_pretax
     growth_roth = roth_before * r_roth
-    growth_taxable = taxable_before * r_taxable
+    growth_taxable = taxable_before * r_taxable if taxable_before > 0.0 else 0.0
     growth_hsa = hsa_before * r_hsa
     
     pretax_mid = pretax_before + growth_pre
@@ -766,12 +766,12 @@ def njit_simulate_path(
             
         pretax_before = max(0.0, pretax + c_pre[t])
         roth_before = max(0.0, roth + c_roth[t])
-        taxable_before = max(0.0, taxable + c_tax[t])
+        taxable_before = taxable + c_tax[t]
         hsa_before = max(0.0, hsa + c_hsa[t])
         
         growth_pre = pretax_before * r_pre[t]
         growth_roth = roth_before * r_roth[t]
-        growth_taxable = taxable_before * r_tax[t]
+        growth_taxable = taxable_before * r_tax[t] if taxable_before > 0.0 else 0.0
         growth_hsa = hsa_before * r_hsa[t]
         
         pretax_mid = pretax_before + growth_pre

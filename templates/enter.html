@@ -69,16 +69,16 @@
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label for="user_age" class="form-label">Present Age</label>
+                                    <label for="user_age" class="form-label">User's Present Age</label>
                                     <input type="number" class="form-control" id="user_age" name="user_age" value="{{ user_age }}" min="18" max="120" required>
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label for="user_retirement_age" class="form-label">Retirement Age</label>
+                                    <label for="user_retirement_age" class="form-label">User's Retirement Age</label>
                                     <input type="number" class="form-control" id="user_retirement_age" name="user_retirement_age" value="{{ user_retirement_age }}" min="18" max="120" required>
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="user_age_death" class="form-label">Age at Death (Life Expectancy)</label>
+                                <label for="user_age_death" class="form-label">User's Age at Death (Life Expectancy)</label>
                                 <input type="number" class="form-control" id="user_age_death" name="user_age_death" value="{{ user_age_death }}" min="18" max="120" required>
                             </div>
                             <div class="mb-3 form-check form-switch mt-4">
@@ -96,16 +96,16 @@
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label for="spouse_age" class="form-label">Present Age</label>
+                                    <label for="spouse_age" class="form-label">Spouse's Present Age</label>
                                     <input type="number" class="form-control" id="spouse_age" name="spouse_age" value="{{ spouse_age }}" min="18" max="120">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label for="spouse_retirement_age" class="form-label">Retirement Age</label>
+                                    <label for="spouse_retirement_age" class="form-label">Spouse's Retirement Age</label>
                                     <input type="number" class="form-control" id="spouse_retirement_age" name="spouse_retirement_age" value="{{ spouse_retirement_age }}" min="18" max="120">
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="spouse_age_death" class="form-label">Age at Death (Life Expectancy)</label>
+                                <label for="spouse_age_death" class="form-label">Spouse's Age at Death (Life Expectancy)</label>
                                 <input type="number" class="form-control" id="spouse_age_death" name="spouse_age_death" value="{{ spouse_age_death }}" min="18" max="120">
                             </div>
                         </div>
@@ -154,7 +154,7 @@
                         <div class="col-md-4 mb-3">
                             <label for="begin_spending_age_type" class="form-label">Start Age for Retirement Spending</label>
                             <select class="form-select" id="begin_spending_age_type" name="begin_spending_age_type">
-                                <option value="retirement" {% if begin_spending_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                <option value="retirement" {% if begin_spending_age_type == 'retirement' %}selected{% endif %}>User's Retirement Age</option>
                                 <option value="spouse_retirement" {% if begin_spending_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
                                 <option value="specified" {% if begin_spending_age_type == 'specified' %}selected{% endif %}>Specified Age</option>
                             </select>
@@ -234,7 +234,7 @@
                                 <div class="col-6 mb-3">
                                     <label class="form-label">End Age Type</label>
                                     <select class="form-select asset-end-age-type" name="pretax_contrib_end_age_type" data-prefix="pretax">
-                                        <option value="retirement" {% if pretax_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="retirement" {% if pretax_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>User's Retirement Age</option>
                                         <option value="spouse_retirement" {% if pretax_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
                                         <option value="age" {% if pretax_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
                                     </select>
@@ -313,7 +313,7 @@
                                 <div class="col-6 mb-3">
                                     <label class="form-label">End Age Type</label>
                                     <select class="form-select asset-end-age-type" name="roth_contrib_end_age_type" data-prefix="roth">
-                                        <option value="retirement" {% if roth_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="retirement" {% if roth_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>User's Retirement Age</option>
                                         <option value="spouse_retirement" {% if roth_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
                                         <option value="age" {% if roth_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
                                     </select>
@@ -394,7 +394,7 @@
                                 <div class="col-6 mb-3">
                                     <label class="form-label">End Age Type</label>
                                     <select class="form-select asset-end-age-type" name="taxable_contrib_end_age_type" data-prefix="taxable">
-                                        <option value="retirement" {% if taxable_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="retirement" {% if taxable_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>User's Retirement Age</option>
                                         <option value="spouse_retirement" {% if taxable_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
                                         <option value="first_death" {% if taxable_assets.contrib_end_age_type == 'first_death' %}selected{% endif %}>First Death (Insurance)</option>
                                         <option value="age" {% if taxable_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
@@ -474,7 +474,7 @@
                                 <div class="col-6 mb-3">
                                     <label class="form-label">End Age Type</label>
                                     <select class="form-select asset-end-age-type" name="hsa_contrib_end_age_type" data-prefix="hsa">
-                                        <option value="retirement" {% if hsa_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="retirement" {% if hsa_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>User's Retirement Age</option>
                                         <option value="spouse_retirement" {% if hsa_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
                                         <option value="age" {% if hsa_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
                                     </select>
@@ -1006,7 +1006,7 @@
                             <label class="form-label fw-semibold">Starts At</label>
                             <div class="d-flex gap-2">
                                 <select class="form-select inc-start-type" name="income_start_age_type[]">
-                                    <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                    <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>User's Retirement Age</option>
                                     <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
                                     <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specified Age</option>
                                 </select>
@@ -1017,7 +1017,7 @@
                             <label class="form-label fw-semibold">Ends At</label>
                             <div class="d-flex gap-2">
                                 <select class="form-select inc-end-type" name="income_end_age_type[]">
-                                    <option value="death" ${endType === 'death' ? 'selected' : ''}>At Death</option>
+                                    <option value="death" ${endType === 'death' ? 'selected' : ''}>At User's Death</option>
                                     <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
                                     <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specified Age</option>
                                 </select>
@@ -1557,18 +1557,18 @@
             var uDeath = userDeathInput ? parseInt(userDeathInput.value, 10) : 0;
 
             if (userAgeInput && (isNaN(uAge) || uAge < 18 || uAge > 120)) {
-                setFieldInvalid(userAgeInput, 'Present Age must be an integer between 18 and 120.');
-                errors.push({ element: userAgeInput, tab: 'demographics-tab', message: 'Present Age must be an integer between 18 and 120.' });
+                setFieldInvalid(userAgeInput, 'User\'s Present Age must be an integer between 18 and 120.');
+                errors.push({ element: userAgeInput, tab: 'demographics-tab', message: 'User\'s Present Age must be an integer between 18 and 120.' });
             }
 
             if (userRetInput && (isNaN(uRet) || uRet < uAge || uRet > 120)) {
-                var retMsg = 'Retirement Age must be between Present Age (' + (isNaN(uAge) ? 18 : uAge) + ') and 120.';
+                var retMsg = 'User\'s Retirement Age must be between User\'s Present Age (' + (isNaN(uAge) ? 18 : uAge) + ') and 120.';
                 setFieldInvalid(userRetInput, retMsg);
                 errors.push({ element: userRetInput, tab: 'demographics-tab', message: retMsg });
             }
 
             if (userDeathInput && (isNaN(uDeath) || uDeath <= uAge || uDeath > 120)) {
-                var deathMsg = 'Age at Death must be an integer greater than Present Age (' + (isNaN(uAge) ? 18 : uAge) + ') up to 120.';
+                var deathMsg = 'User\'s Age at Death must be an integer greater than User\'s Present Age (' + (isNaN(uAge) ? 18 : uAge) + ') up to 120.';
                 setFieldInvalid(userDeathInput, deathMsg);
                 errors.push({ element: userDeathInput, tab: 'demographics-tab', message: deathMsg });
             }
@@ -1585,16 +1585,16 @@
                 var sDeath = spouseDeathInput ? parseInt(spouseDeathInput.value, 10) : 0;
 
                 if (spouseAgeInput && (isNaN(sAge) || sAge < 18 || sAge > 120)) {
-                    setFieldInvalid(spouseAgeInput, 'Spouse Present Age must be an integer between 18 and 120.');
-                    errors.push({ element: spouseAgeInput, tab: 'demographics-tab', message: 'Spouse Present Age must be an integer between 18 and 120.' });
+                    setFieldInvalid(spouseAgeInput, 'Spouse\'s Present Age must be an integer between 18 and 120.');
+                    errors.push({ element: spouseAgeInput, tab: 'demographics-tab', message: 'Spouse\'s Present Age must be an integer between 18 and 120.' });
                 }
                 if (spouseRetInput && (isNaN(sRet) || sRet < sAge || sRet > 120)) {
-                    var sRetMsg = 'Spouse Retirement Age must be between Spouse Present Age (' + (isNaN(sAge) ? 18 : sAge) + ') and 120.';
+                    var sRetMsg = 'Spouse\'s Retirement Age must be between Spouse\'s Present Age (' + (isNaN(sAge) ? 18 : sAge) + ') and 120.';
                     setFieldInvalid(spouseRetInput, sRetMsg);
                     errors.push({ element: spouseRetInput, tab: 'demographics-tab', message: sRetMsg });
                 }
                 if (spouseDeathInput && (isNaN(sDeath) || sDeath <= sAge || sDeath > 120)) {
-                    var sDeathMsg = 'Spouse Age at Death must be an integer greater than Spouse Present Age (' + (isNaN(sAge) ? 18 : sAge) + ') up to 120.';
+                    var sDeathMsg = 'Spouse\'s Age at Death must be an integer greater than Spouse\'s Present Age (' + (isNaN(sAge) ? 18 : sAge) + ') up to 120.';
                     setFieldInvalid(spouseDeathInput, sDeathMsg);
                     errors.push({ element: spouseDeathInput, tab: 'demographics-tab', message: sDeathMsg });
                 }

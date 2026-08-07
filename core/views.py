@@ -332,19 +332,19 @@ def enter_view(request):
             validation_errors.append("Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.")
             
         if user_age < 18 or user_age > 120:
-            validation_errors.append("Present Age must be an integer between 18 and 120.")
+            validation_errors.append("User's Present Age must be an integer between 18 and 120.")
         if user_retirement_age < user_age or user_retirement_age > 120:
-            validation_errors.append(f"Retirement Age must be between Present Age ({user_age}) and 120.")
+            validation_errors.append(f"User's Retirement Age must be between User's Present Age ({user_age}) and 120.")
         if user_age_death <= user_age or user_age_death > 120:
-            validation_errors.append(f"Age at Death must be an integer greater than Present Age ({user_age}) up to 120.")
+            validation_errors.append(f"User's Age at Death must be an integer greater than User's Present Age ({user_age}) up to 120.")
             
         if is_married:
             if spouse_age < 18 or spouse_age > 120:
-                validation_errors.append("Spouse Present Age must be an integer between 18 and 120.")
+                validation_errors.append("Spouse's Present Age must be an integer between 18 and 120.")
             if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
-                validation_errors.append(f"Spouse Retirement Age must be between Spouse Present Age ({spouse_age}) and 120.")
+                validation_errors.append(f"Spouse's Retirement Age must be between Spouse's Present Age ({spouse_age}) and 120.")
             if spouse_age_death <= spouse_age or spouse_age_death > 120:
-                validation_errors.append(f"Spouse Age at Death must be an integer greater than Spouse Present Age ({spouse_age}) up to 120.")
+                validation_errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
                 
         # Store in JSON block
         data_block = {
