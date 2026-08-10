@@ -237,6 +237,40 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('det_rows', response.context)
 
+    def test_ui_label_and_simulation_input_updates(self):
+        # 1. Test Base Navigation Bar label
+        base_resp = self.client.get('/')
+        self.assertContains(base_resp, 'Simulation Results')
+        self.assertNotContains(base_resp, 'View Results')
+
+        # 2. Test Regular Simulation Results page
+        res_resp = self.client.get('/results/')
+        self.assertEqual(res_resp.status_code, 200)
+        self.assertContains(res_resp, 'Desired Annual Recurring Spending in Today\'s Dollars')
+        self.assertNotContains(res_resp, 'Simulations Run:')
+        self.assertContains(res_resp, 'User\'s Age at Death:')
+        
+        # Heading checks: "Results" card title instead of "Regular Simulation Results"
+        self.assertContains(res_resp, 'Results')
+        self.assertNotContains(res_resp, 'Regular Simulation Results')
+        self.assertNotContains(res_resp, 'Goal-Seeking Simulation Results')
+
+        # 3. Test Goal-Seeking mode Results page
+        session = self.client.session
+        sim_data = session['simulation_data']
+        sim_data['goal_seeking'] = True
+        session['simulation_data'] = sim_data
+        session['data_version'] = session.get('data_version', 1) + 1
+        session.save()
+
+        goal_resp = self.client.get('/results/')
+        self.assertEqual(goal_resp.status_code, 200)
+        # Desired Annual Recurring Spending should NOT be shown in Simulation Inputs during goal seeking mode
+        self.assertNotContains(goal_resp, 'Desired Annual Recurring Spending in Today\'s Dollars')
+        self.assertNotContains(goal_resp, 'Goal-Seeking Simulation Results')
+        self.assertContains(goal_resp, 'Results')
+
+
 
     def test_invalid_goal_seeking_target_success_rate(self):
         post_data = {
