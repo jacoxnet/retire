@@ -335,7 +335,7 @@ class RetirementCalculationTests(TestCase):
         }
         response = self.client.post('/', post_data)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.")
+        self.assertContains(response, "Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
 
     def test_invalid_runs_exceeds_max(self):
         post_data = {

@@ -125,7 +125,7 @@
                             </div>
                             <div class="mode-option-label">
                                 <input type="radio" name="simulation_type" id="simulation_type_goal" value="goal_seeking" {% if goal_seeking %}checked{% endif %}>
-                                <label for="simulation_type_goal">Goal-Seeking Simulation (Solves for Spending Amount)</label>
+                                <label for="simulation_type_goal">Maximum Spending Simulation (Solves for Spending Amount)</label>
                             </div>
                         </div>
                     </div>
@@ -1607,7 +1607,7 @@
                 var val = parsePercent(targetInput.value);
                 if (isNaN(val) || val < 1.0 || val > 99.0) {
                     setFieldInvalid(targetInput, 'Target Success Rate must be a number between 1% and 99%.');
-                    errors.push({ element: targetInput, tab: 'demographics-tab', message: 'Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.' });
+                    errors.push({ element: targetInput, tab: 'demographics-tab', message: 'Target Success Rate must be between 1% and 99% for Maximum Spending simulation.' });
                 }
             }
 

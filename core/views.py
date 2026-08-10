@@ -346,7 +346,7 @@ def enter_view(request):
             validation_errors.append("Number of Simulations must be a valid number between 1 and 100,000.")
             
         if is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0):
-            validation_errors.append("Target Success Rate must be between 1% and 99% for Goal-Seeking simulation.")
+            validation_errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
             
         if user_age < 18 or user_age > 120:
             validation_errors.append("User's Present Age must be an integer between 18 and 120.")
