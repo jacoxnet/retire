@@ -302,6 +302,21 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(sim['pretax_assets']['return_mean'], 7.5)
         self.assertEqual(sim['roth_assets']['return_mean'], 8.0)
 
+    def test_milestones_and_cash_flow_age_columns(self):
+        self.client.get('/')
+        res_resp = self.client.get('/results/')
+        self.assertEqual(res_resp.status_code, 200)
+        
+        # Verify Milestones header is present
+        self.assertContains(res_resp, '<th>Milestones</th>')
+        self.assertContains(res_resp, 'User Retires')
+        self.assertContains(res_resp, 'User Final Year')
+        
+        # Verify det_rows contains milestones list
+        det_rows = res_resp.context['det_rows']
+        self.assertTrue(len(det_rows) > 0)
+        self.assertIn('milestones', det_rows[0])
+
 
 
 

@@ -313,6 +313,7 @@
                                 <th>Regular Retirement Spending</th>
                                 <th>Additional Spending <small class="text-muted">(Hover)</small></th>
                                 <th>Ending Assets <small class="text-muted">(Hover)</small></th>
+                                <th>Milestones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -529,6 +530,23 @@
                                             </div>
                                         </div>
                                     </td>
+                                    <td>
+                                        {% if row.milestones %}
+                                            {% for m in row.milestones %}
+                                                {% if "Final Year" in m %}
+                                                    <span class="badge bg-secondary text-light me-1">{{ m }}</span>
+                                                {% elif "Retires" in m %}
+                                                    <span class="badge bg-info text-dark me-1">{{ m }}</span>
+                                                {% elif "RMDs" in m %}
+                                                    <span class="badge bg-warning text-dark me-1">{{ m }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-light text-dark border me-1">{{ m }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -559,17 +577,22 @@
                         <thead>
                             <tr>
                                 <th>Year</th>
+                                <th>Age</th>
+                                <th>Spouse</th>
                                 <th>Regular Retirement Spending</th>
                                 <th>Additional Spending <small class="text-muted">(Hover)</small></th>
                                 <th>Taxes & Penalties</th>
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
                                 <th>Portfolio Withdrawals <small class="text-muted">(Hover)</small></th>
+                                <th>Milestones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in det_rows %}
                                 <tr>
                                     <td>{{ row.year }}</td>
+                                    <td>{{ row.user_age|default:"-" }}</td>
+                                    <td>{{ row.spouse_age|default:"-" }}</td>
                                     <td>
                                         <span class="dollar-amount text-danger" data-nominal="{{ row.desired_spending }}" data-real="{{ row.desired_spending }}">
                                             ${{ row.desired_spending|floatformat:"0"|intcomma }}
@@ -672,6 +695,23 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td>
+                                        {% if row.milestones %}
+                                            {% for m in row.milestones %}
+                                                {% if "Final Year" in m %}
+                                                    <span class="badge bg-secondary text-light me-1">{{ m }}</span>
+                                                {% elif "Retires" in m %}
+                                                    <span class="badge bg-info text-dark me-1">{{ m }}</span>
+                                                {% elif "RMDs" in m %}
+                                                    <span class="badge bg-warning text-dark me-1">{{ m }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-light text-dark border me-1">{{ m }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             {% endfor %}
