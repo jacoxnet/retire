@@ -57,17 +57,17 @@
                             <p class="mb-2"><strong>Desired Annual Recurring Spending in Today's Dollars:</strong> <span class="dollar-amount-static">${{ desired_spending|floatformat:"0"|intcomma }}</span></p>
                             {% endif %}
                             <p class="mb-2"><strong>Projection Years:</strong> {{ years }} years</p>
-                            <p class="mb-2"><strong>Inflation Rate:</strong> {{ inflation_rate }}% <span class="text-muted">(Deterministic)</span></p>
+                            <p class="mb-2"><strong>Inflation Rate:</strong> {{ inflation_rate }}%</p>
                             <p class="mb-2"><strong>User's Age at Death:</strong> {{ user_age_death }}</p>
                             {% if is_married %}
                             <p class="mb-2"><strong>Spouse's Age at Death:</strong> {{ spouse_age_death }}</p>
                             {% endif %}
                             
                             <h5 class="mt-4 border-bottom pb-1 text-secondary">Asset Allocations & Returns</h5>
-                            <p class="mb-1 small"><strong>Pretax:</strong> ${{ pretax_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ pretax_assets.return_mean }}% mean, {{ pretax_assets.return_std }}% std)</span></p>
-                            <p class="mb-1 small"><strong>Roth:</strong> ${{ roth_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ roth_assets.return_mean }}% mean, {{ roth_assets.return_std }}% std)</span></p>
-                            <p class="mb-1 small"><strong>Taxable:</strong> ${{ taxable_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ taxable_assets.return_mean }}% mean, {{ taxable_assets.return_std }}% std)</span></p>
-                            <p class="mb-1 small"><strong>HSA:</strong> ${{ hsa_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">(@ {{ hsa_assets.return_mean }}% mean, {{ hsa_assets.return_std }}% std)</span></p>
+                            <p class="mb-1 small"><strong>Pretax:</strong> ${{ pretax_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ pretax_assets.return_mean }}% average return)</span></p>
+                            <p class="mb-1 small"><strong>Roth:</strong> ${{ roth_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ roth_assets.return_mean }}% average return)</span></p>
+                            <p class="mb-1 small"><strong>Taxable:</strong> ${{ taxable_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ taxable_assets.return_mean }}% average return)</span></p>
+                            <p class="mb-1 small"><strong>HSA:</strong> ${{ hsa_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ hsa_assets.return_mean }}% average return)</span></p>
                         </div>
                     </div>
 
@@ -118,13 +118,13 @@
                                     <div class="col-6 mb-2"><strong>Mean Ending Wealth:</strong></div>
                                     <div class="col-6 text-end {% if run_mean >= 0 %}text-success{% else %}text-danger{% endif %}">${{ run_mean|floatformat:"0"|intcomma }}</div>
                                     
-                                    <div class="col-6 mb-2"><strong>Median (50th Pct):</strong></div>
+                                    <div class="col-6 mb-2"><strong>Median Ending Wealth:</strong></div>
                                     <div class="col-6 text-end font-weight-bold {% if run_median >= 0 %}text-success{% else %}text-danger{% endif %}">${{ run_median|floatformat:"0"|intcomma }}</div>
 
-                                    <div class="col-6 mb-2"><strong>25th Percentile:</strong></div>
+                                    <div class="col-6 mb-2"><strong>25th Percentile Ending Wealth:</strong></div>
                                     <div class="col-6 text-end {% if run_25 >= 0 %}text-success{% else %}text-danger{% endif %}">${{ run_25|floatformat:"0"|intcomma }}</div>
 
-                                    <div class="col-6 mb-2"><strong>10th Percentile:</strong></div>
+                                    <div class="col-6 mb-2"><strong>10th Percentile Ending Wealth:</strong></div>
                                     <div class="col-6 text-end font-weight-bold {% if run_10 >= 0 %}text-success{% else %}text-danger{% endif %}">${{ run_10|floatformat:"0"|intcomma }}</div>
 
                                     <div class="col-6 mb-2"><strong>Maximum Wealth:</strong></div>
@@ -153,9 +153,6 @@
 
                                     <div class="col-7 mb-3"><strong>Achieved Success Rate:</strong></div>
                                     <div class="col-5 text-end text-success font-weight-bold">{{ achieved_success_rate|floatformat:1 }}%</div>
-
-                                    <div class="col-7 mb-3"><strong>Bisection Searches Done:</strong></div>
-                                    <div class="col-5 text-end">{{ searches }} searches</div>
                                 </div>
                                 <hr>
                                 <p class="text-secondary small">

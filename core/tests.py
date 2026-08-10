@@ -248,7 +248,15 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(res_resp.status_code, 200)
         self.assertContains(res_resp, 'Desired Annual Recurring Spending in Today\'s Dollars')
         self.assertNotContains(res_resp, 'Simulations Run:')
+        self.assertNotContains(res_resp, '(Deterministic)')
+        self.assertContains(res_resp, 'average return')
         self.assertContains(res_resp, 'User\'s Age at Death:')
+        
+        # Percentile labels checks
+        self.assertContains(res_resp, 'Median Ending Wealth')
+        self.assertContains(res_resp, '25th Percentile Ending Wealth')
+        self.assertContains(res_resp, '10th Percentile Ending Wealth')
+        self.assertNotContains(res_resp, 'Median (50th Pct)')
         
         # Heading checks: "Results" card title instead of "Regular Simulation Results"
         self.assertContains(res_resp, 'Results')
@@ -267,6 +275,7 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(goal_resp.status_code, 200)
         # Desired Annual Recurring Spending should NOT be shown in Simulation Inputs during goal seeking mode
         self.assertNotContains(goal_resp, 'Desired Annual Recurring Spending in Today\'s Dollars')
+        self.assertNotContains(goal_resp, 'Bisection Searches Done')
         self.assertNotContains(goal_resp, 'Goal-Seeking Simulation Results')
         self.assertContains(goal_resp, 'Results')
 
