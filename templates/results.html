@@ -47,35 +47,151 @@
         <!-- TAB 1: MONTE CARLO STATISTICS -->
         <div class="tab-pane fade show active" id="stats" role="tabpanel" aria-labelledby="stats-tab">
             <div class="row">
-                <!-- Parameters Card -->
+                <!-- Parameters & Simulation Mode Card -->
                 <div class="col-md-5 mb-4">
-                    <div class="card p-4">
-                        <h3 class="border-bottom pb-2 text-primary">Simulation Inputs</h3>
-                        <div class="mt-3">
-                            <p class="mb-2"><strong>Initial Wealth:</strong> <span class="dollar-amount-static">${{ initial_wealth|floatformat:"0"|intcomma }}</span></p>
-                            {% if not goal_seeking %}
-                            <p class="mb-2"><strong>Desired Annual Recurring Spending in Today's Dollars:</strong> <span class="dollar-amount-static">${{ desired_spending|floatformat:"0"|intcomma }}</span></p>
-                            {% endif %}
-                            <p class="mb-2"><strong>Projection Years:</strong> {{ years }} years</p>
-                            <p class="mb-2"><strong>Inflation Rate:</strong> {{ inflation_rate }}%</p>
-                            <p class="mb-2"><strong>User's Age at Death:</strong> {{ user_age_death }}</p>
-                            {% if is_married %}
-                            <p class="mb-2"><strong>Spouse's Age at Death:</strong> {{ spouse_age_death }}</p>
-                            {% endif %}
+                    <form method="POST" action="{% url 'change_mode' %}" id="resultsInputsForm">
+                        {% csrf_token %}
+                        <div class="card p-4 shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                <h3 class="text-primary mb-0">Simulation Inputs</h3>
+                                <span class="badge bg-light text-secondary border fw-normal"><i class="fa fa-sliders me-1"></i> Interactive Tweak</span>
+                            </div>
                             
-                            <h5 class="mt-4 border-bottom pb-1 text-secondary">Asset Allocations & Returns</h5>
-                            <p class="mb-1 small"><strong>Pretax:</strong> ${{ pretax_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ pretax_assets.return_mean }}% average return)</span></p>
-                            <p class="mb-1 small"><strong>Roth:</strong> ${{ roth_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ roth_assets.return_mean }}% average return)</span></p>
-                            <p class="mb-1 small"><strong>Taxable:</strong> ${{ taxable_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ taxable_assets.return_mean }}% average return)</span></p>
-                            <p class="mb-1 small"><strong>HSA:</strong> ${{ hsa_assets.present_balance|floatformat:"0"|intcomma }} <span class="text-muted">({{ hsa_assets.return_mean }}% average return)</span></p>
-                        </div>
-                    </div>
+                            <div>
+                                <p class="mb-2"><strong>Initial Wealth:</strong> <span class="dollar-amount-static">${{ initial_wealth|floatformat:"0"|intcomma }}</span></p>
+                                <p class="mb-3"><strong>Projection Years:</strong> {{ years }} years</p>
+                                
+                                {% if not goal_seeking %}
+                                <!-- Desired Annual Recurring Spending Slider / Stepper -->
+                                <div class="mb-3 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label for="input_desired_spending" class="form-label small fw-bold mb-0">Desired Annual Recurring Spending</label>
+                                        <div class="input-group input-group-sm" style="width: 155px;">
+                                            <span class="input-group-text">$</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_desired_spending" data-step="-1000">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_desired_spending" name="desired_spending" value="{{ desired_spending|floatformat:'0' }}" min="0" max="500000" step="1000" data-range="range_desired_spending">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_desired_spending" data-step="1000">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_desired_spending" data-num="input_desired_spending" min="0" max="500000" step="1000" value="{{ desired_spending|floatformat:'0' }}">
+                                </div>
+                                {% endif %}
 
-                    <!-- Simulation Mode Selection Card -->
-                    <div class="card p-4 mt-4 shadow-sm">
-                        <h4 class="border-bottom pb-2 text-primary">Simulation Mode</h4>
-                        <form method="POST" action="{% url 'change_mode' %}" id="resultsModeForm" class="mt-2">
-                            {% csrf_token %}
+                                <!-- Inflation Rate Slider / Stepper -->
+                                <div class="mb-3 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label for="input_inflation_rate" class="form-label small fw-bold mb-0">Inflation Rate</label>
+                                        <div class="input-group input-group-sm" style="width: 135px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_inflation_rate" data-step="-0.1">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:1 }}" min="0" max="15" step="0.1" data-range="range_inflation_rate">
+                                            <span class="input-group-text px-1">%</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_inflation_rate" data-step="0.1">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_inflation_rate" data-num="input_inflation_rate" min="0" max="15" step="0.1" value="{{ inflation_rate|floatformat:1 }}">
+                                </div>
+
+                                <!-- User's Age at Death Slider / Stepper -->
+                                <div class="mb-3 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label for="input_user_age_death" class="form-label small fw-bold mb-0">User's Age at Death</label>
+                                        <div class="input-group input-group-sm" style="width: 130px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_user_age_death" data-step="-1">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_user_age_death" name="user_age_death" value="{{ user_age_death }}" min="60" max="110" step="1" data-range="range_user_age_death">
+                                            <span class="input-group-text px-1">yrs</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_user_age_death" data-step="1">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_user_age_death" data-num="input_user_age_death" min="60" max="110" step="1" value="{{ user_age_death }}">
+                                </div>
+
+                                {% if is_married %}
+                                <!-- Spouse's Age at Death Slider / Stepper -->
+                                <div class="mb-3 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label for="input_spouse_age_death" class="form-label small fw-bold mb-0">Spouse's Age at Death</label>
+                                        <div class="input-group input-group-sm" style="width: 130px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_spouse_age_death" data-step="-1">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_spouse_age_death" name="spouse_age_death" value="{{ spouse_age_death }}" min="60" max="110" step="1" data-range="range_spouse_age_death">
+                                            <span class="input-group-text px-1">yrs</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_spouse_age_death" data-step="1">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_spouse_age_death" data-num="input_spouse_age_death" min="60" max="110" step="1" value="{{ spouse_age_death }}">
+                                </div>
+                                {% endif %}
+                                
+                                <h5 class="mt-4 border-bottom pb-1 text-secondary">Asset Allocations & Average Returns</h5>
+
+                                <!-- Pretax Return -->
+                                <div class="mb-2 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div>
+                                            <span class="fw-bold small">Pretax:</span> <span class="small text-muted">${{ pretax_assets.present_balance|floatformat:"0"|intcomma }}</span>
+                                        </div>
+                                        <div class="input-group input-group-sm" style="width: 135px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_pretax_return_mean" data-step="-0.5">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_pretax_return_mean" name="pretax_return_mean" value="{{ pretax_assets.return_mean|floatformat:1 }}" min="-10" max="25" step="0.1" data-range="range_pretax_return_mean">
+                                            <span class="input-group-text px-1">%</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_pretax_return_mean" data-step="0.5">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_pretax_return_mean" data-num="input_pretax_return_mean" min="-10" max="25" step="0.1" value="{{ pretax_assets.return_mean|floatformat:1 }}">
+                                </div>
+
+                                <!-- Roth Return -->
+                                <div class="mb-2 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div>
+                                            <span class="fw-bold small">Roth:</span> <span class="small text-muted">${{ roth_assets.present_balance|floatformat:"0"|intcomma }}</span>
+                                        </div>
+                                        <div class="input-group input-group-sm" style="width: 135px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_roth_return_mean" data-step="-0.5">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_roth_return_mean" name="roth_return_mean" value="{{ roth_assets.return_mean|floatformat:1 }}" min="-10" max="25" step="0.1" data-range="range_roth_return_mean">
+                                            <span class="input-group-text px-1">%</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_roth_return_mean" data-step="0.5">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_roth_return_mean" data-num="input_roth_return_mean" min="-10" max="25" step="0.1" value="{{ roth_assets.return_mean|floatformat:1 }}">
+                                </div>
+
+                                <!-- Taxable Return -->
+                                <div class="mb-2 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div>
+                                            <span class="fw-bold small">Taxable:</span> <span class="small text-muted">${{ taxable_assets.present_balance|floatformat:"0"|intcomma }}</span>
+                                        </div>
+                                        <div class="input-group input-group-sm" style="width: 135px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_taxable_return_mean" data-step="-0.5">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_taxable_return_mean" name="taxable_return_mean" value="{{ taxable_assets.return_mean|floatformat:1 }}" min="-10" max="25" step="0.1" data-range="range_taxable_return_mean">
+                                            <span class="input-group-text px-1">%</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_taxable_return_mean" data-step="0.5">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_taxable_return_mean" data-num="input_taxable_return_mean" min="-10" max="25" step="0.1" value="{{ taxable_assets.return_mean|floatformat:1 }}">
+                                </div>
+
+                                <!-- HSA Return -->
+                                <div class="mb-2 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div>
+                                            <span class="fw-bold small">HSA:</span> <span class="small text-muted">${{ hsa_assets.present_balance|floatformat:"0"|intcomma }}</span>
+                                        </div>
+                                        <div class="input-group input-group-sm" style="width: 135px;">
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_hsa_return_mean" data-step="-0.5">-</button>
+                                            <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_hsa_return_mean" name="hsa_return_mean" value="{{ hsa_assets.return_mean|floatformat:1 }}" min="-10" max="25" step="0.1" data-range="range_hsa_return_mean">
+                                            <span class="input-group-text px-1">%</span>
+                                            <button class="btn btn-outline-secondary px-2 btn-step" type="button" data-target="input_hsa_return_mean" data-step="0.5">+</button>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range range-sync" id="range_hsa_return_mean" data-num="input_hsa_return_mean" min="-10" max="25" step="0.1" value="{{ hsa_assets.return_mean|floatformat:1 }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Simulation Mode Selection Card -->
+                        <div class="card p-4 mt-4 shadow-sm">
+                            <h4 class="border-bottom pb-2 text-primary">Simulation Mode</h4>
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_regular" value="regular" {% if not goal_seeking %}checked{% endif %}>
                                 <label class="form-check-label fw-semibold" for="results_sim_type_regular">
@@ -92,11 +208,11 @@
                                 <label for="results_target_success_rate" class="form-label fw-semibold">Target Success Rate %</label>
                                 <input type="text" inputmode="decimal" class="form-control percent-input" id="results_target_success_rate" name="target_success_rate" value="{{ target_success_rate|default:80.0|floatformat:"-2" }}" min="1" max="99" step="0.1">
                             </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100">
-                                <i class="fa fa-refresh me-1"></i> Update Simulation Mode
+                            <button type="submit" class="btn btn-primary btn-md w-100 shadow-sm">
+                                <i class="fa fa-sync-alt me-1"></i> Update Inputs & Re-Run Simulation
                             </button>
-                        </form>
-                    </div>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Simulation Output Card -->
@@ -877,6 +993,53 @@
             if (el.value) {
                 el.value = formatPercent(el.value);
             }
+        });
+
+        // Sync Range Sliders and Number Inputs
+        document.querySelectorAll('.range-sync').forEach(function(rangeEl) {
+            rangeEl.addEventListener('input', function() {
+                const numId = this.getAttribute('data-num');
+                const numEl = document.getElementById(numId);
+                if (numEl) {
+                    numEl.value = this.value;
+                }
+            });
+        });
+
+        document.querySelectorAll('.num-sync').forEach(function(numEl) {
+            numEl.addEventListener('input', function() {
+                const rangeId = this.getAttribute('data-range');
+                const rangeEl = document.getElementById(rangeId);
+                if (rangeEl) {
+                    rangeEl.value = this.value;
+                }
+            });
+        });
+
+        // Stepper - / + Buttons
+        document.querySelectorAll('.btn-step').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-target');
+                const stepVal = parseFloat(this.getAttribute('data-step') || 1);
+                const numEl = document.getElementById(targetId);
+                if (numEl) {
+                    let current = parseFloat(numEl.value) || 0;
+                    let min = numEl.hasAttribute('min') ? parseFloat(numEl.getAttribute('min')) : -Infinity;
+                    let max = numEl.hasAttribute('max') ? parseFloat(numEl.getAttribute('max')) : Infinity;
+                    let stepDecimal = (stepVal.toString().split('.')[1] || '').length;
+                    
+                    let newVal = current + stepVal;
+                    newVal = Math.min(max, Math.max(min, newVal));
+                    numEl.value = newVal.toFixed(stepDecimal);
+                    
+                    // Sync slider
+                    const rangeId = numEl.getAttribute('data-range');
+                    const rangeEl = document.getElementById(rangeId);
+                    if (rangeEl) {
+                        rangeEl.value = numEl.value;
+                    }
+                }
+            });
         });
     });
 </script>

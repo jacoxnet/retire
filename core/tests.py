@@ -246,11 +246,11 @@ class RetirementCalculationTests(TestCase):
         # 2. Test Regular Simulation Results page
         res_resp = self.client.get('/results/')
         self.assertEqual(res_resp.status_code, 200)
-        self.assertContains(res_resp, 'Desired Annual Recurring Spending in Today\'s Dollars')
+        self.assertContains(res_resp, 'Desired Annual Recurring Spending')
         self.assertNotContains(res_resp, 'Simulations Run:')
         self.assertNotContains(res_resp, '(Deterministic)')
-        self.assertContains(res_resp, 'average return')
-        self.assertContains(res_resp, 'User\'s Age at Death:')
+        self.assertContains(res_resp, 'Average Return')
+        self.assertContains(res_resp, 'User\'s Age at Death')
         
         # Percentile labels checks
         self.assertContains(res_resp, 'Median Ending Wealth')
@@ -278,6 +278,30 @@ class RetirementCalculationTests(TestCase):
         self.assertNotContains(goal_resp, 'Bisection Searches Done')
         self.assertNotContains(goal_resp, 'Goal-Seeking Simulation Results')
         self.assertContains(goal_resp, 'Results')
+
+    def test_update_simulation_inputs_via_steppers(self):
+        # Initialize default session
+        self.client.get('/')
+        
+        # Post updated inputs from sliders/steppers
+        response = self.client.post('/change_mode/', {
+            'simulation_type': 'regular',
+            'desired_spending': '48000',
+            'inflation_rate': '3.2',
+            'user_age_death': '95',
+            'pretax_return_mean': '7.5',
+            'roth_return_mean': '8.0'
+        })
+        self.assertRedirects(response, '/results/')
+        
+        # Verify session data was updated
+        sim = self.client.session['simulation_data']
+        self.assertEqual(sim['desired_spending'], 48000.0)
+        self.assertEqual(sim['inflation_rate'], 3.2)
+        self.assertEqual(sim['user_age_death'], 95)
+        self.assertEqual(sim['pretax_assets']['return_mean'], 7.5)
+        self.assertEqual(sim['roth_assets']['return_mean'], 8.0)
+
 
 
 

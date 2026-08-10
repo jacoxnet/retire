@@ -164,13 +164,30 @@ def change_mode_view(request):
         target_rate = get_float(request.POST.get('target_success_rate'), data.get('target_success_rate', 80.0))
         data['target_success_rate'] = min(99.0, max(1.0, target_rate))
 
+    # Input adjustments from Simulation Inputs card sliders/steppers
+    if 'desired_spending' in request.POST:
+        data['desired_spending'] = get_float(request.POST.get('desired_spending'), data.get('desired_spending', 40000.0))
+    if 'inflation_rate' in request.POST:
+        data['inflation_rate'] = get_float(request.POST.get('inflation_rate'), data.get('inflation_rate', 2.5))
+    if 'user_age_death' in request.POST:
+        data['user_age_death'] = get_int(request.POST.get('user_age_death'), data.get('user_age_death', 90))
+    if 'spouse_age_death' in request.POST:
+        data['spouse_age_death'] = get_int(request.POST.get('spouse_age_death'), data.get('spouse_age_death', 90))
+
+    # Asset return updates
+    for prefix in ['pretax', 'roth', 'taxable', 'hsa']:
+        key = f'{prefix}_return_mean'
+        if key in request.POST:
+            if prefix + '_assets' not in data or not isinstance(data[prefix + '_assets'], dict):
+                data[prefix + '_assets'] = {}
+            data[prefix + '_assets']['return_mean'] = get_float(request.POST.get(key), data[prefix + '_assets'].get('return_mean', 5.0))
+
     request.session['simulation_data'] = data
     request.session['data_version'] = request.session.get('data_version', 0) + 1
     request.session['cached_results'] = None
     request.session['cached_version'] = -1
     
-    mode_label = "Goal-Seeking Simulation" if is_goal else "Regular Simulation"
-    messages.success(request, f"Simulation mode updated to {mode_label}.")
+    messages.success(request, "Simulation inputs updated and simulation re-run.")
     return redirect(reverse('results'))
 
 @require_http_methods(["GET", "POST"])
