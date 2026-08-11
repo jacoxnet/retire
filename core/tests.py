@@ -37,6 +37,24 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(get_rmd_start_age(1960), 75)
         self.assertEqual(get_rmd_start_age(1975), 75)
 
+    def test_rmd_calculation_uses_prior_year_balance(self):
+        # Age 75 divisor is 24.6
+        # Initial pretax balance: 246,000. Return: 10% (r_pretax = 0.10)
+        # Expected RMD based on prior year-end balance = 246,000 / 24.6 = 10,000
+        from core.runs import simulate_step
+        res = simulate_step(
+            t=0, user_age=75, is_married=False, spouse_age=75,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=75, desired_spending=0, survivor_spending=0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax=246000.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax=0.10, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            rmd_start_age=75
+        )
+        self.assertAlmostEqual(res['withdrawals']['pretax_rmd'], 10000.0)
+
     def test_taxable_social_security_single(self):
         # Combined Income = AGI ex SS + 0.5 * SS
         # Base limit: 25000, step: 9000 (upper: 34000)

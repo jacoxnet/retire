@@ -266,7 +266,7 @@ def simulate_step(
     rmd_t = 0.0
     if user_alive and user_age_t >= rmd_start_age:
         divisor = RMD_TABLE.get(user_age_t, 2.0)
-        rmd_t = min(pretax_mid / divisor, pretax_mid) if pretax_mid > 0 else 0.0
+        rmd_t = min(pretax_before / divisor, pretax_mid) if pretax_before > 0 else 0.0
         
     # 8. Circular Tax calculations and Withdrawal Ordering
     # Inflate tax thresholds & standard deduction
@@ -800,7 +800,7 @@ def njit_simulate_path(
         rmd_t = 0.0
         if user_alive and user_age_t >= rmd_start_age:
             divisor = RMD_TABLE_ARR[user_age_t] if user_age_t <= 150 else 2.0
-            rmd_t = min(pretax_mid / divisor, pretax_mid) if pretax_mid > 0.0 else 0.0
+            rmd_t = min(pretax_before / divisor, pretax_mid) if pretax_before > 0.0 else 0.0
             
         if filing_status_t == 1:
             thresholds_t = THRESHOLDS_JOINT_ARR * inf_factor
