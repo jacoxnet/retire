@@ -1349,12 +1349,14 @@ def run_deterministic(sim_input):
             continue
             
         milestones = []
+        if user_alive and user_age_t == inputs['user_rmd_start_age']:
+            milestones.append(f"User RMDs Start ({user_age_t})")
+        if spouse_alive and spouse_age_t == inputs['spouse_rmd_start_age']:
+            milestones.append(f"Spouse RMDs Start ({spouse_age_t})")
         if user_alive and user_age_t == inputs['user_ret_age']:
             milestones.append(f"User Retires ({user_age_t})")
         if spouse_alive and spouse_age_t == inputs['spouse_ret_age']:
             milestones.append(f"Spouse Retires ({spouse_age_t})")
-        if user_alive and user_age_t == inputs['rmd_start_age']:
-            milestones.append(f"User RMDs Start ({user_age_t})")
         if user_alive and user_age_t == inputs['user_age_death']:
             milestones.append(f"User Final Year ({user_age_t})")
         if spouse_alive and spouse_age_t == inputs['spouse_age_death']:

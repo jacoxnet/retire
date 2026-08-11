@@ -335,6 +335,34 @@ class RetirementCalculationTests(TestCase):
         self.assertTrue(len(det_rows) > 0)
         self.assertIn('milestones', det_rows[0])
 
+    def test_spouse_rmd_start_milestone(self):
+        from core.runs import run_deterministic
+        sim_input = {
+            'user_name': 'User Milestone',
+            'user_age': 65,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': True,
+            'spouse_name': 'Spouse Milestone',
+            'spouse_age': 60, # Born ~1966 -> RMD start age 75 (occurs in 15 years, t=15)
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 90,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'desired_spending': 50000.0,
+            'survivor_spending': 40000.0,
+            'adjust_spending_inflation': True,
+            'inflation_rate': 2.0,
+            'pretax_assets': {'present_balance': 100000.0},
+            'spouse_pretax_assets': {'present_balance': 100000.0},
+            'roth_assets': {}, 'taxable_assets': {}, 'hsa_assets': {},
+            'additional_spending': [], 'income_sources': []
+        }
+        rows = run_deterministic(sim_input)
+        # Find row where spouse_age is 75 (t=15)
+        spouse_rmd_row = [r for r in rows if r['spouse_age'] == 75][0]
+        self.assertIn("Spouse RMDs Start (75)", spouse_rmd_row['milestones'])
+
 
 
 
