@@ -521,6 +521,66 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(res['ending_assets']['pretax_spouse'], 300000.0)
         self.assertEqual(res['ending_assets']['pretax'], 300000.0)
 
+    def test_dual_engine_numba_vs_python_parity(self):
+        # Verify Python run_simulation_path and Numba njit_simulate_path produce identical ending wealth
+        from core.runs import extract_sim_inputs, run_simulation_path, prepare_numba_inputs, njit_simulate_path
+        import numpy as np
+        
+        sim_input = {
+            'user_name': 'Parity User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': True,
+            'spouse_name': 'Parity Spouse',
+            'spouse_age': 58,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 92,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'begin_spending_age_type': 'retirement',
+            'desired_spending': 80000.0,
+            'survivor_spending': 60000.0,
+            'adjust_spending_inflation': True,
+            'inflation_rate': 2.5,
+            'runs': 1,
+            'target_success_rate': 80.0,
+            'pretax_assets': {'present_balance': 500000.0, 'contrib_amount': 10000.0, 'contrib_freq': 'annual', 'contrib_start_age': 60, 'contrib_end_age_type': 'retirement', 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0},
+            'spouse_pretax_assets': {'present_balance': 300000.0, 'contrib_amount': 5000.0, 'contrib_freq': 'annual', 'contrib_start_age': 58, 'contrib_end_age_type': 'spouse_retirement', 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0},
+            'roth_assets': {'present_balance': 150000.0, 'contrib_amount': 0.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'taxable_assets': {'present_balance': 200000.0, 'contrib_amount': 0.0, 'return_mean': 5.0, 'return_std': 8.0},
+            'hsa_assets': {'present_balance': 20000.0, 'contrib_amount': 0.0, 'return_mean': 4.0, 'return_std': 5.0, 'hsa_for_medical': True},
+            'additional_spending': [],
+            'income_sources': []
+        }
+        
+        inputs = extract_sim_inputs(sim_input)
+        years = inputs['total_years']
+        
+        # Fixed deterministic return vectors
+        r_pre = np.full(years, 0.06)
+        r_roth = np.full(years, 0.06)
+        r_tax = np.full(years, 0.05)
+        r_hsa = np.full(years, 0.04)
+        
+        # 1. Run Python simulation
+        py_results = run_simulation_path(inputs, r_pre, r_roth, r_tax, r_hsa)
+        py_ending_wealth = py_results[-1]['ending_assets']['total']
+        
+        # 2. Run Numba JIT simulation
+        nb_inp = prepare_numba_inputs(inputs)
+        nb_ending_wealth = njit_simulate_path(
+            years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
+            nb_inp['filing_status_code'], inputs['desired_spending_start_age'], nb_inp['desired_spending'], nb_inp['survivor_spending'],
+            inputs['adjust_spending_inflation'], inputs['inflation_rate'], inputs['hsa_for_medical'], nb_inp['user_rmd_start_age'], nb_inp['spouse_rmd_start_age'],
+            nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_init'],
+            nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
+            nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
+            r_pre, r_roth, r_tax, r_hsa
+        )
+        
+        self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
+
 
 
 
