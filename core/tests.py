@@ -48,10 +48,10 @@ class RetirementCalculationTests(TestCase):
             desired_spending_start_age=75, desired_spending=0, survivor_spending=0,
             adjust_spending_inflation=False, inflation_rate=0.0,
             additional_spending_list=[], income_sources_list=[],
-            pretax=246000.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
-            r_pretax=0.10, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
-            contrib_pretax=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
-            rmd_start_age=75
+            pretax_user=246000.0, pretax_spouse=0.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.10, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75
         )
         self.assertAlmostEqual(res['withdrawals']['pretax_rmd'], 10000.0)
 
@@ -458,6 +458,68 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(sim_data['target_success_rate'], 85.5)
         self.assertEqual(sim_data['pretax_assets']['return_mean'], 6.5)
         self.assertEqual(sim_data['pretax_assets']['return_std'], 10.5)
+
+    def test_spouse_pretax_independent_rmd(self):
+        # User age 75 (RMD start age 75), Spouse age 65 (RMD start age 75)
+        # User pretax balance: 246,000 (divisor 24.6 -> RMD = 10,000)
+        # Spouse pretax balance: 500,000 (RMD = 0 because age < 75)
+        from core.runs import simulate_step
+        res = simulate_step(
+            t=0, user_age=75, is_married=True, spouse_age=65,
+            user_age_death=90, spouse_age_death=90, filing_status='joint',
+            desired_spending_start_age=75, desired_spending=0, survivor_spending=0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=246000.0, pretax_spouse=500000.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75
+        )
+        self.assertAlmostEqual(res['withdrawals']['user_pretax_rmd'], 10000.0)
+        self.assertEqual(res['withdrawals']['spouse_pretax_rmd'], 0.0)
+        self.assertAlmostEqual(res['withdrawals']['pretax_rmd'], 10000.0)
+
+    def test_spouse_pretax_proportional_deficit_drawdown(self):
+        # User pretax: 300,000, Spouse pretax: 100,000 (3:1 ratio)
+        # Spending requirement produces a deficit requiring extra pretax withdrawal.
+        from core.runs import simulate_step
+        res = simulate_step(
+            t=0, user_age=60, is_married=True, spouse_age=60,
+            user_age_death=90, spouse_age_death=90, filing_status='joint',
+            desired_spending_start_age=60, desired_spending=40000, survivor_spending=40000,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=300000.0, pretax_spouse=100000.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75
+        )
+        w_extra = res['withdrawals']['pretax_extra']
+        self.assertGreater(w_extra, 0.0)
+        
+        # Verify remaining balances reflect 3:1 proportional reduction
+        user_end = res['ending_assets']['pretax_user']
+        spouse_end = res['ending_assets']['pretax_spouse']
+        self.assertAlmostEqual(user_end / spouse_end, 3.0, delta=0.01)
+
+    def test_spousal_rollover_upon_first_death(self):
+        # User dies at age 70 (t=10). At t=11 (t > t_first_death), deceased user's pretax rolls into spouse's pretax.
+        from core.runs import simulate_step
+        res = simulate_step(
+            t=11, user_age=60, is_married=True, spouse_age=60,
+            user_age_death=70, spouse_age_death=90, filing_status='joint',
+            desired_spending_start_age=60, desired_spending=0, survivor_spending=0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=200000.0, pretax_spouse=100000.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75
+        )
+        # User is deceased, spouse is survivor
+        self.assertEqual(res['ending_assets']['pretax_user'], 0.0)
+        self.assertEqual(res['ending_assets']['pretax_spouse'], 300000.0)
+        self.assertEqual(res['ending_assets']['pretax'], 300000.0)
 
 
 

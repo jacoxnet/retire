@@ -657,8 +657,22 @@
                                                         ${{ row.withdrawals.taxable|floatformat:"0"|intcomma }}
                                                     </span>
                                                 </div>
+                                                {% if row.withdrawals.user_pretax_rmd > 0 or row.withdrawals.spouse_pretax_rmd > 0 %}
+                                                <div class="d-flex justify-content-between gap-3 small mb-1 text-muted ps-2">
+                                                    <span>User RMD:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.user_pretax_rmd }}" data-real="{{ row.withdrawals.user_pretax_rmd }}">
+                                                        ${{ row.withdrawals.user_pretax_rmd|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1 text-muted ps-2">
+                                                    <span>Spouse RMD:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.withdrawals.spouse_pretax_rmd }}" data-real="{{ row.withdrawals.spouse_pretax_rmd }}">
+                                                        ${{ row.withdrawals.spouse_pretax_rmd|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% endif %}
                                                 <div class="d-flex justify-content-between gap-3 small mb-1">
-                                                    <span>Pretax (RMD):</span>
+                                                    <span>Pretax (RMD Total):</span>
                                                     <span class="dollar-amount" data-nominal="{{ row.withdrawals.pretax_rmd }}" data-real="{{ row.withdrawals.pretax_rmd }}">
                                                         ${{ row.withdrawals.pretax_rmd|floatformat:"0"|intcomma }}
                                                     </span>

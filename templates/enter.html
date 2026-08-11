@@ -204,10 +204,10 @@
             <!-- TAB 2: ASSETS & RETURNS -->
             <div class="tab-pane fade" id="assets" role="tabpanel" aria-labelledby="assets-tab">
                 <div class="row">
-                    <!-- PRETAX ASSETS CARD -->
+                    <!-- PRETAX ASSETS CARD (USER) -->
                     <div class="col-md-6 mb-4">
                         <div class="card p-4 h-100">
-                            <h4 class="text-primary mb-3">Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
+                            <h4 class="text-primary mb-3"><span class="user-card-prefix" style="display: {% if is_married %}inline{% else %}none{% endif %};">User </span>Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance $</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input" id="pretax_present_balance" name="pretax_present_balance" value="{{ pretax_assets.present_balance|floatformat:0 }}">
@@ -278,6 +278,63 @@
                                         </i>
                                     </label>
                                     <input type="text" inputmode="decimal" class="form-control percent-input" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SPOUSE PRETAX ASSETS CARD -->
+                    <div class="col-md-6 mb-4 spouse-pretax-container" style="display: {% if is_married %}block{% else %}none{% endif %};">
+                        <div class="card p-4 h-100 border-info">
+                            <h4 class="text-info mb-3">Spouse Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Present Balance $</label>
+                                <input type="text" inputmode="numeric" class="form-control currency-input" id="spouse_pretax_present_balance" name="spouse_pretax_present_balance" value="{{ spouse_pretax_assets.present_balance|floatformat:0 }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Future Contributions $</label>
+                                    <input type="text" inputmode="numeric" class="form-control currency-input" id="spouse_pretax_contrib_amount" name="spouse_pretax_contrib_amount" value="{{ spouse_pretax_assets.contrib_amount|floatformat:0 }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Frequency</label>
+                                    <select class="form-select" name="spouse_pretax_contrib_freq">
+                                        <option value="annual" {% if spouse_pretax_assets.contrib_freq == 'annual' %}selected{% endif %}>Annually</option>
+                                        <option value="monthly" {% if spouse_pretax_assets.contrib_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                        <option value="one-time" {% if spouse_pretax_assets.contrib_freq == 'one-time' %}selected{% endif %}>One-Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Start Age</label>
+                                    <input type="number" class="form-control" id="spouse_pretax_contrib_start_age" name="spouse_pretax_contrib_start_age" value="{{ spouse_pretax_assets.contrib_start_age }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">End Age Type</label>
+                                    <select class="form-select asset-end-age-type" name="spouse_pretax_contrib_end_age_type" data-prefix="spouse_pretax">
+                                        <option value="retirement" {% if spouse_pretax_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>User's Retirement Age</option>
+                                        <option value="spouse_retirement" {% if spouse_pretax_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
+                                        <option value="age" {% if spouse_pretax_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3 asset-end-age-spec-group" id="spouse_pretax_end_age_spec_group" style="display: {% if spouse_pretax_assets.contrib_end_age_type == 'age' %}block{% else %}none{% endif %};">
+                                <label class="form-label">Specified End Age</label>
+                                <input type="number" class="form-control" id="spouse_pretax_contrib_end_age_specified" name="spouse_pretax_contrib_end_age_specified" value="{{ spouse_pretax_assets.contrib_end_age_specified }}">
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="spouse_pretax_contrib_adjust_inflation" name="spouse_pretax_contrib_adjust_inflation" {% if spouse_pretax_assets.contrib_adjust_inflation %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="spouse_pretax_contrib_adjust_inflation">Adjust Contributions for Inflation</label>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Average Return %</label>
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="spouse_pretax_return_mean" value="{{ spouse_pretax_assets.return_mean|floatformat:1 }}" step="0.1">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Return Std Dev %</label>
+                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="spouse_pretax_return_std" value="{{ spouse_pretax_assets.return_std|floatformat:1 }}" step="0.1">
                                 </div>
                             </div>
                         </div>
@@ -832,14 +889,19 @@
         const survivorSpendingGroup = document.getElementById('survivor_spending_group');
         
         function toggleSpouseSection() {
+            const spousePretaxContainer = document.querySelector('.spouse-pretax-container');
+            const userCardPrefixes = document.querySelectorAll('.user-card-prefix');
             if (isMarriedCheckbox.checked) {
                 spouseSection.style.display = 'block';
                 survivorSpendingGroup.style.display = 'block';
-                // Adjust filing status dropdown list to allow joint
+                if (spousePretaxContainer) spousePretaxContainer.style.display = 'block';
+                userCardPrefixes.forEach(el => el.style.display = 'inline');
                 document.getElementById('filing_status').value = 'joint';
             } else {
                 spouseSection.style.display = 'none';
                 survivorSpendingGroup.style.display = 'none';
+                if (spousePretaxContainer) spousePretaxContainer.style.display = 'none';
+                userCardPrefixes.forEach(el => el.style.display = 'none');
                 document.getElementById('filing_status').value = 'single';
             }
         }
@@ -1151,6 +1213,17 @@
                     'contrib_adjust_inflation': document.getElementById('pretax_contrib_adjust_inflation').checked,
                     'return_mean': parsePercent(document.querySelector('[name="pretax_return_mean"]').value || 0),
                     'return_std': parsePercent(document.querySelector('[name="pretax_return_std"]').value || 0)
+                },
+                'spouse_pretax_assets': {
+                    'present_balance': parseMoney(document.getElementById('spouse_pretax_present_balance')?.value || 0),
+                    'contrib_amount': parseMoney(document.getElementById('spouse_pretax_contrib_amount')?.value || 0),
+                    'contrib_freq': document.querySelector('[name="spouse_pretax_contrib_freq"]')?.value || 'annual',
+                    'contrib_start_age': parseInt(document.getElementById('spouse_pretax_contrib_start_age')?.value || 0),
+                    'contrib_end_age_type': document.querySelector('[name="spouse_pretax_contrib_end_age_type"]')?.value || 'spouse_retirement',
+                    'contrib_end_age_specified': parseInt(document.getElementById('spouse_pretax_contrib_end_age_specified')?.value || 0),
+                    'contrib_adjust_inflation': document.getElementById('spouse_pretax_contrib_adjust_inflation')?.checked || false,
+                    'return_mean': parsePercent(document.querySelector('[name="spouse_pretax_return_mean"]')?.value || 0),
+                    'return_std': parsePercent(document.querySelector('[name="spouse_pretax_return_std"]')?.value || 0)
                 },
                 'roth_assets': {
                     'present_balance': parseMoney(document.getElementById('roth_present_balance').value || 0),

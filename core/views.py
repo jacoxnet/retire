@@ -66,6 +66,17 @@ def get_default_data():
             'return_mean': 6.0,
             'return_std': 10.0
         },
+        'spouse_pretax_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'spouse_retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        },
         'roth_assets': {
             'present_balance': 100000.0,
             'contrib_amount': 2000.0,
@@ -175,7 +186,7 @@ def change_mode_view(request):
         data['spouse_age_death'] = get_int(request.POST.get('spouse_age_death'), data.get('spouse_age_death', 90))
 
     # Asset return updates
-    for prefix in ['pretax', 'roth', 'taxable', 'hsa']:
+    for prefix in ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa']:
         key = f'{prefix}_return_mean'
         if key in request.POST:
             if prefix + '_assets' not in data or not isinstance(data[prefix + '_assets'], dict):
@@ -229,7 +240,7 @@ def enter_view(request):
         raw_target_srate = get_float(request.POST.get('target_success_rate'), 80.0)
         target_success_rate = min(99.0, max(1.0, raw_target_srate))
         
-        # Assets (Pretax, Roth, Taxable, HSA)
+        # Assets (Pretax User, Pretax Spouse, Roth, Taxable, HSA)
         pretax_assets = {
             'present_balance': get_float(request.POST.get('pretax_present_balance'), 500000.0),
             'contrib_amount': get_float(request.POST.get('pretax_contrib_amount'), 0.0),
@@ -240,6 +251,18 @@ def enter_view(request):
             'contrib_adjust_inflation': get_bool(request.POST.get('pretax_contrib_adjust_inflation')),
             'return_mean': get_float(request.POST.get('pretax_return_mean'), 6.0),
             'return_std': get_float(request.POST.get('pretax_return_std'), 10.0),
+        }
+        
+        spouse_pretax_assets = {
+            'present_balance': get_float(request.POST.get('spouse_pretax_present_balance'), 0.0) if is_married else 0.0,
+            'contrib_amount': get_float(request.POST.get('spouse_pretax_contrib_amount'), 0.0) if is_married else 0.0,
+            'contrib_freq': request.POST.get('spouse_pretax_contrib_freq', 'annual'),
+            'contrib_start_age': max(min_start_age, get_int(request.POST.get('spouse_pretax_contrib_start_age'), spouse_age if is_married else user_age)),
+            'contrib_end_age_type': request.POST.get('spouse_pretax_contrib_end_age_type', 'spouse_retirement'),
+            'contrib_end_age_specified': get_int(request.POST.get('spouse_pretax_contrib_end_age_specified'), spouse_retirement_age if is_married else user_retirement_age),
+            'contrib_adjust_inflation': get_bool(request.POST.get('spouse_pretax_contrib_adjust_inflation')),
+            'return_mean': get_float(request.POST.get('spouse_pretax_return_mean'), 6.0),
+            'return_std': get_float(request.POST.get('spouse_pretax_return_std'), 10.0),
         }
         
         roth_assets = {
@@ -386,6 +409,7 @@ def enter_view(request):
             'runs': runs,
             'target_success_rate': raw_target_srate if is_goal_seeking else target_success_rate,
             'pretax_assets': pretax_assets,
+            'spouse_pretax_assets': spouse_pretax_assets,
             'roth_assets': roth_assets,
             'taxable_assets': taxable_assets,
             'hsa_assets': hsa_assets,
