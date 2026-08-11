@@ -232,7 +232,7 @@
                                     <input type="number" class="form-control" id="pretax_contrib_start_age" name="pretax_contrib_start_age" value="{{ pretax_assets.contrib_start_age }}">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">End Age Type</label>
+                                    <label class="form-label">End Age</label>
                                     <select class="form-select asset-end-age-type" name="pretax_contrib_end_age_type" data-prefix="pretax">
                                         <option value="retirement" {% if pretax_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                         <option value="spouse_retirement" {% if pretax_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
@@ -311,7 +311,7 @@
                                     <input type="number" class="form-control" id="spouse_pretax_contrib_start_age" name="spouse_pretax_contrib_start_age" value="{{ spouse_pretax_assets.contrib_start_age }}">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">End Age Type</label>
+                                    <label class="form-label">End Age</label>
                                     <select class="form-select asset-end-age-type" name="spouse_pretax_contrib_end_age_type" data-prefix="spouse_pretax">
                                         <option value="retirement" {% if spouse_pretax_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                         <option value="spouse_retirement" {% if spouse_pretax_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
@@ -368,7 +368,7 @@
                                     <input type="number" class="form-control" id="roth_contrib_start_age" name="roth_contrib_start_age" value="{{ roth_assets.contrib_start_age }}">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">End Age Type</label>
+                                    <label class="form-label">End Age</label>
                                     <select class="form-select asset-end-age-type" name="roth_contrib_end_age_type" data-prefix="roth">
                                         <option value="retirement" {% if roth_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                         <option value="spouse_retirement" {% if roth_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
@@ -449,7 +449,7 @@
                                     <input type="number" class="form-control" id="taxable_contrib_start_age" name="taxable_contrib_start_age" value="{{ taxable_assets.contrib_start_age }}">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">End Age Type</label>
+                                    <label class="form-label">End Age</label>
                                     <select class="form-select asset-end-age-type" name="taxable_contrib_end_age_type" data-prefix="taxable">
                                         <option value="retirement" {% if taxable_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                         <option value="spouse_retirement" {% if taxable_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
@@ -529,7 +529,7 @@
                                     <input type="number" class="form-control" id="hsa_contrib_start_age" name="hsa_contrib_start_age" value="{{ hsa_assets.contrib_start_age }}">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">End Age Type</label>
+                                    <label class="form-label">End Age</label>
                                     <select class="form-select asset-end-age-type" name="hsa_contrib_end_age_type" data-prefix="hsa">
                                         <option value="retirement" {% if hsa_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                         <option value="spouse_retirement" {% if hsa_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
@@ -613,24 +613,25 @@
                             </tbody>
                         </table>
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" id="btnAddSpendingRow">
-                        <i class="fa fa-plus"></i> Add Spending Item
-                    </button>
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnAddSpendingRow">
+                            <i class="fa fa-plus me-1"></i> Add Spending Item
+                        </button>
+                    </div>
                 </div>
 
                 <div class="card p-4 mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <h3 class="mb-1">Other Income Streams & Benefits</h3>
-                            <p class="text-secondary small mb-0">Enter Social Security, pensions, annuity payments, or other sources of non-portfolio income.</p>
-                        </div>
-                        <button type="button" class="btn btn-primary btn-sm" id="btnAddIncomeRow">
+                    <h3 class="mb-1">Other Income Streams & Benefits</h3>
+                    <p class="text-secondary small mb-3">Enter Social Security, pensions, annuity payments, or other sources of non-portfolio income.</p>
+                    
+                    <div id="incomeStreamsContainer" class="mb-3">
+                        <!-- JS populated multi-line card items -->
+                    </div>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnAddIncomeRow">
                             <i class="fa fa-plus me-1"></i> Add Income Source
                         </button>
-                    </div>
-                    
-                    <div id="incomeStreamsContainer" class="mb-2">
-                        <!-- JS populated multi-line card items -->
                     </div>
                 </div>
 
@@ -1008,7 +1009,7 @@
         
         function addIncomeRow(data = {}) {
             var name = data.name !== undefined ? data.name : '';
-            var amount = data.amount !== undefined ? data.amount : 20000;
+            var amount = data.amount !== undefined ? data.amount : 2500;
             var frequency = data.frequency !== undefined ? data.frequency : 'monthly';
             var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
             var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
@@ -1098,7 +1099,7 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Social Security Stream?</label>
+                            <label class="form-label fw-semibold">Is this Social Security?</label>
                             <select class="form-select" name="income_is_ss[]">
                                 <option value="false" ${!isSS ? 'selected' : ''}>No</option>
                                 <option value="true" ${isSS ? 'selected' : ''}>Yes</option>
@@ -1349,7 +1350,7 @@
             clean.survivor_spending = clampNum(raw.survivor_spending, 0, null, clean.desired_spending);
             clean.adjust_spending_inflation = raw.adjust_spending_inflation !== false;
 
-            clean.inflation_rate = clampNum(raw.inflation_rate, -10, 50, 2.5);
+            clean.inflation_rate = clampNum(raw.inflation_rate, -10, 50, 3.5);
             clean.runs = clampInt(raw.runs, 1, 5000, 1000);
             clean.target_success_rate = clampNum(raw.target_success_rate, 1, 100, 80);
 

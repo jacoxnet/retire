@@ -52,7 +52,7 @@ def get_default_data():
         'desired_spending': 40000.0,
         'survivor_spending': 40000.0,
         'adjust_spending_inflation': True,
-        'inflation_rate': 2.5,
+        'inflation_rate': 3.5,
         'runs': 1000,
         'target_success_rate': 80.0,
         'pretax_assets': {
