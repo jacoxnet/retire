@@ -268,7 +268,7 @@ class RetirementCalculationTests(TestCase):
         self.assertNotContains(res_resp, 'Simulations Run:')
         self.assertNotContains(res_resp, '(Deterministic)')
         self.assertContains(res_resp, 'Average Return')
-        self.assertContains(res_resp, 'User\'s Age at Death')
+        self.assertContains(res_resp, 'Your\'s Age at Death' if False else 'Your Age at Death')
         
         # Percentile labels checks
         self.assertContains(res_resp, 'Median Ending Wealth')
@@ -327,8 +327,8 @@ class RetirementCalculationTests(TestCase):
         
         # Verify Milestones header is present
         self.assertContains(res_resp, '<th>Milestones</th>')
-        self.assertContains(res_resp, 'User Retires')
-        self.assertContains(res_resp, 'User Final Year')
+        self.assertContains(res_resp, 'You Retire')
+        self.assertContains(res_resp, 'Your Final Year')
         
         # Verify det_rows contains milestones list
         det_rows = res_resp.context['det_rows']

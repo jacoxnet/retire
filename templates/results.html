@@ -90,7 +90,7 @@
                                 <!-- User's Age at Death Slider -->
                                 <div class="mb-3 p-2 bg-light rounded border">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <label for="input_user_age_death" class="form-label small fw-bold mb-0">User's Age at Death</label>
+                                        <label for="input_user_age_death" class="form-label small fw-bold mb-0">Your Age at Death</label>
                                         <div class="input-group input-group-sm" style="width: 90px;">
                                             <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_user_age_death" name="user_age_death" value="{{ user_age_death }}" min="60" max="110" step="1" data-range="range_user_age_death">
                                             <span class="input-group-text px-1">yrs</span>
@@ -659,7 +659,7 @@
                                                 </div>
                                                 {% if row.withdrawals.user_pretax_rmd > 0 or row.withdrawals.spouse_pretax_rmd > 0 %}
                                                 <div class="d-flex justify-content-between gap-3 small mb-1 text-muted ps-2">
-                                                    <span>User RMD:</span>
+                                                    <span>Your RMD:</span>
                                                     <span class="dollar-amount" data-nominal="{{ row.withdrawals.user_pretax_rmd }}" data-real="{{ row.withdrawals.user_pretax_rmd }}">
                                                         ${{ row.withdrawals.user_pretax_rmd|floatformat:"0"|intcomma }}
                                                     </span>

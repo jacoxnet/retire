@@ -372,11 +372,11 @@ def enter_view(request):
             validation_errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
             
         if user_age < 18 or user_age > 120:
-            validation_errors.append("User's Present Age must be an integer between 18 and 120.")
+            validation_errors.append("Your Present Age must be an integer between 18 and 120.")
         if user_retirement_age < user_age or user_retirement_age > 120:
-            validation_errors.append(f"User's Retirement Age must be between User's Present Age ({user_age}) and 120.")
+            validation_errors.append(f"Your Retirement Age must be between Your Present Age ({user_age}) and 120.")
         if user_age_death <= user_age or user_age_death > 120:
-            validation_errors.append(f"User's Age at Death must be an integer greater than User's Present Age ({user_age}) up to 120.")
+            validation_errors.append(f"Your Age at Death must be an integer greater than Your Present Age ({user_age}) up to 120.")
             
         if is_married:
             if spouse_age < 18 or spouse_age > 120:
