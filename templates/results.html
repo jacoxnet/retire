@@ -40,6 +40,11 @@
                 Deterministic Cash Flow
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="charts-tab" data-bs-toggle="tab" data-bs-target="#charts" type="button" role="tab" aria-controls="charts" aria-selected="false">
+                <i class="fa fa-chart-line me-1"></i> Charts
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content" id="resultsTabsContent">
@@ -264,6 +269,17 @@
                                 </p>
                             </div>
                         {% endif %}
+
+                        <div class="alert alert-light border p-3 mt-4 mb-0">
+                            <p class="mb-0 text-secondary small">
+                                <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
+                                1) Required Minimum Distributions (RMDs) from Pretax accounts;
+                                2) Taxable accounts;
+                                3) Pretax accounts (with tax gross-up / circular solver);
+                                4) Roth accounts;
+                                5) Health Savings Accounts (HSA).
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -723,6 +739,169 @@
             </div>
         </div>
 
+        <!-- TAB 4: CHARTS -->
+        <div class="tab-pane fade" id="charts" role="tabpanel" aria-labelledby="charts-tab">
+            <!-- Charts Control Bar -->
+            <div class="card p-3 mb-4 shadow-sm border-0 bg-light">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa fa-chart-pie text-primary fs-5"></i>
+                        <h4 class="mb-0 text-dark fw-bold">Interactive Financial Visualizations</h4>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="text-secondary small fw-bold">Display Mode:</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Chart Dollar Mode">
+                            <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_nominal" value="nominal" checked onclick="setDollarMode('nominal')">
+                            <label class="btn btn-outline-primary" for="chart_nominal"><i class="fa fa-dollar-sign me-1"></i>Nominal</label>
+                            <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_real" value="real" onclick="setDollarMode('real')">
+                            <label class="btn btn-outline-primary" for="chart_real"><i class="fa fa-filter me-1"></i>Real (Inflation-Adjusted)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <!-- Chart 1: Spaghetti Chart -->
+                <div class="col-lg-6">
+                    <div class="card h-100 shadow-sm border-0 chart-card">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-line-chart me-2"></i>1. Spaghetti Chart of Monte Carlo Runs
+                                </h5>
+                                <small class="text-muted">Selected simulated portfolio paths over time</small>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <select id="spaghettiPathCount" class="form-select form-select-sm" style="width: auto;" title="Number of paths to display" onchange="updateSpaghettiChart()">
+                                    <option value="10">10 Paths</option>
+                                    <option value="25">25 Paths</option>
+                                    <option value="50">50 Paths</option>
+                                    <option value="100" selected>100 Paths</option>
+                                    <option value="250">250 Paths</option>
+                                    <option value="500">500 Paths</option>
+                                </select>
+                                <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('spaghetti', '1. Spaghetti Chart of Monte Carlo Runs')" title="Click to enlarge">
+                                    <i class="fa fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container">
+                                <canvas id="spaghettiChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart 2: MC Wealth Trajectory -->
+                <div class="col-lg-6">
+                    <div class="card h-100 shadow-sm border-0 chart-card">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-area-chart me-2"></i>2. Monte Carlo Wealth Trajectory
+                                </h5>
+                                <small class="text-muted">90th (Optimistic), 50th (Median), and 10th (Pessimistic) percentiles</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('trajectory', '2. Monte Carlo Wealth Trajectory')" title="Click to enlarge">
+                                <i class="fa fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container">
+                                <canvas id="trajectoryChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Stacked Asset Class Breakdown -->
+                <div class="col-lg-6">
+                    <div class="card h-100 shadow-sm border-0 chart-card">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-layer-group me-2"></i>3. Asset Class Breakdown (Drawdown Sequence)
+                                </h5>
+                                <small class="text-muted">Pretax, Roth, Taxable, and HSA balances over time</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('assetBreakdown', '3. Stacked Asset Class Breakdown')" title="Click to enlarge">
+                                <i class="fa fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container">
+                                <canvas id="assetBreakdownChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart 4: Annual Income vs Spending Sources -->
+                <div class="col-lg-6">
+                    <div class="card h-100 shadow-sm border-0 chart-card">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-balance-scale me-2"></i>4. Annual Income vs. Spending Sources
+                                </h5>
+                                <small class="text-muted">Inflows (SS, Pensions, Withdrawals) vs Outflows (Spending & Taxes)</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('incomeSpending', '4. Annual Income vs. Spending Sources')" title="Click to enlarge">
+                                <i class="fa fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container">
+                                <canvas id="incomeSpendingChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart 5: Lifetime Tax Liability & "The Tax Bomb" -->
+                <div class="col-12">
+                    <div class="card shadow-sm border-0 chart-card">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-file-invoice-dollar me-2"></i>5. Lifetime Tax Liability & "The Tax Bomb"
+                                </h5>
+                                <small class="text-muted">Year-by-year income taxes paid, highlighting RMD spikes</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('taxLiability', '5. Lifetime Tax Liability & RMD Spikes')" title="Click to enlarge">
+                                <i class="fa fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container">
+                                <canvas id="taxLiabilityChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enlarge Chart Modal (Placed outside tab hierarchy at root level to prevent backdrop shading issues) -->
+<div class="modal fade" id="chartModal" tabindex="-1" aria-labelledby="chartModalLabel" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary" id="chartModalLabel">Chart Title</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div style="height: 520px; position: relative;">
+                    <canvas id="modalChartCanvas"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -771,26 +950,473 @@
     });
 
     function setDollarMode(mode) {
+        currentDollarMode = mode;
         // Toggle checkboxes / radios state
+        const projNom = document.getElementById('proj_nominal');
+        const cfNom = document.getElementById('cf_nominal');
+        const chartNom = document.getElementById('chart_nominal');
+        const projReal = document.getElementById('proj_real');
+        const cfReal = document.getElementById('cf_real');
+        const chartReal = document.getElementById('chart_real');
+
         if (mode === 'nominal') {
-            document.getElementById('proj_nominal').checked = true;
-            document.getElementById('cf_nominal').checked = true;
+            if (projNom) projNom.checked = true;
+            if (cfNom) cfNom.checked = true;
+            if (chartNom) chartNom.checked = true;
         } else {
-            document.getElementById('proj_real').checked = true;
-            document.getElementById('cf_real').checked = true;
+            if (projReal) projReal.checked = true;
+            if (cfReal) cfReal.checked = true;
+            if (chartReal) chartReal.checked = true;
         }
         
         const elements = document.querySelectorAll('.dollar-amount');
         elements.forEach(el => {
             const val = parseFloat(el.getAttribute('data-' + mode));
-            // Add negative check
             if (val < 0) {
                 el.textContent = '-' + currencyFormatter.format(Math.abs(val));
             } else {
                 el.textContent = currencyFormatter.format(val);
             }
         });
+
+        if (typeof updateChartsDollarMode === 'function') {
+            updateChartsDollarMode(mode);
+        }
     }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+{{ det_rows|json_script:"det-rows-json" }}
+{{ mc_p10|json_script:"mc-p10-json" }}
+{{ mc_p50|json_script:"mc-p50-json" }}
+{{ mc_p90|json_script:"mc-p90-json" }}
+{{ mc_spaghetti_paths|json_script:"mc-spaghetti-json" }}
+
+<script>
+    // Global Chart Instances & Data Caches
+    let currentDollarMode = 'nominal';
+    let chartInstances = {};
+    let modalChartInstance = null;
+
+    const detRowsData = JSON.parse(document.getElementById('det-rows-json')?.textContent || '[]');
+    const mcP10Data = JSON.parse(document.getElementById('mc-p10-json')?.textContent || '[]');
+    const mcP50Data = JSON.parse(document.getElementById('mc-p50-json')?.textContent || '[]');
+    const mcP90Data = JSON.parse(document.getElementById('mc-p90-json')?.textContent || '[]');
+    const mcSpaghettiPaths = JSON.parse(document.getElementById('mc-spaghetti-json')?.textContent || '[]');
+
+    const userStartAge = {{ det_rows.0.user_age|default:60 }};
+    const startYear = {{ det_rows.0.year|default:2026 }};
+
+    function formatChartCurrency(val) {
+        if (isNaN(val)) return '$0';
+        const absVal = Math.abs(val);
+        if (absVal >= 1e6) {
+            return (val < 0 ? '-' : '') + '$' + (absVal / 1e6).toFixed(2) + 'M';
+        } else if (absVal >= 1e3) {
+            return (val < 0 ? '-' : '') + '$' + (absVal / 1e3).toFixed(0) + 'K';
+        }
+        return (val < 0 ? '-' : '') + '$' + absVal.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    }
+
+    function scaleVal(val, t) {
+        if (currentDollarMode === 'real') {
+            return val / Math.pow(1.0 + inflationRate / 100.0, t);
+        }
+        return val;
+    }
+
+    function initAllCharts() {
+        initSpaghettiChart();
+        initTrajectoryChart();
+        initAssetBreakdownChart();
+        initIncomeSpendingChart();
+        initTaxLiabilityChart();
+    }
+
+    // Chart 1: Spaghetti Chart of Monte Carlo Runs
+    function initSpaghettiChart() {
+        const canvas = document.getElementById('spaghettiChartCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (chartInstances.spaghetti) {
+            chartInstances.spaghetti.destroy();
+        }
+
+        const pathCount = parseInt(document.getElementById('spaghettiPathCount')?.value || 100);
+        const selectedPaths = mcSpaghettiPaths.slice(0, pathCount);
+        const years = selectedPaths.length > 0 ? selectedPaths[0].length : 0;
+        const labels = Array.from({ length: years }, (_, t) => `Age ${userStartAge + t} (${startYear + t})`);
+
+        const datasets = selectedPaths.map((path, idx) => {
+            const hue = (idx * 137.5) % 360;
+            return {
+                label: `Run ${idx + 1}`,
+                data: path.map((val, t) => scaleVal(val, t)),
+                borderColor: `hsla(${hue}, 75%, 48%, 0.4)`,
+                borderWidth: 1.2,
+                pointRadius: 0,
+                tension: 0.1,
+                fill: false
+            };
+        });
+
+        chartInstances.spaghetti = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets },
+            options: getChartOptions('Portfolio Wealth ($)', false)
+        });
+    }
+
+    function updateSpaghettiChart() {
+        initSpaghettiChart();
+    }
+
+    // Chart 2: Monte Carlo Wealth Trajectory
+    function initTrajectoryChart() {
+        const canvas = document.getElementById('trajectoryChartCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (chartInstances.trajectory) {
+            chartInstances.trajectory.destroy();
+        }
+
+        const years = mcP50Data.length;
+        const labels = Array.from({ length: years }, (_, t) => `Age ${userStartAge + t} (${startYear + t})`);
+
+        chartInstances.trajectory = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: '90th Percentile (Optimistic)',
+                        data: mcP90Data.map((v, t) => scaleVal(v, t)),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2.5,
+                        pointRadius: 1,
+                        tension: 0.2
+                    },
+                    {
+                        label: '50th Percentile (Median)',
+                        data: mcP50Data.map((v, t) => scaleVal(v, t)),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 1,
+                        tension: 0.2
+                    },
+                    {
+                        label: '10th Percentile (Pessimistic)',
+                        data: mcP10Data.map((v, t) => scaleVal(v, t)),
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2.5,
+                        pointRadius: 1,
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: getChartOptions('Portfolio Wealth ($)', true)
+        });
+    }
+
+    // Chart 3: Stacked Asset Class Breakdown
+    function initAssetBreakdownChart() {
+        const canvas = document.getElementById('assetBreakdownChartCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (chartInstances.assetBreakdown) {
+            chartInstances.assetBreakdown.destroy();
+        }
+
+        const labels = detRowsData.map((r, t) => `Age ${r.user_age || (userStartAge + t)} (${r.year || (startYear + t)})`);
+
+        chartInstances.assetBreakdown = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Pretax Assets (IRA/401k)',
+                        data: detRowsData.map((r, t) => scaleVal(r.ending_assets.pretax || 0, t + 1)),
+                        backgroundColor: 'rgba(230, 57, 70, 0.75)',
+                        borderColor: '#e63946',
+                        borderWidth: 1.5,
+                        fill: 'origin',
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Roth Assets (Roth IRA/401k)',
+                        data: detRowsData.map((r, t) => scaleVal(r.ending_assets.roth || 0, t + 1)),
+                        backgroundColor: 'rgba(255, 183, 3, 0.75)',
+                        borderColor: '#ffb703',
+                        borderWidth: 1.5,
+                        fill: '-1',
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Taxable Assets (Brokerage/Cash)',
+                        data: detRowsData.map((r, t) => scaleVal(r.ending_assets.taxable || 0, t + 1)),
+                        backgroundColor: 'rgba(33, 158, 188, 0.75)',
+                        borderColor: '#219ebc',
+                        borderWidth: 1.5,
+                        fill: '-1',
+                        pointRadius: 0,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'HSA Assets (Health Savings)',
+                        data: detRowsData.map((r, t) => scaleVal(r.ending_assets.hsa || 0, t + 1)),
+                        backgroundColor: 'rgba(42, 157, 143, 0.75)',
+                        borderColor: '#2a9d8f',
+                        borderWidth: 1.5,
+                        fill: '-1',
+                        pointRadius: 0,
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: getChartOptions('Total Assets ($)', true, true)
+        });
+    }
+
+    // Chart 4: Annual Income vs. Spending Sources
+    function initIncomeSpendingChart() {
+        const canvas = document.getElementById('incomeSpendingChartCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (chartInstances.incomeSpending) {
+            chartInstances.incomeSpending.destroy();
+        }
+
+        const labels = detRowsData.map((r, t) => `Age ${r.user_age || (userStartAge + t)} (${r.year || (startYear + t)})`);
+
+        const ssVals = [];
+        const pensionVals = [];
+        const withdrawalVals = [];
+        const desiredSpendVals = [];
+        const addSpendVals = [];
+        const taxVals = [];
+
+        const planData = JSON.parse(document.getElementById('plan-data-json')?.textContent || '{}');
+        const ssNames = (planData.income_sources || []).filter(s => s.is_social_security).map(s => s.name.trim().toLowerCase());
+
+        detRowsData.forEach((r, t) => {
+            let ssSum = 0;
+            let pensionSum = 0;
+            const incBk = r.income_breakdown || {};
+            Object.keys(incBk).forEach(name => {
+                const amt = incBk[name] || 0;
+                const cleanName = name.trim().toLowerCase();
+                if (ssNames.includes(cleanName) || cleanName.includes('social security') || cleanName.includes('ss')) {
+                    ssSum += amt;
+                } else {
+                    pensionSum += amt;
+                }
+            });
+
+            ssVals.push(scaleVal(ssSum, t));
+            pensionVals.push(scaleVal(pensionSum, t));
+            withdrawalVals.push(scaleVal(r.withdrawals.total || 0, t));
+
+            desiredSpendVals.push(scaleVal(r.desired_spending || 0, t));
+            addSpendVals.push(scaleVal(r.additional_spending || 0, t));
+            taxVals.push(scaleVal(r.taxes || 0, t));
+        });
+
+        chartInstances.incomeSpending = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    // Inflows Stack
+                    { label: 'Social Security', data: ssVals, backgroundColor: '#06d6a0', stack: 'Inflows' },
+                    { label: 'Pensions & Other Income', data: pensionVals, backgroundColor: '#118ab2', stack: 'Inflows' },
+                    { label: 'Portfolio Withdrawals', data: withdrawalVals, backgroundColor: '#8338ec', stack: 'Inflows' },
+                    // Outflows Stack
+                    { label: 'Regular Spending', data: desiredSpendVals, backgroundColor: '#ff4d6d', stack: 'Outflows' },
+                    { label: 'Additional Spending', data: addSpendVals, backgroundColor: '#ffb703', stack: 'Outflows' },
+                    { label: 'Taxes & Penalties', data: taxVals, backgroundColor: '#c1121f', stack: 'Outflows' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                events: ['click', 'touchstart'],
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${formatChartCurrency(context.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: {
+                        stacked: true,
+                        ticks: { callback: value => formatChartCurrency(value) },
+                        title: { display: true, text: 'Annual Cash Flow ($)' }
+                    }
+                }
+            }
+        });
+    }
+
+    // Chart 5: Lifetime Tax Liability & "The Tax Bomb"
+    function initTaxLiabilityChart() {
+        const canvas = document.getElementById('taxLiabilityChartCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (chartInstances.taxLiability) {
+            chartInstances.taxLiability.destroy();
+        }
+
+        const labels = detRowsData.map((r, t) => `Age ${r.user_age || (userStartAge + t)} (${r.year})`);
+        const taxVals = detRowsData.map((r, t) => scaleVal(r.taxes || 0, t));
+
+        const barColors = detRowsData.map(r => {
+            const hasRmdMilestone = (r.milestones || []).some(m => m.toLowerCase().includes('rmd'));
+            return hasRmdMilestone ? '#ffb703' : '#d90429';
+        });
+
+        chartInstances.taxLiability = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Taxes Paid',
+                    data: taxVals,
+                    backgroundColor: barColors,
+                    borderColor: '#a0001c',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                events: ['click', 'touchstart'],
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const idx = context.dataIndex;
+                                const row = detRowsData[idx];
+                                let label = `Taxes Paid: ${formatChartCurrency(context.raw)}`;
+                                if (row && row.milestones && row.milestones.length > 0) {
+                                    label += ` (${row.milestones.join(', ')})`;
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        ticks: { callback: value => formatChartCurrency(value) },
+                        title: { display: true, text: 'Annual Tax Liability ($)' }
+                    }
+                }
+            }
+        });
+    }
+
+    function getChartOptions(yAxisTitle, showLegend = true, stacked = false) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            events: ['click', 'touchstart'],
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: showLegend, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${formatChartCurrency(context.raw)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { display: false } },
+                y: {
+                    stacked: stacked,
+                    ticks: { callback: value => formatChartCurrency(value) },
+                    title: { display: true, text: yAxisTitle }
+                }
+            }
+        };
+    }
+
+    function updateChartsDollarMode(mode) {
+        currentDollarMode = mode;
+        initAllCharts();
+    }
+
+    function expandChart(chartType, title) {
+        const modalTitleEl = document.getElementById('chartModalLabel');
+        if (modalTitleEl) modalTitleEl.textContent = title;
+
+        const modalCanvas = document.getElementById('modalChartCanvas');
+        if (!modalCanvas) return;
+        const modalCtx = modalCanvas.getContext('2d');
+
+        if (modalChartInstance) {
+            modalChartInstance.destroy();
+        }
+
+        const sourceChart = chartInstances[chartType];
+        if (!sourceChart) return;
+
+        modalChartInstance = new Chart(modalCtx, {
+            type: sourceChart.config.type,
+            data: JSON.parse(JSON.stringify(sourceChart.config.data)),
+            options: {
+                ...sourceChart.config.options,
+                maintainAspectRatio: false,
+                events: ['click', 'touchstart'],
+                plugins: {
+                    ...sourceChart.config.options.plugins,
+                    legend: {
+                        ...sourceChart.config.options.plugins?.legend,
+                        labels: { boxWidth: 14, font: { size: 13 } }
+                    }
+                }
+            }
+        });
+
+        const modalEl = document.getElementById('chartModal');
+        if (modalEl) {
+            const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            bsModal.show();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const chartsTabBtn = document.getElementById('charts-tab');
+        if (chartsTabBtn) {
+            chartsTabBtn.addEventListener('shown.bs.tab', function () {
+                initAllCharts();
+            });
+        }
+
+        setTimeout(initAllCharts, 150);
+    });
 </script>
 
 {{ plan_data_json|json_script:"plan-data-json" }}

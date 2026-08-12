@@ -196,7 +196,6 @@
 
                     <div class="text-center mt-4">
                         <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Next: Assets & Returns</button>
-                        <button type="submit" class="btn btn-primary px-4 me-2">Run Simulation</button>
                     </div>
                 </div>
             </div>
@@ -266,18 +265,26 @@
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
-                                        Return Std Dev %
+                                        Volatility of Return
                                         <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
                                            tabindex="0"
                                            style="cursor: pointer;"
                                            data-bs-toggle="popover" 
                                            data-bs-trigger="hover focus" 
                                            data-bs-html="true" 
-                                           data-bs-title="Annual Volatility / Risk (%)" 
-                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                           data-bs-title="Volatility of Return" 
+                                           data-bs-content="In Monte Carlo simulations, volatility is indicated by the standard deviation of a return. Standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 4.5%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 9.5%</li><li><strong>High Risk (Stock Index Funds):</strong> 16.0%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <div class="d-flex gap-2">
+                                        <select class="form-select volatility-select" data-prefix="pretax">
+                                            <option value="low" {% if pretax_assets.return_std == 4.5 %}selected{% endif %}>Low</option>
+                                            <option value="moderate" {% if pretax_assets.return_std == 9.5 %}selected{% endif %}>Moderate</option>
+                                            <option value="high" {% if pretax_assets.return_std == 16.0 or pretax_assets.return_std == 16 %}selected{% endif %}>High</option>
+                                            <option value="custom" {% if pretax_assets.return_std != 4.5 and pretax_assets.return_std != 9.5 and pretax_assets.return_std != 16.0 and pretax_assets.return_std != 16 %}selected{% endif %}>User Specified</option>
+                                        </select>
+                                        <input type="text" inputmode="decimal" class="form-control percent-input custom-vol-input" name="pretax_return_std" value="{{ pretax_assets.return_std|floatformat:1 }}" step="0.1" style="max-width: 100px; display: {% if pretax_assets.return_std != 4.5 and pretax_assets.return_std != 9.5 and pretax_assets.return_std != 16.0 and pretax_assets.return_std != 16 %}block{% else %}none{% endif %};">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -333,8 +340,27 @@
                                     <input type="text" inputmode="decimal" class="form-control percent-input" name="spouse_pretax_return_mean" value="{{ spouse_pretax_assets.return_mean|floatformat:1 }}" step="0.1">
                                 </div>
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Return Std Dev %</label>
-                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="spouse_pretax_return_std" value="{{ spouse_pretax_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <label class="form-label">
+                                        Volatility of Return
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
+                                           tabindex="0"
+                                           style="cursor: pointer;"
+                                           data-bs-toggle="popover" 
+                                           data-bs-trigger="hover focus" 
+                                           data-bs-html="true" 
+                                           data-bs-title="Volatility of Return" 
+                                           data-bs-content="In Monte Carlo simulations, volatility is indicated by the standard deviation of a return. Standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 4.5%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 9.5%</li><li><strong>High Risk (Stock Index Funds):</strong> 16.0%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                        </i>
+                                    </label>
+                                    <div class="d-flex gap-2">
+                                        <select class="form-select volatility-select" data-prefix="spouse_pretax">
+                                            <option value="low" {% if spouse_pretax_assets.return_std == 4.5 %}selected{% endif %}>Low</option>
+                                            <option value="moderate" {% if spouse_pretax_assets.return_std == 9.5 %}selected{% endif %}>Moderate</option>
+                                            <option value="high" {% if spouse_pretax_assets.return_std == 16.0 or spouse_pretax_assets.return_std == 16 %}selected{% endif %}>High</option>
+                                            <option value="custom" {% if spouse_pretax_assets.return_std != 4.5 and spouse_pretax_assets.return_std != 9.5 and spouse_pretax_assets.return_std != 16.0 and spouse_pretax_assets.return_std != 16 %}selected{% endif %}>User Specified</option>
+                                        </select>
+                                        <input type="text" inputmode="decimal" class="form-control percent-input custom-vol-input" name="spouse_pretax_return_std" value="{{ spouse_pretax_assets.return_std|floatformat:1 }}" step="0.1" style="max-width: 100px; display: {% if spouse_pretax_assets.return_std != 4.5 and spouse_pretax_assets.return_std != 9.5 and spouse_pretax_assets.return_std != 16.0 and spouse_pretax_assets.return_std != 16 %}block{% else %}none{% endif %};">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -402,18 +428,26 @@
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
-                                        Return Std Dev %
+                                        Volatility of Return
                                         <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
                                            tabindex="0"
                                            style="cursor: pointer;"
                                            data-bs-toggle="popover" 
                                            data-bs-trigger="hover focus" 
                                            data-bs-html="true" 
-                                           data-bs-title="Annual Volatility / Risk (%)" 
-                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                           data-bs-title="Volatility of Return" 
+                                           data-bs-content="In Monte Carlo simulations, volatility is indicated by the standard deviation of a return. Standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 4.5%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 9.5%</li><li><strong>High Risk (Stock Index Funds):</strong> 16.0%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="roth_return_std" value="{{ roth_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <div class="d-flex gap-2">
+                                        <select class="form-select volatility-select" data-prefix="roth">
+                                            <option value="low" {% if roth_assets.return_std == 4.5 %}selected{% endif %}>Low</option>
+                                            <option value="moderate" {% if roth_assets.return_std == 9.5 %}selected{% endif %}>Moderate</option>
+                                            <option value="high" {% if roth_assets.return_std == 16.0 or roth_assets.return_std == 16 %}selected{% endif %}>High</option>
+                                            <option value="custom" {% if roth_assets.return_std != 4.5 and roth_assets.return_std != 9.5 and roth_assets.return_std != 16.0 and roth_assets.return_std != 16 %}selected{% endif %}>User Specified</option>
+                                        </select>
+                                        <input type="text" inputmode="decimal" class="form-control percent-input custom-vol-input" name="roth_return_std" value="{{ roth_assets.return_std|floatformat:1 }}" step="0.1" style="max-width: 100px; display: {% if roth_assets.return_std != 4.5 and roth_assets.return_std != 9.5 and roth_assets.return_std != 16.0 and roth_assets.return_std != 16 %}block{% else %}none{% endif %};">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -484,18 +518,26 @@
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
-                                        Return Std Dev %
+                                        Volatility of Return
                                         <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
                                            tabindex="0"
                                            style="cursor: pointer;"
                                            data-bs-toggle="popover" 
                                            data-bs-trigger="hover focus" 
                                            data-bs-html="true" 
-                                           data-bs-title="Annual Volatility / Risk (%)" 
-                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                           data-bs-title="Volatility of Return" 
+                                           data-bs-content="In Monte Carlo simulations, volatility is indicated by the standard deviation of a return. Standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 4.5%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 9.5%</li><li><strong>High Risk (Stock Index Funds):</strong> 16.0%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="taxable_return_std" value="{{ taxable_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <div class="d-flex gap-2">
+                                        <select class="form-select volatility-select" data-prefix="taxable">
+                                            <option value="low" {% if taxable_assets.return_std == 4.5 %}selected{% endif %}>Low</option>
+                                            <option value="moderate" {% if taxable_assets.return_std == 9.5 %}selected{% endif %}>Moderate</option>
+                                            <option value="high" {% if taxable_assets.return_std == 16.0 or taxable_assets.return_std == 16 %}selected{% endif %}>High</option>
+                                            <option value="custom" {% if taxable_assets.return_std != 4.5 and taxable_assets.return_std != 9.5 and taxable_assets.return_std != 16.0 and taxable_assets.return_std != 16 %}selected{% endif %}>User Specified</option>
+                                        </select>
+                                        <input type="text" inputmode="decimal" class="form-control percent-input custom-vol-input" name="taxable_return_std" value="{{ taxable_assets.return_std|floatformat:1 }}" step="0.1" style="max-width: 100px; display: {% if taxable_assets.return_std != 4.5 and taxable_assets.return_std != 9.5 and taxable_assets.return_std != 16.0 and taxable_assets.return_std != 16 %}block{% else %}none{% endif %};">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -563,18 +605,26 @@
                                 </div>
                                 <div class="col-6 mb-3">
                                     <label class="form-label">
-                                        Return Std Dev %
+                                        Volatility of Return
                                         <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" 
                                            tabindex="0"
                                            style="cursor: pointer;"
                                            data-bs-toggle="popover" 
                                            data-bs-trigger="hover focus" 
                                            data-bs-html="true" 
-                                           data-bs-title="Annual Volatility / Risk (%)" 
-                                           data-bs-content="In Monte Carlo simulations, standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 3% – 6%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 8% – 11%</li><li><strong>High Risk (Stock Index Funds):</strong> 14% – 18%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                           data-bs-title="Volatility of Return" 
+                                           data-bs-content="In Monte Carlo simulations, volatility is indicated by the standard deviation of a return. Standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 4.5%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 9.5%</li><li><strong>High Risk (Stock Index Funds):</strong> 16.0%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
                                         </i>
                                     </label>
-                                    <input type="text" inputmode="decimal" class="form-control percent-input" name="hsa_return_std" value="{{ hsa_assets.return_std|floatformat:1 }}" step="0.1">
+                                    <div class="d-flex gap-2">
+                                        <select class="form-select volatility-select" data-prefix="hsa">
+                                            <option value="low" {% if hsa_assets.return_std == 4.5 %}selected{% endif %}>Low</option>
+                                            <option value="moderate" {% if hsa_assets.return_std == 9.5 %}selected{% endif %}>Moderate</option>
+                                            <option value="high" {% if hsa_assets.return_std == 16.0 or hsa_assets.return_std == 16 %}selected{% endif %}>High</option>
+                                            <option value="custom" {% if hsa_assets.return_std != 4.5 and hsa_assets.return_std != 9.5 and hsa_assets.return_std != 16.0 and hsa_assets.return_std != 16 %}selected{% endif %}>User Specified</option>
+                                        </select>
+                                        <input type="text" inputmode="decimal" class="form-control percent-input custom-vol-input" name="hsa_return_std" value="{{ hsa_assets.return_std|floatformat:1 }}" step="0.1" style="max-width: 100px; display: {% if hsa_assets.return_std != 4.5 and hsa_assets.return_std != 9.5 and hsa_assets.return_std != 16.0 and hsa_assets.return_std != 16 %}block{% else %}none{% endif %};">
+                                    </div>
                                 </div>
                             </div>
                             <div class="mb-3 form-check form-switch ps-5">
@@ -588,7 +638,6 @@
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('demographics-tab')">Back</button>
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('income-spending-tab')">Next: Income & Extra Spending</button>
-                    <button type="submit" class="btn btn-primary px-4 me-2">Run Simulation</button>
                 </div>
             </div>             <!-- TAB 3: INCOME & ADDITIONAL SPENDING -->
             <div class="tab-pane fade" id="income-spending" role="tabpanel" aria-labelledby="income-spending-tab">
@@ -635,20 +684,8 @@
                     </div>
                 </div>
 
-                <div class="card bg-light p-3 mb-4">
-                    <p class="mb-0 text-secondary small">
-                        <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
-                        1) Required Minimum Distributions (RMDs) from Pretax accounts;
-                        2) Taxable accounts;
-                        3) Pretax accounts (with tax gross-up / circular solver);
-                        4) Roth accounts;
-                        5) Health Savings Accounts (HSA).
-                    </p>
-                </div>
-
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Back</button>
-                    <button type="submit" class="btn btn-primary btn-lg px-5">Run Simulation</button>
                 </div>
             </div>
 
@@ -1050,13 +1087,13 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Annual Adjustment Rule</label>
+                            <label class="form-label fw-semibold">Adjust for Inflation?</label>
                             <div class="d-flex gap-2">
                                 <select class="form-select inc-adjust-type" name="income_adjust_type[]">
-                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Adjust for Inflation</option>
-                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>Fixed Percentage</option>
-                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation Less Fixed %</option>
-                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No Adjustment</option>
+                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Yes</option>
+                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No</option>
+                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>By a Fixed Percentage</option>
+                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less a Fixed Percentage</option>
                                 </select>
                                 <input type="text" inputmode="decimal" class="form-control inc-adjust-val percent-input" name="income_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
                             </div>
@@ -1826,15 +1863,40 @@
             });
         }
 
-        // Intercept Simulation Results nav link click
+        // Volatility of Return dropdown change handler
+        function handleVolatilitySelectChange(selectEl) {
+            var prefix = selectEl.getAttribute('data-prefix');
+            var customInput = document.querySelector('[name="' + prefix + '_return_std"]');
+            if (!customInput) return;
+            
+            var val = selectEl.value;
+            if (val === 'low') {
+                customInput.value = '4.5%';
+                customInput.style.display = 'none';
+            } else if (val === 'moderate') {
+                customInput.value = '9.5%';
+                customInput.style.display = 'none';
+            } else if (val === 'high') {
+                customInput.value = '16.0%';
+                customInput.style.display = 'none';
+            } else if (val === 'custom') {
+                customInput.style.display = 'block';
+            }
+        }
+
+        document.querySelectorAll('.volatility-select').forEach(function(selectEl) {
+            selectEl.addEventListener('change', function() {
+                handleVolatilitySelectChange(this);
+            });
+        });
+
+        // Intercept Simulation Results nav link click to save data internally
         const viewResultsNav = document.getElementById('viewResultsNav');
         if (viewResultsNav && enterDataForm) {
             viewResultsNav.addEventListener('click', function(e) {
-                if (dataChanged) {
-                    e.preventDefault();
-                    if (handleCustomValidation(enterDataForm)) {
-                        enterDataForm.submit();
-                    }
+                e.preventDefault();
+                if (handleCustomValidation(enterDataForm)) {
+                    enterDataForm.submit();
                 }
             });
         }

@@ -428,7 +428,6 @@ def enter_view(request):
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         SimulationData.objects.create(data=data_block)
-        messages.success(request, "Simulation data saved successfully!")
         return redirect(reverse('results'))
     else:
         if request.GET.get('new_session') == '1' or request.GET.get('reset') == '1':
@@ -486,6 +485,8 @@ def results_view(request):
         results.update(mc_stats)
     else:
         achieved_spending, achieved_success_rate, searches, achieved_spending_y1 = binary_search(sim_input)
+        mc_stats = generate_runs(sim_input, test_spending=achieved_spending)
+        results.update(mc_stats)
         results.update({
             "target_success_rate": data.get('target_success_rate', 80.0),
             "achieved_spending": achieved_spending,

@@ -791,7 +791,8 @@ def njit_simulate_path(
     pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_init,
     c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
     add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-    r_pre, r_roth, r_tax, r_hsa
+    r_pre, r_roth, r_tax, r_hsa,
+    trajectory_arr=None
 ):
     pretax_user = pretax_user_init
     pretax_spouse = pretax_spouse_init
@@ -799,6 +800,9 @@ def njit_simulate_path(
     taxable = taxable_init
     hsa = hsa_init
     
+    if trajectory_arr is not None:
+        trajectory_arr[0] = pretax_user + pretax_spouse + roth + taxable + hsa
+
     t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else (user_age_death - user_age)
     
     for t in range(total_years):
@@ -814,6 +818,8 @@ def njit_simulate_path(
             roth = 0.0
             taxable = 0.0
             hsa = 0.0
+            if trajectory_arr is not None:
+                trajectory_arr[t + 1] = 0.0
             continue
             
         filing_status_t = filing_status_code
@@ -1019,6 +1025,9 @@ def njit_simulate_path(
         taxable = taxable_end
         hsa = hsa_end
         
+        if trajectory_arr is not None:
+            trajectory_arr[t + 1] = pretax_user + pretax_spouse + roth + taxable + hsa
+        
     return pretax_user + pretax_spouse + roth + taxable + hsa
 
 @numba.njit(parallel=True)
@@ -1030,18 +1039,31 @@ def njit_simulate_all_paths(
     c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
     add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
     returns_pre, returns_roth, returns_taxable, returns_hsa,
-    ending_wealths
+    ending_wealths,
+    trajectories=None
 ):
     for i in numba.prange(runs):
-        ending_wealths[i] = njit_simulate_path(
-            total_years, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
-            filing_status_code, desired_spending_start_age, desired_spending, survivor_spending,
-            adjust_spending_inflation, inflation_rate, hsa_for_medical, user_rmd_start_age, spouse_rmd_start_age,
-            pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_init,
-            c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
-            add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-            returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i]
-        )
+        if trajectories is not None:
+            ending_wealths[i] = njit_simulate_path(
+                total_years, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
+                filing_status_code, desired_spending_start_age, desired_spending, survivor_spending,
+                adjust_spending_inflation, inflation_rate, hsa_for_medical, user_rmd_start_age, spouse_rmd_start_age,
+                pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_init,
+                c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
+                add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
+                returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
+                trajectories[i]
+            )
+        else:
+            ending_wealths[i] = njit_simulate_path(
+                total_years, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
+                filing_status_code, desired_spending_start_age, desired_spending, survivor_spending,
+                adjust_spending_inflation, inflation_rate, hsa_for_medical, user_rmd_start_age, spouse_rmd_start_age,
+                pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_init,
+                c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
+                add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
+                returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i]
+            )
 
 def prepare_numba_inputs(inputs, test_spending=None):
     desired_spending = test_spending if test_spending is not None else inputs['desired_spending']
@@ -1180,7 +1202,7 @@ def prepare_numba_inputs(inputs, test_spending=None):
         'spouse_rmd_start_age': inputs['spouse_rmd_start_age']
     }
 
-def generate_runs(sim_input):
+def generate_runs(sim_input, test_spending=None):
     inputs = extract_sim_inputs(sim_input)
     
     rng = np.random.default_rng()
@@ -1201,8 +1223,9 @@ def generate_runs(sim_input):
     returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
     returns_hsa = rng.normal(hsa_m, hsa_s, size=(runs, years))
     
-    nb_inp = prepare_numba_inputs(inputs)
+    nb_inp = prepare_numba_inputs(inputs, test_spending=test_spending)
     ending_wealths = np.empty(runs, dtype=np.float64)
+    trajectories = np.empty((runs, years + 1), dtype=np.float64)
     
     njit_simulate_all_paths(
         runs, years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
@@ -1212,11 +1235,19 @@ def generate_runs(sim_input):
         nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
         nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
         returns_pre, returns_roth, returns_taxable, returns_hsa,
-        ending_wealths
+        ending_wealths,
+        trajectories
     )
     
     successes = float(np.sum(ending_wealths >= 0.0))
     success_rate = (successes / runs) * 100.0
+    
+    mc_p10 = [float(val) for val in np.percentile(trajectories, 10, axis=0)]
+    mc_p50 = [float(val) for val in np.percentile(trajectories, 50, axis=0)]
+    mc_p90 = [float(val) for val in np.percentile(trajectories, 90, axis=0)]
+    
+    sample_size = min(runs, 500)
+    spaghetti_paths = [[float(v) for v in row] for row in trajectories[:sample_size]]
     
     return {
         'run_mean': float(np.mean(ending_wealths)),
@@ -1225,7 +1256,11 @@ def generate_runs(sim_input):
         'run_25': float(np.percentile(ending_wealths, 25)),
         'run_min': float(np.min(ending_wealths)),
         'run_max': float(np.max(ending_wealths)),
-        'run_success': float(success_rate)
+        'run_success': float(success_rate),
+        'mc_p10': mc_p10,
+        'mc_p50': mc_p50,
+        'mc_p90': mc_p90,
+        'mc_spaghetti_paths': spaghetti_paths
     }
 
 def binary_search(sim_input):
@@ -1365,8 +1400,10 @@ def run_deterministic(sim_input):
         rows.append({
             'year_index': t,
             'year': year,
-            'user_age': user_age_t if user_alive else None,
-            'spouse_age': spouse_age_t if spouse_alive else None,
+            'user_age': user_age_t,
+            'spouse_age': spouse_age_t if inputs['is_married'] else None,
+            'user_alive': user_alive,
+            'spouse_alive': spouse_alive,
             'milestones': milestones,
             'beg_assets': res['beginning_assets'],
             'contribs': res['contributions'],
