@@ -55,6 +55,16 @@ def get_default_data():
         'inflation_rate': 3.5,
         'runs': 1000,
         'target_success_rate': 80.0,
+        'social_security': {
+            'user_entitled': True,
+            'user_amount': 2500.0,
+            'user_freq': 'monthly',
+            'user_start_age': 67,
+            'spouse_entitled': False,
+            'spouse_amount': 0.0,
+            'spouse_freq': 'monthly',
+            'spouse_start_age': 67,
+        },
         'pretax_assets': {
             'present_balance': 500000.0,
             'contrib_amount': 5000.0,
@@ -240,6 +250,28 @@ def enter_view(request):
         raw_target_srate = get_float(request.POST.get('target_success_rate'), 80.0)
         target_success_rate = min(99.0, max(1.0, raw_target_srate))
         
+        # Dedicated Social Security
+        user_ss_entitled = request.POST.get('user_ss_entitled') == 'true' if request.POST.get('user_ss_entitled') is not None else True
+        user_ss_amount = get_float(request.POST.get('user_ss_amount'), 2500.0)
+        user_ss_freq = request.POST.get('user_ss_freq', 'monthly')
+        user_ss_start_age = get_int(request.POST.get('user_ss_start_age'), 67)
+
+        spouse_ss_entitled = request.POST.get('spouse_ss_entitled') == 'true' if is_married else False
+        spouse_ss_amount = get_float(request.POST.get('spouse_ss_amount'), 0.0) if is_married else 0.0
+        spouse_ss_freq = request.POST.get('spouse_ss_freq', 'monthly')
+        spouse_ss_start_age = get_int(request.POST.get('spouse_ss_start_age'), 67) if is_married else 67
+
+        social_security = {
+            'user_entitled': user_ss_entitled,
+            'user_amount': user_ss_amount,
+            'user_freq': user_ss_freq,
+            'user_start_age': user_ss_start_age,
+            'spouse_entitled': spouse_ss_entitled,
+            'spouse_amount': spouse_ss_amount,
+            'spouse_freq': spouse_ss_freq,
+            'spouse_start_age': spouse_ss_start_age,
+        }
+        
         # Assets (Pretax User, Pretax Spouse, Roth, Taxable, HSA)
         pretax_assets = {
             'present_balance': get_float(request.POST.get('pretax_present_balance'), 500000.0),
@@ -311,17 +343,18 @@ def enter_view(request):
         add_inflation_flags = request.POST.getlist('add_spending_adjust_inflation[]')
         
         for i in range(len(add_amounts)):
-            try:
-                name_val = add_names[i].strip() if i < len(add_names) and add_names[i] else "Additional Expense"
-                additional_spending.append({
-                    'name': name_val,
-                    'amount': get_float(add_amounts[i]),
-                    'start_age': get_int(add_start_ages[i]),
-                    'interval': get_int(add_intervals[i]),
-                    'adjust_inflation': add_inflation_flags[i] == 'true'
-                })
-            except IndexError:
-                pass
+            name_val = add_names[i].strip() if i < len(add_names) and add_names[i] else "Additional Expense"
+            amt_val = get_float(add_amounts[i])
+            start_val = get_int(add_start_ages[i]) if i < len(add_start_ages) else 65
+            interval_val = get_int(add_intervals[i]) if i < len(add_intervals) else 0
+            inf_val = add_inflation_flags[i] == 'true' if i < len(add_inflation_flags) else True
+            additional_spending.append({
+                'name': name_val,
+                'amount': amt_val,
+                'start_age': start_val,
+                'interval': interval_val,
+                'adjust_inflation': inf_val
+            })
                 
         # Income Sources List
         income_sources = []
@@ -338,23 +371,31 @@ def enter_view(request):
         inc_adj_vals = request.POST.getlist('income_adjust_val[]')
         
         for i in range(len(inc_names)):
-            try:
-                freq = inc_freqs[i] if i < len(inc_freqs) else 'monthly'
-                income_sources.append({
-                    'name': inc_names[i],
-                    'amount': get_float(inc_amounts[i]),
-                    'frequency': freq,
-                    'start_age_type': inc_start_types[i],
-                    'start_age_specified': get_int(inc_start_specs[i]),
-                    'end_age_type': inc_end_types[i],
-                    'end_age_specified': get_int(inc_end_specs[i]),
-                    'subject_to_tax': inc_subj_taxes[i] == 'true',
-                    'is_social_security': inc_is_ss_list[i] == 'true',
-                    'adjust_type': inc_adj_types[i],
-                    'adjust_val': get_float(inc_adj_vals[i])
-                })
-            except IndexError:
-                pass
+            name_val = inc_names[i].strip() if i < len(inc_names) and inc_names[i] else "Income Source"
+            amt_val = get_float(inc_amounts[i]) if i < len(inc_amounts) else 0.0
+            freq_val = inc_freqs[i] if i < len(inc_freqs) else 'monthly'
+            start_type_val = inc_start_types[i] if i < len(inc_start_types) else 'retirement'
+            start_spec_val = get_int(inc_start_specs[i]) if i < len(inc_start_specs) else 65
+            end_type_val = inc_end_types[i] if i < len(inc_end_types) else 'death'
+            end_spec_val = get_int(inc_end_specs[i]) if i < len(inc_end_specs) else 90
+            tax_val = inc_subj_taxes[i] == 'true' if i < len(inc_subj_taxes) else True
+            ss_val = inc_is_ss_list[i] == 'true' if i < len(inc_is_ss_list) else False
+            adj_type_val = inc_adj_types[i] if i < len(inc_adj_types) else 'inflation'
+            adj_num_val = get_float(inc_adj_vals[i]) if i < len(inc_adj_vals) else 0.0
+
+            income_sources.append({
+                'name': name_val,
+                'amount': amt_val,
+                'frequency': freq_val,
+                'start_age_type': start_type_val,
+                'start_age_specified': start_spec_val,
+                'end_age_type': end_type_val,
+                'end_age_specified': end_spec_val,
+                'subject_to_tax': tax_val,
+                'is_social_security': ss_val,
+                'adjust_type': adj_type_val,
+                'adjust_val': adj_num_val
+            })
                 
         is_goal_seeking = (simulation_type == 'goal_seeking')
         
@@ -383,8 +424,12 @@ def enter_view(request):
                 validation_errors.append("Spouse's Present Age must be an integer between 18 and 120.")
             if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
                 validation_errors.append(f"Spouse's Retirement Age must be between Spouse's Present Age ({spouse_age}) and 120.")
-            if spouse_age_death <= spouse_age or spouse_age_death > 120:
-                validation_errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
+        if user_ss_entitled:
+            if user_ss_start_age < 62 or user_ss_start_age > 70:
+                validation_errors.append("Your Social Security Claiming Age must be between 62 and 70.")
+        if is_married and spouse_ss_entitled:
+            if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
+                validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
                 
         # Store in JSON block
         data_block = {
@@ -408,6 +453,7 @@ def enter_view(request):
             'inflation_rate': inflation_rate,
             'runs': runs,
             'target_success_rate': raw_target_srate if is_goal_seeking else target_success_rate,
+            'social_security': social_security,
             'pretax_assets': pretax_assets,
             'spouse_pretax_assets': spouse_pretax_assets,
             'roth_assets': roth_assets,
@@ -477,7 +523,7 @@ def results_view(request):
         "roth_assets": data.get('roth_assets', {}),
         "taxable_assets": data.get('taxable_assets', {}),
         "hsa_assets": data.get('hsa_assets', {}),
-        "plan_data_json": json.dumps(data, indent=4)
+        "plan_data_json": data
     }
     
     if not is_goal_seeking:

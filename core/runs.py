@@ -117,7 +117,7 @@ def simulate_step(
     pretax_user, pretax_spouse, roth, taxable, hsa, hsa_for_medical,
     r_pretax_user, r_pretax_spouse, r_roth, r_taxable, r_hsa,
     contrib_pretax_user, contrib_pretax_spouse, contrib_roth, contrib_taxable, contrib_hsa,
-    user_rmd_start_age, spouse_rmd_start_age=150
+    user_rmd_start_age, spouse_rmd_start_age=150, social_security_data=None
 ):
     user_age_t = user_age + t
     spouse_age_t = spouse_age + t if is_married else None
@@ -216,19 +216,73 @@ def simulate_step(
             
     total_spending_target = desired_spending_t + add_spending_t
     
-    # 6. Calculate Income Sources
+    # 6. Calculate Dedicated Social Security & General Income Sources
     taxable_income_sources = 0.0
     ss_benefits = 0.0
     nontaxable_income = 0.0
     income_breakdown = {}
-    
+
+    # Dedicated Social Security Calculation
+    ss_data = social_security_data if social_security_data is not None else {}
+    user_ss_entitled = ss_data.get('user_entitled', True)
+    user_ss_amount = float(ss_data.get('user_amount', 2500.0))
+    user_ss_freq = ss_data.get('user_freq', 'monthly')
+    user_ss_start_age = int(ss_data.get('user_start_age', 67))
+
+    spouse_ss_entitled = ss_data.get('spouse_entitled', False) if is_married else False
+    spouse_ss_amount = float(ss_data.get('spouse_amount', 0.0)) if is_married else 0.0
+    spouse_ss_freq = ss_data.get('spouse_freq', 'monthly')
+    spouse_ss_start_age = int(ss_data.get('spouse_start_age', 67)) if is_married else 67
+
+    inf_factor = (1.0 + inflation_rate / 100.0) ** t
+
+    user_ss_base = user_ss_amount * 12.0 if user_ss_freq == 'monthly' else user_ss_amount
+    spouse_ss_base = spouse_ss_amount * 12.0 if spouse_ss_freq == 'monthly' else spouse_ss_amount
+
+    user_ss_inf = (user_ss_base * inf_factor) if user_ss_entitled else 0.0
+    spouse_ss_inf = (spouse_ss_base * inf_factor) if (spouse_ss_entitled and is_married) else 0.0
+
+    user_ss_active = user_alive and user_ss_entitled and (user_age_t >= user_ss_start_age)
+    spouse_ss_active = spouse_alive and spouse_ss_entitled and is_married and (spouse_age_t >= spouse_ss_start_age)
+
+    user_ss_t = 0.0
+    spouse_ss_t = 0.0
+
+    if user_ss_active and spouse_ss_active:
+        user_ss_t = user_ss_inf
+        spouse_ss_t = spouse_ss_inf
+    elif user_alive and not spouse_alive and is_married:
+        # User is survivor after first death
+        if user_ss_active:
+            user_ss_t = max(user_ss_inf, spouse_ss_inf)
+        elif spouse_ss_inf > 0.0 and spouse_age_t >= spouse_ss_start_age:
+            user_ss_t = spouse_ss_inf
+    elif spouse_alive and not user_alive and is_married:
+        # Spouse is survivor after first death
+        if spouse_ss_active:
+            spouse_ss_t = max(spouse_ss_inf, user_ss_inf)
+        elif user_ss_inf > 0.0 and user_age_t >= user_ss_start_age:
+            spouse_ss_t = user_ss_inf
+    elif user_ss_active:
+        user_ss_t = user_ss_inf
+    elif spouse_ss_active:
+        spouse_ss_t = spouse_ss_inf
+
+    if user_ss_t > 0.0:
+        income_breakdown["Your Social Security"] = user_ss_t
+    if spouse_ss_t > 0.0:
+        income_breakdown["Spouse's Social Security"] = spouse_ss_t
+
+    ss_benefits += (user_ss_t + spouse_ss_t)
+
+    # General Income Streams
     for inc in income_sources_list:
         name = inc.get('name', 'Income')
         freq = inc.get('frequency', 'monthly')
         raw_amt = inc.get('amount', 0.0)
         
         # resolve start/end age
-        start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death) # fallback to spending start or ret age
+        start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
         end_age = resolve_age(inc.get('end_age_type', 'death'), inc.get('end_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
         
         # Check active
@@ -237,8 +291,6 @@ def simulate_step(
         in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
         
         if in_age_range:
-            # check survivor rules if spouse dies or user dies
-            # If User is dead, only spouse-related stream or streams ending at spouse death are active
             if not user_alive and inc.get('end_age_type') in ['death', 'retirement']:
                 active = False
             elif not spouse_alive and inc.get('end_age_type') in ['spouse_death', 'spouse_retirement']:
@@ -256,7 +308,7 @@ def simulate_step(
             adj_val = inc.get('adjust_val', 0.0)
             
             if adj_type == 'inflation':
-                factor = (1.0 + inflation_rate / 100.0) ** t
+                factor = inf_factor
             elif adj_type == 'fixed_pct':
                 factor = (1.0 + adj_val / 100.0) ** t
             elif adj_type == 'inflation_less_pct':
@@ -673,6 +725,7 @@ def extract_sim_inputs(sim_input):
         'hsa_for_medical': hsa_for_medical,
         'additional_spending': additional_spending,
         'income_sources': income_sources,
+        'social_security': raw.get('social_security', {}),
         'total_years': total_years,
         'user_rmd_start_age': user_rmd_start_age,
         'spouse_rmd_start_age': spouse_rmd_start_age,
@@ -721,7 +774,8 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
             pretax_user, pretax_spouse, roth, taxable, hsa, inputs['hsa_for_medical'],
             r_pre_user, r_pre_spouse, r_roth, r_tax, r_hsa,
             c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
-            inputs['user_rmd_start_age'], inputs['spouse_rmd_start_age']
+            inputs['user_rmd_start_age'], inputs['spouse_rmd_start_age'],
+            inputs.get('social_security', {})
         )
         
         year_results.append(res)
@@ -1128,6 +1182,53 @@ def prepare_numba_inputs(inputs, test_spending=None):
         tax_inc = 0.0
         ss_inc = 0.0
         nontax_inc = 0.0
+
+        # Dedicated Social Security calculation in Numba inputs pre-compilation
+        ss_data = inputs.get('social_security', {})
+        u_entitled = ss_data.get('user_entitled', True)
+        u_amt = float(ss_data.get('user_amount', 2500.0))
+        u_freq = ss_data.get('user_freq', 'monthly')
+        u_start_age = int(ss_data.get('user_start_age', 67))
+
+        sp_entitled = ss_data.get('spouse_entitled', False) if is_married else False
+        sp_amt = float(ss_data.get('spouse_amount', 0.0)) if is_married else 0.0
+        sp_freq = ss_data.get('spouse_freq', 'monthly')
+        sp_start_age = int(ss_data.get('spouse_start_age', 67)) if is_married else 67
+
+        inf_factor = (1.0 + inflation_rate / 100.0) ** t
+
+        u_base = u_amt * 12.0 if u_freq == 'monthly' else u_amt
+        sp_base = sp_amt * 12.0 if sp_freq == 'monthly' else sp_amt
+
+        u_ss_inf = (u_base * inf_factor) if u_entitled else 0.0
+        sp_ss_inf = (sp_base * inf_factor) if (sp_entitled and is_married) else 0.0
+
+        u_ss_active = user_alive and u_entitled and (user_age_t >= u_start_age)
+        sp_ss_active = spouse_alive and sp_entitled and is_married and (spouse_age_t >= sp_start_age)
+
+        u_ss_t = 0.0
+        sp_ss_t = 0.0
+
+        if u_ss_active and sp_ss_active:
+            u_ss_t = u_ss_inf
+            sp_ss_t = sp_ss_inf
+        elif user_alive and not spouse_alive and is_married:
+            if u_ss_active:
+                u_ss_t = max(u_ss_inf, sp_ss_inf)
+            elif sp_ss_inf > 0.0 and spouse_age_t >= sp_start_age:
+                u_ss_t = sp_ss_inf
+        elif spouse_alive and not user_alive and is_married:
+            if sp_ss_active:
+                sp_ss_t = max(sp_ss_inf, u_ss_inf)
+            elif u_ss_inf > 0.0 and user_age_t >= u_start_age:
+                sp_ss_t = u_ss_inf
+        elif u_ss_active:
+            u_ss_t = u_ss_inf
+        elif sp_ss_active:
+            sp_ss_t = sp_ss_inf
+
+        ss_inc += (u_ss_t + sp_ss_t)
+
         for inc in inputs['income_sources']:
             freq = inc.get('frequency', 'monthly')
             raw_amt = inc.get('amount', 0.0)
@@ -1155,7 +1256,7 @@ def prepare_numba_inputs(inputs, test_spending=None):
                 adj_type = inc.get('adjust_type', 'inflation')
                 adj_val = inc.get('adjust_val', 0.0)
                 if adj_type == 'inflation':
-                    factor = (1.0 + inflation_rate / 100.0) ** t
+                    factor = inf_factor
                 elif adj_type == 'fixed_pct':
                     factor = (1.0 + adj_val / 100.0) ** t
                 elif adj_type == 'inflation_less_pct':

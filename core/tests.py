@@ -609,6 +609,163 @@ class RetirementCalculationTests(TestCase):
         
         self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
 
+    def test_social_security_card_defaults_and_validation(self):
+        from core.views import get_default_data
+        default_data = get_default_data()
+        self.assertIn('social_security', default_data)
+        ss = default_data['social_security']
+        self.assertTrue(ss['user_entitled'])
+        self.assertEqual(ss['user_start_age'], 67)
+        self.assertFalse(ss['spouse_entitled'])
+
+        # Test claiming age validation < 62
+        resp = self.client.post('/', {
+            'user_name': 'Test Validation',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': True,
+            'spouse_name': 'Spouse',
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 90,
+            'user_ss_entitled': 'true',
+            'user_ss_start_age': '60', # Invalid: below legal min age 62
+            'spouse_ss_entitled': 'true',
+            'spouse_ss_start_age': '72', # Invalid: above legal max age 70
+        })
+        self.assertEqual(resp.status_code, 200) # Form re-rendered with validation errors
+        self.assertContains(resp, 'Your Social Security Claiming Age must be between 62 and 70.')
+        self.assertContains(resp, 'Spouse&#x27;s Social Security Claiming Age must be between 62 and 70.')
+
+    def test_spousal_survivor_social_security_step_up(self):
+        from core.runs import extract_sim_inputs, run_deterministic
+        sim_input = {
+            'user_name': 'Survivor User',
+            'user_age': 65,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': True,
+            'spouse_name': 'Deceased Spouse',
+            'spouse_age': 65,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 75, # Spouse dies at age 75 (year t=10)
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'inflation_rate': 0.0, # Zero inflation for clear math assertion
+            'desired_spending': 40000.0,
+            'social_security': {
+                'user_entitled': True,
+                'user_amount': 2000.0, # $24,000 annual
+                'user_freq': 'monthly',
+                'user_start_age': 65,
+                'spouse_entitled': True,
+                'spouse_amount': 3000.0, # $36,000 annual (higher)
+                'spouse_freq': 'monthly',
+                'spouse_start_age': 65,
+            },
+            'pretax_assets': {'present_balance': 500000.0, 'contrib_amount': 0.0, 'return_mean': 5.0},
+            'spouse_pretax_assets': {'present_balance': 0.0},
+            'roth_assets': {'present_balance': 0.0},
+            'taxable_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0},
+            'additional_spending': [],
+            'income_sources': []
+        }
+        inputs = extract_sim_inputs(sim_input)
+        det_rows = run_deterministic(inputs)
+
+        # Before death (e.g. t=5, age 70): User gets 24k, Spouse gets 36k
+        row_t5 = [r for r in det_rows if r['user_age'] == 70][0]
+        self.assertIn("Your Social Security", row_t5['income_breakdown'])
+        self.assertIn("Spouse's Social Security", row_t5['income_breakdown'])
+        self.assertEqual(row_t5['income_breakdown']["Your Social Security"], 24000.0)
+        self.assertEqual(row_t5['income_breakdown']["Spouse's Social Security"], 36000.0)
+
+        # After spouse death (e.g. t=12, age 77, Spouse is dead):
+        # User receives survivor step-up to Spouse's higher benefit ($36,000)
+        row_t12 = [r for r in det_rows if r['user_age'] == 77][0]
+        self.assertIn("Your Social Security", row_t12['income_breakdown'])
+        self.assertNotIn("Spouse's Social Security", row_t12['income_breakdown'])
+        self.assertEqual(row_t12['income_breakdown']["Your Social Security"], 36000.0)
+
+    def test_custom_pension_income_stream_persistence(self):
+        # Post form with custom Pension income stream (without legacy income_is_ss array)
+        response = self.client.post('/', {
+            'user_name': 'Pension User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'runs': '1000',
+            'current_year': '2026',
+            'inflation_rate': '3.5',
+            'desired_spending': '50000',
+            'income_name[]': ['Pension'],
+            'income_amount[]': ['15000'],
+            'income_frequency[]': ['annual'],
+            'income_start_age_type[]': ['retirement'],
+            'income_start_age_specified[]': ['65'],
+            'income_end_age_type[]': ['death'],
+            'income_end_age_specified[]': ['90'],
+            'income_subject_to_tax[]': ['true'],
+            'income_adjust_type[]': ['inflation'],
+            'income_adjust_val[]': ['0.0'],
+        })
+        self.assertRedirects(response, '/results/')
+
+        # 1. Verify session saved income stream
+        sim = self.client.session['simulation_data']
+        self.assertEqual(len(sim['income_sources']), 1)
+        self.assertEqual(sim['income_sources'][0]['name'], 'Pension')
+        self.assertEqual(sim['income_sources'][0]['amount'], 15000.0)
+
+        # 2. Verify results page includes Pension in projections (inflated at 3.5% over 5 years from age 60 to 65)
+        res_resp = self.client.get('/results/')
+        self.assertEqual(res_resp.status_code, 200)
+        det_rows = res_resp.context['det_rows']
+        ret_row = [r for r in det_rows if r['user_age'] == 65][0]
+        self.assertIn('Pension', ret_row['income_breakdown'])
+        self.assertAlmostEqual(ret_row['income_breakdown']['Pension'], 15000.0 * (1.035 ** 5), places=2)
+
+        # 3. Verify navigating back to enter page displays Pension
+        enter_resp = self.client.get('/')
+        self.assertEqual(enter_resp.status_code, 200)
+        self.assertContains(enter_resp, 'Pension')
+
+    def test_load_aug_13_plan_json(self):
+        import os, json
+        plan_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saved json files', 'aug_13_plan.json')
+        self.assertTrue(os.path.exists(plan_path))
+        with open(plan_path, 'r') as f:
+            raw_content = f.read()
+
+        parsed = json.loads(raw_content)
+        while isinstance(parsed, str):
+            parsed = json.loads(parsed)
+
+        self.assertEqual(parsed['user_name'], 'Jack Doe')
+        self.assertEqual(parsed['spouse_name'], 'Diane Doe')
+        self.assertEqual(len(parsed['income_sources']), 1)
+        self.assertEqual(parsed['income_sources'][0]['name'], 'Pension')
+        self.assertEqual(parsed['income_sources'][0]['amount'], 50000.0)
+
+    def test_load_aug_13_v2_plan_spouse_pretax(self):
+        import os, json
+        plan_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saved json files', 'aug_13_v2_plan.json')
+        self.assertTrue(os.path.exists(plan_path))
+        with open(plan_path, 'r') as f:
+            raw_content = f.read()
+
+        parsed = json.loads(raw_content)
+        while isinstance(parsed, str):
+            parsed = json.loads(parsed)
+
+        self.assertEqual(parsed['user_name'], 'Jack Doe')
+        self.assertEqual(parsed['spouse_name'], 'Diane Doe')
+        self.assertIn('spouse_pretax_assets', parsed)
+        self.assertEqual(parsed['spouse_pretax_assets']['present_balance'], 500000.0)
+
+
 
 
 

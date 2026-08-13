@@ -1440,6 +1440,13 @@
 
     // JSON Sanitization & Load Plan (JSON)
     function sanitizeJSONData(raw) {
+        while (typeof raw === 'string') {
+            try {
+                raw = JSON.parse(raw);
+            } catch (e) {
+                break;
+            }
+        }
         if (typeof raw !== 'object' || raw === null) return {};
 
         function clampNum(val, min, max, fallback) {
@@ -1484,16 +1491,17 @@
 
         var minStartAge = clean.is_married ? Math.min(clean.user_age, clean.spouse_age) : clean.user_age;
 
-        var assetClasses = ['pretax', 'roth', 'taxable', 'hsa'];
+        var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa'];
         assetClasses.forEach(function(ac) {
             var rawAc = raw[ac + '_assets'] || {};
+            var minAge = ac === 'spouse_pretax' ? (clean.spouse_age || 18) : clean.user_age;
             clean[ac + '_assets'] = {
                 present_balance: clampNum(rawAc.present_balance, 0, null, 0),
                 contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
                 contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
-                contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, clean.user_age),
-                contrib_end_age_type: ['retirement', 'spouse_retirement', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : 'retirement',
-                contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, clean.user_retirement_age),
+                contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, minAge),
+                contrib_end_age_type: ['retirement', 'spouse_retirement', 'first_death', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : (ac === 'spouse_pretax' ? 'spouse_retirement' : 'retirement'),
+                contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, (ac === 'spouse_pretax' ? clean.spouse_retirement_age : clean.user_retirement_age)),
                 contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
                 return_mean: clampNum(rawAc.return_mean, -50, 100, 6.0),
                 return_std: clampNum(rawAc.return_std, 0, 100, 10.0),
@@ -1537,6 +1545,17 @@
                 });
             });
         }
+
+        clean.social_security = {
+            user_entitled: raw.social_security ? raw.social_security.user_entitled !== false : true,
+            user_amount: clampNum(raw.social_security ? raw.social_security.user_amount : 2500, 0, null, 2500),
+            user_freq: ['monthly', 'annual'].includes(raw.social_security?.user_freq) ? raw.social_security.user_freq : 'monthly',
+            user_start_age: clampInt(raw.social_security ? raw.social_security.user_start_age : 67, 62, 70, 67),
+            spouse_entitled: raw.social_security ? !!raw.social_security.spouse_entitled : false,
+            spouse_amount: clampNum(raw.social_security ? raw.social_security.spouse_amount : 0, 0, null, 0),
+            spouse_freq: ['monthly', 'annual'].includes(raw.social_security?.spouse_freq) ? raw.social_security.spouse_freq : 'monthly',
+            spouse_start_age: clampInt(raw.social_security ? raw.social_security.spouse_start_age : 67, 62, 70, 67)
+        };
 
         return clean;
     }
