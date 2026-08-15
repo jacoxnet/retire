@@ -2153,14 +2153,47 @@
                 }
             }
 
-            // 6. Asset Returns & Balances (Tab 2)
+            // Retirement Spending Start Age (Specified)
+            var beginSpendType = document.getElementById('begin_spending_age_type')?.value;
+            if (beginSpendType === 'specified') {
+                var beginSpendInput = document.getElementById('begin_spending_age_specified');
+                var beginSpendAge = beginSpendInput ? parseInt(beginSpendInput.value, 10) : 0;
+                var minSpendAge = isNaN(uAge) ? 18 : uAge;
+                var maxSpendAge = isNaN(uDeath) ? 120 : uDeath;
+                if (isNaN(beginSpendAge) || beginSpendAge < minSpendAge || beginSpendAge > maxSpendAge) {
+                    var spendAgeMsg = 'Specified Spending Start Age (' + (beginSpendInput ? beginSpendInput.value : '') + ') must be between Your Present Age (' + minSpendAge + ') and Your Age at Death (' + maxSpendAge + ').';
+                    setFieldInvalid(beginSpendInput, spendAgeMsg);
+                    errors.push({ element: beginSpendInput, tab: 'demographics-tab', message: spendAgeMsg });
+                }
+            }
+
+            // Survivor Spending (if married)
+            if (isMarried) {
+                var survivorInput = document.getElementById('survivor_spending');
+                if (survivorInput) {
+                    var survVal = parseMoney(survivorInput.value);
+                    if (isNaN(survVal) || survVal < 0) {
+                        setFieldInvalid(survivorInput, 'Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.');
+                        errors.push({ element: survivorInput, tab: 'demographics-tab', message: 'Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.' });
+                    }
+                }
+            }
+
+            // 6. Asset Returns, Balances & Contributions (Tab 2: Assets & Returns)
             ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa'].forEach(function (prefix) {
+                if (prefix === 'spouse_pretax' && !isMarried) return;
+
+                var isSpouse = (prefix === 'spouse_pretax');
+                var relevantAge = isSpouse ? (isNaN(sAge) ? 18 : sAge) : (isNaN(uAge) ? 18 : uAge);
+                var relevantDeath = isSpouse ? (isNaN(sDeath) ? 120 : sDeath) : (isNaN(uDeath) ? 120 : uDeath);
+                var prefixLabel = prefix.replace('_', ' ').toUpperCase();
+
                 var meanInput = form.querySelector('[name="' + prefix + '_return_mean"]');
                 if (meanInput && meanInput.value !== '') {
                     var mVal = parsePercent(meanInput.value);
                     if (isNaN(mVal) || mVal < -100.0 || mVal > 100.0) {
                         setFieldInvalid(meanInput, 'Average Return % must be between -100% and 100%.');
-                        errors.push({ element: meanInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Average Return % must be between -100% and 100%.' });
+                        errors.push({ element: meanInput, tab: 'assets-tab', message: prefixLabel + ' Average Return % must be between -100% and 100%.' });
                     }
                 }
                 var stdInput = form.querySelector('[name="' + prefix + '_return_std"]');
@@ -2168,7 +2201,7 @@
                     var sVal = parsePercent(stdInput.value);
                     if (isNaN(sVal) || sVal < 0.0 || sVal > 100.0) {
                         setFieldInvalid(stdInput, 'Return Std Dev % must be a non-negative number up to 100%.');
-                        errors.push({ element: stdInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Return Std Dev % must be between 0% and 100%.' });
+                        errors.push({ element: stdInput, tab: 'assets-tab', message: prefixLabel + ' Return Std Dev % must be between 0% and 100%.' });
                     }
                 }
                 var balInput = document.getElementById(prefix + '_present_balance');
@@ -2176,12 +2209,156 @@
                     var bVal = parseMoney(balInput.value);
                     if (isNaN(bVal) || bVal < 0) {
                         setFieldInvalid(balInput, 'Present Balance cannot be negative.');
-                        errors.push({ element: balInput, tab: 'assets-tab', message: prefix.toUpperCase() + ' Present Balance cannot be negative.' });
+                        errors.push({ element: balInput, tab: 'assets-tab', message: prefixLabel + ' Present Balance cannot be negative.' });
+                    }
+                }
+
+                // Contribution Amount
+                var contribAmtInput = document.getElementById(prefix + '_contrib_amount');
+                var cAmt = 0;
+                if (contribAmtInput && contribAmtInput.value !== '') {
+                    cAmt = parseMoney(contribAmtInput.value);
+                    if (isNaN(cAmt) || cAmt < 0) {
+                        setFieldInvalid(contribAmtInput, prefixLabel + ' Future Contribution Amount cannot be negative.');
+                        errors.push({ element: contribAmtInput, tab: 'assets-tab', message: prefixLabel + ' Future Contribution Amount cannot be negative.' });
+                    }
+                }
+
+                // Contribution Start Age
+                var startAgeInput = document.getElementById(prefix + '_contrib_start_age');
+                var cStartAge = startAgeInput ? parseInt(startAgeInput.value, 10) : relevantAge;
+                if (startAgeInput && startAgeInput.value !== '') {
+                    if (isNaN(cStartAge) || cStartAge < relevantAge || cStartAge > relevantDeath) {
+                        var cStartMsg = prefixLabel + ' Contribution Start Age (' + startAgeInput.value + ') must be between Present Age (' + relevantAge + ') and Age at Death (' + relevantDeath + ').';
+                        setFieldInvalid(startAgeInput, cStartMsg);
+                        errors.push({ element: startAgeInput, tab: 'assets-tab', message: cStartMsg });
+                    }
+                }
+
+                // Contribution Specified End Age
+                var endAgeTypeSelect = form.querySelector('[name="' + prefix + '_contrib_end_age_type"]');
+                if (endAgeTypeSelect && endAgeTypeSelect.value === 'age') {
+                    var endAgeSpecInput = document.getElementById(prefix + '_contrib_end_age_specified');
+                    var cEndAge = endAgeSpecInput ? parseInt(endAgeSpecInput.value, 10) : 0;
+                    var minEndAge = isNaN(cStartAge) ? relevantAge : cStartAge;
+                    if (isNaN(cEndAge) || cEndAge < minEndAge || cEndAge > 120) {
+                        var cEndMsg = prefixLabel + ' Specified Contribution End Age (' + (endAgeSpecInput ? endAgeSpecInput.value : '') + ') must be greater than or equal to Contribution Start Age (' + minEndAge + ') up to 120.';
+                        setFieldInvalid(endAgeSpecInput, cEndMsg);
+                        errors.push({ element: endAgeSpecInput, tab: 'assets-tab', message: cEndMsg });
                     }
                 }
             });
 
-            // 7. General catch-all for any other native invalid elements
+            // 7. Additional Spending Rows (Tab 3: Additional Spending)
+            var spendingRows = document.querySelectorAll('#additionalSpendingTable tbody tr');
+            spendingRows.forEach(function (row, idx) {
+                var nameInput = row.querySelector('input[name="spending_name[]"]');
+                var amtInput = row.querySelector('input[name="spending_amount[]"]');
+                var startInput = row.querySelector('input[name="spending_start_age[]"]');
+                var intervalInput = row.querySelector('input[name="spending_interval[]"]');
+
+                var itemName = nameInput ? nameInput.value.trim() : '';
+                if (nameInput && !itemName) {
+                    setFieldInvalid(nameInput, 'Additional Spending item #' + (idx + 1) + ' Name is required.');
+                    errors.push({ element: nameInput, tab: 'spending-tab', message: 'Additional Spending item #' + (idx + 1) + ' Name is required.' });
+                }
+
+                if (amtInput) {
+                    var sAmt = parseMoney(amtInput.value);
+                    if (isNaN(sAmt) || sAmt < 0) {
+                        setFieldInvalid(amtInput, 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Amount cannot be negative.');
+                        errors.push({ element: amtInput, tab: 'spending-tab', message: 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Amount cannot be negative.' });
+                    }
+                }
+
+                if (startInput) {
+                    var sStartAge = parseInt(startInput.value, 10);
+                    var minStartAge = isNaN(uAge) ? 18 : uAge;
+                    var maxStartAge = isNaN(uDeath) ? 120 : uDeath;
+                    if (isNaN(sStartAge) || sStartAge < minStartAge || sStartAge > maxStartAge) {
+                        var sStartMsg = 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Start Age (' + startInput.value + ') cannot be younger than Your Present Age (' + minStartAge + ').';
+                        setFieldInvalid(startInput, sStartMsg);
+                        errors.push({ element: startInput, tab: 'spending-tab', message: sStartMsg });
+                    }
+                }
+
+                if (intervalInput) {
+                    var sInterval = parseInt(intervalInput.value, 10);
+                    if (isNaN(sInterval) || sInterval < 0) {
+                        setFieldInvalid(intervalInput, 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Interval must be 0 (for one-time) or a positive number of years.');
+                        errors.push({ element: intervalInput, tab: 'spending-tab', message: 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Interval must be 0 or a positive number of years.' });
+                    }
+                }
+            });
+
+            // 8. Other Income Streams & Benefits (Tab 4: Income Streams & Benefits)
+            var incomeCards = document.querySelectorAll('#incomeStreamsContainer .income-stream-card');
+            incomeCards.forEach(function (card, idx) {
+                var nameInput = card.querySelector('input[name="income_name[]"]');
+                var amtInput = card.querySelector('input[name="income_amount[]"]');
+                var startTypeSelect = card.querySelector('.inc-start-type');
+                var startSpecInput = card.querySelector('.inc-start-spec');
+                var endTypeSelect = card.querySelector('.inc-end-type');
+                var endSpecInput = card.querySelector('.inc-end-spec');
+                var freqSelect = card.querySelector('.inc-frequency');
+                var adjTypeSelect = card.querySelector('.inc-adjust-type');
+                var adjValInput = card.querySelector('.inc-adjust-val');
+                var adjStartTypeSelect = card.querySelector('.inc-adjust-start-type');
+                var adjStartSpecInput = card.querySelector('.inc-adjust-start-spec');
+
+                var incName = nameInput ? nameInput.value.trim() : '';
+                if (nameInput && !incName) {
+                    setFieldInvalid(nameInput, 'Income Source #' + (idx + 1) + ' Name is required.');
+                    errors.push({ element: nameInput, tab: 'income-tab', message: 'Income Source #' + (idx + 1) + ' Name is required.' });
+                }
+
+                if (amtInput) {
+                    var iAmt = parseMoney(amtInput.value);
+                    if (isNaN(iAmt) || iAmt < 0) {
+                        setFieldInvalid(amtInput, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Amount cannot be negative.');
+                        errors.push({ element: amtInput, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Amount cannot be negative.' });
+                    }
+                }
+
+                var iStartAge = 65;
+                if (startTypeSelect && startTypeSelect.value === 'specified' && startSpecInput) {
+                    iStartAge = parseInt(startSpecInput.value, 10);
+                    if (isNaN(iStartAge) || iStartAge < 18 || iStartAge > 120) {
+                        var iStartMsg = 'Income Source "' + (incName || '#' + (idx + 1)) + '" Specified Start Age must be between 18 and 120.';
+                        setFieldInvalid(startSpecInput, iStartMsg);
+                        errors.push({ element: startSpecInput, tab: 'income-tab', message: iStartMsg });
+                    }
+                }
+
+                var isOneTime = freqSelect && (freqSelect.value === 'one_time' || freqSelect.value === 'one-time');
+                if (!isOneTime && endTypeSelect && endTypeSelect.value === 'specified' && endSpecInput) {
+                    var iEndAge = parseInt(endSpecInput.value, 10);
+                    var minEnd = (startTypeSelect && startTypeSelect.value === 'specified' && !isNaN(iStartAge)) ? iStartAge : 18;
+                    if (isNaN(iEndAge) || iEndAge < minEnd || iEndAge > 120) {
+                        var iEndMsg = 'Income Source "' + (incName || '#' + (idx + 1)) + '" Specified End Age (' + endSpecInput.value + ') must be greater than or equal to Start Age (' + minEnd + ') up to 120.';
+                        setFieldInvalid(endSpecInput, iEndMsg);
+                        errors.push({ element: endSpecInput, tab: 'income-tab', message: iEndMsg });
+                    }
+                }
+
+                if (adjTypeSelect && ['fixed_pct', 'inflation_less_pct'].includes(adjTypeSelect.value) && adjValInput) {
+                    var iRate = parsePercent(adjValInput.value);
+                    if (isNaN(iRate) || iRate < 0.0 || iRate > 100.0) {
+                        setFieldInvalid(adjValInput, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Percentage Rate must be between 0% and 100%.');
+                        errors.push({ element: adjValInput, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Percentage Rate must be between 0% and 100%.' });
+                    }
+                }
+
+                if (adjTypeSelect && adjTypeSelect.value !== 'none' && adjStartTypeSelect && adjStartTypeSelect.value === 'specified' && adjStartSpecInput) {
+                    var iAdjStart = parseInt(adjStartSpecInput.value, 10);
+                    if (isNaN(iAdjStart) || iAdjStart < 18 || iAdjStart > 120) {
+                        setFieldInvalid(adjStartSpecInput, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Adjustment Start Age must be between 18 and 120.');
+                        errors.push({ element: adjStartSpecInput, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Adjustment Start Age must be between 18 and 120.' });
+                    }
+                }
+            });
+
+            // 9. General catch-all for any other native invalid elements
             var invalidEls = form.querySelectorAll(':invalid');
             for (var i = 0; i < invalidEls.length; i++) {
                 var el = invalidEls[i];

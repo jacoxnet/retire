@@ -430,12 +430,72 @@ def enter_view(request):
                 validation_errors.append("Spouse's Present Age must be an integer between 18 and 120.")
             if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
                 validation_errors.append(f"Spouse's Retirement Age must be between Spouse's Present Age ({spouse_age}) and 120.")
+            if spouse_age_death <= spouse_age or spouse_age_death > 120:
+                validation_errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
+            if survivor_spending < 0:
+                validation_errors.append("Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.")
+
+        if begin_spending_age_type == 'specified':
+            if begin_spending_age_specified < user_age or begin_spending_age_specified > user_age_death:
+                validation_errors.append(f"Specified Spending Start Age ({begin_spending_age_specified}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
+
+        if desired_spending < 0:
+            validation_errors.append("Desired Annual Spending must be a valid non-negative number.")
+
         if user_ss_entitled:
             if user_ss_start_age < 62 or user_ss_start_age > 70:
                 validation_errors.append("Your Social Security Claiming Age must be between 62 and 70.")
         if is_married and spouse_ss_entitled:
             if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
                 validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
+
+        # Asset Contributions validation
+        for prefix, asset in [('Pre-Tax', pretax_assets), ('Spouse Pre-Tax', spouse_pretax_assets), ('Roth', roth_assets), ('Taxable', taxable_assets), ('HSA', hsa_assets)]:
+            if prefix == 'Spouse Pre-Tax' and not is_married:
+                continue
+            rel_age = spouse_age if prefix == 'Spouse Pre-Tax' else user_age
+            rel_death = spouse_age_death if prefix == 'Spouse Pre-Tax' else user_age_death
+            if asset.get('contrib_amount', 0.0) < 0:
+                validation_errors.append(f"{prefix} Future Contribution Amount cannot be negative.")
+            c_start = asset.get('contrib_start_age', rel_age)
+            if c_start < rel_age or c_start > rel_death:
+                validation_errors.append(f"{prefix} Contribution Start Age ({c_start}) must be between Present Age ({rel_age}) and Age at Death ({rel_death}).")
+            if asset.get('contrib_end_age_type') == 'age':
+                c_end = asset.get('contrib_end_age_specified', rel_age)
+                if c_end < c_start or c_end > 120:
+                    validation_errors.append(f"{prefix} Specified Contribution End Age ({c_end}) must be greater than or equal to Contribution Start Age ({c_start}) up to 120.")
+
+        # Additional Spending items validation
+        for item in additional_spending:
+            if item.get('amount', 0.0) < 0:
+                validation_errors.append(f"Additional Spending item '{item.get('name')}' Amount cannot be negative.")
+            s_start = item.get('start_age', user_age)
+            if s_start < user_age or s_start > user_age_death:
+                validation_errors.append(f"Additional Spending item '{item.get('name')}' Start Age ({s_start}) cannot be younger than Your Present Age ({user_age}) or after Age at Death ({user_age_death}).")
+            if item.get('interval', 0) < 0:
+                validation_errors.append(f"Additional Spending item '{item.get('name')}' Interval must be 0 (for one-time) or a positive number of years.")
+
+        # Income Sources validation
+        for inc in income_sources:
+            if inc.get('amount', 0.0) < 0:
+                validation_errors.append(f"Income Source '{inc.get('name')}' Amount cannot be negative.")
+            if inc.get('start_age_type') == 'specified':
+                s_spec = inc.get('start_age_specified', 65)
+                if s_spec < 18 or s_spec > 120:
+                    validation_errors.append(f"Income Source '{inc.get('name')}' Specified Start Age must be between 18 and 120.")
+            if inc.get('frequency') not in ['one_time', 'one-time'] and inc.get('end_age_type') == 'specified':
+                min_end = inc.get('start_age_specified', 18) if inc.get('start_age_type') == 'specified' else 18
+                e_spec = inc.get('end_age_specified', 90)
+                if e_spec < min_end or e_spec > 120:
+                    validation_errors.append(f"Income Source '{inc.get('name')}' Specified End Age ({e_spec}) must be greater than or equal to Start Age ({min_end}) up to 120.")
+            if inc.get('adjust_type') in ['fixed_pct', 'inflation_less_pct']:
+                a_val = inc.get('adjust_val', 0.0)
+                if a_val < 0.0 or a_val > 100.0:
+                    validation_errors.append(f"Income Source '{inc.get('name')}' Percentage Rate must be between 0% and 100%.")
+            if inc.get('adjust_type') != 'none' and inc.get('adjust_start_age_type') == 'specified':
+                a_start = inc.get('adjust_start_age_specified', 65)
+                if a_start < 18 or a_start > 120:
+                    validation_errors.append(f"Income Source '{inc.get('name')}' Adjustment Start Age must be between 18 and 120.")
                 
         # Store in JSON block
         data_block = {

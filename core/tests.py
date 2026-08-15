@@ -855,6 +855,75 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(sim['income_sources'][0]['adjust_start_age_type'], 'specified')
         self.assertEqual(sim['income_sources'][0]['adjust_start_age_specified'], 68)
 
+    def test_validation_spending_start_age_out_of_range(self):
+        """Test validation error when specified spending start age is younger than user present age."""
+        resp = self.client.post('/', {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'runs': '1000',
+            'begin_spending_age_type': 'specified',
+            'begin_spending_age_specified': '55',
+            'desired_spending': '40000',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Specified Spending Start Age (55) must be between Your Present Age (60) and Your Age at Death (90).")
+
+    def test_validation_survivor_spending_negative(self):
+        """Test validation error when survivor spending is negative."""
+        resp = self.client.post('/', {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': 'on',
+            'spouse_name': 'Spouse User',
+            'spouse_age': '60',
+            'spouse_retirement_age': '65',
+            'spouse_age_death': '90',
+            'runs': '1000',
+            'desired_spending': '40000',
+            'survivor_spending': '-5000',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.")
+
+    def test_validation_asset_contribution_end_age_before_start_age(self):
+        """Test validation error when specified contribution end age is before contribution start age."""
+        resp = self.client.post('/', {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'runs': '1000',
+            'pretax_contrib_amount': '5000',
+            'pretax_contrib_start_age': '65',
+            'pretax_contrib_end_age_type': 'age',
+            'pretax_contrib_end_age_specified': '62',
+            'desired_spending': '40000',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Pre-Tax Specified Contribution End Age (62) must be greater than or equal to Contribution Start Age (65)")
+
+    def test_validation_additional_spending_start_age_younger_than_present_age(self):
+        """Test validation error when additional spending start age is younger than user present age."""
+        resp = self.client.post('/', {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'runs': '1000',
+            'desired_spending': '40000',
+            'add_spending_name[]': ['College Tuition'],
+            'add_spending_amount[]': ['25000'],
+            'add_spending_start_age[]': ['55'],
+            'add_spending_interval[]': ['0'],
+            'add_spending_adjust_inflation[]': ['true'],
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Additional Spending item &#x27;College Tuition&#x27; Start Age (55) cannot be younger than Your Present Age (60)")
+
 
 
 
