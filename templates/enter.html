@@ -49,9 +49,15 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="income-spending-tab" data-bs-toggle="tab" data-bs-target="#income-spending"
-                type="button" role="tab" aria-controls="income-spending" aria-selected="false">
-                3. Income & Additional Spending
+            <button class="nav-link" id="spending-tab" data-bs-toggle="tab" data-bs-target="#spending"
+                type="button" role="tab" aria-controls="spending" aria-selected="false">
+                3. Additional Spending
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="income-tab" data-bs-toggle="tab" data-bs-target="#income"
+                type="button" role="tab" aria-controls="income" aria-selected="false">
+                4. Income Streams & Benefits
             </button>
         </li>
     </ul>
@@ -763,10 +769,12 @@
                     <button type="button" class="btn btn-secondary me-2"
                         onclick="switchTab('demographics-tab')">Back</button>
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('income-spending-tab')">Next: Income & Extra Spending</button>
+                        onclick="switchTab('spending-tab')">Next: Additional Spending</button>
                 </div>
-            </div> <!-- TAB 3: INCOME & ADDITIONAL SPENDING -->
-            <div class="tab-pane fade" id="income-spending" role="tabpanel" aria-labelledby="income-spending-tab">
+            </div>
+
+            <!-- TAB 3: ADDITIONAL SPENDING -->
+            <div class="tab-pane fade" id="spending" role="tabpanel" aria-labelledby="spending-tab">
                 <div class="card p-4 mb-4">
                     <h3 class="mb-3">Additional Spending</h3>
                     <p class="text-secondary small mb-3">Enter spending items that do not occur every year (e.g. car
@@ -795,117 +803,129 @@
                             <i class="fa fa-plus me-1"></i> Add Spending Item
                         </button>
                     </div>
-                    <!-- DEDICATED SOCIAL SECURITY CARD -->
-                    <div class="card p-4 mb-4 border-primary">
-                        <h3 class="mb-1 text-primary">Social Security</h3>
-                        <p class="text-secondary small mb-3">Configure Social Security benefits for you and your spouse.
-                            Inflation indexation is automatically applied starting at plan launch, and spousal survivor
-                            benefits automatically step up to the higher deceased benefit upon first death.</p>
+                </div>
 
-                        <div class="row">
-                            <!-- User Social Security Section -->
-                            <div class="col-md-6 border-end">
-                                <h4 class="h6 fw-bold text-primary mb-3">Your Social Security</h4>
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold" for="user_ss_entitled">Are you, or will you be,
-                                        entitled to Social Security?</label>
-                                    <select class="form-select" id="user_ss_entitled" name="user_ss_entitled">
-                                        <option value="true" {% if social_security.user_entitled %}selected{% endif %}>
-                                            Yes</option>
-                                        <option value="false" {% if not social_security.user_entitled %}selected{% endif %}>No</option>
-                                    </select>
-                                </div>
-                                <div id="user_ss_fields_group"
-                                    style="display: {% if social_security.user_entitled %}block{% else %}none{% endif %};">
-                                    <div class="row">
-                                        <div class="col-6 mb-3">
-                                            <label class="form-label fw-semibold" for="user_ss_amount">Initial Amount
-                                                $</label>
-                                            <input type="text" inputmode="numeric" class="form-control currency-input"
-                                                id="user_ss_amount" name="user_ss_amount"
-                                                value="{{ social_security.user_amount|floatformat:0 }}">
-                                        </div>
-                                        <div class="col-6 mb-3">
-                                            <label class="form-label fw-semibold" for="user_ss_freq">Frequency</label>
-                                            <select class="form-select" id="user_ss_freq" name="user_ss_freq">
-                                                <option value="monthly" {% if social_security.user_freq == 'monthly' %}selected{% endif %}>Monthly</option>
-                                                <option value="annual" {% if social_security.user_freq == 'annual' %}selected{% endif %}>Annual</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold" for="user_ss_start_age">Your Age at
-                                            Claiming (62 – 70)</label>
-                                        <input type="number" class="form-control" id="user_ss_start_age"
-                                            name="user_ss_start_age" value="{{ social_security.user_start_age }}"
-                                            min="62" max="70">
-                                    </div>
-                                </div>
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-secondary me-2"
+                        onclick="switchTab('assets-tab')">Back</button>
+                    <button type="button" class="btn btn-secondary me-2"
+                        onclick="switchTab('income-tab')">Next: Income Streams & Benefits</button>
+                </div>
+            </div>
+
+            <!-- TAB 4: INCOME STREAMS & BENEFITS -->
+            <div class="tab-pane fade" id="income" role="tabpanel" aria-labelledby="income-tab">
+                <!-- DEDICATED SOCIAL SECURITY CARD -->
+                <div class="card p-4 mb-4 border-primary">
+                    <h3 class="mb-1 text-primary">Social Security</h3>
+                    <p class="text-secondary small mb-3">Configure Social Security benefits for you and your spouse.
+                        Inflation indexation is automatically applied starting at plan launch, and spousal survivor
+                        benefits automatically step up to the higher deceased benefit upon first death.</p>
+
+                    <div class="row">
+                        <!-- User Social Security Section -->
+                        <div class="col-md-6 border-end">
+                            <h4 class="h6 fw-bold text-primary mb-3">Your Social Security</h4>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold" for="user_ss_entitled">Are you, or will you be,
+                                    entitled to Social Security?</label>
+                                <select class="form-select" id="user_ss_entitled" name="user_ss_entitled">
+                                    <option value="true" {% if social_security.user_entitled %}selected{% endif %}>
+                                        Yes</option>
+                                    <option value="false" {% if not social_security.user_entitled %}selected{% endif %}>No</option>
+                                </select>
                             </div>
-
-                            <!-- Spouse Social Security Section -->
-                            <div class="col-md-6" id="spouse_ss_container"
-                                style="display: {% if is_married %}block{% else %}none{% endif %};">
-                                <h4 class="h6 fw-bold text-info mb-3">Spouse's Social Security</h4>
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold" for="spouse_ss_entitled">Is your spouse, or will
-                                        your spouse be, entitled to Social Security?</label>
-                                    <select class="form-select" id="spouse_ss_entitled" name="spouse_ss_entitled">
-                                        <option value="true" {% if social_security.spouse_entitled %}selected{% endif %}>Yes</option>
-                                        <option value="false" {% if not social_security.spouse_entitled %}selected{% endif %}>No</option>
-                                    </select>
+                            <div id="user_ss_fields_group"
+                                style="display: {% if social_security.user_entitled %}block{% else %}none{% endif %};">
+                                <div class="row">
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label fw-semibold" for="user_ss_amount">Initial Amount
+                                            $</label>
+                                        <input type="text" inputmode="numeric" class="form-control currency-input"
+                                            id="user_ss_amount" name="user_ss_amount"
+                                            value="{{ social_security.user_amount|floatformat:0 }}">
+                                    </div>
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label fw-semibold" for="user_ss_freq">Frequency</label>
+                                        <select class="form-select" id="user_ss_freq" name="user_ss_freq">
+                                            <option value="monthly" {% if social_security.user_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                            <option value="annual" {% if social_security.user_freq == 'annual' %}selected{% endif %}>Annual</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div id="spouse_ss_fields_group"
-                                    style="display: {% if social_security.spouse_entitled %}block{% else %}none{% endif %};">
-                                    <div class="row">
-                                        <div class="col-6 mb-3">
-                                            <label class="form-label fw-semibold" for="spouse_ss_amount">Initial Amount
-                                                $</label>
-                                            <input type="text" inputmode="numeric" class="form-control currency-input"
-                                                id="spouse_ss_amount" name="spouse_ss_amount"
-                                                value="{{ social_security.spouse_amount|floatformat:0 }}">
-                                        </div>
-                                        <div class="col-6 mb-3">
-                                            <label class="form-label fw-semibold" for="spouse_ss_freq">Frequency</label>
-                                            <select class="form-select" id="spouse_ss_freq" name="spouse_ss_freq">
-                                                <option value="monthly" {% if social_security.spouse_freq == 'monthly' %}selected{% endif %}>Monthly</option>
-                                                <option value="annual" {% if social_security.spouse_freq == 'annual' %}selected{% endif %}>Annual</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold" for="spouse_ss_start_age">Spouse's Age at
-                                            Claiming (62 – 70)</label>
-                                        <input type="number" class="form-control" id="spouse_ss_start_age"
-                                            name="spouse_ss_start_age" value="{{ social_security.spouse_start_age }}"
-                                            min="62" max="70">
-                                    </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold" for="user_ss_start_age">Your Age at
+                                        Claiming (62 – 70)</label>
+                                    <input type="number" class="form-control" id="user_ss_start_age"
+                                        name="user_ss_start_age" value="{{ social_security.user_start_age }}"
+                                        min="62" max="70">
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="card p-4 mb-4">
-                        <h3 class="mb-1">Other Income Streams & Benefits</h3>
-                        <p class="text-secondary small mb-3">Enter pensions, annuity payments, or other non-Social
-                            Security sources of non-portfolio income.</p>
-
-                        <div id="incomeStreamsContainer" class="mb-3">
-                            <!-- JS populated multi-line card items -->
+                        <!-- Spouse Social Security Section -->
+                        <div class="col-md-6" id="spouse_ss_container"
+                            style="display: {% if is_married %}block{% else %}none{% endif %};">
+                            <h4 class="h6 fw-bold text-info mb-3">Spouse's Social Security</h4>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold" for="spouse_ss_entitled">Is your spouse, or will
+                                    your spouse be, entitled to Social Security?</label>
+                                <select class="form-select" id="spouse_ss_entitled" name="spouse_ss_entitled">
+                                    <option value="true" {% if social_security.spouse_entitled %}selected{% endif %}>Yes</option>
+                                    <option value="false" {% if not social_security.spouse_entitled %}selected{% endif %}>No</option>
+                                </select>
+                            </div>
+                            <div id="spouse_ss_fields_group"
+                                style="display: {% if social_security.spouse_entitled %}block{% else %}none{% endif %};">
+                                <div class="row">
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label fw-semibold" for="spouse_ss_amount">Initial Amount
+                                            $</label>
+                                        <input type="text" inputmode="numeric" class="form-control currency-input"
+                                            id="spouse_ss_amount" name="spouse_ss_amount"
+                                            value="{{ social_security.spouse_amount|floatformat:0 }}">
+                                    </div>
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label fw-semibold" for="spouse_ss_freq">Frequency</label>
+                                        <select class="form-select" id="spouse_ss_freq" name="spouse_ss_freq">
+                                            <option value="monthly" {% if social_security.spouse_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                            <option value="annual" {% if social_security.spouse_freq == 'annual' %}selected{% endif %}>Annual</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold" for="spouse_ss_start_age">Spouse's Age at
+                                        Claiming (62 – 70)</label>
+                                    <input type="number" class="form-control" id="spouse_ss_start_age"
+                                        name="spouse_ss_start_age" value="{{ social_security.spouse_start_age }}"
+                                        min="62" max="70">
+                                </div>
+                            </div>
                         </div>
-
-                        <div class="text-center">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btnAddIncomeRow">
-                                <i class="fa fa-plus me-1"></i> Add Income Source
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="text-center mt-4">
-                        <button type="button" class="btn btn-secondary me-2"
-                            onclick="switchTab('assets-tab')">Back</button>
                     </div>
                 </div>
+
+                <div class="card p-4 mb-4">
+                    <h3 class="mb-1">Other Income Streams & Benefits</h3>
+                    <p class="text-secondary small mb-3">Enter pensions, annuity payments, or other non-Social
+                        Security sources of non-portfolio income.</p>
+
+                    <div id="incomeStreamsContainer" class="mb-3">
+                        <!-- JS populated multi-line card items -->
+                    </div>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnAddIncomeRow">
+                            <i class="fa fa-plus me-1"></i> Add Income Source
+                        </button>
+                    </div>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-secondary me-2"
+                        onclick="switchTab('spending-tab')">Back</button>
+                </div>
+            </div>
 
             </div>
     </form>
@@ -2093,7 +2113,7 @@
                 var uSsAge = uSsAgeInput ? parseInt(uSsAgeInput.value, 10) : 67;
                 if (isNaN(uSsAge) || uSsAge < 62 || uSsAge > 70) {
                     setFieldInvalid(uSsAgeInput, 'Your Social Security Claiming Age must be between 62 and 70.');
-                    errors.push({ element: uSsAgeInput, tab: 'income-spending-tab', message: 'Your Social Security Claiming Age must be between 62 and 70.' });
+                    errors.push({ element: uSsAgeInput, tab: 'income-tab', message: 'Your Social Security Claiming Age must be between 62 and 70.' });
                 }
             }
             if (isMarried && document.getElementById('spouse_ss_entitled')?.value === 'true') {
@@ -2101,7 +2121,7 @@
                 var spSsAge = spSsAgeInput ? parseInt(spSsAgeInput.value, 10) : 67;
                 if (isNaN(spSsAge) || spSsAge < 62 || spSsAge > 70) {
                     setFieldInvalid(spSsAgeInput, 'Spouse\'s Social Security Claiming Age must be between 62 and 70.');
-                    errors.push({ element: spSsAgeInput, tab: 'income-spending-tab', message: 'Spouse\'s Social Security Claiming Age must be between 62 and 70.' });
+                    errors.push({ element: spSsAgeInput, tab: 'income-tab', message: 'Spouse\'s Social Security Claiming Age must be between 62 and 70.' });
                 }
             }
 
