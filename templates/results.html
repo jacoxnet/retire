@@ -1596,6 +1596,8 @@
                 if (adjType === 'none' || adjType === 'inflation') {
                     adjVal = 0.0;
                 }
+                var adjStartType = ['start', 'retirement', 'spouse_retirement', 'current_age', 'specified'].includes(item.adjust_start_age_type) ? item.adjust_start_age_type : 'start';
+                var adjStartSpec = clampInt(item.adjust_start_age_specified, 18, 120, 65);
                 clean.income_sources.push({
                     name: (item.name || 'Income Source').trim(),
                     amount: clampNum(item.amount, 0, null, 0),
@@ -1607,7 +1609,9 @@
                     subject_to_tax: item.subject_to_tax !== false,
                     is_social_security: !!item.is_social_security,
                     adjust_type: adjType,
-                    adjust_val: adjVal
+                    adjust_val: adjVal,
+                    adjust_start_age_type: adjStartType,
+                    adjust_start_age_specified: adjStartSpec
                 });
             });
         }

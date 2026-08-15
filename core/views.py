@@ -369,6 +369,8 @@ def enter_view(request):
         inc_is_ss_list = request.POST.getlist('income_is_ss[]')
         inc_adj_types = request.POST.getlist('income_adjust_type[]')
         inc_adj_vals = request.POST.getlist('income_adjust_val[]')
+        inc_adj_start_types = request.POST.getlist('income_adjust_start_age_type[]')
+        inc_adj_start_specs = request.POST.getlist('income_adjust_start_age_specified[]')
         
         for i in range(len(inc_names)):
             name_val = inc_names[i].strip() if i < len(inc_names) and inc_names[i] else "Income Source"
@@ -382,6 +384,8 @@ def enter_view(request):
             ss_val = inc_is_ss_list[i] == 'true' if i < len(inc_is_ss_list) else False
             adj_type_val = inc_adj_types[i] if i < len(inc_adj_types) else 'inflation'
             adj_num_val = get_float(inc_adj_vals[i]) if i < len(inc_adj_vals) else 0.0
+            adj_start_type_val = inc_adj_start_types[i] if i < len(inc_adj_start_types) else 'start'
+            adj_start_spec_val = get_int(inc_adj_start_specs[i]) if i < len(inc_adj_start_specs) else 65
 
             income_sources.append({
                 'name': name_val,
@@ -394,7 +398,9 @@ def enter_view(request):
                 'subject_to_tax': tax_val,
                 'is_social_security': ss_val,
                 'adjust_type': adj_type_val,
-                'adjust_val': adj_num_val
+                'adjust_val': adj_num_val,
+                'adjust_start_age_type': adj_start_type_val,
+                'adjust_start_age_specified': adj_start_spec_val
             })
                 
         is_goal_seeking = (simulation_type == 'goal_seeking')

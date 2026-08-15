@@ -719,18 +719,74 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(sim['income_sources'][0]['name'], 'Pension')
         self.assertEqual(sim['income_sources'][0]['amount'], 15000.0)
 
-        # 2. Verify results page includes Pension in projections (inflated at 3.5% over 5 years from age 60 to 65)
+        # 2. Verify results page includes Pension in projections
+        # When adjust_start_age_type defaults to 'start', at age 65 it is $15,000 and at age 66 it is 15000 * 1.035
         res_resp = self.client.get('/results/')
         self.assertEqual(res_resp.status_code, 200)
         det_rows = res_resp.context['det_rows']
-        ret_row = [r for r in det_rows if r['user_age'] == 65][0]
-        self.assertIn('Pension', ret_row['income_breakdown'])
-        self.assertAlmostEqual(ret_row['income_breakdown']['Pension'], 15000.0 * (1.035 ** 5), places=2)
+        row_65 = [r for r in det_rows if r['user_age'] == 65][0]
+        row_66 = [r for r in det_rows if r['user_age'] == 66][0]
+        self.assertIn('Pension', row_65['income_breakdown'])
+        self.assertAlmostEqual(row_65['income_breakdown']['Pension'], 15000.0, places=2)
+        self.assertAlmostEqual(row_66['income_breakdown']['Pension'], 15000.0 * 1.035, places=2)
 
         # 3. Verify navigating back to enter page displays Pension
         enter_resp = self.client.get('/')
         self.assertEqual(enter_resp.status_code, 200)
         self.assertContains(enter_resp, 'Pension')
+
+    def test_income_stream_deferred_inflation_start_at_specified_age(self):
+        """Test pension starting at age 65 with inflation adjustment deferred until age 68."""
+        post_data = {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': False,
+            'runs': '1000',
+            'current_year': '2026',
+            'inflation_rate': '3.5',
+            'desired_spending': '40000',
+            'income_name[]': ['Pension'],
+            'income_amount[]': ['2500'],
+            'income_frequency[]': ['monthly'],
+            'income_start_age_type[]': ['specified'],
+            'income_start_age_specified[]': ['65'],
+            'income_end_age_type[]': ['death'],
+            'income_end_age_specified[]': ['90'],
+            'income_subject_to_tax[]': ['true'],
+            'income_adjust_type[]': ['inflation'],
+            'income_adjust_val[]': ['0.0'],
+            'income_adjust_start_age_type[]': ['specified'],
+            'income_adjust_start_age_specified[]': ['68'],
+        }
+        resp = self.client.post('/', post_data)
+        self.assertRedirects(resp, '/results/')
+
+        res_resp = self.client.get('/results/')
+        self.assertEqual(res_resp.status_code, 200)
+        det_rows = res_resp.context['det_rows']
+
+        # Annual base is 2500 * 12 = 30,000
+        # Age 65: 30,000
+        # Age 66: 30,000
+        # Age 67: 30,000
+        # Age 68: 30,000
+        # Age 69: 30,000 * 1.035 = 31,050
+        # Age 70: 30,000 * (1.035 ** 2) = 32,136.75
+        row_65 = [r for r in det_rows if r['user_age'] == 65][0]
+        row_66 = [r for r in det_rows if r['user_age'] == 66][0]
+        row_67 = [r for r in det_rows if r['user_age'] == 67][0]
+        row_68 = [r for r in det_rows if r['user_age'] == 68][0]
+        row_69 = [r for r in det_rows if r['user_age'] == 69][0]
+        row_70 = [r for r in det_rows if r['user_age'] == 70][0]
+
+        self.assertAlmostEqual(row_65['income_breakdown']['Pension'], 30000.0, places=2)
+        self.assertAlmostEqual(row_66['income_breakdown']['Pension'], 30000.0, places=2)
+        self.assertAlmostEqual(row_67['income_breakdown']['Pension'], 30000.0, places=2)
+        self.assertAlmostEqual(row_68['income_breakdown']['Pension'], 30000.0, places=2)
+        self.assertAlmostEqual(row_69['income_breakdown']['Pension'], 30000.0 * 1.035, places=2)
+        self.assertAlmostEqual(row_70['income_breakdown']['Pension'], 30000.0 * (1.035 ** 2), places=2)
 
     def test_load_aug_13_plan_json(self):
         import os, json
@@ -764,6 +820,40 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(parsed['spouse_name'], 'Diane Doe')
         self.assertIn('spouse_pretax_assets', parsed)
         self.assertEqual(parsed['spouse_pretax_assets']['present_balance'], 500000.0)
+
+    def test_load_plan_with_deferred_income_adjustment(self):
+        import json
+        plan_data = {
+            'user_name': 'Deferred User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'current_year': 2026,
+            'desired_spending': 40000.0,
+            'income_sources': [
+                {
+                    'name': 'Pension',
+                    'amount': 2500.0,
+                    'frequency': 'monthly',
+                    'start_age_type': 'specified',
+                    'start_age_specified': 65,
+                    'end_age_type': 'death',
+                    'end_age_specified': 90,
+                    'subject_to_tax': True,
+                    'adjust_type': 'inflation',
+                    'adjust_val': 0.0,
+                    'adjust_start_age_type': 'specified',
+                    'adjust_start_age_specified': 68
+                }
+            ]
+        }
+        resp = self.client.post('/load_plan/', {'json_data': json.dumps(plan_data)})
+        self.assertRedirects(resp, '/results/')
+        sim = self.client.session['simulation_data']
+        self.assertEqual(len(sim['income_sources']), 1)
+        self.assertEqual(sim['income_sources'][0]['adjust_start_age_type'], 'specified')
+        self.assertEqual(sim['income_sources'][0]['adjust_start_age_specified'], 68)
 
 
 

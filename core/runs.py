@@ -306,14 +306,30 @@ def simulate_step(
                 
             adj_type = inc.get('adjust_type', 'inflation')
             adj_val = inc.get('adjust_val', 0.0)
-            
+            adj_start_type = inc.get('adjust_start_age_type', 'start')
+            adj_start_spec = inc.get('adjust_start_age_specified', 65)
+
+            if adj_start_type in ['start', 'income_start', 'at_start']:
+                adj_start_age = start_age
+            elif adj_start_type in ['current_age', 'current_year', 'now']:
+                adj_start_age = user_age
+            elif adj_start_type == 'specified':
+                try:
+                    adj_start_age = int(adj_start_spec)
+                except (ValueError, TypeError):
+                    adj_start_age = start_age
+            else:
+                adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+
+            years_since_adj = max(0, user_age_t - adj_start_age)
+
             if adj_type == 'inflation':
-                factor = inf_factor
+                factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
             elif adj_type == 'fixed_pct':
-                factor = (1.0 + adj_val / 100.0) ** t
+                factor = (1.0 + adj_val / 100.0) ** years_since_adj
             elif adj_type == 'inflation_less_pct':
                 rate = max(0.0, inflation_rate - adj_val)
-                factor = (1.0 + rate / 100.0) ** t
+                factor = (1.0 + rate / 100.0) ** years_since_adj
             else:
                 factor = 1.0
                 
@@ -1255,13 +1271,30 @@ def prepare_numba_inputs(inputs, test_spending=None):
                     
                 adj_type = inc.get('adjust_type', 'inflation')
                 adj_val = inc.get('adjust_val', 0.0)
+                adj_start_type = inc.get('adjust_start_age_type', 'start')
+                adj_start_spec = inc.get('adjust_start_age_specified', 65)
+
+                if adj_start_type in ['start', 'income_start', 'at_start']:
+                    adj_start_age = start_age
+                elif adj_start_type in ['current_age', 'current_year', 'now']:
+                    adj_start_age = user_age
+                elif adj_start_type == 'specified':
+                    try:
+                        adj_start_age = int(adj_start_spec)
+                    except (ValueError, TypeError):
+                        adj_start_age = start_age
+                else:
+                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+
+                years_since_adj = max(0, user_age_t - adj_start_age)
+
                 if adj_type == 'inflation':
-                    factor = inf_factor
+                    factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
                 elif adj_type == 'fixed_pct':
-                    factor = (1.0 + adj_val / 100.0) ** t
+                    factor = (1.0 + adj_val / 100.0) ** years_since_adj
                 elif adj_type == 'inflation_less_pct':
                     rate = max(0.0, inflation_rate - adj_val)
-                    factor = (1.0 + rate / 100.0) ** t
+                    factor = (1.0 + rate / 100.0) ** years_since_adj
                 else:
                     factor = 1.0
                 inc_amt_t = amt * factor

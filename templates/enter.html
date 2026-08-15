@@ -1296,6 +1296,8 @@
             var isSS = data.is_social_security !== undefined ? data.is_social_security : false;
             var adjustType = data.adjust_type !== undefined ? data.adjust_type : 'inflation';
             var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
+            var adjustStartType = data.adjust_start_age_type !== undefined ? data.adjust_start_age_type : 'start';
+            var adjustStartAge = data.adjust_start_age_specified !== undefined ? data.adjust_start_age_specified : 65;
 
             var formattedAmt = formatMoney(amount);
 
@@ -1336,6 +1338,25 @@
                                     <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less a Fixed Percentage</option>
                                 </select>
                                 <input type="text" inputmode="decimal" class="form-control inc-adjust-val percent-input" name="income_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 1b: Inflation Adjustment Start Timing (Shown if adjustType != 'none') -->
+                    <div class="inc-adjust-start-group mb-3" style="display: ${adjustType === 'none' ? 'none' : 'block'};">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Adjustment Begins At</label>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select inc-adjust-start-type" name="income_adjust_start_age_type[]">
+                                        <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
+                                        <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                        <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                        <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
+                                        <option value="specified" ${adjustStartType === 'specified' ? 'selected' : ''}>Specify an Age</option>
+                                    </select>
+                                    <input type="number" class="form-control inc-adjust-start-spec" name="income_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${adjustStartType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Adjustment Start Age" placeholder="Age">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1405,6 +1426,18 @@
                 valInput.style.display = show ? 'block' : 'none';
                 if (show) {
                     valInput.focus();
+                }
+                var startGroup = card.querySelector('.inc-adjust-start-group');
+                if (startGroup) {
+                    startGroup.style.display = (this.value === 'none') ? 'none' : 'block';
+                }
+            });
+
+            card.querySelector('.inc-adjust-start-type').addEventListener('change', function () {
+                var specInput = card.querySelector('.inc-adjust-start-spec');
+                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+                if (this.value === 'specified') {
+                    specInput.focus();
                 }
             });
 
@@ -1578,6 +1611,8 @@
                 var isSsEl = card.querySelector('[name="income_is_ss[]"]');
                 var adjTypeEl = card.querySelector('[name="income_adjust_type[]"]');
                 var adjValEl = card.querySelector('[name="income_adjust_val[]"]');
+                var adjStartTypeEl = card.querySelector('[name="income_adjust_start_age_type[]"]');
+                var adjStartSpecEl = card.querySelector('[name="income_adjust_start_age_specified[]"]');
 
                 dataBlock.income_sources.push({
                     'name': nameEl ? nameEl.value.trim() : 'Income Source',
@@ -1590,7 +1625,9 @@
                     'subject_to_tax': taxEl?.value === 'true',
                     'is_social_security': isSsEl?.value === 'true',
                     'adjust_type': adjTypeEl?.value || 'inflation',
-                    'adjust_val': parsePercent(adjValEl?.value || 0.0)
+                    'adjust_val': parsePercent(adjValEl?.value || 0.0),
+                    'adjust_start_age_type': adjStartTypeEl?.value || 'start',
+                    'adjust_start_age_specified': parseInt(adjStartSpecEl?.value || 65)
                 });
             });
 
@@ -1695,6 +1732,8 @@
                     if (adjType === 'none' || adjType === 'inflation') {
                         adjVal = 0.0;
                     }
+                    var adjStartType = ['start', 'retirement', 'spouse_retirement', 'current_age', 'specified'].includes(item.adjust_start_age_type) ? item.adjust_start_age_type : 'start';
+                    var adjStartSpec = clampInt(item.adjust_start_age_specified, 18, 120, 65);
                     clean.income_sources.push({
                         name: (item.name || 'Income Source').trim(),
                         amount: clampNum(item.amount, 0, null, 0),
@@ -1706,7 +1745,9 @@
                         subject_to_tax: item.subject_to_tax !== false,
                         is_social_security: !!item.is_social_security,
                         adjust_type: adjType,
-                        adjust_val: adjVal
+                        adjust_val: adjVal,
+                        adjust_start_age_type: adjStartType,
+                        adjust_start_age_specified: adjStartSpec
                     });
                 });
             }
@@ -1898,7 +1939,7 @@
                 document.querySelector('[name="hsa_contrib_end_age_type"]')
             ];
 
-            document.querySelectorAll('.inc-start-type, .inc-end-type').forEach(function (s) {
+            document.querySelectorAll('.inc-start-type, .inc-end-type, .inc-adjust-start-type').forEach(function (s) {
                 selects.push(s);
             });
 
@@ -1912,7 +1953,13 @@
                         opt.style.display = isMarried ? 'block' : 'none';
                         opt.disabled = !isMarried;
                         if (!isMarried && opt.selected) {
-                            select.value = opt.value === 'spouse_death' ? 'death' : 'retirement';
+                            if (select.classList.contains('inc-adjust-start-type')) {
+                                select.value = 'start';
+                            } else if (opt.value === 'spouse_death') {
+                                select.value = 'death';
+                            } else {
+                                select.value = 'retirement';
+                            }
                             var event = new Event('change');
                             select.dispatchEvent(event);
                         }
