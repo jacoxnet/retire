@@ -1314,13 +1314,13 @@
                     </button>
                 </div>
                 <div class="card-body p-3">
-                    <!-- Row 1: Amount, Frequency & Annual Adjustment Rule -->
+                    <!-- Line 1: Amount & Frequency -->
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold">Amount $</label>
                             <input type="text" inputmode="numeric" class="form-control currency-input" name="income_amount[]" value="${formattedAmt}" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold">Frequency</label>
                             <select class="form-select inc-frequency" name="income_frequency[]">
                                 <option value="monthly" ${frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
@@ -1328,40 +1328,9 @@
                                 <option value="one_time" ${frequency === 'one_time' || frequency === 'one-time' ? 'selected' : ''}>One-Time Payment</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold">Adjust for Inflation?</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select inc-adjust-type" name="income_adjust_type[]">
-                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Yes</option>
-                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No</option>
-                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>By a Fixed Percentage</option>
-                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less a Fixed Percentage</option>
-                                </select>
-                                <input type="text" inputmode="decimal" class="form-control inc-adjust-val percent-input" name="income_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
-                            </div>
-                        </div>
                     </div>
 
-                    <!-- Row 1b: Inflation Adjustment Start Timing (Shown if adjustType != 'none') -->
-                    <div class="inc-adjust-start-group mb-3" style="display: ${adjustType === 'none' ? 'none' : 'block'};">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">Adjustment Begins At</label>
-                                <div class="d-flex gap-2">
-                                    <select class="form-select inc-adjust-start-type" name="income_adjust_start_age_type[]">
-                                        <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
-                                        <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                        <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                        <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
-                                        <option value="specified" ${adjustStartType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                    </select>
-                                    <input type="number" class="form-control inc-adjust-start-spec" name="income_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${adjustStartType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Adjustment Start Age" placeholder="Age">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Row 2: Timing / Duration -->
+                    <!-- Line 2: (1) Starts At, (2) Starts At age box, (3) Ends At, (4) Ends At age box -->
                     <div class="row g-3 mb-3 align-items-start">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Starts At</label>
@@ -1386,8 +1355,37 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Line 3: (5) Adjust for Inflation? + rate box, (6) Adjustment Begins At, (7) Adjustment Begins At age box -->
+                    <div class="row g-3 mb-3 align-items-start">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Adjust for Inflation?</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select inc-adjust-type" name="income_adjust_type[]">
+                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Yes</option>
+                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No</option>
+                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>By a Fixed Percentage</option>
+                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less a Fixed Percentage</option>
+                                </select>
+                                <input type="text" inputmode="decimal" class="form-control inc-adjust-val percent-input" name="income_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
+                            </div>
+                        </div>
+                        <div class="col-md-6 inc-adjust-start-group" style="display: ${adjustType === 'none' ? 'none' : 'block'};">
+                            <label class="form-label fw-semibold">Adjustment Begins At</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select inc-adjust-start-type" name="income_adjust_start_age_type[]">
+                                    <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
+                                    <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                    <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                    <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
+                                    <option value="specified" ${adjustStartType === 'specified' ? 'selected' : ''}>Specify an Age</option>
+                                </select>
+                                <input type="number" class="form-control inc-adjust-start-spec" name="income_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${adjustStartType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Adjustment Start Age" placeholder="Age">
+                            </div>
+                        </div>
+                    </div>
                     
-                    <!-- Row 3: Tax Status -->
+                    <!-- Line 4: (8) Subject to Income Tax? -->
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Subject to Income Tax?</label>
