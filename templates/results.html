@@ -45,6 +45,11 @@
                 <i class="fa fa-chart-line me-1"></i> Charts
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="stress-tab" data-bs-toggle="tab" data-bs-target="#stresstest" type="button" role="tab" aria-controls="stresstest" aria-selected="false">
+                <i class="fa fa-fire me-1 text-danger"></i> Historical Stress Test
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content" id="resultsTabsContent">
@@ -888,6 +893,180 @@
                 </div>
             </div>
         </div>
+
+        <!-- TAB 5: HISTORICAL STRESS TEST -->
+        <div class="tab-pane fade" id="stresstest" role="tabpanel" aria-labelledby="stress-tab">
+            <!-- Controls Card -->
+            <div class="card p-4 shadow-sm mb-4 border-0 bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 border-bottom pb-3 mb-3">
+                    <div>
+                        <h4 class="fw-bold text-danger mb-0">
+                            <i class="fa fa-fire me-2"></i>Historical Crisis & Sequence-of-Returns Stress Test
+                        </h4>
+                        <small class="text-secondary">Replay famous market crashes and high-inflation periods over your actual retirement plan.</small>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnScanWorst">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> <span id="btnScanWorstText">Find Worst Historical Year</span>
+                    </button>
+                </div>
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold" for="stressScenarioSelect">Select Crisis Scenario</label>
+                        <select class="form-select" id="stressScenarioSelect">
+                            <option value="2000_dotcom" selected>The Dot-Com Crash & "Lost Decade" (2000–2012)</option>
+                            <option value="1973_stagflation">The 1970s Stagflation & Inflation Shock (1973–1982)</option>
+                            <option value="2008_gfc">The Great Financial Crisis (2007–2017)</option>
+                            <option value="1929_depression">The Great Depression (1929–1941)</option>
+                            <option value="2022_rate_spike">The 2022 Inflation & Rate Spike Shock (2022–2024)</option>
+                            <option value="1966_bear">The 1966 Sideways Market (Classic 4% Rule Stress)</option>
+                            <option value="custom">Custom Starting Year (1926–2024)...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="customYearGroup" style="display: none;">
+                        <label class="form-label fw-semibold" for="stressCustomYear">Starting Year</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="stressCustomYear" value="2000" min="1926" max="2024">
+                            <button class="btn btn-outline-secondary" type="button" id="btnApplyCustomYear">Apply</button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" for="stressAllocationSelect">Asset Allocation</label>
+                        <select class="form-select" id="stressAllocationSelect">
+                            <option value="matched" selected>Matched to My Expected Returns</option>
+                            <option value="100_stock">100% Stock / 0% Bond</option>
+                            <option value="80_20">80% Stock / 20% Bond</option>
+                            <option value="60_40">60% Stock / 40% Bond (Moderate)</option>
+                            <option value="40_60">40% Stock / 60% Bond (Conservative)</option>
+                            <option value="100_bond">0% Stock / 100% Bond</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" for="stressTimingSelect">Crisis Timing</label>
+                        <select class="form-select" id="stressTimingSelect">
+                            <option value="retirement" selected>Hit Market Crisis at Retirement Start</option>
+                            <option value="current">Hit Market Crisis Immediately (Current Year)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Scenario Description Callout -->
+                <div class="mt-3 p-3 bg-light rounded border" id="stressScenarioDescription">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge bg-danger" id="stressScenarioBadge">Tech Bust + 2008 GFC</span>
+                        <strong class="text-dark" id="stressScenarioTitle">The Dot-Com Crash & "Lost Decade" (2000–2012)</strong>
+                    </div>
+                    <p class="mb-0 text-secondary small" id="stressScenarioText">
+                        Three consecutive down years for stocks (-9.1%, -11.9%, -22.1%) followed closely by the 2008 crash, representing the classic Sequence-of-Returns shock for early retirees.
+                    </p>
+                </div>
+            </div>
+
+            <!-- KPI Metric Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card p-3 shadow-sm border-0 h-100 bg-white" id="stressCardSurvival">
+                        <small class="text-muted text-uppercase fw-semibold">Portfolio Survival</small>
+                        <h4 class="fw-bold mt-2 mb-0" id="stressKpiSurvival">Survived</h4>
+                        <small class="text-muted mt-1" id="stressKpiSurvivalDetail">Through life expectancy</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 shadow-sm border-0 h-100 bg-white">
+                        <small class="text-muted text-uppercase fw-semibold">Maximum Drawdown</small>
+                        <h4 class="fw-bold mt-2 mb-0 text-danger" id="stressKpiMaxDrawdown">-41.1%</h4>
+                        <small class="text-muted mt-1">Peak-to-trough decline</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 shadow-sm border-0 h-100 bg-white">
+                        <small class="text-muted text-uppercase fw-semibold">Lowest Portfolio Balance</small>
+                        <h4 class="fw-bold mt-2 mb-0 text-warning" id="stressKpiLowestBal">$757,447</h4>
+                        <small class="text-muted mt-1" id="stressKpiLowestBalDetail">In Year 2031 (Age 65)</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 shadow-sm border-0 h-100 bg-white">
+                        <small class="text-muted text-uppercase fw-semibold">Ending Legacy Balance</small>
+                        <h4 class="fw-bold mt-2 mb-0 text-primary" id="stressKpiEndingBal">$3,328,920</h4>
+                        <small class="text-muted mt-1" id="stressKpiEndingDelta">-$650k vs Baseline Plan</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stress Test Visual Charts -->
+            <div class="row g-4 mb-4">
+                <!-- Chart A: Portfolio Balance Trajectory Comparison -->
+                <div class="col-lg-7">
+                    <div class="card shadow-sm border-0 chart-card h-100">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-chart-area me-2"></i>Portfolio Trajectory: Baseline vs. Crisis Replay
+                                </h5>
+                                <small class="text-muted">Comparing base deterministic trajectory against the historical market replay</small>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container" style="height: 380px;">
+                                <canvas id="stressTrajectoryChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart B: Annual Market Returns & Inflation -->
+                <div class="col-lg-5">
+                    <div class="card shadow-sm border-0 chart-card h-100">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title text-primary mb-0 fw-bold">
+                                    <i class="fa fa-chart-column me-2"></i>Crisis Macro Drivers
+                                </h5>
+                                <small class="text-muted">Stock Return, Bond Return & Inflation during the crisis sequence</small>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container" style="height: 380px;">
+                                <canvas id="stressMacroChartCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Year-by-Year Detailed Table -->
+            <div class="card p-4 shadow-sm border-0 mb-4 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0 text-primary">
+                        <i class="fa fa-table me-2"></i>Year-by-Year Stress Test Schedule
+                    </h5>
+                    <span class="badge bg-secondary" id="stressTableCountBadge">31 Years</span>
+                </div>
+                <div class="table-container" style="overflow-x: auto; max-height: 520px;">
+                    <table class="table table-hover align-middle mb-0" id="stressTestTable" style="min-width: 900px;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Year</th>
+                                <th>Your Age</th>
+                                {% if is_married %}<th>Spouse Age</th>{% endif %}
+                                <th>Hist. Year</th>
+                                <th class="text-end">Stocks</th>
+                                <th class="text-end">Bonds</th>
+                                <th class="text-end">Inflation</th>
+                                <th class="text-end">Spending</th>
+                                <th class="text-end">Withdrawals</th>
+                                <th class="text-end">Crisis Balance</th>
+                                <th class="text-end">Baseline Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stressTestTableBody">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1486,6 +1665,394 @@
 </script>
 
 {{ plan_data_json|json_script:"plan-data-json" }}
+{{ stress_test|json_script:"initial-stress-test-data" }}
+{{ scenarios_list|json_script:"initial-scenarios-data" }}
+
+<script>
+    // ==========================================
+    // TAB 5: HISTORICAL STRESS TEST JAVASCRIPT
+    // ==========================================
+    const stressChartInstances = {
+        trajectory: null,
+        macro: null
+    };
+
+    function formatNumberCurrency(val) {
+        if (val === null || val === undefined || isNaN(val)) return '$0';
+        const num = Math.round(Number(val));
+        const absNum = Math.abs(num);
+        const sign = num < 0 ? '-' : '';
+        return sign + '$' + absNum.toLocaleString('en-US');
+    }
+
+    function formatDeltaCurrency(val) {
+        if (val === null || val === undefined || isNaN(val)) return '$0';
+        const num = Math.round(Number(val));
+        const sign = num > 0 ? '+' : (num < 0 ? '-' : '');
+        const absNum = Math.abs(num);
+        return sign + '$' + absNum.toLocaleString('en-US');
+    }
+
+    function updateStressKPIs(summary, scenario) {
+        if (!summary) return;
+
+        const survivalCard = document.getElementById('stressCardSurvival');
+        const survivalTitle = document.getElementById('stressKpiSurvival');
+        const survivalDetail = document.getElementById('stressKpiSurvivalDetail');
+
+        if (survivalTitle) {
+            if (summary.survived) {
+                survivalTitle.textContent = 'Survived';
+                survivalTitle.className = 'fw-bold mt-2 mb-0 text-success';
+                if (survivalDetail) survivalDetail.textContent = 'Through entire plan horizon';
+                if (survivalCard) survivalCard.className = 'card p-3 shadow-sm border-0 h-100 bg-white border-start border-success border-4';
+            } else {
+                survivalTitle.textContent = `Depleted at Age ${summary.depletion_age}`;
+                survivalTitle.className = 'fw-bold mt-2 mb-0 text-danger';
+                if (survivalDetail) survivalDetail.textContent = `In Year ${summary.depletion_year}`;
+                if (survivalCard) survivalCard.className = 'card p-3 shadow-sm border-0 h-100 bg-white border-start border-danger border-4';
+            }
+        }
+
+        const maxDdEl = document.getElementById('stressKpiMaxDrawdown');
+        if (maxDdEl) {
+            maxDdEl.textContent = `-${summary.max_drawdown}%`;
+        }
+
+        const lowestBalEl = document.getElementById('stressKpiLowestBal');
+        const lowestDetailEl = document.getElementById('stressKpiLowestBalDetail');
+        if (lowestBalEl) {
+            lowestBalEl.textContent = formatNumberCurrency(summary.lowest_balance);
+        }
+        if (lowestDetailEl) {
+            lowestDetailEl.textContent = `In Year ${summary.lowest_balance_year} (Age ${summary.lowest_balance_age})`;
+        }
+
+        const endingBalEl = document.getElementById('stressKpiEndingBal');
+        const endingDeltaEl = document.getElementById('stressKpiEndingDelta');
+        if (endingBalEl) {
+            endingBalEl.textContent = formatNumberCurrency(summary.ending_balance);
+        }
+        if (endingDeltaEl) {
+            endingDeltaEl.textContent = `${formatDeltaCurrency(summary.balance_delta)} vs Baseline Plan`;
+            endingDeltaEl.className = summary.balance_delta >= 0 ? 'text-success mt-1' : 'text-danger mt-1';
+        }
+
+        if (scenario) {
+            const badgeEl = document.getElementById('stressScenarioBadge');
+            const titleEl = document.getElementById('stressScenarioTitle');
+            const textEl = document.getElementById('stressScenarioText');
+            if (badgeEl) badgeEl.textContent = scenario.badge || `Cohort ${scenario.start_year}`;
+            if (titleEl) titleEl.textContent = scenario.name || `Cohort ${scenario.start_year}`;
+            if (textEl) textEl.textContent = scenario.description || '';
+        }
+    }
+
+    function renderStressTestTable(yearlyData) {
+        const tbody = document.getElementById('stressTestTableBody');
+        const countBadge = document.getElementById('stressTableCountBadge');
+        if (!tbody || !yearlyData) return;
+
+        if (countBadge) countBadge.textContent = `${yearlyData.length} Years`;
+
+        let html = '';
+        yearlyData.forEach(function(row) {
+            const isDepleted = row.ending_assets <= 0;
+            const rowClass = isDepleted ? 'table-danger' : '';
+            const stockColor = row.stocks_ret >= 0 ? 'text-success' : 'text-danger';
+            const bondColor = row.bonds_ret >= 0 ? 'text-success' : 'text-danger';
+
+            let milestoneBadge = '';
+            if (row.milestones && row.milestones.length > 0) {
+                milestoneBadge = ` <span class="badge bg-info text-dark ms-1 small">${row.milestones.join(', ')}</span>`;
+            }
+
+            html += `<tr class="${rowClass}">
+                <td class="fw-bold">${row.year}${milestoneBadge}</td>
+                <td>${row.user_age}</td>
+                ${row.spouse_age !== null && row.spouse_age !== undefined ? `<td>${row.spouse_age}</td>` : ''}
+                <td class="text-secondary small">${row.historical_year}</td>
+                <td class="text-end ${stockColor} fw-semibold">${row.stocks_ret > 0 ? '+' : ''}${row.stocks_ret.toFixed(1)}%</td>
+                <td class="text-end ${bondColor}">${row.bonds_ret > 0 ? '+' : ''}${row.bonds_ret.toFixed(1)}%</td>
+                <td class="text-end text-warning fw-semibold">${row.inflation_ret.toFixed(1)}%</td>
+                <td class="text-end">${formatNumberCurrency(row.spending)}</td>
+                <td class="text-end text-danger">${formatNumberCurrency(row.withdrawals)}</td>
+                <td class="text-end fw-bold ${row.ending_assets <= 0 ? 'text-danger' : 'text-dark'}">${formatNumberCurrency(row.ending_assets)}</td>
+                <td class="text-end text-muted">${formatNumberCurrency(row.baseline_ending_assets)}</td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function initStressCharts(yearlyData, summary) {
+        if (!yearlyData || yearlyData.length === 0) return;
+
+        const labels = yearlyData.map(r => `Age ${r.user_age} (${r.year})`);
+        const baselineData = yearlyData.map(r => r.baseline_ending_assets);
+        const stressData = yearlyData.map(r => Math.max(0, r.ending_assets));
+
+        // 1. Trajectory Chart
+        const trajCanvas = document.getElementById('stressTrajectoryChartCanvas');
+        if (trajCanvas) {
+            const ctx = trajCanvas.getContext('2d');
+            if (stressChartInstances.trajectory) {
+                stressChartInstances.trajectory.destroy();
+            }
+
+            stressChartInstances.trajectory = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Base Plan Projection',
+                            data: baselineData,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2.5,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Historical Crisis Replay',
+                            data: stressData,
+                            borderColor: summary && !summary.survived ? '#dc2626' : '#d97706',
+                            backgroundColor: summary && !summary.survived ? 'rgba(220, 38, 38, 0.12)' : 'rgba(217, 119, 6, 0.12)',
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    events: ['click', 'touchstart'],
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { boxWidth: 14, font: { size: 12 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${formatChartCurrency(context.raw)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            ticks: { callback: value => formatChartCurrency(value) },
+                            title: { display: true, text: 'Portfolio Wealth ($)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Macro Drivers Chart
+        const macroCanvas = document.getElementById('stressMacroChartCanvas');
+        if (macroCanvas) {
+            const ctx = macroCanvas.getContext('2d');
+            if (stressChartInstances.macro) {
+                stressChartInstances.macro.destroy();
+            }
+
+            const macroLabels = yearlyData.map(r => `${r.historical_year}`);
+            const stocksData = yearlyData.map(r => r.stocks_ret);
+            const bondsData = yearlyData.map(r => r.bonds_ret);
+            const inflationData = yearlyData.map(r => r.inflation_ret);
+
+            stressChartInstances.macro = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: macroLabels,
+                    datasets: [
+                        {
+                            label: 'S&P 500 Stocks (%)',
+                            data: stocksData,
+                            backgroundColor: stocksData.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
+                            borderColor: stocksData.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                            borderWidth: 1,
+                            order: 2
+                        },
+                        {
+                            label: '10Y US Treasury Bonds (%)',
+                            data: bondsData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1,
+                            order: 2
+                        },
+                        {
+                            label: 'CPI Inflation (%)',
+                            data: inflationData,
+                            type: 'line',
+                            borderColor: '#f59e0b',
+                            backgroundColor: '#f59e0b',
+                            borderWidth: 2.5,
+                            pointRadius: 2,
+                            fill: false,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    events: ['click', 'touchstart'],
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw > 0 ? '+' : ''}${context.raw.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            ticks: { callback: value => `${value}%` },
+                            title: { display: true, text: 'Annual Return / Inflation (%)' }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function updateStressTestView(data) {
+        if (!data) return;
+        updateStressKPIs(data.summary, data.scenario);
+        renderStressTestTable(data.yearly_data);
+        initStressCharts(data.yearly_data, data.summary);
+    }
+
+    function fetchStressTest(extraParams) {
+        const scenarioSelect = document.getElementById('stressScenarioSelect');
+        const customYearInput = document.getElementById('stressCustomYear');
+        const allocationSelect = document.getElementById('stressAllocationSelect');
+        const timingSelect = document.getElementById('stressTimingSelect');
+
+        const params = new URLSearchParams();
+        params.append('scenario_key', scenarioSelect ? scenarioSelect.value : '2000_dotcom');
+        params.append('custom_start_year', customYearInput ? customYearInput.value : '2000');
+        params.append('asset_allocation', allocationSelect ? allocationSelect.value : 'matched');
+        params.append('crisis_timing', timingSelect ? timingSelect.value : 'retirement');
+
+        if (extraParams) {
+            for (const [k, v] of Object.entries(extraParams)) {
+                params.set(k, v);
+            }
+        }
+
+        fetch('/api/stress_test/?' + params.toString())
+            .then(res => res.json())
+            .then(data => {
+                if (data.worst_scanned_year) {
+                    if (scenarioSelect) scenarioSelect.value = 'custom';
+                    if (customYearInput) customYearInput.value = data.worst_scanned_year;
+                    const customGroup = document.getElementById('customYearGroup');
+                    if (customGroup) customGroup.style.display = 'block';
+                }
+                updateStressTestView(data);
+            })
+            .catch(err => console.error('Error fetching stress test data:', err));
+    }
+
+    // Attach listeners on load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initial data load
+        const stressScript = document.getElementById('initial-stress-test-data');
+        let initialStress = null;
+        if (stressScript) {
+            try {
+                initialStress = JSON.parse(stressScript.textContent);
+            } catch(e) {
+                console.error(e);
+            }
+        }
+        if (initialStress) {
+            updateStressTestView(initialStress);
+        }
+
+        const stressTabBtn = document.getElementById('stress-tab');
+        if (stressTabBtn) {
+            stressTabBtn.addEventListener('shown.bs.tab', function () {
+                if (initialStress) {
+                    initStressCharts(initialStress.yearly_data, initialStress.summary);
+                }
+            });
+        }
+
+        const scenarioSelect = document.getElementById('stressScenarioSelect');
+        const customGroup = document.getElementById('customYearGroup');
+        const customYearInput = document.getElementById('stressCustomYear');
+        const btnApplyCustom = document.getElementById('btnApplyCustomYear');
+        const allocationSelect = document.getElementById('stressAllocationSelect');
+        const timingSelect = document.getElementById('stressTimingSelect');
+        const btnScanWorst = document.getElementById('btnScanWorst');
+        const btnScanWorstText = document.getElementById('btnScanWorstText');
+
+        if (scenarioSelect) {
+            scenarioSelect.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    if (customGroup) customGroup.style.display = 'block';
+                } else {
+                    if (customGroup) customGroup.style.display = 'none';
+                    fetchStressTest();
+                }
+            });
+        }
+
+        if (btnApplyCustom) {
+            btnApplyCustom.addEventListener('click', function() {
+                fetchStressTest();
+            });
+        }
+
+        if (customYearInput) {
+            customYearInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    fetchStressTest();
+                }
+            });
+        }
+
+        if (allocationSelect) {
+            allocationSelect.addEventListener('change', function() {
+                fetchStressTest();
+            });
+        }
+
+        if (timingSelect) {
+            timingSelect.addEventListener('change', function() {
+                fetchStressTest();
+            });
+        }
+
+        if (btnScanWorst) {
+            btnScanWorst.addEventListener('click', function() {
+                if (btnScanWorstText) btnScanWorstText.textContent = 'Scanning 1926–2005...';
+                btnScanWorst.disabled = true;
+
+                fetchStressTest({ action: 'scan_worst' });
+
+                setTimeout(() => {
+                    if (btnScanWorstText) btnScanWorstText.textContent = 'Find Worst Historical Year';
+                    btnScanWorst.disabled = false;
+                }, 1000);
+            });
+        }
+    });
+</script>
 
 <script>
     // Save Plan (JSON)

@@ -607,6 +607,37 @@ def results_view(request):
             "achieved_spending_y1": achieved_spending_y1
         })
         
+    from core.runs import run_historical_stress_test, scan_worst_historical_cohort
+    from core.historical_data import CRISIS_SCENARIOS
+
+    stress_test_data = run_historical_stress_test(sim_input, scenario_key='2000_dotcom')
+    results['stress_test'] = stress_test_data
+    results['scenarios_list'] = CRISIS_SCENARIOS
+
     request.session['cached_results'] = results
     request.session['cached_version'] = data_ver
     return render(request, 'results.html', results)
+
+
+@require_http_methods(["GET", "POST"])
+def stress_test_api(request):
+    from django.http import JsonResponse
+    from core.runs import run_historical_stress_test, scan_worst_historical_cohort
+
+    sim_input = get_session_sim_data(request)
+    params = request.POST if request.method == "POST" else request.GET
+
+    scenario_key = params.get('scenario_key', '2000_dotcom')
+    custom_year = params.get('custom_start_year')
+    allocation = params.get('asset_allocation', 'matched')
+    timing = params.get('crisis_timing', 'retirement')
+    action = params.get('action')
+
+    if action == 'scan_worst':
+        worst_yr = scan_worst_historical_cohort(sim_input, asset_allocation=allocation, crisis_timing=timing)
+        res = run_historical_stress_test(sim_input, scenario_key='custom', custom_start_year=worst_yr, asset_allocation=allocation, crisis_timing=timing)
+        res['worst_scanned_year'] = worst_yr
+        return JsonResponse(res)
+
+    res = run_historical_stress_test(sim_input, scenario_key=scenario_key, custom_start_year=custom_year, asset_allocation=allocation, crisis_timing=timing)
+    return JsonResponse(res)

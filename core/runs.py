@@ -1553,3 +1553,228 @@ def run_deterministic(sim_input):
         })
         
     return rows
+
+
+def infer_asset_allocation(mean_return):
+    """
+    Infers stock/bond/cash percentage based on user's expected return.
+    Assumes ~10% for pure equity, ~4.5% for intermediate bonds, ~2.5% for cash.
+    """
+    if mean_return >= 10.0:
+        return 100.0, 0.0, 0.0
+    elif mean_return <= 2.5:
+        return 0.0, 0.0, 100.0
+    elif mean_return <= 4.5:
+        bond_ratio = (mean_return - 2.5) / 2.0
+        return 0.0, float(bond_ratio * 100.0), float((1.0 - bond_ratio) * 100.0)
+    else:
+        stock_ratio = (mean_return - 4.5) / 5.5
+        return float(stock_ratio * 100.0), float((1.0 - stock_ratio) * 100.0), 0.0
+
+
+def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', custom_start_year=None, asset_allocation='matched', crisis_timing='retirement'):
+    """
+    Simulates the user's plan under a historical crisis sequence.
+    """
+    from core.historical_data import HISTORICAL_RETURNS, CRISIS_SCENARIOS, get_historical_sequence, blend_return, MIN_HISTORICAL_YEAR, MAX_HISTORICAL_YEAR
+
+    inputs = extract_sim_inputs(sim_input)
+    years = inputs['total_years']
+
+    if scenario_key == 'custom':
+        try:
+            start_yr = int(custom_start_year)
+            start_yr = max(MIN_HISTORICAL_YEAR, min(MAX_HISTORICAL_YEAR, start_yr))
+        except (TypeError, ValueError):
+            start_yr = 2000
+        scenario_info = {
+            'key': 'custom',
+            'name': f"Custom Historical Cohort ({start_yr})",
+            'short_name': f"{start_yr} Cohort",
+            'start_year': start_yr,
+            'description': f"Simulates your plan using the actual sequence of market returns and inflation starting from {start_yr}.",
+            'badge': f"Started in {start_yr}"
+        }
+    elif scenario_key in CRISIS_SCENARIOS:
+        scenario_info = dict(CRISIS_SCENARIOS[scenario_key])
+        scenario_info['key'] = scenario_key
+        start_yr = scenario_info['start_year']
+    else:
+        scenario_info = dict(CRISIS_SCENARIOS['2000_dotcom'])
+        scenario_info['key'] = '2000_dotcom'
+        start_yr = 2000
+
+    hist_seq = get_historical_sequence(start_yr, years)
+    t_ret = max(0, inputs['user_ret_age'] - inputs['user_age'])
+
+    account_keys = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa']
+    account_returns = {}
+
+    for prefix in account_keys:
+        acc_data = inputs[f'{prefix}_data']
+        base_m = acc_data.get('return_mean', 6.0) / 100.0
+
+        if asset_allocation == '100_stock':
+            s_pct, b_pct, c_pct = 100.0, 0.0, 0.0
+        elif asset_allocation == '80_20':
+            s_pct, b_pct, c_pct = 80.0, 20.0, 0.0
+        elif asset_allocation == '60_40':
+            s_pct, b_pct, c_pct = 60.0, 40.0, 0.0
+        elif asset_allocation == '40_60':
+            s_pct, b_pct, c_pct = 40.0, 60.0, 0.0
+        elif asset_allocation == '100_bond':
+            s_pct, b_pct, c_pct = 0.0, 100.0, 0.0
+        else:
+            s_pct, b_pct, c_pct = infer_asset_allocation(acc_data.get('return_mean', 6.0))
+
+        acc_r = []
+        for t in range(years):
+            if crisis_timing == 'retirement' and t < t_ret:
+                acc_r.append(base_m)
+            else:
+                h_idx = (t - t_ret) if (crisis_timing == 'retirement') else t
+                h_idx = max(0, h_idx)
+                s_val = hist_seq['stocks'][h_idx]
+                b_val = hist_seq['bonds'][h_idx]
+                c_val = hist_seq['cash'][h_idx]
+                blended = blend_return(s_pct, b_pct, c_pct, s_val, b_val, c_val) / 100.0
+                acc_r.append(blended)
+        account_returns[prefix] = acc_r
+
+    stress_results = run_simulation_path(
+        inputs,
+        account_returns['pretax'],
+        account_returns['roth'],
+        account_returns['taxable'],
+        account_returns['hsa']
+    )
+
+    det_pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
+    det_roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
+    det_taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
+    det_hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
+
+    baseline_results = run_simulation_path(
+        inputs,
+        [det_pretax_m] * years,
+        [det_roth_m] * years,
+        [det_taxable_m] * years,
+        [det_hsa_m] * years
+    )
+
+    balances = [r['ending_assets']['total'] for r in stress_results]
+    baseline_balances = [r['ending_assets']['total'] for r in baseline_results]
+
+    peak_balance = max(0.0, balances[0])
+    max_drawdown = 0.0
+    lowest_balance = balances[0]
+    lowest_balance_year = inputs['current_year']
+    lowest_balance_age = inputs['user_age']
+
+    for idx, b in enumerate(balances):
+        if b > peak_balance:
+            peak_balance = b
+        elif peak_balance > 0.0:
+            dd = (peak_balance - b) / peak_balance * 100.0
+            if dd > max_drawdown:
+                max_drawdown = dd
+        if b < lowest_balance:
+            lowest_balance = b
+            lowest_balance_year = inputs['current_year'] + idx
+            lowest_balance_age = inputs['user_age'] + idx
+
+    survived = all(b > 0.0 for b in balances)
+    depletion_year = None
+    depletion_age = None
+    if not survived:
+        for idx, b in enumerate(balances):
+            if b <= 0.0:
+                depletion_year = inputs['current_year'] + idx
+                depletion_age = inputs['user_age'] + idx
+                break
+
+    yearly_data = []
+    for t in range(years):
+        res = stress_results[t]
+        base_res = baseline_results[t]
+        y_yr = inputs['current_year'] + t
+        u_age = inputs['user_age'] + t
+        s_age = (inputs['spouse_age'] + t) if inputs['is_married'] else None
+
+        h_idx = (t - t_ret) if (crisis_timing == 'retirement' and t >= t_ret) else (t if crisis_timing != 'retirement' else 0)
+        h_actual_year = (start_yr + h_idx)
+        if h_actual_year > MAX_HISTORICAL_YEAR:
+            h_actual_year = MIN_HISTORICAL_YEAR + (h_actual_year - MAX_HISTORICAL_YEAR - 1)
+
+        s_ret = hist_seq['stocks'][h_idx]
+        b_ret = hist_seq['bonds'][h_idx]
+        inf_ret = hist_seq['inflation'][h_idx]
+
+        milestones = []
+        if u_age == inputs['user_ret_age']:
+            milestones.append(f"You Retire ({u_age})")
+        if u_age == inputs['user_rmd_start_age']:
+            milestones.append(f"RMDs Start ({u_age})")
+        if u_age == inputs['user_age_death']:
+            milestones.append(f"Final Year ({u_age})")
+
+        yearly_data.append({
+            'year': y_yr,
+            'user_age': u_age,
+            'spouse_age': s_age,
+            'historical_year': h_actual_year,
+            'stocks_ret': s_ret,
+            'bonds_ret': b_ret,
+            'inflation_ret': inf_ret,
+            'portfolio_ret': round(account_returns['pretax'][t] * 100.0, 2),
+            'beg_assets': res['beginning_assets']['total'],
+            'ending_assets': res['ending_assets']['total'],
+            'baseline_ending_assets': base_res['ending_assets']['total'],
+            'income': res['income_sources_total'],
+            'spending': res['desired_spending'] + res['additional_spending'],
+            'taxes': res['taxes_paid'],
+            'withdrawals': res['withdrawals']['total'],
+            'milestones': milestones
+        })
+
+    summary = {
+        'survived': survived,
+        'depletion_year': depletion_year,
+        'depletion_age': depletion_age,
+        'max_drawdown': round(max_drawdown, 1),
+        'lowest_balance': round(lowest_balance, 2),
+        'lowest_balance_year': lowest_balance_year,
+        'lowest_balance_age': lowest_balance_age,
+        'ending_balance': round(balances[-1], 2),
+        'baseline_ending_balance': round(baseline_balances[-1], 2),
+        'balance_delta': round(balances[-1] - baseline_balances[-1], 2),
+        'start_year': start_yr
+    }
+
+    return {
+        'scenario': scenario_info,
+        'summary': summary,
+        'yearly_data': yearly_data,
+        'scenarios_list': CRISIS_SCENARIOS
+    }
+
+
+def scan_worst_historical_cohort(sim_input, asset_allocation='matched', crisis_timing='retirement'):
+    from core.historical_data import MIN_HISTORICAL_YEAR, MAX_HISTORICAL_YEAR
+    worst_year = None
+    worst_ending = float('inf')
+    worst_depletion_age = float('inf')
+
+    for yr in range(MIN_HISTORICAL_YEAR, 2005):
+        res = run_historical_stress_test(sim_input, scenario_key='custom', custom_start_year=yr, asset_allocation=asset_allocation, crisis_timing=crisis_timing)
+        s = res['summary']
+        if not s['survived']:
+            if s['depletion_age'] < worst_depletion_age:
+                worst_depletion_age = s['depletion_age']
+                worst_ending = s['ending_balance']
+                worst_year = yr
+        elif worst_depletion_age == float('inf') and s['ending_balance'] < worst_ending:
+            worst_ending = s['ending_balance']
+            worst_year = yr
+
+    return worst_year or 1966

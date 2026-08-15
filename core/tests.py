@@ -924,6 +924,69 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Additional Spending item &#x27;College Tuition&#x27; Start Age (55) cannot be younger than Your Present Age (60)")
 
+    def test_historical_returns_dataset_integrity(self):
+        """Test that historical returns dataset covers 1926 through 2024 with valid keys."""
+        from core.historical_data import HISTORICAL_RETURNS, CRISIS_SCENARIOS, get_historical_sequence, MIN_HISTORICAL_YEAR, MAX_HISTORICAL_YEAR
+
+        self.assertEqual(MIN_HISTORICAL_YEAR, 1926)
+        self.assertEqual(MAX_HISTORICAL_YEAR, 2024)
+        for yr in range(1926, 2025):
+            self.assertIn(yr, HISTORICAL_RETURNS)
+            data = HISTORICAL_RETURNS[yr]
+            self.assertIn('stocks', data)
+            self.assertIn('bonds', data)
+            self.assertIn('cash', data)
+            self.assertIn('inflation', data)
+
+        self.assertIn('2000_dotcom', CRISIS_SCENARIOS)
+        self.assertIn('1973_stagflation', CRISIS_SCENARIOS)
+        self.assertIn('2008_gfc', CRISIS_SCENARIOS)
+
+        seq = get_historical_sequence(2000, 30)
+        self.assertEqual(len(seq['stocks']), 30)
+        self.assertEqual(len(seq['bonds']), 30)
+
+    def test_historical_stress_test_simulation(self):
+        """Test running historical stress test scenarios."""
+        from core.views import get_default_data
+        from core.runs import run_historical_stress_test
+
+        plan = get_default_data()
+        res_dotcom = run_historical_stress_test(plan, scenario_key='2000_dotcom')
+        self.assertIn('summary', res_dotcom)
+        self.assertIn('yearly_data', res_dotcom)
+        self.assertGreater(len(res_dotcom['yearly_data']), 0)
+        self.assertIn('max_drawdown', res_dotcom['summary'])
+
+        res_custom = run_historical_stress_test(plan, scenario_key='custom', custom_start_year=1973, asset_allocation='60_40')
+        self.assertEqual(res_custom['scenario']['start_year'], 1973)
+
+    def test_stress_test_api_endpoint(self):
+        """Test the /api/stress_test/ endpoint."""
+        resp = self.client.get('/api/stress_test/', {
+            'scenario_key': '1973_stagflation',
+            'asset_allocation': '60_40',
+            'crisis_timing': 'retirement'
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('summary', data)
+        self.assertIn('yearly_data', data)
+        self.assertEqual(data['scenario']['key'], '1973_stagflation')
+
+    def test_stress_test_api_scan_worst(self):
+        """Test the /api/stress_test/ endpoint with action=scan_worst."""
+        resp = self.client.post('/api/stress_test/', {
+            'action': 'scan_worst',
+            'asset_allocation': 'matched',
+            'crisis_timing': 'retirement'
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('worst_scanned_year', data)
+        self.assertGreaterEqual(data['worst_scanned_year'], 1926)
+
+
 
 
 
