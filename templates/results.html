@@ -587,7 +587,13 @@
                                 <th>Additional Spending <small class="text-muted">(Hover)</small></th>
                                 <th>Taxes & Penalties</th>
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
-                                <th>Portfolio Withdrawals <small class="text-muted">(Hover)</small></th>
+                                <th>
+                                    Portfolio Withdrawals 
+                                    <button type="button" class="btn btn-link p-0 text-primary ms-1 align-baseline text-decoration-none" data-bs-toggle="modal" data-bs-target="#portfolioWithdrawalsModal" title="Click to understand how portfolio withdrawals, RMDs, and spending interact" aria-label="Portfolio Withdrawals Information">
+                                        <i class="fa-solid fa-circle-question fs-6"></i>
+                                    </button>
+                                    <small class="text-muted d-block fw-normal">(Hover rows for breakdown)</small>
+                                </th>
                                 <th>Milestones</th>
                             </tr>
                         </thead>
@@ -896,6 +902,66 @@
             <div class="modal-body p-4">
                 <div style="height: 520px; position: relative;">
                     <canvas id="modalChartCanvas"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Portfolio Withdrawals Explanation Modal -->
+<div class="modal fade" id="portfolioWithdrawalsModal" tabindex="-1" aria-labelledby="portfolioWithdrawalsModalLabel" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary" id="portfolioWithdrawalsModalLabel">
+                    <i class="fa-solid fa-circle-info me-2"></i>Understanding Portfolio Withdrawals
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="mb-3 text-secondary">
+                    In standard retirement years, portfolio withdrawals are calculated on an <strong>as-needed basis</strong> to bridge the net cash deficit between your outflows and non-portfolio income:
+                </p>
+                <div class="p-3 bg-light rounded border text-center mb-4">
+                    <span class="fs-6 fw-semibold text-dark">Portfolio Withdrawals = Regular Spending + Additional Spending + Taxes & Penalties − Income Sources</span>
+                </div>
+
+                <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Why Withdrawals May Differ in Later Years</h6>
+
+                <div class="card mb-3 border-primary-subtle bg-light">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-primary">Alternative 1</span>
+                            <strong class="text-dark">Required Minimum Distributions (RMDs) Exceed Spending Needs</strong>
+                        </div>
+                        <p class="small text-secondary mb-2">
+                            Starting at RMD age (age 73 or 75 under SECURE 2.0 rules), the IRS mandates minimum annual distributions from Pre-Tax accounts (Traditional IRA / 401(k)).
+                        </p>
+                        <ul class="small text-secondary ps-3 mb-0">
+                            <li>When the mandatory RMD is <strong>greater</strong> than your net spending deficit, the full RMD must still be withdrawn to satisfy IRS rules.</li>
+                            <li><strong>Where the surplus goes:</strong> The excess cash is not lost or spent; it is automatically <strong>reinvested and deposited into your Taxable Assets</strong> (visible in Tab 2: <em>Deterministic Asset Projections</em>).</li>
+                            <li>In these years: <span class="fw-bold text-primary">Portfolio Withdrawals &gt; (Spending + Taxes − Income Sources)</span>.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card border-danger-subtle bg-light">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-danger">Alternative 2</span>
+                            <strong class="text-dark">Portfolio Depletion (Assets Exhausted)</strong>
+                        </div>
+                        <p class="small text-secondary mb-2">
+                            If portfolio assets across all accounts (Taxable, Pre-Tax, Roth, and HSA) reach $0 in later years, the portfolio can no longer provide funds to cover your target spending.
+                        </p>
+                        <ul class="small text-secondary ps-3 mb-0">
+                            <li>Withdrawals drop to $0 (or whatever partial balance remains), creating an unfulfilled cash flow shortfall.</li>
+                            <li>In these years: <span class="fw-bold text-danger">Portfolio Withdrawals &lt; (Spending + Taxes − Income Sources)</span>.</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer bg-light">
