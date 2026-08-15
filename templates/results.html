@@ -1038,9 +1038,14 @@
             <!-- Year-by-Year Detailed Table -->
             <div class="card p-4 shadow-sm border-0 mb-4 bg-white">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0 text-primary">
-                        <i class="fa fa-table me-2"></i>Year-by-Year Stress Test Schedule
-                    </h5>
+                    <div class="d-flex align-items-center">
+                        <h5 class="fw-bold mb-0 text-primary">
+                            <i class="fa fa-table me-2"></i>Year-by-Year Stress Test Schedule
+                        </h5>
+                        <button type="button" class="btn btn-outline-info btn-sm ms-2 py-0 px-2 rounded-pill shadow-none" id="wrapAroundInfoBtn" data-bs-toggle="modal" data-bs-target="#wrapAroundModal" style="display: none; font-size: 0.78rem;">
+                            <i class="fa-solid fa-rotate me-1"></i>Historical Wrap-Around Active
+                        </button>
+                    </div>
                     <span class="badge bg-secondary" id="stressTableCountBadge">31 Years</span>
                 </div>
                 <div class="table-container" style="overflow-x: auto; max-height: 520px;">
@@ -1142,6 +1147,45 @@
                         </ul>
                     </div>
                 </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Historical Wrap-Around Explanation Modal -->
+<div class="modal fade" id="wrapAroundModal" tabindex="-1" aria-labelledby="wrapAroundModalLabel" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary" id="wrapAroundModalLabel">
+                    <i class="fa-solid fa-rotate me-2 text-info"></i>Understanding Historical Wrap-Around
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <h6 class="fw-bold text-dark mb-2">Why does the historical sequence wrap around?</h6>
+                <p class="text-secondary mb-3">
+                    The verified historical market database spans 99 continuous years from <strong>1926 through 2024</strong>. 
+                    When you test a relatively recent crisis starting year (such as 2008, 2020, or 2022), your retirement plan horizon extends beyond 2024 (the latest completed calendar year).
+                </p>
+
+                <h6 class="fw-bold text-dark mb-2">How the sequence is mapped:</h6>
+                <p class="text-secondary mb-2">
+                    The engine progresses sequentially forward from your chosen start year until it reaches <strong>2024</strong>. 
+                    For subsequent plan years, it seamlessly <strong>wraps around to 1926</strong> (the earliest year in the dataset) and continues forward from there:
+                </p>
+                <div class="p-3 bg-light rounded border mb-3 font-monospace small text-center text-dark">
+                    ... &rarr; 2022 &rarr; 2023 &rarr; 2024 &rarr; <span class="badge bg-info text-dark">1926 (Wrap)</span> &rarr; 1927 &rarr; 1928 &rarr; 1929 &rarr; ...
+                </div>
+
+                <h6 class="fw-bold text-dark mb-2">Why this method is used:</h6>
+                <p class="text-secondary mb-0">
+                    This circular bootstrapping approach is the standard methodology in academic retirement research and financial planning tools (such as <em>FireCalc</em> and <em>cFIREsim</em>). 
+                    It avoids inventing artificial synthetic data while preserving genuine real-world multi-year correlation structures between stocks, bonds, and inflation.
+                </p>
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
@@ -1746,6 +1790,11 @@
             if (titleEl) titleEl.textContent = scenario.name || `Cohort ${scenario.start_year}`;
             if (textEl) textEl.textContent = scenario.description || '';
         }
+
+        const wrapBtn = document.getElementById('wrapAroundInfoBtn');
+        if (wrapBtn) {
+            wrapBtn.style.display = summary.has_wrapped ? 'inline-block' : 'none';
+        }
     }
 
     function renderStressTestTable(yearlyData) {
@@ -1767,11 +1816,16 @@
                 milestoneBadge = ` <span class="badge bg-info text-dark ms-1 small">${row.milestones.join(', ')}</span>`;
             }
 
+            let histYearDisplay = `${row.historical_year}`;
+            if (row.is_wrapped) {
+                histYearDisplay += ` <span class="badge bg-light text-info border" title="Wrapped from 2024 to 1926" style="font-size:0.65rem;">Wrap</span>`;
+            }
+
             html += `<tr class="${rowClass}">
                 <td class="fw-bold">${row.year}${milestoneBadge}</td>
                 <td>${row.user_age}</td>
                 ${row.spouse_age !== null && row.spouse_age !== undefined ? `<td>${row.spouse_age}</td>` : ''}
-                <td class="text-secondary small">${row.historical_year}</td>
+                <td class="text-secondary small">${histYearDisplay}</td>
                 <td class="text-end ${stockColor} fw-semibold">${row.stocks_ret > 0 ? '+' : ''}${row.stocks_ret.toFixed(1)}%</td>
                 <td class="text-end ${bondColor}">${row.bonds_ret > 0 ? '+' : ''}${row.bonds_ret.toFixed(1)}%</td>
                 <td class="text-end text-warning fw-semibold">${row.inflation_ret.toFixed(1)}%</td>

@@ -1694,6 +1694,7 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', custom_sta
                 break
 
     yearly_data = []
+    has_wrapped = False
     for t in range(years):
         res = stress_results[t]
         base_res = baseline_results[t]
@@ -1702,9 +1703,13 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', custom_sta
         s_age = (inputs['spouse_age'] + t) if inputs['is_married'] else None
 
         h_idx = (t - t_ret) if (crisis_timing == 'retirement' and t >= t_ret) else (t if crisis_timing != 'retirement' else 0)
-        h_actual_year = (start_yr + h_idx)
-        if h_actual_year > MAX_HISTORICAL_YEAR:
-            h_actual_year = MIN_HISTORICAL_YEAR + (h_actual_year - MAX_HISTORICAL_YEAR - 1)
+        raw_hist_yr = start_yr + h_idx
+        is_wrapped = (raw_hist_yr > MAX_HISTORICAL_YEAR)
+        if is_wrapped:
+            has_wrapped = True
+            h_actual_year = MIN_HISTORICAL_YEAR + (raw_hist_yr - MAX_HISTORICAL_YEAR - 1)
+        else:
+            h_actual_year = raw_hist_yr
 
         s_ret = hist_seq['stocks'][h_idx]
         b_ret = hist_seq['bonds'][h_idx]
@@ -1723,6 +1728,7 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', custom_sta
             'user_age': u_age,
             'spouse_age': s_age,
             'historical_year': h_actual_year,
+            'is_wrapped': is_wrapped,
             'stocks_ret': s_ret,
             'bonds_ret': b_ret,
             'inflation_ret': inf_ret,
@@ -1748,7 +1754,8 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', custom_sta
         'ending_balance': round(balances[-1], 2),
         'baseline_ending_balance': round(baseline_balances[-1], 2),
         'balance_delta': round(balances[-1] - baseline_balances[-1], 2),
-        'start_year': start_yr
+        'start_year': start_yr,
+        'has_wrapped': has_wrapped
     }
 
     return {
