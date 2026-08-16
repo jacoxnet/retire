@@ -117,7 +117,8 @@ def simulate_step(
     pretax_user, pretax_spouse, roth, taxable, hsa, hsa_for_medical,
     r_pretax_user, r_pretax_spouse, r_roth, r_taxable, r_hsa,
     contrib_pretax_user, contrib_pretax_spouse, contrib_roth, contrib_taxable, contrib_hsa,
-    user_rmd_start_age, spouse_rmd_start_age=150, social_security_data=None
+    user_rmd_start_age, spouse_rmd_start_age=150, social_security_data=None,
+    state_tax_rate=0.0, state_ss_exempt=True, other_taxes_list=None
 ):
     user_age_t = user_age + t
     spouse_age_t = spouse_age + t if is_married else None
@@ -136,8 +137,10 @@ def simulate_step(
             'income_sources_total': 0.0,
             'income_sources_breakdown': {},
             'taxes_paid': 0.0,
+            'tax_breakdown': {'fed_tax': 0.0, 'state_tax': 0.0, 'penalty': 0.0, 'other_taxes': 0.0, 'other_taxes_breakdown': {}},
             'desired_spending': 0.0,
             'additional_spending': 0.0,
+            'additional_spending_breakdown': {},
             'withdrawals': {'user_pretax_rmd': 0.0, 'spouse_pretax_rmd': 0.0, 'pretax_rmd': 0.0, 'pretax_extra': 0.0, 'taxable': 0.0, 'roth': 0.0, 'hsa': 0.0, 'total': 0.0}
         }
     
@@ -358,6 +361,67 @@ def simulate_step(
 
     rmd_t = user_rmd_t + spouse_rmd_t
         
+    # 7.5 Calculate User-Specified Other Taxes
+    other_taxes_t = 0.0
+    other_taxes_breakdown_t = {}
+    if other_taxes_list:
+        for item in other_taxes_list:
+            name = item.get('name') or 'Other Tax'
+            freq = item.get('frequency', 'annual')
+            raw_amt = float(item.get('amount', 0.0))
+            start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            
+            is_one_time = (freq in ['one_time', 'one-time'])
+            in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
+            active = False
+            if in_age_range:
+                if not user_alive and item.get('end_age_type') in ['death', 'retirement']:
+                    active = False
+                elif not spouse_alive and item.get('end_age_type') in ['spouse_death', 'spouse_retirement']:
+                    active = False
+                else:
+                    active = True
+                    
+            if active:
+                if freq == 'annual' or is_one_time:
+                    amt = raw_amt
+                else:
+                    amt = raw_amt * 12.0
+                    
+                adj_type = item.get('adjust_type', 'inflation')
+                adj_val = float(item.get('adjust_val', 0.0))
+                adj_start_type = item.get('adjust_start_age_type', 'start')
+                adj_start_spec = item.get('adjust_start_age_specified', 65)
+
+                if adj_start_type in ['start', 'income_start', 'at_start']:
+                    adj_start_age = start_age
+                elif adj_start_type in ['current_age', 'current_year', 'now']:
+                    adj_start_age = user_age
+                elif adj_start_type == 'specified':
+                    try:
+                        adj_start_age = int(adj_start_spec)
+                    except (ValueError, TypeError):
+                        adj_start_age = start_age
+                else:
+                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+
+                years_since_adj = max(0, user_age_t - adj_start_age)
+
+                if adj_type == 'inflation':
+                    factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
+                elif adj_type == 'fixed_pct':
+                    factor = (1.0 + adj_val / 100.0) ** years_since_adj
+                elif adj_type == 'inflation_less_pct':
+                    rate = max(0.0, inflation_rate - adj_val)
+                    factor = (1.0 + rate / 100.0) ** years_since_adj
+                else:
+                    factor = 1.0
+
+                tax_item_amt = amt * factor
+                other_taxes_t += tax_item_amt
+                other_taxes_breakdown_t[name] = other_taxes_breakdown_t.get(name, 0.0) + tax_item_amt
+
     # 8. Circular Tax calculations and Withdrawal Ordering
     # Inflate tax thresholds & standard deduction
     inf_factor = (1.0 + inflation_rate / 100.0) ** t
@@ -371,18 +435,23 @@ def simulate_step(
         thresholds_t = [val * inf_factor for val in THRESHOLDS_2026_SINGLE]
         std_deduction_t = STD_DEDUCTION_2026_SINGLE * inf_factor
         
+    state_rate = max(0.0, float(state_tax_rate)) / 100.0
+
     # Base Tax Calculation (includes RMD, which is mandatory and taxed)
     base_agi_ex_ss = taxable_income_sources + rmd_t
     base_taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-    base_taxable_income = base_agi_ex_ss + base_taxable_ss - std_deduction_t
-    base_tax = calculate_tax(base_taxable_income, thresholds_t, TAX_RATES)
+    base_fed_taxable_income = max(0.0, base_agi_ex_ss + base_taxable_ss - std_deduction_t)
+    base_fed_tax = calculate_tax(base_fed_taxable_income, thresholds_t, TAX_RATES)
     
-    # Check early withdrawal penalties for Pretax RMD? RMD is always after age 59.5, so no penalty.
-    total_base_tax = base_tax
+    base_state_ss = 0.0 if state_ss_exempt else base_taxable_ss
+    base_state_taxable_income = max(0.0, base_agi_ex_ss + base_state_ss - std_deduction_t)
+    base_state_tax = base_state_taxable_income * state_rate
+
+    total_base_tax = base_fed_tax + base_state_tax
     
     # Cash inflows and outflows under base assumptions
     cash_inflows = total_income_sources + rmd_t
-    cash_outflows = total_spending_target + total_base_tax
+    cash_outflows = total_spending_target + total_base_tax + other_taxes_t
     
     net_base = cash_inflows - cash_outflows
     
@@ -391,7 +460,11 @@ def simulate_step(
     w_taxable = 0.0
     w_roth = 0.0
     w_hsa = 0.0
-    final_tax_and_penalty = total_base_tax
+    
+    final_fed_tax = base_fed_tax
+    final_state_tax = base_state_tax
+    final_penalty = 0.0
+    final_tax_and_penalty = total_base_tax + other_taxes_t
     
     pretax_user_end = pretax_user_mid - user_rmd_t
     pretax_spouse_end = pretax_spouse_mid - spouse_rmd_t
@@ -420,10 +493,15 @@ def simulate_step(
                 # W is the extra pretax withdrawal
                 agi_ex_ss = base_agi_ex_ss + W
                 taxable_ss = calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_t)
-                taxable_income = agi_ex_ss + taxable_ss - std_deduction_t
-                tax = calculate_tax(taxable_income, thresholds_t, TAX_RATES)
+                fed_taxable = max(0.0, agi_ex_ss + taxable_ss - std_deduction_t)
+                fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
+                
+                st_ss = 0.0 if state_ss_exempt else taxable_ss
+                st_taxable = max(0.0, agi_ex_ss + st_ss - std_deduction_t)
+                st_tax = st_taxable * state_rate
+                
                 penalty = 0.10 * W if (user_alive and user_age_t < 59.5) else 0.0
-                total_tax_and_pen = tax + penalty
+                total_tax_and_pen = fed_tax + st_tax + penalty
                 # Cash gained = Withdrawal - tax drag
                 return W - (total_tax_and_pen - total_base_tax)
                 
@@ -437,10 +515,14 @@ def simulate_step(
                 base_agi_ex_ss += w_pretax_extra
                 # recalculate total_base_tax
                 taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                base_taxable_income = base_agi_ex_ss + taxable_ss - std_deduction_t
-                penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                total_base_tax = calculate_tax(base_taxable_income, thresholds_t, TAX_RATES) + penalty
-                final_tax_and_penalty = total_base_tax
+                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+                final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
+                st_ss = 0.0 if state_ss_exempt else taxable_ss
+                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                final_state_tax = st_taxable * state_rate
+                final_penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
+                total_base_tax = final_fed_tax + final_state_tax + final_penalty
+                final_tax_and_penalty = total_base_tax + other_taxes_t
             else:
                 # Search for correct withdrawal amount
                 low = 0.0
@@ -456,10 +538,14 @@ def simulate_step(
                 # Update base
                 base_agi_ex_ss += w_pretax_extra
                 taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                base_taxable_income = base_agi_ex_ss + taxable_ss - std_deduction_t
-                penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                total_base_tax = calculate_tax(base_taxable_income, thresholds_t, TAX_RATES) + penalty
-                final_tax_and_penalty = total_base_tax
+                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+                final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
+                st_ss = 0.0 if state_ss_exempt else taxable_ss
+                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                final_state_tax = st_taxable * state_rate
+                final_penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
+                total_base_tax = final_fed_tax + final_state_tax + final_penalty
+                final_tax_and_penalty = total_base_tax + other_taxes_t
                 deficit = 0.0
             
             # Divide extra pretax withdrawal proportionally between user and spouse
@@ -489,10 +575,13 @@ def simulate_step(
                     # W is the taxable HSA withdrawal
                     agi_ex_ss = base_agi_ex_ss + W
                     taxable_ss = calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_t)
-                    taxable_income = agi_ex_ss + taxable_ss - std_deduction_t
-                    tax = calculate_tax(taxable_income, thresholds_t, TAX_RATES)
+                    fed_taxable = max(0.0, agi_ex_ss + taxable_ss - std_deduction_t)
+                    fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
+                    st_ss = 0.0 if state_ss_exempt else taxable_ss
+                    st_taxable = max(0.0, agi_ex_ss + st_ss - std_deduction_t)
+                    st_tax = st_taxable * state_rate
                     penalty = 0.20 * W if (user_alive and user_age_t < 65.0) else 0.0
-                    total_tax_and_pen = tax + penalty
+                    total_tax_and_pen = fed_tax + st_tax + penalty
                     return W - (total_tax_and_pen - total_base_tax)
                     
                 if get_net_cash_from_hsa(hsa_end) <= deficit:
@@ -502,10 +591,15 @@ def simulate_step(
                     deficit = deficit - gained
                     base_agi_ex_ss += w_hsa
                     taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    base_taxable_income = base_agi_ex_ss + taxable_ss - std_deduction_t
-                    penalty = 0.20 * w_hsa if (user_alive and user_age_t < 65.0) else 0.0
-                    total_base_tax = calculate_tax(base_taxable_income, thresholds_t, TAX_RATES) + penalty
-                    final_tax_and_penalty = total_base_tax
+                    fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+                    final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
+                    st_ss = 0.0 if state_ss_exempt else taxable_ss
+                    st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                    final_state_tax = st_taxable * state_rate
+                    hsa_pen = 0.20 * w_hsa if (user_alive and user_age_t < 65.0) else 0.0
+                    final_penalty = (0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0) + hsa_pen
+                    total_base_tax = final_fed_tax + final_state_tax + final_penalty
+                    final_tax_and_penalty = total_base_tax + other_taxes_t
                 else:
                     low = 0.0
                     high = hsa_end
@@ -519,10 +613,15 @@ def simulate_step(
                     hsa_end = hsa_end - w_hsa
                     base_agi_ex_ss += w_hsa
                     taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    base_taxable_income = base_agi_ex_ss + taxable_ss - std_deduction_t
-                    penalty = 0.20 * w_hsa if (user_alive and user_age_t < 65.0) else 0.0
-                    total_base_tax = calculate_tax(base_taxable_income, thresholds_t, TAX_RATES) + penalty
-                    final_tax_and_penalty = total_base_tax
+                    fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+                    final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
+                    st_ss = 0.0 if state_ss_exempt else taxable_ss
+                    st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                    final_state_tax = st_taxable * state_rate
+                    hsa_pen = 0.20 * w_hsa if (user_alive and user_age_t < 65.0) else 0.0
+                    final_penalty = (0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0) + hsa_pen
+                    total_base_tax = final_fed_tax + final_state_tax + final_penalty
+                    final_tax_and_penalty = total_base_tax + other_taxes_t
                     deficit = 0.0
                     
         # E. Still have a deficit? Subtract from taxable (goes negative to indicate failure)
@@ -580,6 +679,14 @@ def simulate_step(
         'hsa': w_hsa,
         'total': rmd_t + w_pretax_extra + w_taxable + w_roth + w_hsa
     }
+
+    tax_breakdown = {
+        'fed_tax': final_fed_tax,
+        'state_tax': final_state_tax,
+        'penalty': final_penalty,
+        'other_taxes': other_taxes_t,
+        'other_taxes_breakdown': other_taxes_breakdown_t
+    }
     
     return {
         'beginning_assets': beg_assets,
@@ -589,6 +696,7 @@ def simulate_step(
         'income_sources_total': total_income_sources,
         'income_sources_breakdown': income_breakdown,
         'taxes_paid': final_tax_and_penalty,
+        'tax_breakdown': tax_breakdown,
         'desired_spending': desired_spending_t,
         'additional_spending': add_spending_t,
         'additional_spending_breakdown': add_spending_breakdown_t,
@@ -716,6 +824,10 @@ def extract_sim_inputs(sim_input):
     spouse_birth_year = current_year - spouse_age if is_married else current_year
     spouse_rmd_start_age = get_rmd_start_age(spouse_birth_year) if is_married else 150
     
+    state_tax_rate = float(raw.get('state_tax_rate', 0.0))
+    state_ss_exempt = bool(raw.get('state_ss_exempt', True))
+    other_taxes = raw.get('other_taxes', [])
+
     return {
         'user_age': user_age,
         'user_ret_age': user_ret_age,
@@ -741,6 +853,9 @@ def extract_sim_inputs(sim_input):
         'hsa_for_medical': hsa_for_medical,
         'additional_spending': additional_spending,
         'income_sources': income_sources,
+        'other_taxes': other_taxes,
+        'state_tax_rate': state_tax_rate,
+        'state_ss_exempt': state_ss_exempt,
         'social_security': raw.get('social_security', {}),
         'total_years': total_years,
         'user_rmd_start_age': user_rmd_start_age,
@@ -791,7 +906,9 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
             r_pre_user, r_pre_spouse, r_roth, r_tax, r_hsa,
             c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
             inputs['user_rmd_start_age'], inputs['spouse_rmd_start_age'],
-            inputs.get('social_security', {})
+            inputs.get('social_security', {}),
+            inputs.get('state_tax_rate', 0.0), inputs.get('state_ss_exempt', True),
+            inputs.get('other_taxes', [])
         )
         
         year_results.append(res)
@@ -862,6 +979,7 @@ def njit_simulate_path(
     c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
     add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
     r_pre, r_roth, r_tax, r_hsa,
+    state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     trajectory_arr=None
 ):
     pretax_user = pretax_user_init
@@ -874,6 +992,7 @@ def njit_simulate_path(
         trajectory_arr[0] = pretax_user + pretax_spouse + roth + taxable + hsa
 
     t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else (user_age_death - user_age)
+    state_rate = state_tax_rate / 100.0
     
     for t in range(total_years):
         user_age_t = user_age + t
@@ -962,12 +1081,16 @@ def njit_simulate_path(
             
         base_agi_ex_ss = taxable_income_sources + rmd_t
         base_taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-        base_taxable_income = base_agi_ex_ss + base_taxable_ss - std_deduction_t
+        base_taxable_income = max(0.0, base_agi_ex_ss + base_taxable_ss - std_deduction_t)
         base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR)
-        total_base_tax = base_tax
+        
+        base_st_ss = 0.0 if state_ss_exempt_code == 1 else base_taxable_ss
+        base_st_income = max(0.0, base_agi_ex_ss + base_st_ss - std_deduction_t)
+        base_st_tax = base_st_income * state_rate
+        total_base_tax = base_tax + base_st_tax
         
         cash_inflows = total_income_sources + rmd_t
-        cash_outflows = total_spending_target + total_base_tax
+        cash_outflows = total_spending_target + total_base_tax + other_taxes_arr[t]
         net_base = cash_inflows - cash_outflows
         
         pretax_user_end = pretax_user_mid - user_rmd_t
@@ -989,10 +1112,13 @@ def njit_simulate_path(
             if deficit > 0.0 and pretax_end > 0.0:
                 agi_max = base_agi_ex_ss + pretax_end
                 tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t)
-                tax_inc_max = agi_max + tax_ss_max - std_deduction_t
+                tax_inc_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
                 tax_max = njit_calculate_tax(tax_inc_max, thresholds_t, TAX_RATES_ARR)
+                st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
+                st_inc_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
+                st_tax_max = st_inc_max * state_rate
                 pen_max = 0.10 * pretax_end if (user_alive and user_age_t < 59.5) else 0.0
-                net_cash_max = pretax_end - ((tax_max + pen_max) - total_base_tax)
+                net_cash_max = pretax_end - ((tax_max + st_tax_max + pen_max) - total_base_tax)
                 
                 if net_cash_max <= deficit:
                     w_pretax_extra = pretax_end
@@ -1000,9 +1126,11 @@ def njit_simulate_path(
                     deficit -= net_cash_max
                     base_agi_ex_ss += w_pretax_extra
                     tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    base_taxable_income = base_agi_ex_ss + tax_ss - std_deduction_t
+                    base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
+                    st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                    st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
                     penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                    total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + penalty
+                    total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
                 else:
                     low = 0.0
                     high = pretax_end
@@ -1010,10 +1138,13 @@ def njit_simulate_path(
                         mid = (low + high) / 2.0
                         agi = base_agi_ex_ss + mid
                         tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t)
-                        tax_inc = agi + tax_ss - std_deduction_t
+                        tax_inc = max(0.0, agi + tax_ss - std_deduction_t)
                         tax = njit_calculate_tax(tax_inc, thresholds_t, TAX_RATES_ARR)
+                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                        st_inc = max(0.0, agi + st_ss - std_deduction_t)
+                        st_tax = st_inc * state_rate
                         penalty = 0.10 * mid if (user_alive and user_age_t < 59.5) else 0.0
-                        net_cash = mid - ((tax + penalty) - total_base_tax)
+                        net_cash = mid - ((tax + st_tax + penalty) - total_base_tax)
                         if net_cash < deficit:
                             low = mid
                         else:
@@ -1022,9 +1153,11 @@ def njit_simulate_path(
                     pretax_end -= w_pretax_extra
                     base_agi_ex_ss += w_pretax_extra
                     tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    base_taxable_income = base_agi_ex_ss + tax_ss - std_deduction_t
+                    base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
+                    st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                    st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
                     penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                    total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + penalty
+                    total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
                     deficit = 0.0
                 
                 tot_pre = pretax_user_end + pretax_spouse_end
@@ -1048,10 +1181,13 @@ def njit_simulate_path(
                 else:
                     agi_max = base_agi_ex_ss + hsa_end
                     tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t)
-                    tax_inc_max = agi_max + tax_ss_max - std_deduction_t
+                    tax_inc_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
                     tax_max = njit_calculate_tax(tax_inc_max, thresholds_t, TAX_RATES_ARR)
+                    st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
+                    st_inc_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
+                    st_tax_max = st_inc_max * state_rate
                     pen_max = 0.20 * hsa_end if (user_alive and user_age_t < 65.0) else 0.0
-                    net_cash_max = hsa_end - ((tax_max + pen_max) - total_base_tax)
+                    net_cash_max = hsa_end - ((tax_max + st_tax_max + pen_max) - total_base_tax)
                     
                     if net_cash_max <= deficit:
                         w_hsa = hsa_end
@@ -1059,9 +1195,11 @@ def njit_simulate_path(
                         deficit -= net_cash_max
                         base_agi_ex_ss += w_hsa
                         tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                        base_taxable_income = base_agi_ex_ss + tax_ss - std_deduction_t
+                        base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
+                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                        st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
                         penalty = 0.20 * w_hsa if (user_alive and user_age_t < 65.0) else 0.0
-                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + penalty
+                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
                     else:
                         low = 0.0
                         high = hsa_end
@@ -1069,10 +1207,13 @@ def njit_simulate_path(
                             mid = (low + high) / 2.0
                             agi = base_agi_ex_ss + mid
                             tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t)
-                            tax_inc = agi + tax_ss - std_deduction_t
+                            tax_inc = max(0.0, agi + tax_ss - std_deduction_t)
                             tax = njit_calculate_tax(tax_inc, thresholds_t, TAX_RATES_ARR)
+                            st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                            st_inc = max(0.0, agi + st_ss - std_deduction_t)
+                            st_tax = st_inc * state_rate
                             penalty = 0.20 * mid if (user_alive and user_age_t < 65.0) else 0.0
-                            net_cash = mid - ((tax + penalty) - total_base_tax)
+                            net_cash = mid - ((tax + st_tax + penalty) - total_base_tax)
                             if net_cash < deficit:
                                 low = mid
                             else:
@@ -1081,9 +1222,11 @@ def njit_simulate_path(
                         hsa_end -= w_hsa
                         base_agi_ex_ss += w_hsa
                         tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                        base_taxable_income = base_agi_ex_ss + tax_ss - std_deduction_t
+                        base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
+                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                        st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
                         penalty = 0.20 * w_hsa if (user_alive and user_age_t < 65.0) else 0.0
-                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + penalty
+                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
                         deficit = 0.0
                         
             if deficit > 0.0:
@@ -1109,6 +1252,7 @@ def njit_simulate_all_paths(
     c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
     add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
     returns_pre, returns_roth, returns_taxable, returns_hsa,
+    state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     ending_wealths,
     trajectories=None
 ):
@@ -1122,6 +1266,7 @@ def njit_simulate_all_paths(
                 c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
                 add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
                 returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
+                state_tax_rate, state_ss_exempt_code, other_taxes_arr,
                 trajectories[i]
             )
         else:
@@ -1132,7 +1277,8 @@ def njit_simulate_all_paths(
                 pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_init,
                 c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa,
                 add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-                returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i]
+                returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
+                state_tax_rate, state_ss_exempt_code, other_taxes_arr
             )
 
 def prepare_numba_inputs(inputs, test_spending=None):
@@ -1156,6 +1302,7 @@ def prepare_numba_inputs(inputs, test_spending=None):
     inc_taxable_arr = np.zeros(total_years, dtype=np.float64)
     inc_ss_arr = np.zeros(total_years, dtype=np.float64)
     inc_nontaxable_arr = np.zeros(total_years, dtype=np.float64)
+    other_taxes_arr = np.zeros(total_years, dtype=np.float64)
     
     user_age = inputs['user_age']
     is_married = inputs['is_married']
@@ -1165,6 +1312,11 @@ def prepare_numba_inputs(inputs, test_spending=None):
     user_age_death = inputs['user_age_death']
     spouse_age_death = inputs['spouse_age_death']
     inflation_rate = inputs['inflation_rate']
+    
+    state_tax_rate = float(inputs.get('state_tax_rate', 0.0))
+    state_ss_exempt = bool(inputs.get('state_ss_exempt', True))
+    state_ss_exempt_code = 1 if state_ss_exempt else 0
+    other_taxes_list = inputs.get('other_taxes', [])
     
     for t in range(total_years):
         user_age_t = user_age + t
@@ -1194,6 +1346,62 @@ def prepare_numba_inputs(inputs, test_spending=None):
                 factor = (1.0 + inflation_rate / 100.0) ** t if adjust_inf else 1.0
                 add_s += amount * factor
         add_spending_arr[t] = add_s
+        
+        ot_s = 0.0
+        for item in other_taxes_list:
+            freq = item.get('frequency', 'annual')
+            raw_amt = float(item.get('amount', 0.0))
+            start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            
+            is_one_time = (freq in ['one_time', 'one-time'])
+            in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
+            active = False
+            if in_age_range:
+                if not user_alive and item.get('end_age_type') in ['death', 'retirement']:
+                    active = False
+                elif not spouse_alive and item.get('end_age_type') in ['spouse_death', 'spouse_retirement']:
+                    active = False
+                else:
+                    active = True
+                    
+            if active:
+                if freq == 'annual' or is_one_time:
+                    amt = raw_amt
+                else:
+                    amt = raw_amt * 12.0
+                    
+                adj_type = item.get('adjust_type', 'inflation')
+                adj_val = float(item.get('adjust_val', 0.0))
+                adj_start_type = item.get('adjust_start_age_type', 'start')
+                adj_start_spec = item.get('adjust_start_age_specified', 65)
+
+                if adj_start_type in ['start', 'income_start', 'at_start']:
+                    adj_start_age = start_age
+                elif adj_start_type in ['current_age', 'current_year', 'now']:
+                    adj_start_age = user_age
+                elif adj_start_type == 'specified':
+                    try:
+                        adj_start_age = int(adj_start_spec)
+                    except (ValueError, TypeError):
+                        adj_start_age = start_age
+                else:
+                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+
+                years_since_adj = max(0, user_age_t - adj_start_age)
+
+                if adj_type == 'inflation':
+                    factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
+                elif adj_type == 'fixed_pct':
+                    factor = (1.0 + adj_val / 100.0) ** years_since_adj
+                elif adj_type == 'inflation_less_pct':
+                    rate = max(0.0, inflation_rate - adj_val)
+                    factor = (1.0 + rate / 100.0) ** years_since_adj
+                else:
+                    factor = 1.0
+
+                ot_s += amt * factor
+        other_taxes_arr[t] = ot_s
         
         tax_inc = 0.0
         ss_inc = 0.0
@@ -1327,6 +1535,9 @@ def prepare_numba_inputs(inputs, test_spending=None):
         'inc_taxable_arr': inc_taxable_arr,
         'inc_ss_arr': inc_ss_arr,
         'inc_nontaxable_arr': inc_nontaxable_arr,
+        'state_tax_rate': state_tax_rate,
+        'state_ss_exempt_code': state_ss_exempt_code,
+        'other_taxes_arr': other_taxes_arr,
         'pretax_user_init': pretax_user_init,
         'pretax_spouse_init': pretax_spouse_init,
         'roth_init': roth_init,
@@ -1369,6 +1580,7 @@ def generate_runs(sim_input, test_spending=None):
         nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
         nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
         returns_pre, returns_roth, returns_taxable, returns_hsa,
+        nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
         ending_wealths,
         trajectories
     )
@@ -1451,6 +1663,7 @@ def binary_search(sim_input):
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
             returns_pre, returns_roth, returns_taxable, returns_hsa,
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
             ending_wealths
         )
         
@@ -1545,6 +1758,7 @@ def run_deterministic(sim_input):
             'income': res['income_sources_total'],
             'income_breakdown': res['income_sources_breakdown'],
             'taxes': res['taxes_paid'],
+            'tax_breakdown': res.get('tax_breakdown', {}),
             'desired_spending': res['desired_spending'],
             'additional_spending': res['additional_spending'],
             'additional_spending_breakdown': res['additional_spending_breakdown'],

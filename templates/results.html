@@ -270,7 +270,7 @@
                                 </div>
                                 <hr>
                                 <p class="text-secondary small">
-                                    <strong>Definition:</strong> The <em>Achieved Spending (Year 1 Net Cash Flow)</em> represents the sum of the solved portfolio withdrawal and non-portfolio income sources, minus federal income taxes in the first year. It equals the achieved Desired Recurring Spending plus any Additional Spending occurring in Year 1.
+                                    <strong>Definition:</strong> The <em>Achieved Spending (Year 1 Net Cash Flow)</em> represents the sum of the solved portfolio withdrawal and non-portfolio income sources, minus estimated income taxes and penalties in the first year. It equals the achieved Desired Recurring Spending plus any Additional Spending occurring in Year 1.
                                 </p>
                             </div>
                         {% endif %}
@@ -468,9 +468,53 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount text-danger" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
-                                            ${{ row.taxes|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Taxes & Penalties Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
+                                                ${{ row.taxes|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Tax Breakdown</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Federal Income Tax:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.fed_tax }}" data-real="{{ row.tax_breakdown.fed_tax }}">
+                                                        ${{ row.tax_breakdown.fed_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>State Income Tax:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.state_tax }}" data-real="{{ row.tax_breakdown.state_tax }}">
+                                                        ${{ row.tax_breakdown.state_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% if row.tax_breakdown.penalty > 0 %}
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Early Withdrawal Penalty:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.penalty }}" data-real="{{ row.tax_breakdown.penalty }}">
+                                                        ${{ row.tax_breakdown.penalty|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% endif %}
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Other Specified Taxes:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.other_taxes }}" data-real="{{ row.tax_breakdown.other_taxes }}">
+                                                        ${{ row.tax_breakdown.other_taxes|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% if row.tax_breakdown.other_taxes_breakdown.items %}
+                                                    <div class="border-top pt-1 mt-1">
+                                                        {% for ot_name, ot_val in row.tax_breakdown.other_taxes_breakdown.items %}
+                                                            <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1">
+                                                                <span>&bull; {{ ot_name }}:</span>
+                                                                <span class="dollar-amount" data-nominal="{{ ot_val }}" data-real="{{ ot_val }}">
+                                                                    ${{ ot_val|floatformat:"0"|intcomma }}
+                                                                </span>
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         <span class="dollar-amount" data-nominal="{{ row.desired_spending }}" data-real="{{ row.desired_spending }}">
@@ -639,9 +683,53 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="dollar-amount text-danger" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
-                                            ${{ row.taxes|floatformat:"0"|intcomma }}
-                                        </span>
+                                        <!-- Hover Tooltip for Taxes & Penalties Breakdown -->
+                                        <div class="tooltip-trigger">
+                                            <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
+                                                ${{ row.taxes|floatformat:"0"|intcomma }}
+                                            </span>
+                                            <div class="tooltip-content">
+                                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold text-center">Tax Breakdown</h6>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Federal Income Tax:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.fed_tax }}" data-real="{{ row.tax_breakdown.fed_tax }}">
+                                                        ${{ row.tax_breakdown.fed_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>State Income Tax:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.state_tax }}" data-real="{{ row.tax_breakdown.state_tax }}">
+                                                        ${{ row.tax_breakdown.state_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% if row.tax_breakdown.penalty > 0 %}
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Early Withdrawal Penalty:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.penalty }}" data-real="{{ row.tax_breakdown.penalty }}">
+                                                        ${{ row.tax_breakdown.penalty|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% endif %}
+                                                <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                    <span>Other Specified Taxes:</span>
+                                                    <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.other_taxes }}" data-real="{{ row.tax_breakdown.other_taxes }}">
+                                                        ${{ row.tax_breakdown.other_taxes|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% if row.tax_breakdown.other_taxes_breakdown.items %}
+                                                    <div class="border-top pt-1 mt-1">
+                                                        {% for ot_name, ot_val in row.tax_breakdown.other_taxes_breakdown.items %}
+                                                            <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1">
+                                                                <span>&bull; {{ ot_name }}:</span>
+                                                                <span class="dollar-amount" data-nominal="{{ ot_val }}" data-real="{{ ot_val }}">
+                                                                    ${{ ot_val|floatformat:"0"|intcomma }}
+                                                                </span>
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         <!-- Hover Tooltip for Income Sources Breakdown -->

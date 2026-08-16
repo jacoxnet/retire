@@ -122,7 +122,10 @@ def get_default_data():
             'hsa_for_medical': True
         },
         'additional_spending': [],
-        'income_sources': []
+        'income_sources': [],
+        'other_taxes': [],
+        'state_tax_rate': 0.0,
+        'state_ss_exempt': True
     }
 
 def get_session_sim_data(request):
@@ -249,7 +252,9 @@ def enter_view(request):
         runs = get_int(request.POST.get('runs'), 1000)
         raw_target_srate = get_float(request.POST.get('target_success_rate'), 80.0)
         target_success_rate = min(99.0, max(1.0, raw_target_srate))
-        
+        state_tax_rate = get_float(request.POST.get('state_tax_rate'), 0.0)
+        state_ss_exempt = get_bool(request.POST.get('state_ss_exempt'))
+
         # Dedicated Social Security
         user_ss_entitled = request.POST.get('user_ss_entitled') == 'true' if request.POST.get('user_ss_entitled') is not None else True
         user_ss_amount = get_float(request.POST.get('user_ss_amount'), 2500.0)
@@ -403,6 +408,47 @@ def enter_view(request):
                 'adjust_start_age_specified': adj_start_spec_val
             })
                 
+        # Other Taxes List
+        other_taxes = []
+        ot_names = request.POST.getlist('other_tax_name[]')
+        ot_amounts = request.POST.getlist('other_tax_amount[]')
+        ot_freqs = request.POST.getlist('other_tax_frequency[]')
+        ot_start_types = request.POST.getlist('other_tax_start_age_type[]')
+        ot_start_specs = request.POST.getlist('other_tax_start_age_specified[]')
+        ot_end_types = request.POST.getlist('other_tax_end_age_type[]')
+        ot_end_specs = request.POST.getlist('other_tax_end_age_specified[]')
+        ot_adj_types = request.POST.getlist('other_tax_adjust_type[]')
+        ot_adj_vals = request.POST.getlist('other_tax_adjust_val[]')
+        ot_adj_start_types = request.POST.getlist('other_tax_adjust_start_age_type[]')
+        ot_adj_start_specs = request.POST.getlist('other_tax_adjust_start_age_specified[]')
+
+        for i in range(len(ot_names)):
+            name_val = ot_names[i].strip() if i < len(ot_names) and ot_names[i] else "Other Tax"
+            amt_val = get_float(ot_amounts[i]) if i < len(ot_amounts) else 0.0
+            freq_val = ot_freqs[i] if i < len(ot_freqs) else 'annual'
+            start_type_val = ot_start_types[i] if i < len(ot_start_types) else 'retirement'
+            start_spec_val = get_int(ot_start_specs[i]) if i < len(ot_start_specs) else 65
+            end_type_val = ot_end_types[i] if i < len(ot_end_types) else 'death'
+            end_spec_val = get_int(ot_end_specs[i]) if i < len(ot_end_specs) else 90
+            adj_type_val = ot_adj_types[i] if i < len(ot_adj_types) else 'inflation'
+            adj_num_val = get_float(ot_adj_vals[i]) if i < len(ot_adj_vals) else 0.0
+            adj_start_type_val = ot_adj_start_types[i] if i < len(ot_adj_start_types) else 'start'
+            adj_start_spec_val = get_int(ot_adj_start_specs[i]) if i < len(ot_adj_start_specs) else 65
+
+            other_taxes.append({
+                'name': name_val,
+                'amount': amt_val,
+                'frequency': freq_val,
+                'start_age_type': start_type_val,
+                'start_age_specified': start_spec_val,
+                'end_age_type': end_type_val,
+                'end_age_specified': end_spec_val,
+                'adjust_type': adj_type_val,
+                'adjust_val': adj_num_val,
+                'adjust_start_age_type': adj_start_type_val,
+                'adjust_start_age_specified': adj_start_spec_val
+            })
+
         is_goal_seeking = (simulation_type == 'goal_seeking')
         
         # Validation checks
@@ -441,6 +487,9 @@ def enter_view(request):
 
         if desired_spending < 0:
             validation_errors.append("Desired Annual Spending must be a valid non-negative number.")
+
+        if state_tax_rate < 0.0 or state_tax_rate > 100.0:
+            validation_errors.append("State Income Tax Rate must be between 0% and 100%.")
 
         if user_ss_entitled:
             if user_ss_start_age < 62 or user_ss_start_age > 70:
@@ -496,6 +545,28 @@ def enter_view(request):
                 a_start = inc.get('adjust_start_age_specified', 65)
                 if a_start < 18 or a_start > 120:
                     validation_errors.append(f"Income Source '{inc.get('name')}' Adjustment Start Age must be between 18 and 120.")
+
+        # Other Taxes validation
+        for ot in other_taxes:
+            if ot.get('amount', 0.0) < 0:
+                validation_errors.append(f"Other Tax item '{ot.get('name')}' Amount cannot be negative.")
+            if ot.get('start_age_type') == 'specified':
+                s_spec = ot.get('start_age_specified', 65)
+                if s_spec < 18 or s_spec > 120:
+                    validation_errors.append(f"Other Tax item '{ot.get('name')}' Specified Start Age must be between 18 and 120.")
+            if ot.get('frequency') not in ['one_time', 'one-time'] and ot.get('end_age_type') == 'specified':
+                min_end = ot.get('start_age_specified', 18) if ot.get('start_age_type') == 'specified' else 18
+                e_spec = ot.get('end_age_specified', 90)
+                if e_spec < min_end or e_spec > 120:
+                    validation_errors.append(f"Other Tax item '{ot.get('name')}' Specified End Age ({e_spec}) must be greater than or equal to Start Age ({min_end}) up to 120.")
+            if ot.get('adjust_type') in ['fixed_pct', 'inflation_less_pct']:
+                a_val = ot.get('adjust_val', 0.0)
+                if a_val < 0.0 or a_val > 100.0:
+                    validation_errors.append(f"Other Tax item '{ot.get('name')}' Percentage Rate must be between 0% and 100%.")
+            if ot.get('adjust_type') != 'none' and ot.get('adjust_start_age_type') == 'specified':
+                a_start = ot.get('adjust_start_age_specified', 65)
+                if a_start < 18 or a_start > 120:
+                    validation_errors.append(f"Other Tax item '{ot.get('name')}' Adjustment Start Age must be between 18 and 120.")
                 
         # Store in JSON block
         data_block = {
@@ -519,6 +590,8 @@ def enter_view(request):
             'inflation_rate': inflation_rate,
             'runs': runs,
             'target_success_rate': raw_target_srate if is_goal_seeking else target_success_rate,
+            'state_tax_rate': state_tax_rate,
+            'state_ss_exempt': state_ss_exempt,
             'social_security': social_security,
             'pretax_assets': pretax_assets,
             'spouse_pretax_assets': spouse_pretax_assets,
@@ -526,7 +599,8 @@ def enter_view(request):
             'taxable_assets': taxable_assets,
             'hsa_assets': hsa_assets,
             'additional_spending': additional_spending,
-            'income_sources': income_sources
+            'income_sources': income_sources,
+            'other_taxes': other_taxes
         }
         
         if validation_errors:

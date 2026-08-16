@@ -604,7 +604,8 @@ class RetirementCalculationTests(TestCase):
             nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_init'],
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-            r_pre, r_roth, r_tax, r_hsa
+            r_pre, r_roth, r_tax, r_hsa,
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr']
         )
         
         self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
@@ -985,6 +986,222 @@ class RetirementCalculationTests(TestCase):
         data = resp.json()
         self.assertIn('worst_scanned_year', data)
         self.assertGreaterEqual(data['worst_scanned_year'], 1926)
+
+    def test_state_income_taxes_and_ss_exemption(self):
+        """Verify state income tax calculations with and without Social Security exemption."""
+        from core.runs import simulate_step
+        
+        # Scenario: Single filer, Age 65.
+        # Taxable Pension: $60,000. Social Security: $20,000.
+        # Standard deduction 2026 Single: $16,100.
+        # Provisional income: 60,000 + 10,000 = 70,000 -> Taxable SS = 0.85 * 20000 = 17,000.
+        # Federal Taxable income = 60,000 + 17,000 - 16,100 = 60,900.
+        
+        # Test Case 1: State tax 5%, Social Security EXEMPT from state tax
+        # State Taxable Income = 60,000 + 0 - 16,100 = 43,900.
+        # Expected State Tax = 43,900 * 5% = 2,195.00.
+        res_exempt = simulate_step(
+            t=0, user_age=65, is_married=False, spouse_age=65,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=65, desired_spending=40000, survivor_spending=40000,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[],
+            income_sources_list=[
+                {'name': 'Pension', 'amount': 60000.0, 'frequency': 'annual', 'start_age_type': 'retirement', 'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90, 'subject_to_tax': True, 'is_social_security': False, 'adjust_type': 'none', 'adjust_val': 0.0}
+            ],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=100000.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+            social_security_data={'user_entitled': True, 'user_amount': 20000.0, 'user_freq': 'annual', 'user_start_age': 65},
+            state_tax_rate=5.0, state_ss_exempt=True, other_taxes_list=[]
+        )
+        self.assertAlmostEqual(res_exempt['tax_breakdown']['state_tax'], 2195.00, places=2)
+        self.assertEqual(res_exempt['tax_breakdown']['other_taxes'], 0.0)
+        self.assertAlmostEqual(res_exempt['taxes_paid'], res_exempt['tax_breakdown']['fed_tax'] + 2195.00, places=2)
+
+        # Test Case 2: State tax 5%, Social Security NOT EXEMPT from state tax
+        # State Taxable Income = 60,000 + 17,000 - 16,100 = 60,900.
+        # Expected State Tax = 60,900 * 5% = 3,045.00.
+        res_non_exempt = simulate_step(
+            t=0, user_age=65, is_married=False, spouse_age=65,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=65, desired_spending=40000, survivor_spending=40000,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[],
+            income_sources_list=[
+                {'name': 'Pension', 'amount': 60000.0, 'frequency': 'annual', 'start_age_type': 'retirement', 'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90, 'subject_to_tax': True, 'is_social_security': False, 'adjust_type': 'none', 'adjust_val': 0.0}
+            ],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=100000.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+            social_security_data={'user_entitled': True, 'user_amount': 20000.0, 'user_freq': 'annual', 'user_start_age': 65},
+            state_tax_rate=5.0, state_ss_exempt=False, other_taxes_list=[]
+        )
+        self.assertAlmostEqual(res_non_exempt['tax_breakdown']['state_tax'], 3045.00, places=2)
+        self.assertAlmostEqual(res_non_exempt['tax_breakdown']['fed_tax'], res_exempt['tax_breakdown']['fed_tax'], places=2)
+
+    def test_other_taxes_calculation_and_breakdown(self):
+        """Verify user-specified other taxes (capital gains, NIIT, etc.) and their item breakdown."""
+        from core.runs import simulate_step
+        
+        other_taxes = [
+            {'name': 'Cap Gains Real Estate', 'amount': 15000.0, 'frequency': 'one_time', 'start_age_type': 'specified', 'start_age_specified': 65, 'adjust_type': 'none'},
+            {'name': 'Estimated Dividend Tax', 'amount': 3000.0, 'frequency': 'annual', 'start_age_type': 'retirement', 'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90, 'adjust_type': 'inflation', 'adjust_start_age_type': 'start'}
+        ]
+
+        res = simulate_step(
+            t=0, user_age=65, is_married=False, spouse_age=65,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=65, desired_spending=30000, survivor_spending=30000,
+            adjust_spending_inflation=False, inflation_rate=3.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=100000.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+            social_security_data={'user_entitled': False},
+            state_tax_rate=0.0, state_ss_exempt=True, other_taxes_list=other_taxes
+        )
+
+        self.assertEqual(res['tax_breakdown']['other_taxes'], 18000.0)
+        self.assertEqual(res['tax_breakdown']['other_taxes_breakdown']['Cap Gains Real Estate'], 15000.0)
+        self.assertEqual(res['tax_breakdown']['other_taxes_breakdown']['Estimated Dividend Tax'], 3000.0)
+        self.assertEqual(res['taxes_paid'], 18000.0)
+
+    def test_dual_engine_numba_parity_with_state_and_other_taxes(self):
+        """Verify 100% numerical parity between Python and Numba JIT engines with state and other taxes active."""
+        import numpy as np
+        from core.runs import extract_sim_inputs, run_simulation_path, prepare_numba_inputs, njit_simulate_path
+
+        sim_input = {
+            'user_name': 'Tax Parity User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 85,
+            'is_married': True,
+            'spouse_name': 'Tax Parity Spouse',
+            'spouse_age': 58,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 88,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'begin_spending_age_type': 'retirement',
+            'begin_spending_age_specified': 65,
+            'desired_spending': 50000.0,
+            'survivor_spending': 40000.0,
+            'adjust_spending_inflation': True,
+            'inflation_rate': 2.5,
+            'runs': 10,
+            'target_success_rate': 80.0,
+            'state_tax_rate': 4.5,
+            'state_ss_exempt': False,
+            'social_security': {
+                'user_entitled': True,
+                'user_amount': 2800.0,
+                'user_freq': 'monthly',
+                'user_start_age': 67,
+                'spouse_entitled': True,
+                'spouse_amount': 1500.0,
+                'spouse_freq': 'monthly',
+                'spouse_start_age': 67
+            },
+            'pretax_assets': {'present_balance': 400000.0, 'contrib_amount': 5000.0, 'contrib_freq': 'annual', 'contrib_start_age': 60, 'contrib_end_age_type': 'retirement', 'contrib_end_age_specified': 65, 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0},
+            'spouse_pretax_assets': {'present_balance': 150000.0, 'contrib_amount': 3000.0, 'contrib_freq': 'annual', 'contrib_start_age': 58, 'contrib_end_age_type': 'spouse_retirement', 'contrib_end_age_specified': 65, 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0},
+            'roth_assets': {'present_balance': 100000.0, 'contrib_amount': 2000.0, 'contrib_freq': 'annual', 'contrib_start_age': 60, 'contrib_end_age_type': 'retirement', 'contrib_end_age_specified': 65, 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0},
+            'taxable_assets': {'present_balance': 200000.0, 'contrib_amount': 1000.0, 'contrib_freq': 'annual', 'contrib_start_age': 60, 'contrib_end_age_type': 'retirement', 'contrib_end_age_specified': 65, 'contrib_adjust_inflation': True, 'return_mean': 5.0, 'return_std': 8.0},
+            'hsa_assets': {'present_balance': 25000.0, 'contrib_amount': 1000.0, 'contrib_freq': 'annual', 'contrib_start_age': 60, 'contrib_end_age_type': 'retirement', 'contrib_end_age_specified': 65, 'contrib_adjust_inflation': True, 'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True},
+            'additional_spending': [
+                {'name': 'College', 'amount': 20000.0, 'start_age': 62, 'interval': 0, 'adjust_inflation': True}
+            ],
+            'income_sources': [
+                {'name': 'Consulting', 'amount': 1500.0, 'frequency': 'monthly', 'start_age_type': 'retirement', 'start_age_specified': 65, 'end_age_type': 'specified', 'end_age_specified': 70, 'subject_to_tax': True, 'is_social_security': False, 'adjust_type': 'inflation'}
+            ],
+            'other_taxes': [
+                {'name': 'Cap Gains on Business Sale', 'amount': 25000.0, 'frequency': 'one_time', 'start_age_type': 'retirement', 'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90, 'adjust_type': 'none'},
+                {'name': 'NIIT and Dividends', 'amount': 4000.0, 'frequency': 'annual', 'start_age_type': 'retirement', 'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90, 'adjust_type': 'inflation'}
+            ]
+        }
+
+        inputs = extract_sim_inputs(sim_input)
+        years = inputs['total_years']
+
+        r_pre = np.full(years, 0.055)
+        r_roth = np.full(years, 0.055)
+        r_tax = np.full(years, 0.045)
+        r_hsa = np.full(years, 0.04)
+
+        # 1. Pure Python run
+        py_results = run_simulation_path(inputs, r_pre, r_roth, r_tax, r_hsa)
+        py_ending_wealth = py_results[-1]['ending_assets']['total']
+
+        # 2. Numba JIT run
+        nb_inp = prepare_numba_inputs(inputs)
+        nb_ending_wealth = njit_simulate_path(
+            years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
+            nb_inp['filing_status_code'], inputs['desired_spending_start_age'], nb_inp['desired_spending'], nb_inp['survivor_spending'],
+            inputs['adjust_spending_inflation'], inputs['inflation_rate'], inputs['hsa_for_medical'], nb_inp['user_rmd_start_age'], nb_inp['spouse_rmd_start_age'],
+            nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_init'],
+            nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
+            nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
+            r_pre, r_roth, r_tax, r_hsa,
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr']
+        )
+
+        self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
+
+    def test_enter_view_post_and_tax_breakdown_in_results(self):
+        """Verify full POST submission including state taxes and other taxes persists and renders in results."""
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'Full Tax User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '40000',
+            'inflation_rate': '2.5',
+            'runs': '20',
+            'state_tax_rate': '4.95',
+            'state_ss_exempt': 'true',
+            'pretax_present_balance': '500000',
+            'taxable_present_balance': '200000',
+            'other_tax_name[]': ['Rental Depreciation Recapture', 'Annual Dividend Tax'],
+            'other_tax_amount[]': ['20000', '1500'],
+            'other_tax_frequency[]': ['one_time', 'annual'],
+            'other_tax_start_age_type[]': ['retirement', 'retirement'],
+            'other_tax_start_age_specified[]': ['65', '65'],
+            'other_tax_end_age_type[]': ['death', 'death'],
+            'other_tax_end_age_specified[]': ['90', '90'],
+            'other_tax_adjust_type[]': ['none', 'inflation'],
+            'other_tax_adjust_val[]': ['0', '0'],
+            'other_tax_adjust_start_age_type[]': ['start', 'start'],
+            'other_tax_adjust_start_age_specified[]': ['65', '65']
+        }
+
+        resp = self.client.post('/', post_data)
+        self.assertRedirects(resp, '/results/')
+
+        session_data = self.client.session['simulation_data']
+        self.assertEqual(session_data['state_tax_rate'], 4.95)
+        self.assertTrue(session_data['state_ss_exempt'])
+        self.assertEqual(len(session_data['other_taxes']), 2)
+        self.assertEqual(session_data['other_taxes'][0]['name'], 'Rental Depreciation Recapture')
+
+        # Check results view
+        res = self.client.get('/results/')
+        self.assertEqual(res.status_code, 200)
+        det_rows = res.context['det_rows']
+        self.assertTrue(len(det_rows) > 0)
+        
+        # Check first row has tax breakdown dict
+        first_row = det_rows[0]
+        self.assertIn('tax_breakdown', first_row)
+        self.assertIn('fed_tax', first_row['tax_breakdown'])
+        self.assertIn('state_tax', first_row['tax_breakdown'])
+        self.assertIn('other_taxes', first_row['tax_breakdown'])
+        self.assertIn('other_taxes_breakdown', first_row['tax_breakdown'])
+
 
 
 

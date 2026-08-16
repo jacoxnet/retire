@@ -186,6 +186,38 @@
                             </select>
                         </div>
                         <div class="col-md-4 mb-3">
+                            <label for="state_tax_rate" class="form-label">
+                                State Income Tax Rate %
+                                <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0"
+                                    style="cursor: pointer;" data-bs-toggle="popover"
+                                    data-bs-trigger="hover focus" data-bs-html="true"
+                                    data-bs-title="State Income Tax Rate (%)"
+                                    data-bs-content="Set the estimated flat or effective state income tax rate for your state of residence. Enter 0% if you live in a state with no income tax (e.g., FL, TX, WA, NV, TN, WY, SD, AK).">
+                                </i>
+                            </label>
+                            <input type="text" inputmode="decimal" class="form-control percent-input"
+                                id="state_tax_rate" name="state_tax_rate"
+                                value="{{ state_tax_rate|default:0.0|floatformat:1 }}" step="0.1" min="0" max="100">
+                        </div>
+                        <div class="col-md-4 mb-3 d-flex align-items-center">
+                            <div class="form-check form-switch ps-5 pt-3">
+                                <input class="form-check-input" type="checkbox" id="state_ss_exempt"
+                                    name="state_ss_exempt" value="true" {% if state_ss_exempt or state_ss_exempt is None %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="state_ss_exempt">
+                                    Exempt Social Security from State Income Tax
+                                    <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0"
+                                        style="cursor: pointer;" data-bs-toggle="popover"
+                                        data-bs-trigger="hover focus" data-bs-html="true"
+                                        data-bs-title="Social Security State Exemption"
+                                        data-bs-content="Most U.S. states exempt Social Security benefits from state income taxes. Keep this checked if your state does not tax Social Security.">
+                                    </i>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
                             <label for="current_year" class="form-label">Current Year</label>
                             <input type="number" class="form-control" id="current_year" name="current_year"
                                 value="{{ current_year }}" min="2020" max="2100" required>
@@ -199,9 +231,6 @@
                                 <option value="specified" {% if begin_spending_age_type == 'specified' %}selected{% endif %}>Specified Age</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="row align-items-end">
                         <div class="col-md-4 mb-3" id="begin_spending_specified_group"
                             style="display: {% if begin_spending_age_type == 'specified' %}block{% else %}none{% endif %};">
                             <label for="begin_spending_age_specified" class="form-label">Specified Spending Start
@@ -209,6 +238,9 @@
                             <input type="number" class="form-control" id="begin_spending_age_specified"
                                 name="begin_spending_age_specified" value="{{ begin_spending_age_specified }}">
                         </div>
+                    </div>
+
+                    <div class="row align-items-end">
                         <div class="col-md-4 mb-3">
                             <label for="desired_spending" class="form-label">Desired Recurring Annual Spending in
                                 Today’s Dollars $</label>
@@ -805,6 +837,25 @@
                     </div>
                 </div>
 
+                <!-- OTHER TAXES CARD -->
+                <div class="card p-4 mb-4">
+                    <h3 class="mb-2">Other Taxes</h3>
+                    <div class="alert alert-info border-0 shadow-sm mb-3">
+                        <i class="fa-solid fa-circle-info me-2"></i>
+                        This calculator factors in a rough estimate of the federal and state income taxes that may be expected to be incurred on the Income Streams and the Social Security payments entered into this calculator (except for state income taxes on Social Security payments marked as exempt from state income taxes). However, this calculator does not include any estimate of capital gains taxes, net investment income taxes, taxes on dividends and interest that were not entered as Income Streams, and taxes on items that are not Social Security or other Income Streams entered into this calculator. If any of those taxes should be included, enter the amount of those taxes here.
+                    </div>
+
+                    <div id="otherTaxesContainer">
+                        <!-- JS populated tax items -->
+                    </div>
+
+                    <div class="text-center mt-2">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnAddOtherTaxRow">
+                            <i class="fa fa-plus me-1"></i> Add Tax Item
+                        </button>
+                    </div>
+                </div>
+
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2"
                         onclick="switchTab('assets-tab')">Back</button>
@@ -934,6 +985,7 @@
 <!-- Raw data script tags for initial lists from database -->
 {{ additional_spending|json_script:"initial-additional-spending" }}
 {{ income_sources|json_script:"initial-income-sources" }}
+{{ other_taxes|json_script:"initial-other-taxes" }}
 
 {% endblock %}
 
@@ -1477,6 +1529,170 @@
             });
         }
 
+        // 6b. Other Taxes List Manager
+        const btnAddOtherTaxRow = document.getElementById('btnAddOtherTaxRow');
+        const otherTaxesContainer = document.getElementById('otherTaxesContainer');
+
+        function addOtherTaxRow(data = {}) {
+            var name = data.name !== undefined ? data.name : '';
+            var amount = data.amount !== undefined ? data.amount : 5000;
+            var frequency = data.frequency !== undefined ? data.frequency : 'annual';
+            var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
+            var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
+            var endType = data.end_age_type !== undefined ? data.end_age_type : 'death';
+            var endAge = data.end_age_specified !== undefined ? data.end_age_specified : 90;
+            var adjustType = data.adjust_type !== undefined ? data.adjust_type : 'inflation';
+            var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
+            var adjustStartType = data.adjust_start_age_type !== undefined ? data.adjust_start_age_type : 'start';
+            var adjustStartAge = data.adjust_start_age_specified !== undefined ? data.adjust_start_age_specified : 65;
+
+            var formattedAmt = formatMoney(amount);
+
+            var card = document.createElement('div');
+            card.className = 'card border shadow-sm mb-3 other-tax-card';
+            card.innerHTML = `
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                    <div class="d-flex align-items-center gap-2 flex-grow-1 me-3" style="max-width: 450px;">
+                        <label class="form-label mb-0 fw-bold text-nowrap">Tax Description:</label>
+                        <input type="text" class="form-control form-control-sm" name="other_tax_name[]" value="${name}" placeholder="e.g. Capital Gains, Depreciation Recapture" required>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm btnDeleteRow" title="Remove Tax Item">
+                        <i class="fa fa-trash me-1"></i> Delete
+                    </button>
+                </div>
+                <div class="card-body p-3">
+                    <!-- Line 1: Amount & Frequency -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Estimated Amount $</label>
+                            <input type="text" inputmode="numeric" class="form-control currency-input" name="other_tax_amount[]" value="${formattedAmt}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Frequency</label>
+                            <select class="form-select ot-frequency" name="other_tax_frequency[]">
+                                <option value="annual" ${frequency === 'annual' ? 'selected' : ''}>Annual</option>
+                                <option value="monthly" ${frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                <option value="one_time" ${frequency === 'one_time' || frequency === 'one-time' ? 'selected' : ''}>One-Time Tax</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Line 2: (1) Starts At, (2) Starts At age box, (3) Ends At, (4) Ends At age box -->
+                    <div class="row g-3 mb-3 align-items-start">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Starts At</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select ot-start-type" name="other_tax_start_age_type[]">
+                                    <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                    <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                    <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specify an Age</option>
+                                </select>
+                                <input type="number" class="form-control ot-start-spec" name="other_tax_start_age_specified[]" value="${startAge}" min="18" max="120" style="display: ${startType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Your Age at Start" placeholder="Your Age at Start">
+                            </div>
+                        </div>
+                        <div class="col-md-6 ot-end-group" style="display: ${frequency === 'one_time' || frequency === 'one-time' ? 'none' : 'block'};">
+                            <label class="form-label fw-semibold">Ends At</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select ot-end-type" name="other_tax_end_age_type[]">
+                                    <option value="death" ${endType === 'death' ? 'selected' : ''}>At Your Death</option>
+                                    <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
+                                    <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specify an Age</option>
+                                </select>
+                                <input type="number" class="form-control ot-end-spec" name="other_tax_end_age_specified[]" value="${endAge}" min="18" max="120" style="display: ${endType === 'specified' ? 'block' : 'none'}; max-width: 110px;" title="Specified Age" placeholder="Age">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Line 3: (5) Adjust for Inflation? + rate box, (6) Adjustment Begins At, (7) Adjustment Begins At age box -->
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Adjust for Inflation?</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select ot-adjust-type" name="other_tax_adjust_type[]">
+                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Yes</option>
+                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No</option>
+                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>By a Fixed Percentage</option>
+                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less a Fixed Percentage</option>
+                                </select>
+                                <input type="text" inputmode="decimal" class="form-control ot-adjust-val percent-input" name="other_tax_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
+                            </div>
+                        </div>
+                        <div class="col-md-6 ot-adjust-start-group" style="display: ${adjustType === 'none' ? 'none' : 'block'};">
+                            <label class="form-label fw-semibold">Adjustment Begins At</label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select ot-adjust-start-type" name="other_tax_adjust_start_age_type[]">
+                                    <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Tax Starts</option>
+                                    <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                    <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                    <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
+                                    <option value="specified" ${adjustStartType === 'specified' ? 'selected' : ''}>Specify an Age</option>
+                                </select>
+                                <input type="number" class="form-control ot-adjust-start-spec" name="other_tax_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${adjustStartType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Adjustment Start Age" placeholder="Age">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Frequency listener: toggle Ends At visibility for One-Time items
+            card.querySelector('.ot-frequency').addEventListener('change', function () {
+                var endGroup = card.querySelector('.ot-end-group');
+                if (this.value === 'one_time' || this.value === 'one-time') {
+                    endGroup.style.display = 'none';
+                } else {
+                    endGroup.style.display = 'block';
+                }
+            });
+
+            card.querySelector('.ot-start-type').addEventListener('change', function () {
+                var specInput = card.querySelector('.ot-start-spec');
+                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            });
+
+            card.querySelector('.ot-end-type').addEventListener('change', function () {
+                var specInput = card.querySelector('.ot-end-spec');
+                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            });
+
+            card.querySelector('.ot-adjust-type').addEventListener('change', function () {
+                var valInput = card.querySelector('.ot-adjust-val');
+                var show = ['fixed_pct', 'inflation_less_pct'].includes(this.value);
+                valInput.style.display = show ? 'block' : 'none';
+                if (show) {
+                    valInput.focus();
+                }
+                var startGroup = card.querySelector('.ot-adjust-start-group');
+                if (startGroup) {
+                    startGroup.style.display = (this.value === 'none') ? 'none' : 'block';
+                }
+            });
+
+            card.querySelector('.ot-adjust-start-type').addEventListener('change', function () {
+                var specInput = card.querySelector('.ot-adjust-start-spec');
+                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+                if (this.value === 'specified') {
+                    specInput.focus();
+                }
+            });
+
+            card.querySelector('.btnDeleteRow').addEventListener('click', function () {
+                card.remove();
+            });
+
+            if (otherTaxesContainer) {
+                otherTaxesContainer.appendChild(card);
+            }
+            attachCurrencyInputListeners(card.querySelector('[name="other_tax_amount[]"]'));
+            attachPercentInputListeners(card.querySelector('.ot-adjust-val'));
+            updateSpouseDropdownOptions();
+        }
+
+        if (btnAddOtherTaxRow) {
+            btnAddOtherTaxRow.addEventListener('click', function () {
+                addOtherTaxRow();
+            });
+        }
+
         // 7. Load Initial Lists passed from Backend JSON blocks
         try {
             var initialAddSpending = JSON.parse(document.getElementById('initial-additional-spending').textContent);
@@ -1491,6 +1707,13 @@
                 addIncomeRow(item);
             });
         } catch (e) { console.log("No initial income sources"); }
+
+        try {
+            var initialOtherTaxes = JSON.parse(document.getElementById('initial-other-taxes').textContent);
+            initialOtherTaxes.forEach(function (item) {
+                addOtherTaxRow(item);
+            });
+        } catch (e) { console.log("No initial other taxes"); }
 
         // Run toggles initially
         toggleSpouseSection();
@@ -1515,6 +1738,8 @@
                 'spouse_retirement_age': parseInt(document.getElementById('spouse_retirement_age').value || 0),
                 'spouse_age_death': parseInt(document.getElementById('spouse_age_death').value || 0),
                 'filing_status': document.getElementById('filing_status').value,
+                'state_tax_rate': parsePercent(document.getElementById('state_tax_rate').value || 0),
+                'state_ss_exempt': document.getElementById('state_ss_exempt').checked,
                 'current_year': parseInt(document.getElementById('current_year').value),
                 'begin_spending_age_type': document.getElementById('begin_spending_age_type').value,
                 'begin_spending_age_specified': parseInt(document.getElementById('begin_spending_age_specified').value || 0),
@@ -1594,7 +1819,8 @@
                 },
 
                 'additional_spending': [],
-                'income_sources': []
+                'income_sources': [],
+                'other_taxes': []
             };
 
             // Collect dynamic spending items
@@ -1649,6 +1875,36 @@
                 });
             });
 
+            // Collect dynamic other taxes
+            var otherTaxCards = otherTaxesContainer.querySelectorAll('.other-tax-card');
+            otherTaxCards.forEach(card => {
+                var nameEl = card.querySelector('[name="other_tax_name[]"]');
+                var amtEl = card.querySelector('[name="other_tax_amount[]"]');
+                var freqEl = card.querySelector('[name="other_tax_frequency[]"]');
+                var startTypeEl = card.querySelector('[name="other_tax_start_age_type[]"]');
+                var startSpecEl = card.querySelector('[name="other_tax_start_age_specified[]"]');
+                var endTypeEl = card.querySelector('[name="other_tax_end_age_type[]"]');
+                var endSpecEl = card.querySelector('[name="other_tax_end_age_specified[]"]');
+                var adjTypeEl = card.querySelector('[name="other_tax_adjust_type[]"]');
+                var adjValEl = card.querySelector('[name="other_tax_adjust_val[]"]');
+                var adjStartTypeEl = card.querySelector('[name="other_tax_adjust_start_age_type[]"]');
+                var adjStartSpecEl = card.querySelector('[name="other_tax_adjust_start_age_specified[]"]');
+
+                dataBlock.other_taxes.push({
+                    'name': nameEl ? nameEl.value.trim() : 'Other Tax',
+                    'amount': parseMoney(amtEl?.value || 0),
+                    'frequency': freqEl?.value || 'annual',
+                    'start_age_type': startTypeEl?.value || 'retirement',
+                    'start_age_specified': parseInt(startSpecEl?.value || 0),
+                    'end_age_type': endTypeEl?.value || 'death',
+                    'end_age_specified': parseInt(endSpecEl?.value || 0),
+                    'adjust_type': adjTypeEl?.value || 'inflation',
+                    'adjust_val': parsePercent(adjValEl?.value || 0.0),
+                    'adjust_start_age_type': adjStartTypeEl?.value || 'start',
+                    'adjust_start_age_specified': parseInt(adjStartSpecEl?.value || 65)
+                });
+            });
+
             // Trigger download
             var jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataBlock, null, 4));
             var downloadAnchor = document.createElement('a');
@@ -1696,6 +1952,8 @@
             clean.spouse_age_death = clampInt(raw.spouse_age_death, 18, 120, 90);
 
             clean.filing_status = ['single', 'joint', 'hoh'].includes(raw.filing_status) ? raw.filing_status : (clean.is_married ? 'joint' : 'single');
+            clean.state_tax_rate = clampNum(raw.state_tax_rate, 0, 100, 0.0);
+            clean.state_ss_exempt = raw.state_ss_exempt !== false;
             clean.current_year = clampInt(raw.current_year, 2020, 2100, 2026);
 
             clean.begin_spending_age_type = ['retirement', 'spouse_retirement', 'specified'].includes(raw.begin_spending_age_type) ? raw.begin_spending_age_type : 'retirement';
@@ -1770,6 +2028,32 @@
                 });
             }
 
+            clean.other_taxes = [];
+            if (Array.isArray(raw.other_taxes)) {
+                raw.other_taxes.forEach(function (item) {
+                    var adjType = ['inflation', 'fixed_pct', 'inflation_less_pct', 'none'].includes(item.adjust_type) ? item.adjust_type : 'inflation';
+                    var adjVal = clampNum(item.adjust_val, 0, 100, 0.0);
+                    if (adjType === 'none' || adjType === 'inflation') {
+                        adjVal = 0.0;
+                    }
+                    var adjStartType = ['start', 'retirement', 'spouse_retirement', 'current_age', 'specified'].includes(item.adjust_start_age_type) ? item.adjust_start_age_type : 'start';
+                    var adjStartSpec = clampInt(item.adjust_start_age_specified, 18, 120, 65);
+                    clean.other_taxes.push({
+                        name: (item.name || 'Other Tax').trim(),
+                        amount: clampNum(item.amount, 0, null, 0),
+                        frequency: ['annual', 'monthly', 'one_time', 'one-time'].includes(item.frequency) ? item.frequency : 'annual',
+                        start_age_type: ['retirement', 'spouse_retirement', 'specified'].includes(item.start_age_type) ? item.start_age_type : 'retirement',
+                        start_age_specified: clampInt(item.start_age_specified, 18, 110, 65),
+                        end_age_type: ['death', 'spouse_death', 'specified'].includes(item.end_age_type) ? item.end_age_type : 'death',
+                        end_age_specified: clampInt(item.end_age_specified, 18, 120, 90),
+                        adjust_type: adjType,
+                        adjust_val: adjVal,
+                        adjust_start_age_type: adjStartType,
+                        adjust_start_age_specified: adjStartSpec
+                    });
+                });
+            }
+
             clean.social_security = {
                 user_entitled: raw.social_security ? raw.social_security.user_entitled !== false : true,
                 user_amount: clampNum(raw.social_security ? raw.social_security.user_amount : 2500, 0, null, 2500),
@@ -1814,6 +2098,8 @@
                     document.getElementById('spouse_age_death').value = data.spouse_age_death;
 
                     document.getElementById('filing_status').value = data.filing_status;
+                    if (document.getElementById('state_tax_rate')) document.getElementById('state_tax_rate').value = formatPercent(data.state_tax_rate || 0.0);
+                    if (document.getElementById('state_ss_exempt')) document.getElementById('state_ss_exempt').checked = (data.state_ss_exempt !== false);
                     document.getElementById('current_year').value = data.current_year;
 
                     document.getElementById('begin_spending_age_type').value = data.begin_spending_age_type;
@@ -1900,6 +2186,16 @@
                         });
                     }
 
+                    // Clear and Populate Other Taxes
+                    if (otherTaxesContainer) {
+                        otherTaxesContainer.innerHTML = '';
+                        if (Array.isArray(data.other_taxes)) {
+                            data.other_taxes.forEach(function (item) {
+                                addOtherTaxRow(item);
+                            });
+                        }
+                    }
+
                     // Refresh interactive fields
                     toggleSpouseSection();
                     toggleSpendingStartAge();
@@ -1957,7 +2253,7 @@
                 document.querySelector('[name="hsa_contrib_end_age_type"]')
             ];
 
-            document.querySelectorAll('.inc-start-type, .inc-end-type, .inc-adjust-start-type').forEach(function (s) {
+            document.querySelectorAll('.inc-start-type, .inc-end-type, .inc-adjust-start-type, .ot-start-type, .ot-end-type, .ot-adjust-start-type').forEach(function (s) {
                 selects.push(s);
             });
 
@@ -1971,7 +2267,7 @@
                         opt.style.display = isMarried ? 'block' : 'none';
                         opt.disabled = !isMarried;
                         if (!isMarried && opt.selected) {
-                            if (select.classList.contains('inc-adjust-start-type')) {
+                            if (select.classList.contains('inc-adjust-start-type') || select.classList.contains('ot-adjust-start-type')) {
                                 select.value = 'start';
                             } else if (opt.value === 'spouse_death') {
                                 select.value = 'death';
