@@ -51,7 +51,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="spending-tab" data-bs-toggle="tab" data-bs-target="#spending"
                 type="button" role="tab" aria-controls="spending" aria-selected="false">
-                3. Additional Spending
+                3. Additional Spending and Other Taxes
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -243,7 +243,7 @@
                     <div class="row align-items-end">
                         <div class="col-md-4 mb-3">
                             <label for="desired_spending" class="form-label">Desired Recurring Annual Spending in
-                                Today’s Dollars $</label>
+                                Today’s Dollars</label>
                             <input type="text" inputmode="numeric" class="form-control currency-input"
                                 id="desired_spending" name="desired_spending"
                                 value="{{ desired_spending|floatformat:0 }}" required>
@@ -298,14 +298,14 @@
                                     style="display: {% if is_married %}inline{% else %}none{% endif %};">Your
                                 </span>Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
-                                <label class="form-label">Present Balance $</label>
+                                <label class="form-label">Present Balance</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input"
                                     id="pretax_present_balance" name="pretax_present_balance"
                                     value="{{ pretax_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Future Contributions $</label>
+                                    <label class="form-label">Future Contributions</label>
                                     <input type="text" inputmode="numeric" class="form-control currency-input"
                                         id="pretax_contrib_amount" name="pretax_contrib_amount"
                                         value="{{ pretax_assets.contrib_amount|floatformat:0 }}">
@@ -398,14 +398,14 @@
                         <div class="card p-4 h-100 border-info">
                             <h4 class="text-info mb-3">Spouse's Pretax Assets (Traditional IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
-                                <label class="form-label">Present Balance $</label>
+                                <label class="form-label">Present Balance</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input"
                                     id="spouse_pretax_present_balance" name="spouse_pretax_present_balance"
                                     value="{{ spouse_pretax_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Future Contributions $</label>
+                                    <label class="form-label">Future Contributions</label>
                                     <input type="text" inputmode="numeric" class="form-control currency-input"
                                         id="spouse_pretax_contrib_amount" name="spouse_pretax_contrib_amount"
                                         value="{{ spouse_pretax_assets.contrib_amount|floatformat:0 }}">
@@ -492,14 +492,14 @@
                         <div class="card p-4 h-100">
                             <h4 class="text-primary mb-3">Roth Assets (Roth IRA / 401(k) / 403(b))</h4>
                             <div class="mb-3">
-                                <label class="form-label">Present Balance $</label>
+                                <label class="form-label">Present Balance</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input"
                                     id="roth_present_balance" name="roth_present_balance"
                                     value="{{ roth_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Future Contributions $</label>
+                                    <label class="form-label">Future Contributions</label>
                                     <input type="text" inputmode="numeric" class="form-control currency-input"
                                         id="roth_contrib_amount" name="roth_contrib_amount"
                                         value="{{ roth_assets.contrib_amount|floatformat:0 }}">
@@ -594,14 +594,14 @@
                         <div class="card p-4 h-100">
                             <h4 class="text-primary mb-3">Taxable Assets (Brokerage/Savings)</h4>
                             <div class="mb-3">
-                                <label class="form-label">Present Balance $</label>
+                                <label class="form-label">Present Balance</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input"
                                     id="taxable_present_balance" name="taxable_present_balance"
                                     value="{{ taxable_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Future Contributions $</label>
+                                    <label class="form-label">Future Contributions</label>
                                     <input type="text" inputmode="numeric" class="form-control currency-input"
                                         id="taxable_contrib_amount" name="taxable_contrib_amount"
                                         value="{{ taxable_assets.contrib_amount|floatformat:0 }}">
@@ -696,14 +696,14 @@
                         <div class="card p-4 h-100">
                             <h4 class="text-primary mb-3">Health Savings Account (HSA)</h4>
                             <div class="mb-3">
-                                <label class="form-label">Present Balance $</label>
+                                <label class="form-label">Present Balance</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input"
                                     id="hsa_present_balance" name="hsa_present_balance"
                                     value="{{ hsa_assets.present_balance|floatformat:0 }}">
                             </div>
                             <div class="row">
                                 <div class="col-6 mb-3">
-                                    <label class="form-label">Future Contributions $</label>
+                                    <label class="form-label">Future Contributions</label>
                                     <input type="text" inputmode="numeric" class="form-control currency-input"
                                         id="hsa_contrib_amount" name="hsa_contrib_amount"
                                         value="{{ hsa_assets.contrib_amount|floatformat:0 }}">
@@ -801,7 +801,7 @@
                     <button type="button" class="btn btn-secondary me-2"
                         onclick="switchTab('demographics-tab')">Back</button>
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('spending-tab')">Next: Additional Spending</button>
+                        onclick="switchTab('spending-tab')">Next: Additional Spending and Other Taxes</button>
                 </div>
             </div>
 
@@ -817,7 +817,7 @@
                             <thead>
                                 <tr>
                                     <th style="width: 25%; min-width: 140px;">Spending Item Name</th>
-                                    <th style="width: 20%; min-width: 110px;">Amount $ (Current)</th>
+                                    <th style="width: 20%; min-width: 110px;">Amount (Current)</th>
                                     <th style="width: 15%; min-width: 80px;">Start Age</th>
                                     <th style="width: 20%; min-width: 130px;">Interval (Years) <small
                                             class="text-muted">(0 for one-time)</small></th>
@@ -890,8 +890,7 @@
                                 style="display: {% if social_security.user_entitled %}block{% else %}none{% endif %};">
                                 <div class="row">
                                     <div class="col-6 mb-3">
-                                        <label class="form-label fw-semibold" for="user_ss_amount">Initial Amount
-                                            $</label>
+                                        <label class="form-label fw-semibold" for="user_ss_amount">Initial Amount</label>
                                         <input type="text" inputmode="numeric" class="form-control currency-input"
                                             id="user_ss_amount" name="user_ss_amount"
                                             value="{{ social_security.user_amount|floatformat:0 }}">
@@ -930,8 +929,7 @@
                                 style="display: {% if social_security.spouse_entitled %}block{% else %}none{% endif %};">
                                 <div class="row">
                                     <div class="col-6 mb-3">
-                                        <label class="form-label fw-semibold" for="spouse_ss_amount">Initial Amount
-                                            $</label>
+                                        <label class="form-label fw-semibold" for="spouse_ss_amount">Initial Amount</label>
                                         <input type="text" inputmode="numeric" class="form-control currency-input"
                                             id="spouse_ss_amount" name="spouse_ss_amount"
                                             value="{{ social_security.spouse_amount|floatformat:0 }}">
@@ -1389,7 +1387,7 @@
                     <!-- Line 1: Amount & Frequency -->
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Amount $</label>
+                            <label class="form-label fw-semibold">Amount</label>
                             <input type="text" inputmode="numeric" class="form-control currency-input" name="income_amount[]" value="${formattedAmt}" required>
                         </div>
                         <div class="col-md-6">
@@ -1564,7 +1562,7 @@
                     <!-- Line 1: Amount & Frequency -->
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Estimated Amount $</label>
+                            <label class="form-label fw-semibold">Amount of Other Taxes</label>
                             <input type="text" inputmode="numeric" class="form-control currency-input" name="other_tax_amount[]" value="${formattedAmt}" required>
                         </div>
                         <div class="col-md-6">
