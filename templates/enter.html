@@ -691,10 +691,12 @@
                         </div>
                     </div>
 
-                    <!-- HSA ASSETS CARD -->
+                    <!-- HSA ASSETS CARD (USER) -->
                     <div class="col-md-6 mb-4">
                         <div class="card p-4 h-100">
-                            <h4 class="text-primary mb-3">Health Savings Account (HSA)</h4>
+                            <h4 class="text-primary mb-3"><span class="user-card-prefix"
+                                    style="display: {% if is_married %}inline{% else %}none{% endif %};">Your
+                                </span>Health Savings Account (HSA)</h4>
                             <div class="mb-3">
                                 <label class="form-label">Present Balance</label>
                                 <input type="text" inputmode="numeric" class="form-control currency-input"
@@ -791,6 +793,112 @@
                                 <input class="form-check-input" type="checkbox" id="hsa_for_medical"
                                     name="hsa_for_medical" {% if hsa_assets.hsa_for_medical %}checked{% endif %}>
                                 <label class="form-check-label font-weight-bold" for="hsa_for_medical">Used for
+                                    Qualified Medical Expenses</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SPOUSE HSA ASSETS CARD -->
+                    <div class="col-md-6 mb-4 spouse-hsa-container"
+                        style="display: {% if is_married %}block{% else %}none{% endif %};">
+                        <div class="card p-4 h-100 border-info">
+                            <h4 class="text-info mb-3">Spouse's Health Savings Account (HSA)</h4>
+                            <div class="mb-3">
+                                <label class="form-label">Present Balance</label>
+                                <input type="text" inputmode="numeric" class="form-control currency-input"
+                                    id="spouse_hsa_present_balance" name="spouse_hsa_present_balance"
+                                    value="{{ spouse_hsa_assets.present_balance|floatformat:0 }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Future Contributions</label>
+                                    <input type="text" inputmode="numeric" class="form-control currency-input"
+                                        id="spouse_hsa_contrib_amount" name="spouse_hsa_contrib_amount"
+                                        value="{{ spouse_hsa_assets.contrib_amount|floatformat:0 }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Frequency</label>
+                                    <select class="form-select" name="spouse_hsa_contrib_freq">
+                                        <option value="annual" {% if spouse_hsa_assets.contrib_freq == 'annual' %}selected{% endif %}>Annually</option>
+                                        <option value="monthly" {% if spouse_hsa_assets.contrib_freq == 'monthly' %}selected{% endif %}>Monthly</option>
+                                        <option value="one-time" {% if spouse_hsa_assets.contrib_freq == 'one-time' %}selected{% endif %}>One-Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">Start Age</label>
+                                    <input type="number" class="form-control" id="spouse_hsa_contrib_start_age"
+                                        name="spouse_hsa_contrib_start_age" value="{{ spouse_hsa_assets.contrib_start_age }}">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">End Age</label>
+                                    <select class="form-select asset-end-age-type" name="spouse_hsa_contrib_end_age_type"
+                                        data-prefix="spouse_hsa">
+                                        <option value="retirement" {% if spouse_hsa_assets.contrib_end_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
+                                        <option value="spouse_retirement" {% if spouse_hsa_assets.contrib_end_age_type == 'spouse_retirement' %}selected{% endif %}>
+                                            Spouse's Retirement Age</option>
+                                        <option value="age" {% if spouse_hsa_assets.contrib_end_age_type == 'age' %}selected{% endif %}>Specified Age</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3 asset-end-age-spec-group" id="spouse_hsa_end_age_spec_group"
+                                style="display: {% if spouse_hsa_assets.contrib_end_age_type == 'age' %}block{% else %}none{% endif %};">
+                                <label class="form-label">Specified End Age</label>
+                                <input type="number" class="form-control" id="spouse_hsa_contrib_end_age_specified"
+                                    name="spouse_hsa_contrib_end_age_specified"
+                                    value="{{ spouse_hsa_assets.contrib_end_age_specified }}">
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="spouse_hsa_contrib_adjust_inflation"
+                                    name="spouse_hsa_contrib_adjust_inflation" {% if spouse_hsa_assets.contrib_adjust_inflation %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold"
+                                    for="spouse_hsa_contrib_adjust_inflation">Adjust Contributions for Inflation</label>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">
+                                        Average Return %
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0"
+                                            style="cursor: pointer;" data-bs-toggle="popover"
+                                            data-bs-trigger="hover focus" data-bs-html="true"
+                                            data-bs-title="Expected Annual Return (%)"
+                                            data-bs-content="Set the average percentage return you expect this portfolio to earn each year before inflation.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Conservative (Bonds/Cash):</strong> 3.0% – 4.5%</li><li><strong>Moderate (60/40 Stock/Bond):</strong> 5.5% – 6.5%</li><li><strong>Aggressive (100% Stocks):</strong> 7.5% – 9.5%</li></ul><em class='small text-muted'>Note: Historical S&amp;P 500 long-term return is ~10% nominal (7% real).</em>">
+                                        </i>
+                                    </label>
+                                    <input type="text" inputmode="decimal" class="form-control percent-input"
+                                        name="spouse_hsa_return_mean" value="{{ spouse_hsa_assets.return_mean|floatformat:1 }}"
+                                        step="0.1">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">
+                                        Volatility of Return
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0"
+                                            style="cursor: pointer;" data-bs-toggle="popover"
+                                            data-bs-trigger="hover focus" data-bs-html="true"
+                                            data-bs-title="Volatility of Return"
+                                            data-bs-content="In Monte Carlo simulations, volatility is indicated by the standard deviation of a return. Standard deviation dictates how much returns fluctuate year-to-year.<ul class='mb-1 ps-3 mt-1 small'><li><strong>Low Risk (Bonds/Cash):</strong> 4.5%</li><li><strong>Moderate Risk (Balanced (60/40 Stock/Bond)):</strong> 9.5%</li><li><strong>High Risk (Stock Index Funds):</strong> 16.0%</li></ul><em class='small text-muted'>Rule of thumb: In ~68% of years, your annual return will fall within Mean ± 1 Std Dev.</em>">
+                                        </i>
+                                    </label>
+                                    <div class="d-flex gap-2">
+                                        <select class="form-select volatility-select" data-prefix="spouse_hsa">
+                                            <option value="low" {% if spouse_hsa_assets.return_std == 4.5 %}selected{% endif %}>
+                                                Low</option>
+                                            <option value="moderate" {% if spouse_hsa_assets.return_std == 9.5 %}selected{% endif %}>Moderate</option>
+                                            <option value="high" {% if spouse_hsa_assets.return_std == 16.0 or spouse_hsa_assets.return_std == 16 %}selected{% endif %}>High</option>
+                                            <option value="custom" {% if spouse_hsa_assets.return_std != 4.5 and spouse_hsa_assets.return_std != 9.5 and spouse_hsa_assets.return_std != 16.0 and spouse_hsa_assets.return_std != 16 %}selected{% endif %}>User Specified</option>
+                                        </select>
+                                        <input type="text" inputmode="decimal"
+                                            class="form-control percent-input custom-vol-input" name="spouse_hsa_return_std"
+                                            value="{{ spouse_hsa_assets.return_std|floatformat:1 }}" step="0.1"
+                                            style="max-width: 100px; display: {% if spouse_hsa_assets.return_std != 4.5 and spouse_hsa_assets.return_std != 9.5 and spouse_hsa_assets.return_std != 16.0 and spouse_hsa_assets.return_std != 16 %}block{% else %}none{% endif %};">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3 form-check form-switch ps-5">
+                                <input class="form-check-input" type="checkbox" id="spouse_hsa_for_medical"
+                                    name="spouse_hsa_for_medical" {% if spouse_hsa_assets.hsa_for_medical %}checked{% endif %}>
+                                <label class="form-check-label font-weight-bold" for="spouse_hsa_for_medical">Used for
                                     Qualified Medical Expenses</label>
                             </div>
                         </div>
@@ -1216,12 +1324,14 @@
 
         function toggleSpouseSection() {
             const spousePretaxContainer = document.querySelector('.spouse-pretax-container');
+            const spouseHsaContainer = document.querySelector('.spouse-hsa-container');
             const spouseSsContainer = document.getElementById('spouse_ss_container');
             const userCardPrefixes = document.querySelectorAll('.user-card-prefix');
             if (isMarriedCheckbox.checked) {
                 spouseSection.style.display = 'block';
                 survivorSpendingGroup.style.display = 'block';
                 if (spousePretaxContainer) spousePretaxContainer.style.display = 'block';
+                if (spouseHsaContainer) spouseHsaContainer.style.display = 'block';
                 if (spouseSsContainer) spouseSsContainer.style.display = 'block';
                 userCardPrefixes.forEach(el => el.style.display = 'inline');
                 document.getElementById('filing_status').value = 'joint';
@@ -1229,6 +1339,7 @@
                 spouseSection.style.display = 'none';
                 survivorSpendingGroup.style.display = 'none';
                 if (spousePretaxContainer) spousePretaxContainer.style.display = 'none';
+                if (spouseHsaContainer) spouseHsaContainer.style.display = 'none';
                 if (spouseSsContainer) spouseSsContainer.style.display = 'none';
                 userCardPrefixes.forEach(el => el.style.display = 'none');
                 document.getElementById('filing_status').value = 'single';
@@ -1815,6 +1926,18 @@
                     'return_std': parsePercent(document.querySelector('[name="hsa_return_std"]').value || 0),
                     'hsa_for_medical': document.getElementById('hsa_for_medical').checked
                 },
+                'spouse_hsa_assets': {
+                    'present_balance': parseMoney(document.getElementById('spouse_hsa_present_balance')?.value || 0),
+                    'contrib_amount': parseMoney(document.getElementById('spouse_hsa_contrib_amount')?.value || 0),
+                    'contrib_freq': document.querySelector('[name="spouse_hsa_contrib_freq"]')?.value || 'annual',
+                    'contrib_start_age': parseInt(document.getElementById('spouse_hsa_contrib_start_age')?.value || 0),
+                    'contrib_end_age_type': document.querySelector('[name="spouse_hsa_contrib_end_age_type"]')?.value || 'retirement',
+                    'contrib_end_age_specified': parseInt(document.getElementById('spouse_hsa_contrib_end_age_specified')?.value || 0),
+                    'contrib_adjust_inflation': document.getElementById('spouse_hsa_contrib_adjust_inflation')?.checked || false,
+                    'return_mean': parsePercent(document.querySelector('[name="spouse_hsa_return_mean"]')?.value || 0),
+                    'return_std': parsePercent(document.querySelector('[name="spouse_hsa_return_std"]')?.value || 0),
+                    'hsa_for_medical': document.getElementById('spouse_hsa_for_medical')?.checked !== false
+                },
 
                 'additional_spending': [],
                 'income_sources': [],
@@ -1967,17 +2090,18 @@
 
             var minStartAge = clean.is_married ? Math.min(clean.user_age, clean.spouse_age) : clean.user_age;
 
-            var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa'];
+            var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa'];
             assetClasses.forEach(function (ac) {
                 var rawAc = raw[ac + '_assets'] || {};
-                var minAge = ac === 'spouse_pretax' ? (clean.spouse_age || 18) : clean.user_age;
+                var isSpouse = (ac === 'spouse_pretax' || ac === 'spouse_hsa');
+                var minAge = isSpouse ? (clean.spouse_age || 18) : clean.user_age;
                 clean[ac + '_assets'] = {
                     present_balance: clampNum(rawAc.present_balance, 0, null, 0),
                     contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
                     contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
                     contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, minAge),
-                    contrib_end_age_type: ['retirement', 'spouse_retirement', 'first_death', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : (ac === 'spouse_pretax' ? 'spouse_retirement' : 'retirement'),
-                    contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, (ac === 'spouse_pretax' ? clean.spouse_retirement_age : clean.user_retirement_age)),
+                    contrib_end_age_type: ['retirement', 'spouse_retirement', 'first_death', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : (isSpouse ? 'spouse_retirement' : 'retirement'),
+                    contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, (isSpouse ? clean.spouse_retirement_age : clean.user_retirement_age)),
                     contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
                     return_mean: clampNum(rawAc.return_mean, -50, 100, 6.0),
                     return_std: clampNum(rawAc.return_std, 0, 100, 10.0),
@@ -2110,7 +2234,7 @@
                     document.getElementById('target_success_rate').value = data.target_success_rate;
 
                     // Populate assets
-                    var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa'];
+                    var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa'];
                     assetClasses.forEach(function (ac) {
                         var acData = data[ac + '_assets'] || {};
                         var balEl = document.getElementById(ac + '_present_balance');
@@ -2147,8 +2271,11 @@
                         }
                     });
 
-                    if (data.hsa_assets) {
+                    if (data.hsa_assets && document.getElementById('hsa_for_medical')) {
                         document.getElementById('hsa_for_medical').checked = data.hsa_assets.hsa_for_medical;
+                    }
+                    if (data.spouse_hsa_assets && document.getElementById('spouse_hsa_for_medical')) {
+                        document.getElementById('spouse_hsa_for_medical').checked = data.spouse_hsa_assets.hsa_for_medical;
                     }
 
                     // Social Security Populate
@@ -2223,9 +2350,11 @@
 
             var startAgeInputs = [
                 'pretax_contrib_start_age',
+                'spouse_pretax_contrib_start_age',
                 'roth_contrib_start_age',
                 'taxable_contrib_start_age',
-                'hsa_contrib_start_age'
+                'hsa_contrib_start_age',
+                'spouse_hsa_contrib_start_age'
             ];
             startAgeInputs.forEach(function (id) {
                 var input = document.getElementById(id);
@@ -2246,9 +2375,11 @@
             var selects = [
                 document.getElementById('begin_spending_age_type'),
                 document.querySelector('[name="pretax_contrib_end_age_type"]'),
+                document.querySelector('[name="spouse_pretax_contrib_end_age_type"]'),
                 document.querySelector('[name="roth_contrib_end_age_type"]'),
                 document.querySelector('[name="taxable_contrib_end_age_type"]'),
-                document.querySelector('[name="hsa_contrib_end_age_type"]')
+                document.querySelector('[name="hsa_contrib_end_age_type"]'),
+                document.querySelector('[name="spouse_hsa_contrib_end_age_type"]')
             ];
 
             document.querySelectorAll('.inc-start-type, .inc-end-type, .inc-adjust-start-type, .ot-start-type, .ot-end-type, .ot-adjust-start-type').forEach(function (s) {
@@ -2474,10 +2605,10 @@
             }
 
             // 6. Asset Returns, Balances & Contributions (Tab 2: Assets & Returns)
-            ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa'].forEach(function (prefix) {
-                if (prefix === 'spouse_pretax' && !isMarried) return;
+            ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa'].forEach(function (prefix) {
+                if ((prefix === 'spouse_pretax' || prefix === 'spouse_hsa') && !isMarried) return;
 
-                var isSpouse = (prefix === 'spouse_pretax');
+                var isSpouse = (prefix === 'spouse_pretax' || prefix === 'spouse_hsa');
                 var relevantAge = isSpouse ? (isNaN(sAge) ? 18 : sAge) : (isNaN(uAge) ? 18 : uAge);
                 var relevantDeath = isSpouse ? (isNaN(sDeath) ? 120 : sDeath) : (isNaN(uDeath) ? 120 : uDeath);
                 var prefixLabel = prefix.replace('_', ' ').toUpperCase();

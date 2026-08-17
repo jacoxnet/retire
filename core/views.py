@@ -121,6 +121,18 @@ def get_default_data():
             'return_std': 8.0,
             'hsa_for_medical': True
         },
+        'spouse_hsa_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+            'hsa_for_medical': True
+        },
         'additional_spending': [],
         'income_sources': [],
         'other_taxes': [],
@@ -339,6 +351,19 @@ def enter_view(request):
             'hsa_for_medical': get_bool(request.POST.get('hsa_for_medical')),
         }
         
+        spouse_hsa_assets = {
+            'present_balance': get_float(request.POST.get('spouse_hsa_present_balance'), 0.0),
+            'contrib_amount': get_float(request.POST.get('spouse_hsa_contrib_amount'), 0.0),
+            'contrib_freq': request.POST.get('spouse_hsa_contrib_freq', 'annual'),
+            'contrib_start_age': max(min_start_age, get_int(request.POST.get('spouse_hsa_contrib_start_age'), spouse_age if is_married else user_age)),
+            'contrib_end_age_type': request.POST.get('spouse_hsa_contrib_end_age_type', 'retirement'),
+            'contrib_end_age_specified': get_int(request.POST.get('spouse_hsa_contrib_end_age_specified'), spouse_retirement_age if is_married else user_retirement_age),
+            'contrib_adjust_inflation': get_bool(request.POST.get('spouse_hsa_contrib_adjust_inflation')),
+            'return_mean': get_float(request.POST.get('spouse_hsa_return_mean'), 5.0),
+            'return_std': get_float(request.POST.get('spouse_hsa_return_std'), 8.0),
+            'hsa_for_medical': get_bool(request.POST.get('spouse_hsa_for_medical')),
+        }
+        
         # Additional Spending Lists
         additional_spending = []
         add_names = request.POST.getlist('add_spending_name[]')
@@ -499,11 +524,11 @@ def enter_view(request):
                 validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
 
         # Asset Contributions validation
-        for prefix, asset in [('Pre-Tax', pretax_assets), ('Spouse Pre-Tax', spouse_pretax_assets), ('Roth', roth_assets), ('Taxable', taxable_assets), ('HSA', hsa_assets)]:
-            if prefix == 'Spouse Pre-Tax' and not is_married:
+        for prefix, asset in [('Pre-Tax', pretax_assets), ('Spouse Pre-Tax', spouse_pretax_assets), ('Roth', roth_assets), ('Taxable', taxable_assets), ('HSA', hsa_assets), ('Spouse HSA', spouse_hsa_assets)]:
+            if prefix in ['Spouse Pre-Tax', 'Spouse HSA'] and not is_married:
                 continue
-            rel_age = spouse_age if prefix == 'Spouse Pre-Tax' else user_age
-            rel_death = spouse_age_death if prefix == 'Spouse Pre-Tax' else user_age_death
+            rel_age = spouse_age if prefix in ['Spouse Pre-Tax', 'Spouse HSA'] else user_age
+            rel_death = spouse_age_death if prefix in ['Spouse Pre-Tax', 'Spouse HSA'] else user_age_death
             if asset.get('contrib_amount', 0.0) < 0:
                 validation_errors.append(f"{prefix} Future Contribution Amount cannot be negative.")
             c_start = asset.get('contrib_start_age', rel_age)
@@ -598,6 +623,7 @@ def enter_view(request):
             'roth_assets': roth_assets,
             'taxable_assets': taxable_assets,
             'hsa_assets': hsa_assets,
+            'spouse_hsa_assets': spouse_hsa_assets,
             'additional_spending': additional_spending,
             'income_sources': income_sources,
             'other_taxes': other_taxes
@@ -642,10 +668,12 @@ def results_view(request):
     det_rows = run_deterministic(sim_input)
     
     pretax_bal = data.get('pretax_assets', {}).get('present_balance', 0.0)
+    spouse_pretax_bal = data.get('spouse_pretax_assets', {}).get('present_balance', 0.0) if data.get('is_married') else 0.0
     roth_bal = data.get('roth_assets', {}).get('present_balance', 0.0)
     taxable_bal = data.get('taxable_assets', {}).get('present_balance', 0.0)
     hsa_bal = data.get('hsa_assets', {}).get('present_balance', 0.0)
-    total_initial_wealth = pretax_bal + roth_bal + taxable_bal + hsa_bal
+    spouse_hsa_bal = data.get('spouse_hsa_assets', {}).get('present_balance', 0.0) if data.get('is_married') else 0.0
+    total_initial_wealth = pretax_bal + spouse_pretax_bal + roth_bal + taxable_bal + hsa_bal + spouse_hsa_bal
     
     results = {
         "goal_seeking": is_goal_seeking,
@@ -660,9 +688,11 @@ def results_view(request):
         "is_married": data.get('is_married', False),
         "det_rows": det_rows,
         "pretax_assets": data.get('pretax_assets', {}),
+        "spouse_pretax_assets": data.get('spouse_pretax_assets', {}),
         "roth_assets": data.get('roth_assets', {}),
         "taxable_assets": data.get('taxable_assets', {}),
         "hsa_assets": data.get('hsa_assets', {}),
+        "spouse_hsa_assets": data.get('spouse_hsa_assets', {}),
         "plan_data_json": data
     }
     

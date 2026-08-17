@@ -2266,17 +2266,18 @@
 
         var minStartAge = clean.is_married ? Math.min(clean.user_age, clean.spouse_age) : clean.user_age;
 
-        var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa'];
+        var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa'];
         assetClasses.forEach(function(ac) {
             var rawAc = raw[ac + '_assets'] || {};
-            var minAge = ac === 'spouse_pretax' ? (clean.spouse_age || 18) : clean.user_age;
+            var isSpouse = (ac === 'spouse_pretax' || ac === 'spouse_hsa');
+            var minAge = isSpouse ? (clean.spouse_age || 18) : clean.user_age;
             clean[ac + '_assets'] = {
                 present_balance: clampNum(rawAc.present_balance, 0, null, 0),
                 contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
                 contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
                 contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, minAge),
-                contrib_end_age_type: ['retirement', 'spouse_retirement', 'first_death', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : (ac === 'spouse_pretax' ? 'spouse_retirement' : 'retirement'),
-                contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, (ac === 'spouse_pretax' ? clean.spouse_retirement_age : clean.user_retirement_age)),
+                contrib_end_age_type: ['retirement', 'spouse_retirement', 'first_death', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : (isSpouse ? 'spouse_retirement' : 'retirement'),
+                contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, (isSpouse ? clean.spouse_retirement_age : clean.user_retirement_age)),
                 contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
                 return_mean: clampNum(rawAc.return_mean, -50, 100, 6.0),
                 return_std: clampNum(rawAc.return_std, 0, 100, 10.0),

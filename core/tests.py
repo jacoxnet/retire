@@ -605,7 +605,8 @@ class RetirementCalculationTests(TestCase):
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
             r_pre, r_roth, r_tax, r_hsa,
-            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr']
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
+            nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code']
         )
         
         self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
@@ -1146,7 +1147,8 @@ class RetirementCalculationTests(TestCase):
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
             r_pre, r_roth, r_tax, r_hsa,
-            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr']
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
+            nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code']
         )
 
         self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
@@ -1201,6 +1203,226 @@ class RetirementCalculationTests(TestCase):
         self.assertIn('state_tax', first_row['tax_breakdown'])
         self.assertIn('other_taxes', first_row['tax_breakdown'])
         self.assertIn('other_taxes_breakdown', first_row['tax_breakdown'])
+
+    def test_hsa_non_medical_penalty_age_logic(self):
+        """
+        Verify owner-specific age 65 penalty logic:
+        - User age 66 (>= 65): 0% penalty on non-medical HSA withdrawals.
+        - Spouse age 62 (< 65): 20% penalty on non-medical HSA withdrawals.
+        - Both are subject to ordinary income tax regardless of age.
+        """
+        from core.runs import simulate_step
+
+        # Step where User is 66, Spouse is 62.
+        # Deficit of $10,000 pulls from User HSA first.
+        res_user = simulate_step(
+            t=0, user_age=66, is_married=True, spouse_age=62,
+            user_age_death=90, spouse_age_death=90, filing_status='joint',
+            desired_spending_start_age=60, desired_spending=10000.0, survivor_spending=10000.0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=0.0,
+            hsa_user=50000.0, hsa_user_for_medical=False,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+            hsa_spouse=50000.0, hsa_spouse_for_medical=False,
+            r_hsa_spouse=0.0, contrib_hsa_spouse=0.0
+        )
+        # User is >= 65 so HSA penalty should be 0
+        self.assertEqual(res_user['tax_breakdown'].get('hsa_penalty', 0.0), 0.0)
+        self.assertGreater(res_user['withdrawals']['hsa_user'], 0.0)
+        self.assertEqual(res_user['withdrawals']['hsa_spouse'], 0.0)
+
+        # Now test Spouse HSA withdrawal when User HSA is empty and Spouse is 62 (< 65)
+        res_spouse = simulate_step(
+            t=0, user_age=66, is_married=True, spouse_age=62,
+            user_age_death=90, spouse_age_death=90, filing_status='joint',
+            desired_spending_start_age=60, desired_spending=10000.0, survivor_spending=10000.0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=0.0,
+            hsa_user=0.0, hsa_user_for_medical=False,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+            hsa_spouse=50000.0, hsa_spouse_for_medical=False,
+            r_hsa_spouse=0.0, contrib_hsa_spouse=0.0
+        )
+        # Spouse is < 65, so 20% penalty must apply to Spouse HSA withdrawal
+        w_spouse = res_spouse['withdrawals']['hsa_spouse']
+        self.assertGreater(w_spouse, 0.0)
+        expected_penalty = 0.20 * w_spouse
+        self.assertAlmostEqual(res_spouse['tax_breakdown']['hsa_penalty'], expected_penalty, places=4)
+
+    def test_hsa_medical_vs_nonmedical_taxation(self):
+        """
+        Verify HSA medical vs non-medical:
+        - Medical: 100% tax-free and penalty-free at any age (e.g., age 50).
+        - Non-medical: ordinary income tax + 20% penalty under age 65.
+        """
+        from core.runs import simulate_step
+
+        # Age 50 with medical HSA
+        res_med = simulate_step(
+            t=0, user_age=50, is_married=False, spouse_age=50,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=50, desired_spending=10000.0, survivor_spending=10000.0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=0.0,
+            hsa_user=20000.0, hsa_user_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75
+        )
+        self.assertAlmostEqual(res_med['withdrawals']['hsa_user'], 10000.0)
+        self.assertEqual(res_med['taxes_paid'], 0.0)
+        self.assertEqual(res_med['tax_breakdown'].get('hsa_penalty', 0.0), 0.0)
+
+        # Age 50 with non-medical HSA
+        res_non_med = simulate_step(
+            t=0, user_age=50, is_married=False, spouse_age=50,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=50, desired_spending=10000.0, survivor_spending=10000.0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=0.0,
+            hsa_user=20000.0, hsa_user_for_medical=False,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75
+        )
+        # Gross withdrawal must cover spending + 20% penalty + taxes
+        w_gross = res_non_med['withdrawals']['hsa_user']
+        self.assertGreater(w_gross, 10000.0)
+        self.assertAlmostEqual(res_non_med['tax_breakdown']['hsa_penalty'], 0.20 * w_gross, places=4)
+
+    def test_hsa_spousal_death_rollover(self):
+        """
+        Verify tax-free spousal rollover of HSA upon first death.
+        """
+        from core.runs import simulate_step
+
+        # Year t=1 after spouse dies at t=0 (user_age=80, spouse_age_death=79)
+        res = simulate_step(
+            t=1, user_age=79, is_married=True, spouse_age=79,
+            user_age_death=90, spouse_age_death=79, filing_status='joint',
+            desired_spending_start_age=60, desired_spending=0.0, survivor_spending=0.0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=0.0,
+            hsa_user=15000.0, hsa_user_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+            hsa_spouse=25000.0, hsa_spouse_for_medical=True,
+            r_hsa_spouse=0.0, contrib_hsa_spouse=0.0
+        )
+        # Spouse HSA should roll into User HSA: 15000 + 25000 = 40000
+        self.assertAlmostEqual(res['beginning_assets']['hsa_user'], 40000.0)
+        self.assertAlmostEqual(res['beginning_assets']['hsa_spouse'], 0.0)
+
+    def test_hsa_dual_python_numba_parity(self):
+        """Verify Numba vs Python simulation parity with dual HSA accounts."""
+        import numpy as np
+        from core.runs import extract_sim_inputs, run_simulation_path, prepare_numba_inputs, njit_simulate_path
+
+        sim_input = {
+            'user_name': 'HSA Parity User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 85,
+            'is_married': True,
+            'spouse_name': 'Spouse',
+            'spouse_age': 58,
+            'spouse_retirement_age': 62,
+            'spouse_age_death': 88,
+            'filing_status': 'joint',
+            'desired_spending': 60000.0,
+            'survivor_spending': 45000.0,
+            'inflation_rate': 2.5,
+            'pretax_assets': {'present_balance': 300000.0, 'return_mean': 5.0, 'return_std': 0.0},
+            'spouse_pretax_assets': {'present_balance': 200000.0, 'return_mean': 5.0, 'return_std': 0.0},
+            'roth_assets': {'present_balance': 100000.0, 'return_mean': 5.0, 'return_std': 0.0},
+            'taxable_assets': {'present_balance': 150000.0, 'return_mean': 4.0, 'return_std': 0.0},
+            'hsa_assets': {'present_balance': 40000.0, 'return_mean': 4.0, 'return_std': 0.0, 'hsa_for_medical': False},
+            'spouse_hsa_assets': {'present_balance': 30000.0, 'return_mean': 4.0, 'return_std': 0.0, 'hsa_for_medical': False},
+            'state_tax_rate': 4.5,
+            'state_ss_exempt': True,
+            'additional_spending': [],
+            'income_sources': [],
+            'other_taxes': []
+        }
+
+        inputs = extract_sim_inputs(sim_input)
+        years = inputs['total_years']
+        det_r_pre = [0.05] * years
+        det_r_roth = [0.05] * years
+        det_r_tax = [0.04] * years
+        det_r_hsa = [0.04] * years
+
+        py_res = run_simulation_path(inputs, det_r_pre, det_r_roth, det_r_tax, det_r_hsa)
+        py_ending_wealth = py_res[-1]['ending_assets']['total']
+
+        nb_inp = prepare_numba_inputs(inputs)
+        nb_ending_wealth = njit_simulate_path(
+            years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'],
+            inputs['user_age_death'], inputs['spouse_age_death'],
+            nb_inp['filing_status_code'], inputs['desired_spending_start_age'],
+            nb_inp['desired_spending'], nb_inp['survivor_spending'],
+            inputs['adjust_spending_inflation'], inputs['inflation_rate'],
+            nb_inp['hsa_user_for_medical_code'],
+            nb_inp['user_rmd_start_age'], nb_inp['spouse_rmd_start_age'],
+            nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'],
+            nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_user_init'],
+            nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa_user'],
+            nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
+            np.array(det_r_pre, dtype=np.float64), np.array(det_r_roth, dtype=np.float64),
+            np.array(det_r_tax, dtype=np.float64), np.array(det_r_hsa, dtype=np.float64),
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
+            nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code']
+        )
+
+        self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
+
+    def test_enter_view_post_spouse_hsa(self):
+        """Verify full POST submission including Spouse HSA data persists in session and context."""
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': 'HSA User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': 'on',
+            'spouse_name': 'Spouse HSA',
+            'spouse_age': '58',
+            'spouse_retirement_age': '62',
+            'spouse_age_death': '90',
+            'desired_spending': '40000',
+            'survivor_spending': '30000',
+            'inflation_rate': '2.5',
+            'runs': '20',
+            'hsa_present_balance': '25000',
+            'hsa_contrib_amount': '1500',
+            'hsa_for_medical': 'true',
+            'spouse_hsa_present_balance': '18000',
+            'spouse_hsa_contrib_amount': '1200',
+            'spouse_hsa_for_medical': 'true'
+        }
+
+        resp = self.client.post('/', post_data)
+        self.assertRedirects(resp, '/results/')
+
+        session_data = self.client.session['simulation_data']
+        self.assertEqual(session_data['hsa_assets']['present_balance'], 25000.0)
+        self.assertEqual(session_data['spouse_hsa_assets']['present_balance'], 18000.0)
+        self.assertTrue(session_data['spouse_hsa_assets']['hsa_for_medical'])
+
+        res = self.client.get('/results/')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('spouse_hsa_assets', res.context)
+        self.assertEqual(res.context['spouse_hsa_assets']['present_balance'], 18000.0)
 
 
 
