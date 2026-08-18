@@ -110,6 +110,299 @@ def resolve_age(age_type, specified_val, user_age, user_ret_age, is_married, spo
         return user_age_death
     return default_val
 
+# Shared Numba-JIT kernel used by both the deterministic (simulate_step) and
+# Monte Carlo (njit_simulate_path) engines, so the RMD/tax/withdrawal-waterfall
+# and spousal-rollover logic is implemented exactly once.
+@numba.njit
+def njit_spousal_rollover(
+    t, t_first_death, is_married, user_alive, spouse_alive, filing_status_code,
+    pretax_user, pretax_spouse, hsa_user, hsa_spouse,
+    contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse,
+):
+    filing_status_t = filing_status_code
+    if is_married and t > t_first_death:
+        filing_status_t = 0
+        if user_alive and not spouse_alive:
+            if pretax_spouse > 0.0:
+                pretax_user += pretax_spouse
+                pretax_spouse = 0.0
+                contrib_pretax_spouse = 0.0
+            if hsa_spouse > 0.0:
+                hsa_user += hsa_spouse
+                hsa_spouse = 0.0
+                contrib_hsa_spouse = 0.0
+        elif spouse_alive and not user_alive:
+            if pretax_user > 0.0:
+                pretax_spouse += pretax_user
+                pretax_user = 0.0
+                contrib_pretax_user = 0.0
+            if hsa_user > 0.0:
+                hsa_spouse += hsa_user
+                hsa_user = 0.0
+                contrib_hsa_user = 0.0
+    return (filing_status_t, pretax_user, pretax_spouse, hsa_user, hsa_spouse,
+            contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse)
+
+@numba.njit
+def njit_rmd_tax_withdraw(
+    user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
+    pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
+    roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
+    user_rmd_start_age, spouse_rmd_start_age,
+    filing_status_t_code, inf_factor,
+    total_spending_target, taxable_income_sources, ss_benefits, nontaxable_income,
+    other_taxes_t, state_tax_rate, state_ss_exempt_code,
+    hsa_user_for_medical_code, hsa_spouse_for_medical_code,
+):
+    state_rate = state_tax_rate / 100.0
+    total_income_sources = taxable_income_sources + ss_benefits + nontaxable_income
+
+    user_rmd_t = 0.0
+    if user_alive and user_age_t >= user_rmd_start_age:
+        divisor = RMD_TABLE_ARR[user_age_t] if user_age_t <= 150 else 2.0
+        user_rmd_t = min(pretax_user_before / divisor, pretax_user_mid) if pretax_user_before > 0.0 else 0.0
+
+    spouse_rmd_t = 0.0
+    if spouse_alive and spouse_age_t >= spouse_rmd_start_age:
+        divisor = RMD_TABLE_ARR[spouse_age_t] if spouse_age_t <= 150 else 2.0
+        spouse_rmd_t = min(pretax_spouse_before / divisor, pretax_spouse_mid) if pretax_spouse_before > 0.0 else 0.0
+
+    rmd_t = user_rmd_t + spouse_rmd_t
+
+    if filing_status_t_code == 1:
+        thresholds_t = THRESHOLDS_JOINT_ARR * inf_factor
+        std_deduction_t = STD_DEDUCTION_2026_JOINT * inf_factor
+    elif filing_status_t_code == 2:
+        thresholds_t = THRESHOLDS_HOH_ARR * inf_factor
+        std_deduction_t = STD_DEDUCTION_2026_HOH * inf_factor
+    else:
+        thresholds_t = THRESHOLDS_SINGLE_ARR * inf_factor
+        std_deduction_t = STD_DEDUCTION_2026_SINGLE * inf_factor
+
+    base_agi_ex_ss = taxable_income_sources + rmd_t
+    base_taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
+    base_taxable_income = max(0.0, base_agi_ex_ss + base_taxable_ss - std_deduction_t)
+    base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR)
+
+    base_st_ss = 0.0 if state_ss_exempt_code == 1 else base_taxable_ss
+    base_st_taxable_income = max(0.0, base_agi_ex_ss + base_st_ss - std_deduction_t)
+    base_state_tax = base_st_taxable_income * state_rate
+    total_base_tax = base_tax + base_state_tax
+
+    cash_inflows = total_income_sources + rmd_t
+    cash_outflows = total_spending_target + total_base_tax + other_taxes_t
+    net_base = cash_inflows - cash_outflows
+
+    pretax_user_end = pretax_user_mid - user_rmd_t
+    pretax_spouse_end = pretax_spouse_mid - spouse_rmd_t
+    pretax_end = pretax_user_end + pretax_spouse_end
+    roth_end = roth_mid
+    taxable_end = taxable_mid
+    hsa_user_end = hsa_user_mid
+    hsa_spouse_end = hsa_spouse_mid
+
+    w_pretax_extra = 0.0
+    w_taxable = 0.0
+    w_roth = 0.0
+    w_hsa_user = 0.0
+    w_hsa_spouse = 0.0
+    final_fed_tax = base_tax
+    final_state_tax = base_state_tax
+    final_penalty = 0.0
+    hsa_penalty_user = 0.0
+    hsa_penalty_spouse = 0.0
+
+    if net_base >= 0.0:
+        taxable_end = taxable_mid + net_base
+    else:
+        deficit = -net_base
+
+        # A. Taxable assets
+        w_taxable = min(deficit, max(0.0, taxable_end))
+        taxable_end = taxable_end - w_taxable
+        deficit = deficit - w_taxable
+
+        # B. Pre-tax extra withdrawals (gross-up solver)
+        if deficit > 0.0 and pretax_end > 0.0:
+            agi_max = base_agi_ex_ss + pretax_end
+            tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
+            fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
+            fed_tax_max = njit_calculate_tax(fed_taxable_max, thresholds_t, TAX_RATES_ARR)
+            st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
+            st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
+            st_tax_max = st_taxable_max * state_rate
+            pen_max = 0.10 * pretax_end if (user_alive and user_age_t < 59.5) else 0.0
+            net_cash_max = pretax_end - ((fed_tax_max + st_tax_max + pen_max) - total_base_tax)
+
+            if net_cash_max <= deficit:
+                w_pretax_extra = pretax_end
+                pretax_end = 0.0
+                deficit = deficit - net_cash_max
+            else:
+                low = 0.0
+                high = pretax_end
+                for _ in range(25):
+                    mid = (low + high) / 2.0
+                    agi = base_agi_ex_ss + mid
+                    tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t_code)
+                    fed_taxable = max(0.0, agi + tax_ss - std_deduction_t)
+                    fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                    st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                    st_taxable = max(0.0, agi + st_ss - std_deduction_t)
+                    st_tax = st_taxable * state_rate
+                    penalty = 0.10 * mid if (user_alive and user_age_t < 59.5) else 0.0
+                    net_cash = mid - ((fed_tax + st_tax + penalty) - total_base_tax)
+                    if net_cash < deficit:
+                        low = mid
+                    else:
+                        high = mid
+                w_pretax_extra = high
+                pretax_end = pretax_end - w_pretax_extra
+                deficit = 0.0
+
+            base_agi_ex_ss += w_pretax_extra
+            taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
+            fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+            final_fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+            st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
+            st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+            final_state_tax = st_taxable * state_rate
+            final_penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
+            total_base_tax = final_fed_tax + final_state_tax + final_penalty
+
+            tot_pre = pretax_user_end + pretax_spouse_end
+            if tot_pre > 0.0 and w_pretax_extra > 0.0:
+                u_ratio = pretax_user_end / tot_pre
+                w_u = w_pretax_extra * u_ratio
+                w_s = w_pretax_extra - w_u
+                pretax_user_end = max(0.0, pretax_user_end - w_u)
+                pretax_spouse_end = max(0.0, pretax_spouse_end - w_s)
+
+        # C. Roth assets
+        if deficit > 0.0 and roth_end > 0.0:
+            w_roth = min(deficit, max(0.0, roth_end))
+            roth_end = roth_end - w_roth
+            deficit = deficit - w_roth
+
+        # D. HSA user (user HSA first, then spouse HSA)
+        if deficit > 0.0 and hsa_user_end > 0.0:
+            if hsa_user_for_medical_code == 1:
+                w_hsa_user = min(deficit, max(0.0, hsa_user_end))
+                hsa_user_end = hsa_user_end - w_hsa_user
+                deficit = deficit - w_hsa_user
+            else:
+                agi_max = base_agi_ex_ss + hsa_user_end
+                tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
+                fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
+                fed_tax_max = njit_calculate_tax(fed_taxable_max, thresholds_t, TAX_RATES_ARR)
+                st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
+                st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
+                st_tax_max = st_taxable_max * state_rate
+                pen_max = 0.20 * hsa_user_end if (user_alive and user_age_t < 65.0) else 0.0
+                net_cash_max = hsa_user_end - ((fed_tax_max + st_tax_max + final_penalty + pen_max) - total_base_tax)
+
+                if net_cash_max <= deficit:
+                    w_hsa_user = hsa_user_end
+                    hsa_user_end = 0.0
+                    deficit = deficit - net_cash_max
+                else:
+                    low = 0.0
+                    high = hsa_user_end
+                    for _ in range(25):
+                        mid = (low + high) / 2.0
+                        agi = base_agi_ex_ss + mid
+                        tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t_code)
+                        fed_taxable = max(0.0, agi + tax_ss - std_deduction_t)
+                        fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                        st_taxable = max(0.0, agi + st_ss - std_deduction_t)
+                        st_tax = st_taxable * state_rate
+                        penalty = 0.20 * mid if (user_alive and user_age_t < 65.0) else 0.0
+                        net_cash = mid - ((fed_tax + st_tax + final_penalty + penalty) - total_base_tax)
+                        if net_cash < deficit:
+                            low = mid
+                        else:
+                            high = mid
+                    w_hsa_user = high
+                    hsa_user_end = hsa_user_end - w_hsa_user
+                    deficit = 0.0
+
+                base_agi_ex_ss += w_hsa_user
+                taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
+                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+                final_fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
+                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                final_state_tax = st_taxable * state_rate
+                hsa_penalty_user = 0.20 * w_hsa_user if (user_alive and user_age_t < 65.0) else 0.0
+                final_penalty = (0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0) + hsa_penalty_user
+                total_base_tax = final_fed_tax + final_state_tax + final_penalty
+
+        # E. HSA spouse
+        if deficit > 0.0 and hsa_spouse_end > 0.0 and (spouse_alive or not user_alive):
+            if hsa_spouse_for_medical_code == 1:
+                w_hsa_spouse = min(deficit, max(0.0, hsa_spouse_end))
+                hsa_spouse_end = hsa_spouse_end - w_hsa_spouse
+                deficit = deficit - w_hsa_spouse
+            else:
+                agi_max = base_agi_ex_ss + hsa_spouse_end
+                tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
+                fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
+                fed_tax_max = njit_calculate_tax(fed_taxable_max, thresholds_t, TAX_RATES_ARR)
+                st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
+                st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
+                st_tax_max = st_taxable_max * state_rate
+                pen_max = 0.20 * hsa_spouse_end if (spouse_alive and spouse_age_t < 65.0) else 0.0
+                net_cash_max = hsa_spouse_end - ((fed_tax_max + st_tax_max + final_penalty + pen_max) - total_base_tax)
+
+                if net_cash_max <= deficit:
+                    w_hsa_spouse = hsa_spouse_end
+                    hsa_spouse_end = 0.0
+                    deficit = deficit - net_cash_max
+                else:
+                    low = 0.0
+                    high = hsa_spouse_end
+                    for _ in range(25):
+                        mid = (low + high) / 2.0
+                        agi = base_agi_ex_ss + mid
+                        tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t_code)
+                        fed_taxable = max(0.0, agi + tax_ss - std_deduction_t)
+                        fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
+                        st_taxable = max(0.0, agi + st_ss - std_deduction_t)
+                        st_tax = st_taxable * state_rate
+                        penalty = 0.20 * mid if (spouse_alive and spouse_age_t < 65.0) else 0.0
+                        net_cash = mid - ((fed_tax + st_tax + final_penalty + penalty) - total_base_tax)
+                        if net_cash < deficit:
+                            low = mid
+                        else:
+                            high = mid
+                    w_hsa_spouse = high
+                    hsa_spouse_end = hsa_spouse_end - w_hsa_spouse
+                    deficit = 0.0
+
+                base_agi_ex_ss += w_hsa_spouse
+                taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
+                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
+                final_fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
+                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                final_state_tax = st_taxable * state_rate
+                hsa_penalty_spouse = 0.20 * w_hsa_spouse if (spouse_alive and spouse_age_t < 65.0) else 0.0
+                final_penalty = final_penalty + hsa_penalty_spouse
+                total_base_tax = final_fed_tax + final_state_tax + final_penalty
+
+        if deficit > 0.0:
+            taxable_end = taxable_end - deficit
+
+    return (
+        pretax_user_end, pretax_spouse_end, roth_end, taxable_end, hsa_user_end, hsa_spouse_end,
+        user_rmd_t, spouse_rmd_t,
+        w_pretax_extra, w_taxable, w_roth, w_hsa_user, w_hsa_spouse,
+        final_fed_tax, final_state_tax, final_penalty,
+        hsa_penalty_user, hsa_penalty_spouse,
+    )
+
 def simulate_step(
     t, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
     filing_status, desired_spending_start_age, desired_spending, survivor_spending,
@@ -157,32 +450,16 @@ def simulate_step(
         }
     
     t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else user_age_death - user_age
-    
-    filing_status_t = filing_status
-    if is_married and t > t_first_death:
-        filing_status_t = 'single'
-        
-    # Spousal Rollover upon first death
-    if is_married and t > t_first_death:
-        if user_alive and not spouse_alive:
-            if pretax_spouse > 0:
-                pretax_user += pretax_spouse
-                pretax_spouse = 0.0
-                contrib_pretax_spouse = 0.0
-            if hsa_spouse > 0:
-                hsa_user += hsa_spouse
-                hsa_spouse = 0.0
-                contrib_hsa_spouse = 0.0
-        elif spouse_alive and not user_alive:
-            if pretax_user > 0:
-                pretax_spouse += pretax_user
-                pretax_user = 0.0
-                contrib_pretax_user = 0.0
-            if hsa_user > 0:
-                hsa_spouse += hsa_user
-                hsa_user = 0.0
-                contrib_hsa_user = 0.0
-        
+
+    # Spousal Rollover upon first death (shared kernel; also downgrades filing status)
+    filing_status_code = {'joint': 1, 'hoh': 2}.get(filing_status, 0)
+    (filing_status_t_code, pretax_user, pretax_spouse, hsa_user, hsa_spouse,
+     contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse) = njit_spousal_rollover(
+        t, t_first_death, is_married, user_alive, spouse_alive, filing_status_code,
+        pretax_user, pretax_spouse, hsa_user, hsa_spouse,
+        contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse,
+    )
+
     # 2. Add Contributions
     pretax_user_before = max(0.0, pretax_user + contrib_pretax_user)
     pretax_spouse_before = max(0.0, pretax_spouse + contrib_pretax_spouse) if is_married else 0.0
@@ -428,269 +705,31 @@ def simulate_step(
             
     total_income_sources = taxable_income_sources + ss_benefits + nontaxable_income
     
-    # 7. Calculate RMDs
-    user_rmd_t = 0.0
-    if user_alive and user_age_t >= user_rmd_start_age:
-        divisor = RMD_TABLE.get(user_age_t, 2.0)
-        user_rmd_t = min(pretax_user_before / divisor, pretax_user_mid) if pretax_user_before > 0 else 0.0
-        
-    spouse_rmd_t = 0.0
-    if spouse_alive and spouse_age_t >= spouse_rmd_start_age:
-        divisor = RMD_TABLE.get(spouse_age_t, 2.0)
-        spouse_rmd_t = min(pretax_spouse_before / divisor, pretax_spouse_mid) if pretax_spouse_before > 0 else 0.0
-        
-    rmd_t = user_rmd_t + spouse_rmd_t
-    
-    # 8. Base Tax Calculation
+    # 7-9. RMD calculation, tax computation, and withdrawal waterfall (shared kernel)
     inf_factor = (1.0 + inflation_rate / 100.0) ** t
-    if filing_status_t == 'joint':
-        thresholds_t = [th * inf_factor for th in THRESHOLDS_2026_JOINT]
-        std_deduction_t = STD_DEDUCTION_2026_JOINT * inf_factor
-    elif filing_status_t == 'hoh':
-        thresholds_t = [th * inf_factor for th in THRESHOLDS_2026_HOH]
-        std_deduction_t = STD_DEDUCTION_2026_HOH * inf_factor
-    else:
-        thresholds_t = [th * inf_factor for th in THRESHOLDS_2026_SINGLE]
-        std_deduction_t = STD_DEDUCTION_2026_SINGLE * inf_factor
-        
-    base_agi_ex_ss = taxable_income_sources + rmd_t
-    base_taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-    base_taxable_income = max(0.0, base_agi_ex_ss + base_taxable_ss - std_deduction_t)
-    base_tax = calculate_tax(base_taxable_income, thresholds_t, TAX_RATES)
-    
-    state_rate = state_tax_rate / 100.0
-    base_st_ss = 0.0 if state_ss_exempt else base_taxable_ss
-    base_st_taxable_income = max(0.0, base_agi_ex_ss + base_st_ss - std_deduction_t)
-    base_state_tax = base_st_taxable_income * state_rate
-    total_base_tax = base_tax + base_state_tax
-    
-    # 9. Cash Flow & Waterfall
-    cash_inflows = total_income_sources + rmd_t
-    cash_outflows = total_spending_target + total_base_tax + other_taxes_t
-    net_base = cash_inflows - cash_outflows
-    
-    pretax_user_end = pretax_user_mid - user_rmd_t
-    pretax_spouse_end = pretax_spouse_mid - spouse_rmd_t
-    pretax_end = pretax_user_end + pretax_spouse_end
-    roth_end = roth_mid
-    taxable_end = taxable_mid
-    hsa_user_end = hsa_user_mid
-    hsa_spouse_end = hsa_spouse_mid
-    hsa_end = hsa_user_end + hsa_spouse_end
-    
-    w_pretax_extra = 0.0
-    w_taxable = 0.0
-    w_roth = 0.0
-    w_hsa_user = 0.0
-    w_hsa_spouse = 0.0
-    w_hsa = 0.0
-    final_tax_and_penalty = total_base_tax + other_taxes_t
-    final_fed_tax = base_tax
-    final_state_tax = base_state_tax
-    final_penalty = 0.0
-    
-    if net_base >= 0.0:
-        # Surplus goes to taxable
-        taxable_end = taxable_mid + net_base
-    else:
-        deficit = -net_base
-        
-        # A. Taxable Assets
-        w_taxable = min(deficit, max(0.0, taxable_end))
-        taxable_end = taxable_end - w_taxable
-        deficit = deficit - w_taxable
-        
-        # B. Pre-Tax Extra Withdrawals (Gross-up solver)
-        if deficit > 0.0 and pretax_end > 0.0:
-            def get_net_cash_from_pretax(W):
-                agi_ex_ss = base_agi_ex_ss + W
-                taxable_ss = calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_t)
-                fed_taxable = max(0.0, agi_ex_ss + taxable_ss - std_deduction_t)
-                fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                st_ss = 0.0 if state_ss_exempt else taxable_ss
-                st_taxable = max(0.0, agi_ex_ss + st_ss - std_deduction_t)
-                st_tax = st_taxable * state_rate
-                penalty = 0.10 * W if (user_alive and user_age_t < 59.5) else 0.0
-                total_tax_and_pen = fed_tax + st_tax + penalty
-                return W - (total_tax_and_pen - total_base_tax)
-                
-            if get_net_cash_from_pretax(pretax_end) <= deficit:
-                w_pretax_extra = pretax_end
-                pretax_end = 0.0
-                deficit = deficit - get_net_cash_from_pretax(w_pretax_extra)
-                base_agi_ex_ss += w_pretax_extra
-                taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                st_ss = 0.0 if state_ss_exempt else taxable_ss
-                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                final_state_tax = st_taxable * state_rate
-                final_penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                total_base_tax = final_fed_tax + final_state_tax + final_penalty
-                final_tax_and_penalty = total_base_tax + other_taxes_t
-            else:
-                low = 0.0
-                high = pretax_end
-                for _ in range(25):
-                    mid = (low + high) / 2
-                    if get_net_cash_from_pretax(mid) < deficit:
-                        low = mid
-                    else:
-                        high = mid
-                w_pretax_extra = high
-                pretax_end = pretax_end - w_pretax_extra
-                base_agi_ex_ss += w_pretax_extra
-                taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                st_ss = 0.0 if state_ss_exempt else taxable_ss
-                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                final_state_tax = st_taxable * state_rate
-                final_penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                total_base_tax = final_fed_tax + final_state_tax + final_penalty
-                final_tax_and_penalty = total_base_tax + other_taxes_t
-                deficit = 0.0
-                
-            tot_pre = pretax_user_end + pretax_spouse_end
-            if tot_pre > 0 and w_pretax_extra > 0:
-                u_ratio = pretax_user_end / tot_pre
-                w_u = w_pretax_extra * u_ratio
-                w_s = w_pretax_extra - w_u
-                pretax_user_end = max(0.0, pretax_user_end - w_u)
-                pretax_spouse_end = max(0.0, pretax_spouse_end - w_s)
-                
-        # C. Roth Assets
-        if deficit > 0.0 and roth_end > 0.0:
-            w_roth = min(deficit, max(0.0, roth_end))
-            roth_end = roth_end - w_roth
-            deficit = deficit - w_roth
-            
-        # D. HSA Assets (User HSA first, then Spouse HSA)
-        if deficit > 0.0 and hsa_user_end > 0.0:
-            if hsa_user_for_medical:
-                w_hsa_user = min(deficit, max(0.0, hsa_user_end))
-                hsa_user_end = hsa_user_end - w_hsa_user
-                deficit = deficit - w_hsa_user
-            else:
-                # HSA withdrawals are taxable (and have 20% penalty if user age < 65)
-                def get_net_cash_from_hsa_user(W):
-                    agi_ex_ss = base_agi_ex_ss + W
-                    taxable_ss = calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_t)
-                    fed_taxable = max(0.0, agi_ex_ss + taxable_ss - std_deduction_t)
-                    fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                    st_ss = 0.0 if state_ss_exempt else taxable_ss
-                    st_taxable = max(0.0, agi_ex_ss + st_ss - std_deduction_t)
-                    st_tax = st_taxable * state_rate
-                    penalty = 0.20 * W if (user_alive and user_age_t < 65.0) else 0.0
-                    total_tax_and_pen = fed_tax + st_tax + final_penalty + penalty
-                    return W - (total_tax_and_pen - total_base_tax)
-                    
-                if get_net_cash_from_hsa_user(hsa_user_end) <= deficit:
-                    w_hsa_user = hsa_user_end
-                    gained = get_net_cash_from_hsa_user(hsa_user_end)
-                    hsa_user_end = 0.0
-                    deficit = deficit - gained
-                    base_agi_ex_ss += w_hsa_user
-                    taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                    final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                    st_ss = 0.0 if state_ss_exempt else taxable_ss
-                    st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                    final_state_tax = st_taxable * state_rate
-                    hsa_pen = 0.20 * w_hsa_user if (user_alive and user_age_t < 65.0) else 0.0
-                    final_penalty = (0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0) + hsa_pen
-                    total_base_tax = final_fed_tax + final_state_tax + final_penalty
-                    final_tax_and_penalty = total_base_tax + other_taxes_t
-                else:
-                    low = 0.0
-                    high = hsa_user_end
-                    for _ in range(25):
-                        mid = (low + high) / 2
-                        if get_net_cash_from_hsa_user(mid) < deficit:
-                            low = mid
-                        else:
-                            high = mid
-                    w_hsa_user = high
-                    hsa_user_end = hsa_user_end - w_hsa_user
-                    base_agi_ex_ss += w_hsa_user
-                    taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                    final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                    st_ss = 0.0 if state_ss_exempt else taxable_ss
-                    st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                    final_state_tax = st_taxable * state_rate
-                    hsa_pen = 0.20 * w_hsa_user if (user_alive and user_age_t < 65.0) else 0.0
-                    final_penalty = (0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0) + hsa_pen
-                    total_base_tax = final_fed_tax + final_state_tax + final_penalty
-                    final_tax_and_penalty = total_base_tax + other_taxes_t
-                    deficit = 0.0
+    state_ss_exempt_code = 1 if state_ss_exempt else 0
+    hsa_user_for_medical_code = 1 if hsa_user_for_medical else 0
+    hsa_spouse_for_medical_code = 1 if hsa_spouse_for_medical else 0
 
-        if deficit > 0.0 and hsa_spouse_end > 0.0 and (spouse_alive or not user_alive):
-            if hsa_spouse_for_medical:
-                w_hsa_spouse = min(deficit, max(0.0, hsa_spouse_end))
-                hsa_spouse_end = hsa_spouse_end - w_hsa_spouse
-                deficit = deficit - w_hsa_spouse
-            else:
-                # Spouse HSA withdrawals are taxable (and have 20% penalty if spouse age < 65)
-                def get_net_cash_from_hsa_spouse(W):
-                    agi_ex_ss = base_agi_ex_ss + W
-                    taxable_ss = calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_t)
-                    fed_taxable = max(0.0, agi_ex_ss + taxable_ss - std_deduction_t)
-                    fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                    st_ss = 0.0 if state_ss_exempt else taxable_ss
-                    st_taxable = max(0.0, agi_ex_ss + st_ss - std_deduction_t)
-                    st_tax = st_taxable * state_rate
-                    penalty = 0.20 * W if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                    total_tax_and_pen = fed_tax + st_tax + final_penalty + penalty
-                    return W - (total_tax_and_pen - total_base_tax)
-                    
-                if get_net_cash_from_hsa_spouse(hsa_spouse_end) <= deficit:
-                    w_hsa_spouse = hsa_spouse_end
-                    gained = get_net_cash_from_hsa_spouse(hsa_spouse_end)
-                    hsa_spouse_end = 0.0
-                    deficit = deficit - gained
-                    base_agi_ex_ss += w_hsa_spouse
-                    taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                    final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                    st_ss = 0.0 if state_ss_exempt else taxable_ss
-                    st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                    final_state_tax = st_taxable * state_rate
-                    hsa_pen_spouse = 0.20 * w_hsa_spouse if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                    final_penalty = final_penalty + hsa_pen_spouse
-                    total_base_tax = final_fed_tax + final_state_tax + final_penalty
-                    final_tax_and_penalty = total_base_tax + other_taxes_t
-                else:
-                    low = 0.0
-                    high = hsa_spouse_end
-                    for _ in range(25):
-                        mid = (low + high) / 2
-                        if get_net_cash_from_hsa_spouse(mid) < deficit:
-                            low = mid
-                        else:
-                            high = mid
-                    w_hsa_spouse = high
-                    hsa_spouse_end = hsa_spouse_end - w_hsa_spouse
-                    base_agi_ex_ss += w_hsa_spouse
-                    taxable_ss = calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                    final_fed_tax = calculate_tax(fed_taxable, thresholds_t, TAX_RATES)
-                    st_ss = 0.0 if state_ss_exempt else taxable_ss
-                    st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                    final_state_tax = st_taxable * state_rate
-                    hsa_pen_spouse = 0.20 * w_hsa_spouse if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                    final_penalty = final_penalty + hsa_pen_spouse
-                    total_base_tax = final_fed_tax + final_state_tax + final_penalty
-                    final_tax_and_penalty = total_base_tax + other_taxes_t
-                    deficit = 0.0
+    (pretax_user_end, pretax_spouse_end, roth_end, taxable_end, hsa_user_end, hsa_spouse_end,
+     user_rmd_t, spouse_rmd_t,
+     w_pretax_extra, w_taxable, w_roth, w_hsa_user, w_hsa_spouse,
+     final_fed_tax, final_state_tax, final_penalty,
+     hsa_penalty_user, hsa_penalty_spouse) = njit_rmd_tax_withdraw(
+        user_age_t, spouse_age_t if is_married else user_age_t, user_alive, spouse_alive, is_married,
+        pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
+        roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
+        user_rmd_start_age, spouse_rmd_start_age,
+        filing_status_t_code, inf_factor,
+        total_spending_target, taxable_income_sources, ss_benefits, nontaxable_income,
+        other_taxes_t, state_tax_rate, state_ss_exempt_code,
+        hsa_user_for_medical_code, hsa_spouse_for_medical_code,
+    )
 
-        w_hsa = w_hsa_user + w_hsa_spouse
-        hsa_end = hsa_user_end + hsa_spouse_end
-                    
-        # E. Still have a deficit? Subtract from taxable (goes negative to indicate failure)
-        if deficit > 0.0:
-            taxable_end = taxable_end - deficit
-            
+    rmd_t = user_rmd_t + spouse_rmd_t
+    hsa_penalty_total = hsa_penalty_user + hsa_penalty_spouse
+    final_tax_and_penalty = final_fed_tax + final_state_tax + final_penalty + other_taxes_t
+
     # Calculate totals
     beg_assets = {
         'pretax': pretax_user + pretax_spouse,
@@ -753,7 +792,6 @@ def simulate_step(
         'total': rmd_t + w_pretax_extra + w_taxable + w_roth + w_hsa_user + w_hsa_spouse
     }
 
-    hsa_penalty_total = (hsa_pen if 'hsa_pen' in locals() else 0.0) + (hsa_pen_spouse if 'hsa_pen_spouse' in locals() else 0.0)
     tax_breakdown = {
         'fed_tax': final_fed_tax,
         'state_tax': final_state_tax,
@@ -1080,8 +1118,7 @@ def njit_simulate_path(
         trajectory_arr[0] = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
 
     t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else (user_age_death - user_age)
-    state_rate = state_tax_rate / 100.0
-    
+
     for t in range(total_years):
         user_age_t = user_age + t
         spouse_age_t = spouse_age + t if is_married else user_age_t
@@ -1100,30 +1137,19 @@ def njit_simulate_path(
                 trajectory_arr[t + 1] = 0.0
             continue
             
-        filing_status_t = filing_status_code
-        if is_married and t > t_first_death:
-            filing_status_t = 0
-            if user_alive and not spouse_alive:
-                if pretax_spouse > 0.0:
-                    pretax_user += pretax_spouse
-                    pretax_spouse = 0.0
-                if hsa_spouse > 0.0:
-                    hsa_user += hsa_spouse
-                    hsa_spouse = 0.0
-            elif spouse_alive and not user_alive:
-                if pretax_user > 0.0:
-                    pretax_spouse += pretax_user
-                    pretax_user = 0.0
-                if hsa_user > 0.0:
-                    hsa_spouse += hsa_user
-                    hsa_user = 0.0
-            
-        pretax_user_before = max(0.0, pretax_user + c_pre_user[t])
-        pretax_spouse_before = max(0.0, pretax_spouse + c_pre_spouse[t]) if is_married else 0.0
+        (filing_status_t, pretax_user, pretax_spouse, hsa_user, hsa_spouse,
+         c_pre_user_t, c_pre_spouse_t, c_hsa_user_t, c_hsa_spouse_t) = njit_spousal_rollover(
+            t, t_first_death, is_married, user_alive, spouse_alive, filing_status_code,
+            pretax_user, pretax_spouse, hsa_user, hsa_spouse,
+            c_pre_user[t], c_pre_spouse[t], c_hsa_user[t], c_hsa_spouse[t],
+        )
+
+        pretax_user_before = max(0.0, pretax_user + c_pre_user_t)
+        pretax_spouse_before = max(0.0, pretax_spouse + c_pre_spouse_t) if is_married else 0.0
         roth_before = max(0.0, roth + c_roth[t])
         taxable_before = taxable + c_tax[t]
-        hsa_user_before = max(0.0, hsa_user + c_hsa_user[t])
-        hsa_spouse_before = max(0.0, hsa_spouse + c_hsa_spouse[t]) if is_married else 0.0
+        hsa_user_before = max(0.0, hsa_user + c_hsa_user_t)
+        hsa_spouse_before = max(0.0, hsa_spouse + c_hsa_spouse_t) if is_married else 0.0
         
         growth_pre_user = pretax_user_before * r_pre[t]
         growth_pre_spouse = pretax_spouse_before * r_pre[t] if is_married else 0.0
@@ -1161,245 +1187,28 @@ def njit_simulate_path(
         nontaxable_income = inc_nontaxable_arr[t]
         total_income_sources = taxable_income_sources + ss_benefits + nontaxable_income
         
-        user_rmd_t = 0.0
-        if user_alive and user_age_t >= user_rmd_start_age:
-            divisor = RMD_TABLE_ARR[user_age_t] if user_age_t <= 150 else 2.0
-            user_rmd_t = min(pretax_user_before / divisor, pretax_user_mid) if pretax_user_before > 0.0 else 0.0
-            
-        spouse_rmd_t = 0.0
-        if spouse_alive and spouse_age_t >= spouse_rmd_start_age:
-            divisor = RMD_TABLE_ARR[spouse_age_t] if spouse_age_t <= 150 else 2.0
-            spouse_rmd_t = min(pretax_spouse_before / divisor, pretax_spouse_mid) if pretax_spouse_before > 0.0 else 0.0
+        (pretax_user_end, pretax_spouse_end, roth_end, taxable_end, hsa_user_end, hsa_spouse_end,
+         user_rmd_t, spouse_rmd_t,
+         w_pretax_extra, w_taxable, w_roth, w_hsa_u, w_hsa_s,
+         final_fed_tax, final_state_tax, final_penalty,
+         hsa_penalty_user, hsa_penalty_spouse) = njit_rmd_tax_withdraw(
+            user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
+            pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
+            roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
+            user_rmd_start_age, spouse_rmd_start_age,
+            filing_status_t, inf_factor,
+            total_spending_target, taxable_income_sources, ss_benefits, nontaxable_income,
+            other_taxes_arr[t], state_tax_rate, state_ss_exempt_code,
+            hsa_user_for_medical_code, hsa_spouse_for_medical_code,
+        )
 
-        rmd_t = user_rmd_t + spouse_rmd_t
-            
-        if filing_status_t == 1:
-            thresholds_t = THRESHOLDS_JOINT_ARR * inf_factor
-            std_deduction_t = STD_DEDUCTION_2026_JOINT * inf_factor
-        elif filing_status_t == 2:
-            thresholds_t = THRESHOLDS_HOH_ARR * inf_factor
-            std_deduction_t = STD_DEDUCTION_2026_HOH * inf_factor
-        else:
-            thresholds_t = THRESHOLDS_SINGLE_ARR * inf_factor
-            std_deduction_t = STD_DEDUCTION_2026_SINGLE * inf_factor
-            
-        base_agi_ex_ss = taxable_income_sources + rmd_t
-        base_taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-        base_taxable_income = max(0.0, base_agi_ex_ss + base_taxable_ss - std_deduction_t)
-        base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR)
-        
-        base_st_ss = 0.0 if state_ss_exempt_code == 1 else base_taxable_ss
-        base_st_income = max(0.0, base_agi_ex_ss + base_st_ss - std_deduction_t)
-        base_st_tax = base_st_income * state_rate
-        total_base_tax = base_tax + base_st_tax
-        
-        cash_inflows = total_income_sources + rmd_t
-        cash_outflows = total_spending_target + total_base_tax + other_taxes_arr[t]
-        net_base = cash_inflows - cash_outflows
-        
-        pretax_user_end = pretax_user_mid - user_rmd_t
-        pretax_spouse_end = pretax_spouse_mid - spouse_rmd_t
-        pretax_end = pretax_user_end + pretax_spouse_end
-        roth_end = roth_mid
-        taxable_end = taxable_mid
-        hsa_user_end = hsa_user_mid
-        hsa_spouse_end = hsa_spouse_mid
-        
-        if net_base >= 0.0:
-            taxable_end = taxable_mid + net_base
-        else:
-            deficit = -net_base
-            
-            w_taxable = min(deficit, max(0.0, taxable_end))
-            taxable_end -= w_taxable
-            deficit -= w_taxable
-            
-            if deficit > 0.0 and pretax_end > 0.0:
-                agi_max = base_agi_ex_ss + pretax_end
-                tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t)
-                tax_inc_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
-                tax_max = njit_calculate_tax(tax_inc_max, thresholds_t, TAX_RATES_ARR)
-                st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
-                st_inc_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
-                st_tax_max = st_inc_max * state_rate
-                pen_max = 0.10 * pretax_end if (user_alive and user_age_t < 59.5) else 0.0
-                net_cash_max = pretax_end - ((tax_max + st_tax_max + pen_max) - total_base_tax)
-                
-                if net_cash_max <= deficit:
-                    w_pretax_extra = pretax_end
-                    pretax_end = 0.0
-                    deficit -= net_cash_max
-                    base_agi_ex_ss += w_pretax_extra
-                    tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
-                    st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                    st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                    penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                    total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
-                else:
-                    low = 0.0
-                    high = pretax_end
-                    for _ in range(25):
-                        mid = (low + high) / 2.0
-                        agi = base_agi_ex_ss + mid
-                        tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t)
-                        tax_inc = max(0.0, agi + tax_ss - std_deduction_t)
-                        tax = njit_calculate_tax(tax_inc, thresholds_t, TAX_RATES_ARR)
-                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                        st_inc = max(0.0, agi + st_ss - std_deduction_t)
-                        st_tax = st_inc * state_rate
-                        penalty = 0.10 * mid if (user_alive and user_age_t < 59.5) else 0.0
-                        net_cash = mid - ((tax + st_tax + penalty) - total_base_tax)
-                        if net_cash < deficit:
-                            low = mid
-                        else:
-                            high = mid
-                    w_pretax_extra = high
-                    pretax_end -= w_pretax_extra
-                    base_agi_ex_ss += w_pretax_extra
-                    tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                    base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
-                    st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                    st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                    penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
-                    total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
-                    deficit = 0.0
-                
-                tot_pre = pretax_user_end + pretax_spouse_end
-                if tot_pre > 0.0 and w_pretax_extra > 0.0:
-                    u_ratio = pretax_user_end / tot_pre
-                    w_u = w_pretax_extra * u_ratio
-                    w_s = w_pretax_extra - w_u
-                    pretax_user_end = max(0.0, pretax_user_end - w_u)
-                    pretax_spouse_end = max(0.0, pretax_spouse_end - w_s)
-                    
-            if deficit > 0.0 and roth_end > 0.0:
-                w_roth = min(deficit, max(0.0, roth_end))
-                roth_end -= w_roth
-                deficit -= w_roth
-                
-            if deficit > 0.0 and hsa_user_end > 0.0 and (user_alive or not spouse_alive):
-                if hsa_user_for_medical_code == 1:
-                    w_hsa_u = min(deficit, max(0.0, hsa_user_end))
-                    hsa_user_end -= w_hsa_u
-                    deficit -= w_hsa_u
-                else:
-                    agi_max = base_agi_ex_ss + hsa_user_end
-                    tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t)
-                    tax_inc_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
-                    tax_max = njit_calculate_tax(tax_inc_max, thresholds_t, TAX_RATES_ARR)
-                    st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
-                    st_inc_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
-                    st_tax_max = st_inc_max * state_rate
-                    pen_max = 0.20 * hsa_user_end if (user_alive and user_age_t < 65.0) else 0.0
-                    net_cash_max = hsa_user_end - ((tax_max + st_tax_max + pen_max) - total_base_tax)
-                    
-                    if net_cash_max <= deficit:
-                        w_hsa_u = hsa_user_end
-                        hsa_user_end = 0.0
-                        deficit -= net_cash_max
-                        base_agi_ex_ss += w_hsa_u
-                        tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                        base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
-                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                        st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                        penalty = 0.20 * w_hsa_u if (user_alive and user_age_t < 65.0) else 0.0
-                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
-                    else:
-                        low = 0.0
-                        high = hsa_user_end
-                        for _ in range(25):
-                            mid = (low + high) / 2.0
-                            agi = base_agi_ex_ss + mid
-                            tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t)
-                            tax_inc = max(0.0, agi + tax_ss - std_deduction_t)
-                            tax = njit_calculate_tax(tax_inc, thresholds_t, TAX_RATES_ARR)
-                            st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                            st_inc = max(0.0, agi + st_ss - std_deduction_t)
-                            st_tax = st_inc * state_rate
-                            penalty = 0.20 * mid if (user_alive and user_age_t < 65.0) else 0.0
-                            net_cash = mid - ((tax + st_tax + penalty) - total_base_tax)
-                            if net_cash < deficit:
-                                low = mid
-                            else:
-                                high = mid
-                        w_hsa_u = high
-                        hsa_user_end -= w_hsa_u
-                        base_agi_ex_ss += w_hsa_u
-                        tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                        base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
-                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                        st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                        penalty = 0.20 * w_hsa_u if (user_alive and user_age_t < 65.0) else 0.0
-                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
-                        deficit = 0.0
-
-            if deficit > 0.0 and hsa_spouse_end > 0.0 and (spouse_alive or not user_alive):
-                if hsa_spouse_for_medical_code == 1:
-                    w_hsa_s = min(deficit, max(0.0, hsa_spouse_end))
-                    hsa_spouse_end -= w_hsa_s
-                    deficit -= w_hsa_s
-                else:
-                    agi_max = base_agi_ex_ss + hsa_spouse_end
-                    tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t)
-                    tax_inc_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
-                    tax_max = njit_calculate_tax(tax_inc_max, thresholds_t, TAX_RATES_ARR)
-                    st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
-                    st_inc_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
-                    st_tax_max = st_inc_max * state_rate
-                    pen_max = 0.20 * hsa_spouse_end if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                    net_cash_max = hsa_spouse_end - ((tax_max + st_tax_max + pen_max) - total_base_tax)
-                    
-                    if net_cash_max <= deficit:
-                        w_hsa_s = hsa_spouse_end
-                        hsa_spouse_end = 0.0
-                        deficit -= net_cash_max
-                        base_agi_ex_ss += w_hsa_s
-                        tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                        base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
-                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                        st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                        penalty = 0.20 * w_hsa_s if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
-                    else:
-                        low = 0.0
-                        high = hsa_spouse_end
-                        for _ in range(25):
-                            mid = (low + high) / 2.0
-                            agi = base_agi_ex_ss + mid
-                            tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t)
-                            tax_inc = max(0.0, agi + tax_ss - std_deduction_t)
-                            tax = njit_calculate_tax(tax_inc, thresholds_t, TAX_RATES_ARR)
-                            st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                            st_inc = max(0.0, agi + st_ss - std_deduction_t)
-                            st_tax = st_inc * state_rate
-                            penalty = 0.20 * mid if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                            net_cash = mid - ((tax + st_tax + penalty) - total_base_tax)
-                            if net_cash < deficit:
-                                low = mid
-                            else:
-                                high = mid
-                        w_hsa_s = high
-                        hsa_spouse_end -= w_hsa_s
-                        base_agi_ex_ss += w_hsa_s
-                        tax_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t)
-                        base_taxable_income = max(0.0, base_agi_ex_ss + tax_ss - std_deduction_t)
-                        st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
-                        st_inc = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
-                        penalty = 0.20 * w_hsa_s if (spouse_alive and spouse_age_t < 65.0) else 0.0
-                        total_base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR) + (st_inc * state_rate) + penalty
-                        deficit = 0.0
-                        
-            if deficit > 0.0:
-                taxable_end -= deficit
-                
         pretax_user = pretax_user_end
         pretax_spouse = pretax_spouse_end
         roth = roth_end
         taxable = taxable_end
         hsa_user = hsa_user_end
         hsa_spouse = hsa_spouse_end
-        
+
         if trajectory_arr is not None:
             trajectory_arr[t + 1] = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
         
