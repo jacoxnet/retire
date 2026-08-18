@@ -906,7 +906,7 @@ class RetirementCalculationTests(TestCase):
             'desired_spending': '40000',
         })
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Pre-Tax Specified Contribution End Age (62) must be greater than or equal to Contribution Start Age (65)")
+        self.assertContains(resp, "Account &#x27;PRETAX Account&#x27; Specified Contribution End Age (62) must be greater than or equal to Contribution Start Age (65)")
 
     def test_validation_additional_spending_start_age_younger_than_present_age(self):
         """Test validation error when additional spending start age is younger than user present age."""
