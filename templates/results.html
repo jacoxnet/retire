@@ -991,11 +991,11 @@
                         <h4 class="fw-bold text-danger mb-0">
                             <i class="fa fa-fire me-2"></i>Historical Crisis & Sequence-of-Returns Stress Test
                         </h4>
-                        <small class="text-secondary">Replay famous market crashes and high-inflation periods over your actual retirement plan.</small>
+                        <small class="text-secondary">Simulate your retirement plan under historical crisis returns and inflation within a full Monte Carlo framework.</small>
                     </div>
-                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnScanWorst">
-                        <i class="fa fa-wand-magic-sparkles me-1"></i> <span id="btnScanWorstText">Find Worst Historical Year</span>
-                    </button>
+                    <span class="badge bg-light text-danger border border-danger px-3 py-2 fs-6 fw-semibold">
+                        <i class="fa fa-chart-line me-1"></i> Monte Carlo Stress Test
+                    </span>
                 </div>
 
                 <div class="row g-3 align-items-end">
@@ -1008,18 +1008,10 @@
                             <option value="1929_depression">The Great Depression (1929–1941)</option>
                             <option value="2022_rate_spike">The 2022 Inflation & Rate Spike Shock (2022–2024)</option>
                             <option value="1966_bear">The 1966 Sideways Market (Classic 4% Rule Stress)</option>
-                            <option value="custom">Custom Starting Year (1926–2024)...</option>
                         </select>
                     </div>
-                    <div class="col-md-2" id="customYearGroup" style="display: none;">
-                        <label class="form-label fw-semibold" for="stressCustomYear">Starting Year</label>
-                        <div class="input-group">
-                            <input type="number" class="form-control" id="stressCustomYear" value="2000" min="1926" max="2024">
-                            <button class="btn btn-outline-secondary" type="button" id="btnApplyCustomYear">Apply</button>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold" for="stressAllocationSelect">Asset Allocation</label>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold" for="stressAllocationSelect">Asset Allocation During Crisis</label>
                         <select class="form-select" id="stressAllocationSelect">
                             <option value="matched" selected>Matched to My Expected Returns</option>
                             <option value="100_stock">100% Stock / 0% Bond</option>
@@ -1029,11 +1021,11 @@
                             <option value="100_bond">0% Stock / 100% Bond</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold" for="stressTimingSelect">Crisis Timing</label>
                         <select class="form-select" id="stressTimingSelect">
                             <option value="retirement" selected>Hit Market Crisis at Retirement Start</option>
-                            <option value="current">Hit Market Crisis Immediately (Current Year)</option>
+                            <option value="current">Hit Market Crisis Immediately (Plan Inception)</option>
                         </select>
                     </div>
                 </div>
@@ -1043,6 +1035,7 @@
                     <div class="d-flex align-items-center gap-2 mb-1">
                         <span class="badge bg-danger" id="stressScenarioBadge">Tech Bust + 2008 GFC</span>
                         <strong class="text-dark" id="stressScenarioTitle">The Dot-Com Crash & "Lost Decade" (2000–2012)</strong>
+                        <span class="badge bg-secondary ms-auto" id="stressScenarioDurationBadge">13 Years Duration</span>
                     </div>
                     <p class="mb-0 text-secondary small" id="stressScenarioText">
                         Three consecutive down years for stocks (-9.1%, -11.9%, -22.1%) followed closely by the 2008 crash, representing the classic Sequence-of-Returns shock for early retirees.
@@ -1050,113 +1043,121 @@
                 </div>
             </div>
 
-            <!-- KPI Metric Cards -->
-            <div class="row g-3 mb-4">
-                <div class="col-md-3">
-                    <div class="card p-3 shadow-sm border-0 h-100 bg-white" id="stressCardSurvival">
-                        <small class="text-muted text-uppercase fw-semibold">Portfolio Survival</small>
-                        <h4 class="fw-bold mt-2 mb-0" id="stressKpiSurvival">Survived</h4>
-                        <small class="text-muted mt-1" id="stressKpiSurvivalDetail">Through life expectancy</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card p-3 shadow-sm border-0 h-100 bg-white">
-                        <small class="text-muted text-uppercase fw-semibold">Maximum Drawdown</small>
-                        <h4 class="fw-bold mt-2 mb-0 text-danger" id="stressKpiMaxDrawdown">-41.1%</h4>
-                        <small class="text-muted mt-1">Peak-to-trough decline</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card p-3 shadow-sm border-0 h-100 bg-white">
-                        <small class="text-muted text-uppercase fw-semibold">Lowest Portfolio Balance</small>
-                        <h4 class="fw-bold mt-2 mb-0 text-warning" id="stressKpiLowestBal">$757,447</h4>
-                        <small class="text-muted mt-1" id="stressKpiLowestBalDetail">In Year 2031 (Age 65)</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card p-3 shadow-sm border-0 h-100 bg-white">
-                        <small class="text-muted text-uppercase fw-semibold">Ending Legacy Balance</small>
-                        <h4 class="fw-bold mt-2 mb-0 text-primary" id="stressKpiEndingBal">$3,328,920</h4>
-                        <small class="text-muted mt-1" id="stressKpiEndingDelta">-$650k vs Baseline Plan</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Stress Test Visual Charts -->
+            <!-- Comparison Results Section -->
             <div class="row g-4 mb-4">
-                <!-- Chart A: Portfolio Balance Trajectory Comparison -->
+                <!-- Comparison Table & Key Summary Cards -->
                 <div class="col-lg-7">
-                    <div class="card shadow-sm border-0 chart-card h-100">
-                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="card-title text-primary mb-0 fw-bold">
-                                    <i class="fa fa-chart-area me-2"></i>Portfolio Trajectory: Baseline vs. Crisis Replay
-                                </h5>
-                                <small class="text-muted">Comparing base deterministic trajectory against the historical market replay</small>
+                    <div class="card p-4 shadow-sm border-0 h-100 bg-white">
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                            <h3 class="text-primary mb-0">
+                                <i class="fa fa-scale-balanced me-2"></i>Results Comparison
+                            </h3>
+                            <span class="badge bg-light text-secondary border fw-normal">Stress Test vs. Regular Monte Carlo</span>
+                        </div>
+
+                        <!-- Top Metric Callouts: Success Rates -->
+                        <div class="row g-3 mb-4 text-center">
+                            <div class="col-sm-6">
+                                <div class="alert alert-success border h-100 py-3 mb-0">
+                                    <small class="text-muted text-uppercase fw-semibold d-block">Regular Simulation</small>
+                                    <h5 class="mb-1 text-success fw-bold">Success Rate</h5>
+                                    <span class="display-6 font-weight-bold text-success" id="cmpRegularSuccess">--%</span>
+                                    <div class="mt-1 small text-muted">Baseline Monte Carlo</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="alert alert-danger border h-100 py-3 mb-0" id="cmpStressSuccessBox">
+                                    <small class="text-muted text-uppercase fw-semibold d-block">Historical Stress Test</small>
+                                    <h5 class="mb-1 text-danger fw-bold">Success Rate</h5>
+                                    <span class="display-6 font-weight-bold text-danger" id="cmpStressSuccess">--%</span>
+                                    <div class="mt-1 small fw-bold" id="cmpDeltaSuccess">-- vs Regular</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="card-body">
-                            <div class="chart-canvas-container" style="height: 380px;">
-                                <canvas id="stressTrajectoryChartCanvas"></canvas>
-                            </div>
+
+                        <div class="p-2 px-3 bg-light rounded border mb-3 d-flex justify-content-between align-items-center">
+                            <strong>Desired Recurring Annual Spending:</strong>
+                            <span class="fw-bold text-success fs-6" id="cmpDesiredSpending">$0</span>
+                        </div>
+
+                        <!-- Ending Wealth Percentiles (Nominal) Comparison Table -->
+                        <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles (Nominal)</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="stressComparisonTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th class="text-end">Regular Sim</th>
+                                        <th class="text-end">Stress Test</th>
+                                        <th class="text-end">Difference (Impact)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Mean Ending Wealth</strong></td>
+                                        <td class="text-end" id="cmpRegMean">$0</td>
+                                        <td class="text-end fw-semibold" id="cmpStressMean">$0</td>
+                                        <td class="text-end" id="cmpDeltaMean">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Median Ending Wealth</strong></td>
+                                        <td class="text-end font-weight-bold" id="cmpRegMedian">$0</td>
+                                        <td class="text-end font-weight-bold" id="cmpStressMedian">$0</td>
+                                        <td class="text-end font-weight-bold" id="cmpDeltaMedian">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>25th Percentile Ending Wealth</strong></td>
+                                        <td class="text-end" id="cmpRegP25">$0</td>
+                                        <td class="text-end fw-semibold" id="cmpStressP25">$0</td>
+                                        <td class="text-end" id="cmpDeltaP25">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>10th Percentile Ending Wealth</strong></td>
+                                        <td class="text-end font-weight-bold" id="cmpRegP10">$0</td>
+                                        <td class="text-end font-weight-bold" id="cmpStressP10">$0</td>
+                                        <td class="text-end font-weight-bold" id="cmpDeltaP10">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Maximum Wealth</strong></td>
+                                        <td class="text-end" id="cmpRegMax">$0</td>
+                                        <td class="text-end" id="cmpStressMax">$0</td>
+                                        <td class="text-end" id="cmpDeltaMax">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Minimum Wealth</strong></td>
+                                        <td class="text-end" id="cmpRegMin">$0</td>
+                                        <td class="text-end" id="cmpStressMin">$0</td>
+                                        <td class="text-end" id="cmpDeltaMin">$0</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="alert alert-light border p-3 mt-4 mb-0">
+                            <p class="mb-0 text-secondary small">
+                                <strong>Stress Test Methodology:</strong> The historical crisis scenario replaces the stochastic market returns and inflation during the designated crisis window (<span id="stressTimelineText">crisis years</span>). All other plan years utilize the regular stochastic Monte Carlo parameters.
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Chart B: Annual Market Returns & Inflation -->
+                <!-- Trajectory Chart Comparison -->
                 <div class="col-lg-5">
-                    <div class="card shadow-sm border-0 chart-card h-100">
+                    <div class="card shadow-sm border-0 chart-card h-100 bg-white">
                         <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                             <div>
                                 <h5 class="card-title text-primary mb-0 fw-bold">
-                                    <i class="fa fa-chart-column me-2"></i>Crisis Macro Drivers
+                                    <i class="fa fa-chart-area me-2"></i>Trajectory Comparison
                                 </h5>
-                                <small class="text-muted">Stock Return, Bond Return & Inflation during the crisis sequence</small>
+                                <small class="text-muted">Median (50th) & 10th-90th percentiles over time</small>
                             </div>
                         </div>
                         <div class="card-body">
                             <div class="chart-canvas-container" style="height: 380px;">
-                                <canvas id="stressMacroChartCanvas"></canvas>
+                                <canvas id="stressComparisonChartCanvas"></canvas>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Year-by-Year Detailed Table -->
-            <div class="card p-4 shadow-sm border-0 mb-4 bg-white">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="d-flex align-items-center">
-                        <h5 class="fw-bold mb-0 text-primary">
-                            <i class="fa fa-table me-2"></i>Year-by-Year Stress Test Schedule
-                        </h5>
-                        <button type="button" class="btn btn-outline-info btn-sm ms-2 py-0 px-2 rounded-pill shadow-none" id="wrapAroundInfoBtn" data-bs-toggle="modal" data-bs-target="#wrapAroundModal" style="display: none; font-size: 0.78rem;">
-                            <i class="fa-solid fa-rotate me-1"></i>Historical Wrap-Around Active
-                        </button>
-                    </div>
-                    <span class="badge bg-secondary" id="stressTableCountBadge">31 Years</span>
-                </div>
-                <div class="table-container" style="overflow-x: auto; max-height: 520px;">
-                    <table class="table table-hover align-middle mb-0" id="stressTestTable" style="min-width: 900px;">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th>Year</th>
-                                <th>Your Age</th>
-                                {% if is_married %}<th>Spouse Age</th>{% endif %}
-                                <th>Hist. Year</th>
-                                <th class="text-end">Stocks</th>
-                                <th class="text-end">Bonds</th>
-                                <th class="text-end">Inflation</th>
-                                <th class="text-end">Spending</th>
-                                <th class="text-end">Withdrawals</th>
-                                <th class="text-end">Crisis Balance</th>
-                                <th class="text-end">Baseline Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody id="stressTestTableBody">
-                            <!-- Populated dynamically via JS -->
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </div>
@@ -1804,12 +1805,9 @@
     // ==========================================
     // TAB 5: HISTORICAL STRESS TEST JAVASCRIPT
     // ==========================================
-    const stressChartInstances = {
-        trajectory: null,
-        macro: null
-    };
+    let stressComparisonChartInstance = null;
 
-    function formatNumberCurrency(val) {
+    function formatStressCurrency(val) {
         if (val === null || val === undefined || isNaN(val)) return '$0';
         const num = Math.round(Number(val));
         const absNum = Math.abs(num);
@@ -1817,7 +1815,7 @@
         return sign + '$' + absNum.toLocaleString('en-US');
     }
 
-    function formatDeltaCurrency(val) {
+    function formatStressDeltaCurrency(val) {
         if (val === null || val === undefined || isNaN(val)) return '$0';
         const num = Math.round(Number(val));
         const sign = num > 0 ? '+' : (num < 0 ? '-' : '');
@@ -1825,287 +1823,207 @@
         return sign + '$' + absNum.toLocaleString('en-US');
     }
 
-    function updateStressKPIs(summary, scenario) {
-        if (!summary) return;
-
-        const survivalCard = document.getElementById('stressCardSurvival');
-        const survivalTitle = document.getElementById('stressKpiSurvival');
-        const survivalDetail = document.getElementById('stressKpiSurvivalDetail');
-
-        if (survivalTitle) {
-            if (summary.survived) {
-                survivalTitle.textContent = 'Survived';
-                survivalTitle.className = 'fw-bold mt-2 mb-0 text-success';
-                if (survivalDetail) survivalDetail.textContent = 'Through entire plan horizon';
-                if (survivalCard) survivalCard.className = 'card p-3 shadow-sm border-0 h-100 bg-white border-start border-success border-4';
-            } else {
-                survivalTitle.textContent = `Depleted at Age ${summary.depletion_age}`;
-                survivalTitle.className = 'fw-bold mt-2 mb-0 text-danger';
-                if (survivalDetail) survivalDetail.textContent = `In Year ${summary.depletion_year}`;
-                if (survivalCard) survivalCard.className = 'card p-3 shadow-sm border-0 h-100 bg-white border-start border-danger border-4';
-            }
-        }
-
-        const maxDdEl = document.getElementById('stressKpiMaxDrawdown');
-        if (maxDdEl) {
-            maxDdEl.textContent = `-${summary.max_drawdown}%`;
-        }
-
-        const lowestBalEl = document.getElementById('stressKpiLowestBal');
-        const lowestDetailEl = document.getElementById('stressKpiLowestBalDetail');
-        if (lowestBalEl) {
-            lowestBalEl.textContent = formatNumberCurrency(summary.lowest_balance);
-        }
-        if (lowestDetailEl) {
-            lowestDetailEl.textContent = `In Year ${summary.lowest_balance_year} (Age ${summary.lowest_balance_age})`;
-        }
-
-        const endingBalEl = document.getElementById('stressKpiEndingBal');
-        const endingDeltaEl = document.getElementById('stressKpiEndingDelta');
-        if (endingBalEl) {
-            endingBalEl.textContent = formatNumberCurrency(summary.ending_balance);
-        }
-        if (endingDeltaEl) {
-            endingDeltaEl.textContent = `${formatDeltaCurrency(summary.balance_delta)} vs Baseline Plan`;
-            endingDeltaEl.className = summary.balance_delta >= 0 ? 'text-success mt-1' : 'text-danger mt-1';
-        }
-
-        if (scenario) {
-            const badgeEl = document.getElementById('stressScenarioBadge');
-            const titleEl = document.getElementById('stressScenarioTitle');
-            const textEl = document.getElementById('stressScenarioText');
-            if (badgeEl) badgeEl.textContent = scenario.badge || `Cohort ${scenario.start_year}`;
-            if (titleEl) titleEl.textContent = scenario.name || `Cohort ${scenario.start_year}`;
-            if (textEl) textEl.textContent = scenario.description || '';
-        }
-
-        const wrapBtn = document.getElementById('wrapAroundInfoBtn');
-        if (wrapBtn) {
-            wrapBtn.style.display = summary.has_wrapped ? 'inline-block' : 'none';
-        }
+    function formatStressDeltaPercent(val) {
+        if (val === null || val === undefined || isNaN(val)) return '0.0%';
+        const num = Number(val);
+        const sign = num > 0 ? '+' : '';
+        return sign + num.toFixed(1) + '%';
     }
 
-    function renderStressTestTable(yearlyData) {
-        const tbody = document.getElementById('stressTestTableBody');
-        const countBadge = document.getElementById('stressTableCountBadge');
-        if (!tbody || !yearlyData) return;
-
-        if (countBadge) countBadge.textContent = `${yearlyData.length} Years`;
-
-        let html = '';
-        yearlyData.forEach(function(row) {
-            const isDepleted = row.ending_assets <= 0;
-            const rowClass = isDepleted ? 'table-danger' : '';
-            const stockColor = row.stocks_ret >= 0 ? 'text-success' : 'text-danger';
-            const bondColor = row.bonds_ret >= 0 ? 'text-success' : 'text-danger';
-
-            let milestoneBadge = '';
-            if (row.milestones && row.milestones.length > 0) {
-                milestoneBadge = ` <span class="badge bg-info text-dark ms-1 small">${row.milestones.join(', ')}</span>`;
-            }
-
-            let histYearDisplay = `${row.historical_year}`;
-            if (row.is_wrapped) {
-                histYearDisplay += ` <span class="badge bg-light text-info border" title="Wrapped from 2024 to 1926" style="font-size:0.65rem;">Wrap</span>`;
-            }
-
-            html += `<tr class="${rowClass}">
-                <td class="fw-bold">${row.year}${milestoneBadge}</td>
-                <td>${row.user_age}</td>
-                ${row.spouse_age !== null && row.spouse_age !== undefined ? `<td>${row.spouse_age}</td>` : ''}
-                <td class="text-secondary small">${histYearDisplay}</td>
-                <td class="text-end ${stockColor} fw-semibold">${row.stocks_ret > 0 ? '+' : ''}${row.stocks_ret.toFixed(1)}%</td>
-                <td class="text-end ${bondColor}">${row.bonds_ret > 0 ? '+' : ''}${row.bonds_ret.toFixed(1)}%</td>
-                <td class="text-end text-warning fw-semibold">${row.inflation_ret.toFixed(1)}%</td>
-                <td class="text-end">${formatNumberCurrency(row.spending)}</td>
-                <td class="text-end text-danger">${formatNumberCurrency(row.withdrawals)}</td>
-                <td class="text-end fw-bold ${row.ending_assets <= 0 ? 'text-danger' : 'text-dark'}">${formatNumberCurrency(row.ending_assets)}</td>
-                <td class="text-end text-muted">${formatNumberCurrency(row.baseline_ending_assets)}</td>
-            </tr>`;
-        });
-
-        tbody.innerHTML = html;
-    }
-
-    function initStressCharts(yearlyData, summary) {
-        if (!yearlyData || yearlyData.length === 0) return;
-
-        const labels = yearlyData.map(r => `Age ${r.user_age} (${r.year})`);
-        const baselineData = yearlyData.map(r => r.baseline_ending_assets);
-        const stressData = yearlyData.map(r => Math.max(0, r.ending_assets));
-
-        // 1. Trajectory Chart
-        const trajCanvas = document.getElementById('stressTrajectoryChartCanvas');
-        if (trajCanvas) {
-            const ctx = trajCanvas.getContext('2d');
-            if (stressChartInstances.trajectory) {
-                stressChartInstances.trajectory.destroy();
-            }
-
-            stressChartInstances.trajectory = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Base Plan Projection',
-                            data: baselineData,
-                            borderColor: '#2563eb',
-                            backgroundColor: 'transparent',
-                            borderWidth: 2.5,
-                            borderDash: [5, 5],
-                            pointRadius: 0,
-                            tension: 0.1
-                        },
-                        {
-                            label: 'Historical Crisis Replay',
-                            data: stressData,
-                            borderColor: summary && !summary.survived ? '#dc2626' : '#d97706',
-                            backgroundColor: summary && !summary.survived ? 'rgba(220, 38, 38, 0.12)' : 'rgba(217, 119, 6, 0.12)',
-                            borderWidth: 3,
-                            pointRadius: 0,
-                            fill: true,
-                            tension: 0.1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    events: ['click', 'touchstart'],
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: true, position: 'top', labels: { boxWidth: 14, font: { size: 12 } } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${formatChartCurrency(context.raw)}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: {
-                            ticks: { callback: value => formatChartCurrency(value) },
-                            title: { display: true, text: 'Portfolio Wealth ($)' }
-                        }
-                    }
-                }
-            });
-        }
-
-        // 2. Macro Drivers Chart
-        const macroCanvas = document.getElementById('stressMacroChartCanvas');
-        if (macroCanvas) {
-            const ctx = macroCanvas.getContext('2d');
-            if (stressChartInstances.macro) {
-                stressChartInstances.macro.destroy();
-            }
-
-            const macroLabels = yearlyData.map(r => `${r.historical_year}`);
-            const stocksData = yearlyData.map(r => r.stocks_ret);
-            const bondsData = yearlyData.map(r => r.bonds_ret);
-            const inflationData = yearlyData.map(r => r.inflation_ret);
-
-            stressChartInstances.macro = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: macroLabels,
-                    datasets: [
-                        {
-                            label: 'S&P 500 Stocks (%)',
-                            data: stocksData,
-                            backgroundColor: stocksData.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
-                            borderColor: stocksData.map(v => v >= 0 ? '#10b981' : '#ef4444'),
-                            borderWidth: 1,
-                            order: 2
-                        },
-                        {
-                            label: '10Y US Treasury Bonds (%)',
-                            data: bondsData,
-                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                            borderColor: '#3b82f6',
-                            borderWidth: 1,
-                            order: 2
-                        },
-                        {
-                            label: 'CPI Inflation (%)',
-                            data: inflationData,
-                            type: 'line',
-                            borderColor: '#f59e0b',
-                            backgroundColor: '#f59e0b',
-                            borderWidth: 2.5,
-                            pointRadius: 2,
-                            fill: false,
-                            order: 1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    events: ['click', 'touchstart'],
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.raw > 0 ? '+' : ''}${context.raw.toFixed(1)}%`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: {
-                            ticks: { callback: value => `${value}%` },
-                            title: { display: true, text: 'Annual Return / Inflation (%)' }
-                        }
-                    }
-                }
-            });
-        }
-    }
-
-    function updateStressTestView(data) {
+    function updateStressComparisonView(data) {
         if (!data) return;
-        updateStressKPIs(data.summary, data.scenario);
-        renderStressTestTable(data.yearly_data);
-        initStressCharts(data.yearly_data, data.summary);
+
+        const reg = data.regular_results || {};
+        const stress = data.stress_results || {};
+        const deltas = data.deltas || {};
+        const scenario = data.scenario || {};
+
+        // 1. Scenario Callout
+        const badgeEl = document.getElementById('stressScenarioBadge');
+        const titleEl = document.getElementById('stressScenarioTitle');
+        const durEl = document.getElementById('stressScenarioDurationBadge');
+        const textEl = document.getElementById('stressScenarioText');
+        const timelineEl = document.getElementById('stressTimelineText');
+
+        if (badgeEl) badgeEl.textContent = scenario.badge || scenario.key;
+        if (titleEl) titleEl.textContent = scenario.name || scenario.short_name || 'Crisis Scenario';
+        if (durEl) durEl.textContent = `${data.crisis_length || scenario.length || 10} Years Duration`;
+        if (textEl) textEl.textContent = scenario.description || '';
+        if (timelineEl) {
+            timelineEl.textContent = `${data.crisis_start_year}–${data.crisis_end_year} (${data.crisis_length} years)`;
+        }
+
+        // 2. Key Highlights (Success Rates & Spending)
+        const regSuccessEl = document.getElementById('cmpRegularSuccess');
+        const stressSuccessEl = document.getElementById('cmpStressSuccess');
+        const deltaSuccessEl = document.getElementById('cmpDeltaSuccess');
+        const desiredSpendingEl = document.getElementById('cmpDesiredSpending');
+        const stressBoxEl = document.getElementById('cmpStressSuccessBox');
+
+        if (regSuccessEl) regSuccessEl.textContent = `${(reg.run_success || 0).toFixed(1)}%`;
+        if (stressSuccessEl) stressSuccessEl.textContent = `${(stress.run_success || 0).toFixed(1)}%`;
+        if (desiredSpendingEl) desiredSpendingEl.textContent = formatStressCurrency(data.desired_spending);
+
+        if (deltaSuccessEl) {
+            const dSuccess = deltas.delta_success || 0;
+            deltaSuccessEl.textContent = `${formatStressDeltaPercent(dSuccess)} vs Regular Sim`;
+            deltaSuccessEl.className = dSuccess >= 0 ? 'mt-1 small fw-bold text-success' : 'mt-1 small fw-bold text-danger';
+        }
+
+        if (stressBoxEl) {
+            const sRate = stress.run_success || 0;
+            stressBoxEl.className = sRate >= 80.0
+                ? 'alert alert-success border h-100 py-3 mb-0'
+                : (sRate >= 60.0 ? 'alert alert-warning border h-100 py-3 mb-0' : 'alert alert-danger border h-100 py-3 mb-0');
+        }
+
+        // 3. Ending Wealth Percentiles Comparison Table
+        function setCell(id, text, isPositiveGood, deltaVal) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = text;
+            if (deltaVal !== undefined) {
+                el.className = 'text-end fw-bold ' + (deltaVal >= 0 ? 'text-success' : 'text-danger');
+            }
+        }
+
+        setCell('cmpRegMean', formatStressCurrency(reg.run_mean));
+        setCell('cmpStressMean', formatStressCurrency(stress.run_mean));
+        setCell('cmpDeltaMean', formatStressDeltaCurrency(deltas.delta_mean), true, deltas.delta_mean);
+
+        setCell('cmpRegMedian', formatStressCurrency(reg.run_median));
+        setCell('cmpStressMedian', formatStressCurrency(stress.run_median));
+        setCell('cmpDeltaMedian', formatStressDeltaCurrency(deltas.delta_median), true, deltas.delta_median);
+
+        setCell('cmpRegP25', formatStressCurrency(reg.run_25));
+        setCell('cmpStressP25', formatStressCurrency(stress.run_25));
+        setCell('cmpDeltaP25', formatStressDeltaCurrency(deltas.delta_25), true, deltas.delta_25);
+
+        setCell('cmpRegP10', formatStressCurrency(reg.run_10));
+        setCell('cmpStressP10', formatStressCurrency(stress.run_10));
+        setCell('cmpDeltaP10', formatStressDeltaCurrency(deltas.delta_10), true, deltas.delta_10);
+
+        setCell('cmpRegMax', formatStressCurrency(reg.run_max));
+        setCell('cmpStressMax', formatStressCurrency(stress.run_max));
+        setCell('cmpDeltaMax', formatStressDeltaCurrency(deltas.delta_max), true, deltas.delta_max);
+
+        setCell('cmpRegMin', formatStressCurrency(reg.run_min));
+        setCell('cmpStressMin', formatStressCurrency(stress.run_min));
+        setCell('cmpDeltaMin', formatStressDeltaCurrency(deltas.delta_min), true, deltas.delta_min);
+
+        // 4. Comparison Chart
+        renderStressComparisonChart(data);
     }
 
-    function fetchStressTest(extraParams) {
+    function renderStressComparisonChart(data) {
+        const canvas = document.getElementById('stressComparisonChartCanvas');
+        if (!canvas || !data) return;
+
+        const labels = data.chart_labels || [];
+        const reg = data.regular_results || {};
+        const stress = data.stress_results || {};
+
+        const ctx = canvas.getContext('2d');
+        if (stressComparisonChartInstance) {
+            stressComparisonChartInstance.destroy();
+        }
+
+        stressComparisonChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Regular Sim Median (50th)',
+                        data: reg.mc_p50 || [],
+                        borderColor: '#2563eb',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 1
+                    },
+                    {
+                        label: 'Stress Test Median (50th)',
+                        data: stress.mc_p50 || [],
+                        borderColor: '#dc2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                        fill: true,
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 2
+                    },
+                    {
+                        label: 'Regular Sim (10th Percentile)',
+                        data: reg.mc_p10 || [],
+                        borderColor: '#93c5fd',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1.5,
+                        borderDash: [2, 2],
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 3
+                    },
+                    {
+                        label: 'Stress Test (10th Percentile)',
+                        data: stress.mc_p10 || [],
+                        borderColor: '#f87171',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                events: ['click', 'touchstart'],
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { boxWidth: 14, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${formatChartCurrency(context.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        ticks: { callback: value => formatChartCurrency(value) },
+                        title: { display: true, text: 'Portfolio Wealth ($)' }
+                    }
+                }
+            }
+        });
+    }
+
+    function fetchStressTest() {
         const scenarioSelect = document.getElementById('stressScenarioSelect');
-        const customYearInput = document.getElementById('stressCustomYear');
         const allocationSelect = document.getElementById('stressAllocationSelect');
         const timingSelect = document.getElementById('stressTimingSelect');
 
         const params = new URLSearchParams();
         params.append('scenario_key', scenarioSelect ? scenarioSelect.value : '2000_dotcom');
-        params.append('custom_start_year', customYearInput ? customYearInput.value : '2000');
         params.append('asset_allocation', allocationSelect ? allocationSelect.value : 'matched');
         params.append('crisis_timing', timingSelect ? timingSelect.value : 'retirement');
-
-        if (extraParams) {
-            for (const [k, v] of Object.entries(extraParams)) {
-                params.set(k, v);
-            }
-        }
 
         fetch('/api/stress_test/?' + params.toString())
             .then(res => res.json())
             .then(data => {
-                if (data.worst_scanned_year) {
-                    if (scenarioSelect) scenarioSelect.value = 'custom';
-                    if (customYearInput) customYearInput.value = data.worst_scanned_year;
-                    const customGroup = document.getElementById('customYearGroup');
-                    if (customGroup) customGroup.style.display = 'block';
-                }
-                updateStressTestView(data);
+                updateStressComparisonView(data);
             })
-            .catch(err => console.error('Error fetching stress test data:', err));
+            .catch(err => console.error('Error fetching stress test comparison data:', err));
     }
 
     // Attach listeners on load
@@ -2121,50 +2039,25 @@
             }
         }
         if (initialStress) {
-            updateStressTestView(initialStress);
+            updateStressComparisonView(initialStress);
         }
 
         const stressTabBtn = document.getElementById('stress-tab');
         if (stressTabBtn) {
             stressTabBtn.addEventListener('shown.bs.tab', function () {
                 if (initialStress) {
-                    initStressCharts(initialStress.yearly_data, initialStress.summary);
+                    renderStressComparisonChart(initialStress);
                 }
             });
         }
 
         const scenarioSelect = document.getElementById('stressScenarioSelect');
-        const customGroup = document.getElementById('customYearGroup');
-        const customYearInput = document.getElementById('stressCustomYear');
-        const btnApplyCustom = document.getElementById('btnApplyCustomYear');
         const allocationSelect = document.getElementById('stressAllocationSelect');
         const timingSelect = document.getElementById('stressTimingSelect');
-        const btnScanWorst = document.getElementById('btnScanWorst');
-        const btnScanWorstText = document.getElementById('btnScanWorstText');
 
         if (scenarioSelect) {
             scenarioSelect.addEventListener('change', function() {
-                if (this.value === 'custom') {
-                    if (customGroup) customGroup.style.display = 'block';
-                } else {
-                    if (customGroup) customGroup.style.display = 'none';
-                    fetchStressTest();
-                }
-            });
-        }
-
-        if (btnApplyCustom) {
-            btnApplyCustom.addEventListener('click', function() {
                 fetchStressTest();
-            });
-        }
-
-        if (customYearInput) {
-            customYearInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    fetchStressTest();
-                }
             });
         }
 
@@ -2177,20 +2070,6 @@
         if (timingSelect) {
             timingSelect.addEventListener('change', function() {
                 fetchStressTest();
-            });
-        }
-
-        if (btnScanWorst) {
-            btnScanWorst.addEventListener('click', function() {
-                if (btnScanWorstText) btnScanWorstText.textContent = 'Scanning 1926–2005...';
-                btnScanWorst.disabled = true;
-
-                fetchStressTest({ action: 'scan_worst' });
-
-                setTimeout(() => {
-                    if (btnScanWorstText) btnScanWorstText.textContent = 'Find Worst Historical Year';
-                    btnScanWorst.disabled = false;
-                }, 1000);
             });
         }
     });

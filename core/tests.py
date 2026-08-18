@@ -949,19 +949,24 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(len(seq['bonds']), 30)
 
     def test_historical_stress_test_simulation(self):
-        """Test running historical stress test scenarios."""
+        """Test running historical Monte Carlo stress test scenarios."""
         from core.views import get_default_data
         from core.runs import run_historical_stress_test
 
         plan = get_default_data()
         res_dotcom = run_historical_stress_test(plan, scenario_key='2000_dotcom')
-        self.assertIn('summary', res_dotcom)
-        self.assertIn('yearly_data', res_dotcom)
-        self.assertGreater(len(res_dotcom['yearly_data']), 0)
-        self.assertIn('max_drawdown', res_dotcom['summary'])
+        self.assertIn('regular_results', res_dotcom)
+        self.assertIn('stress_results', res_dotcom)
+        self.assertIn('deltas', res_dotcom)
+        self.assertIn('chart_labels', res_dotcom)
+        self.assertIn('run_success', res_dotcom['regular_results'])
+        self.assertIn('run_success', res_dotcom['stress_results'])
+        self.assertIn('mc_p50', res_dotcom['stress_results'])
+        self.assertGreater(len(res_dotcom['chart_labels']), 0)
 
-        res_custom = run_historical_stress_test(plan, scenario_key='custom', custom_start_year=1973, asset_allocation='60_40')
-        self.assertEqual(res_custom['scenario']['start_year'], 1973)
+        res_stagflation = run_historical_stress_test(plan, scenario_key='1973_stagflation', asset_allocation='60_40', crisis_timing='current')
+        self.assertEqual(res_stagflation['scenario']['key'], '1973_stagflation')
+        self.assertIn('delta_success', res_stagflation['deltas'])
 
     def test_stress_test_api_endpoint(self):
         """Test the /api/stress_test/ endpoint."""
@@ -972,21 +977,10 @@ class RetirementCalculationTests(TestCase):
         })
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertIn('summary', data)
-        self.assertIn('yearly_data', data)
+        self.assertIn('regular_results', data)
+        self.assertIn('stress_results', data)
+        self.assertIn('deltas', data)
         self.assertEqual(data['scenario']['key'], '1973_stagflation')
-
-    def test_stress_test_api_scan_worst(self):
-        """Test the /api/stress_test/ endpoint with action=scan_worst."""
-        resp = self.client.post('/api/stress_test/', {
-            'action': 'scan_worst',
-            'asset_allocation': 'matched',
-            'crisis_timing': 'retirement'
-        })
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertIn('worst_scanned_year', data)
-        self.assertGreaterEqual(data['worst_scanned_year'], 1926)
 
     def test_state_income_taxes_and_ss_exemption(self):
         """Verify state income tax calculations with and without Social Security exemption."""

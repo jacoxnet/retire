@@ -114,6 +114,8 @@ CRISIS_SCENARIOS = {
         'name': 'The Dot-Com Crash & "Lost Decade" (2000–2012)',
         'short_name': '2000 Dot-Com Crash',
         'start_year': 2000,
+        'end_year': 2012,
+        'length': 13,
         'description': 'Three consecutive down years for stocks (-9.1%, -11.9%, -22.1%) followed closely by the 2008 crash, representing the classic Sequence-of-Returns shock for early retirees.',
         'badge': 'Tech Bust + 2008 GFC'
     },
@@ -121,6 +123,8 @@ CRISIS_SCENARIOS = {
         'name': 'The 1970s Stagflation & Inflation Shock (1973–1982)',
         'short_name': '1973 Stagflation',
         'start_year': 1973,
+        'end_year': 1982,
+        'length': 10,
         'description': 'Severe equity market drawdown (-14.7%, -26.5%) combined with soaring double-digit inflation (up to 13.3%), putting tremendous strain on inflation-adjusted spending.',
         'badge': 'High Inflation + Drop'
     },
@@ -128,6 +132,8 @@ CRISIS_SCENARIOS = {
         'name': 'The Great Financial Crisis (2007–2017)',
         'short_name': '2008 Global Financial Crisis',
         'start_year': 2007,
+        'end_year': 2017,
+        'length': 11,
         'description': 'A massive 37% stock market plunge in 2008 counterbalanced by strong Treasury bond gains (+20%), followed by an historic monetary stimulus and economic recovery.',
         'badge': 'Liquidity Panic'
     },
@@ -135,6 +141,8 @@ CRISIS_SCENARIOS = {
         'name': 'The Great Depression (1929–1941)',
         'short_name': '1929 Great Depression',
         'start_year': 1929,
+        'end_year': 1941,
+        'length': 13,
         'description': 'Four consecutive years of severe equity collapse with an overall drawdown exceeding 60%, followed by strong deflation and extreme economic volatility.',
         'badge': 'Historic Worst'
     },
@@ -142,6 +150,8 @@ CRISIS_SCENARIOS = {
         'name': 'The 2022 Inflation & Rate Spike Shock (2022–2024)',
         'short_name': '2022 Inflation & Rate Spike',
         'start_year': 2022,
+        'end_year': 2024,
+        'length': 3,
         'description': 'A rare dual-collapse where both equities (-18.1%) and intermediate bonds (-17.8%) dropped simultaneously as inflation surged to 40-year highs.',
         'badge': 'Stocks & Bonds Both Fell'
     },
@@ -149,6 +159,8 @@ CRISIS_SCENARIOS = {
         'name': 'The 1966 Sideways Market & Creeping Inflation (1966–1981)',
         'short_name': '1966 Inflationary Bear',
         'start_year': 1966,
+        'end_year': 1981,
+        'length': 16,
         'description': 'The historically worst retirement cohort in Bill Bengen\'s 4% Rule research, characterized by persistent 15-year sideways equity returns eroded by climbing inflation.',
         'badge': 'Classic 4% Rule Stress'
     }

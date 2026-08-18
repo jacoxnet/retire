@@ -1066,7 +1066,8 @@ def njit_simulate_path(
     r_pre, r_roth, r_tax, r_hsa,
     state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
-    trajectory_arr=None
+    trajectory_arr=None,
+    inf_factors=None
 ):
     pretax_user = pretax_user_init
     pretax_spouse = pretax_spouse_init
@@ -1138,7 +1139,11 @@ def njit_simulate_path(
         hsa_user_mid = hsa_user_before + growth_hsa_user
         hsa_spouse_mid = hsa_spouse_before + growth_hsa_spouse
         
-        inf_factor = (1.0 + inflation_rate / 100.0) ** t
+        if inf_factors is not None:
+            inf_factor = inf_factors[t]
+        else:
+            inf_factor = (1.0 + inflation_rate / 100.0) ** t
+            
         is_spending_active = (user_age_t >= desired_spending_start_age)
         if is_spending_active:
             base_spending = desired_spending
@@ -1273,7 +1278,7 @@ def njit_simulate_path(
                 roth_end -= w_roth
                 deficit -= w_roth
                 
-            if deficit > 0.0 and hsa_user_end > 0.0:
+            if deficit > 0.0 and hsa_user_end > 0.0 and (user_alive or not spouse_alive):
                 if hsa_user_for_medical_code == 1:
                     w_hsa_u = min(deficit, max(0.0, hsa_user_end))
                     hsa_user_end -= w_hsa_u
@@ -1412,7 +1417,8 @@ def njit_simulate_all_paths(
     state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
     ending_wealths,
-    trajectories=None
+    trajectories=None,
+    inf_factors=None
 ):
     for i in numba.prange(runs):
         if trajectories is not None:
@@ -1426,7 +1432,8 @@ def njit_simulate_all_paths(
                 returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
                 state_tax_rate, state_ss_exempt_code, other_taxes_arr,
                 hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
-                trajectories[i]
+                trajectories[i],
+                inf_factors
             )
         else:
             ending_wealths[i] = njit_simulate_path(
@@ -1438,10 +1445,12 @@ def njit_simulate_all_paths(
                 add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
                 returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
                 state_tax_rate, state_ss_exempt_code, other_taxes_arr,
-                hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code
+                hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
+                None,
+                inf_factors
             )
 
-def prepare_numba_inputs(inputs, test_spending=None):
+def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None):
     desired_spending = test_spending if test_spending is not None else inputs['desired_spending']
     survivor_spending = inputs['survivor_spending']
     if test_spending is not None and inputs['desired_spending'] > 0:
@@ -1452,6 +1461,17 @@ def prepare_numba_inputs(inputs, test_spending=None):
     filing_status_code = filing_status_map.get(inputs['filing_status'], 0)
     
     total_years = inputs['total_years']
+    inflation_rate = float(inputs['inflation_rate'])
+    
+    if custom_inflation_rates is not None:
+        inf_rates = np.array(custom_inflation_rates, dtype=np.float64)
+        inf_factors = np.zeros(total_years, dtype=np.float64)
+        inf_factors[0] = 1.0
+        for t in range(1, total_years):
+            inf_factors[t] = inf_factors[t - 1] * (1.0 + inf_rates[t - 1] / 100.0)
+    else:
+        inf_factors = (1.0 + inflation_rate / 100.0) ** np.arange(total_years, dtype=np.float64)
+
     c_pre_user = np.zeros(total_years, dtype=np.float64)
     c_pre_spouse = np.zeros(total_years, dtype=np.float64)
     c_roth = np.zeros(total_years, dtype=np.float64)
@@ -1472,7 +1492,6 @@ def prepare_numba_inputs(inputs, test_spending=None):
     desired_spending_start_age = inputs['desired_spending_start_age']
     user_age_death = inputs['user_age_death']
     spouse_age_death = inputs['spouse_age_death']
-    inflation_rate = inputs['inflation_rate']
     
     state_tax_rate = float(inputs.get('state_tax_rate', 0.0))
     state_ss_exempt = bool(inputs.get('state_ss_exempt', True))
@@ -1505,7 +1524,7 @@ def prepare_numba_inputs(inputs, test_spending=None):
                 else:
                     occurs = ((user_age_t - start_age) % interval == 0)
             if occurs:
-                factor = (1.0 + inflation_rate / 100.0) ** t if adjust_inf else 1.0
+                factor = inf_factors[t] if adjust_inf else 1.0
                 add_s += amount * factor
         add_spending_arr[t] = add_s
         
@@ -1551,9 +1570,10 @@ def prepare_numba_inputs(inputs, test_spending=None):
                     adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
 
                 years_since_adj = max(0, user_age_t - adj_start_age)
+                start_t = max(0, min(total_years - 1, adj_start_age - user_age))
 
                 if adj_type == 'inflation':
-                    factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
+                    factor = (inf_factors[t] / inf_factors[start_t]) if inf_factors[start_t] > 0 else inf_factors[t]
                 elif adj_type == 'fixed_pct':
                     factor = (1.0 + adj_val / 100.0) ** years_since_adj
                 elif adj_type == 'inflation_less_pct':
@@ -1581,7 +1601,7 @@ def prepare_numba_inputs(inputs, test_spending=None):
         sp_freq = ss_data.get('spouse_freq', 'monthly')
         sp_start_age = int(ss_data.get('spouse_start_age', 67)) if is_married else 67
 
-        inf_factor = (1.0 + inflation_rate / 100.0) ** t
+        inf_factor = inf_factors[t]
 
         u_base = u_amt * 12.0 if u_freq == 'monthly' else u_amt
         sp_base = sp_amt * 12.0 if sp_freq == 'monthly' else sp_amt
@@ -1657,9 +1677,10 @@ def prepare_numba_inputs(inputs, test_spending=None):
                     adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
 
                 years_since_adj = max(0, user_age_t - adj_start_age)
+                start_t = max(0, min(total_years - 1, adj_start_age - user_age))
 
                 if adj_type == 'inflation':
-                    factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
+                    factor = (inf_factors[t] / inf_factors[start_t]) if inf_factors[start_t] > 0 else inf_factors[t]
                 elif adj_type == 'fixed_pct':
                     factor = (1.0 + adj_val / 100.0) ** years_since_adj
                 elif adj_type == 'inflation_less_pct':
@@ -1715,7 +1736,8 @@ def prepare_numba_inputs(inputs, test_spending=None):
         'hsa_user_for_medical_code': hsa_user_for_medical_code,
         'hsa_spouse_for_medical_code': hsa_spouse_for_medical_code,
         'user_rmd_start_age': inputs['user_rmd_start_age'],
-        'spouse_rmd_start_age': inputs['spouse_rmd_start_age']
+        'spouse_rmd_start_age': inputs['spouse_rmd_start_age'],
+        'inf_factors': inf_factors
     }
 
 def generate_runs(sim_input, test_spending=None):
@@ -1754,7 +1776,8 @@ def generate_runs(sim_input, test_spending=None):
         nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
         nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
         ending_wealths,
-        trajectories
+        trajectories,
+        nb_inp['inf_factors']
     )
     
     successes = float(np.sum(ending_wealths >= 0.0))
@@ -1838,7 +1861,9 @@ def binary_search(sim_input):
             returns_pre, returns_roth, returns_taxable, returns_hsa,
             nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
             nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
-            ending_wealths
+            ending_wealths,
+            None,
+            nb_inp['inf_factors']
         )
         
         success_rate = float(np.mean(ending_wealths >= 0.0))
@@ -1960,216 +1985,182 @@ def infer_asset_allocation(mean_return):
         return float(stock_ratio * 100.0), float((1.0 - stock_ratio) * 100.0), 0.0
 
 
-def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', custom_start_year=None, asset_allocation='matched', crisis_timing='retirement'):
+def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allocation='matched', crisis_timing='retirement', regular_mc_results=None):
     """
-    Simulates the user's plan under a historical crisis sequence.
+    Conducts a Monte Carlo simulation applying historical returns & inflation for the specified crisis duration,
+    and regular Monte Carlo stochastic draws for all other years of the plan.
     """
-    from core.historical_data import HISTORICAL_RETURNS, CRISIS_SCENARIOS, get_historical_sequence, blend_return, MIN_HISTORICAL_YEAR, MAX_HISTORICAL_YEAR
+    from core.historical_data import HISTORICAL_RETURNS, CRISIS_SCENARIOS, blend_return
 
     inputs = extract_sim_inputs(sim_input)
     years = inputs['total_years']
+    runs = inputs['runs']
 
-    if scenario_key == 'custom':
-        try:
-            start_yr = int(custom_start_year)
-            start_yr = max(MIN_HISTORICAL_YEAR, min(MAX_HISTORICAL_YEAR, start_yr))
-        except (TypeError, ValueError):
-            start_yr = 2000
-        scenario_info = {
-            'key': 'custom',
-            'name': f"Custom Historical Cohort ({start_yr})",
-            'short_name': f"{start_yr} Cohort",
-            'start_year': start_yr,
-            'description': f"Simulates your plan using the actual sequence of market returns and inflation starting from {start_yr}.",
-            'badge': f"Started in {start_yr}"
-        }
-    elif scenario_key in CRISIS_SCENARIOS:
+    if scenario_key in CRISIS_SCENARIOS:
         scenario_info = dict(CRISIS_SCENARIOS[scenario_key])
         scenario_info['key'] = scenario_key
-        start_yr = scenario_info['start_year']
     else:
         scenario_info = dict(CRISIS_SCENARIOS['2000_dotcom'])
         scenario_info['key'] = '2000_dotcom'
-        start_yr = 2000
 
-    hist_seq = get_historical_sequence(start_yr, years)
+    start_yr = scenario_info['start_year']
+    end_yr = scenario_info.get('end_year', start_yr + scenario_info.get('length', 10) - 1)
+    crisis_length = scenario_info.get('length', end_yr - start_yr + 1)
+
     t_ret = max(0, inputs['user_ret_age'] - inputs['user_age'])
+    if crisis_timing == 'retirement':
+        crisis_start_t = t_ret
+    else:
+        crisis_start_t = 0
+    crisis_end_t = min(years, crisis_start_t + crisis_length)
 
-    account_keys = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa']
-    account_returns = {}
+    rng = np.random.default_rng()
+    pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
+    pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
+    roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
+    roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
+    taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
+    taxable_s = inputs['taxable_data'].get('return_std', 10.0) / 100.0
+    hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
+    hsa_s = inputs['hsa_data'].get('return_std', 10.0) / 100.0
 
-    for prefix in account_keys:
-        acc_data = inputs[f'{prefix}_data']
-        base_m = acc_data.get('return_mean', 6.0) / 100.0
+    returns_pre = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
+    returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
+    returns_hsa = rng.normal(hsa_m, hsa_s, size=(runs, years))
 
+    base_inf = float(inputs['inflation_rate'])
+    inflation_rates = np.full(years, base_inf, dtype=np.float64)
+
+    def get_allocation_weights(acc_mean):
         if asset_allocation == '100_stock':
-            s_pct, b_pct, c_pct = 100.0, 0.0, 0.0
+            return 100.0, 0.0, 0.0
         elif asset_allocation == '80_20':
-            s_pct, b_pct, c_pct = 80.0, 20.0, 0.0
+            return 80.0, 20.0, 0.0
         elif asset_allocation == '60_40':
-            s_pct, b_pct, c_pct = 60.0, 40.0, 0.0
+            return 60.0, 40.0, 0.0
         elif asset_allocation == '40_60':
-            s_pct, b_pct, c_pct = 40.0, 60.0, 0.0
+            return 40.0, 60.0, 0.0
         elif asset_allocation == '100_bond':
-            s_pct, b_pct, c_pct = 0.0, 100.0, 0.0
+            return 0.0, 100.0, 0.0
         else:
-            s_pct, b_pct, c_pct = infer_asset_allocation(acc_data.get('return_mean', 6.0))
+            return infer_asset_allocation(acc_mean)
 
-        acc_r = []
-        for t in range(years):
-            if crisis_timing == 'retirement' and t < t_ret:
-                acc_r.append(base_m)
-            else:
-                h_idx = (t - t_ret) if (crisis_timing == 'retirement') else t
-                h_idx = max(0, h_idx)
-                s_val = hist_seq['stocks'][h_idx]
-                b_val = hist_seq['bonds'][h_idx]
-                c_val = hist_seq['cash'][h_idx]
-                blended = blend_return(s_pct, b_pct, c_pct, s_val, b_val, c_val) / 100.0
-                acc_r.append(blended)
-        account_returns[prefix] = acc_r
+    w_pre = get_allocation_weights(inputs['pretax_data'].get('return_mean', 6.0))
+    w_roth = get_allocation_weights(inputs['roth_data'].get('return_mean', 6.0))
+    w_tax = get_allocation_weights(inputs['taxable_data'].get('return_mean', 6.0))
+    w_hsa = get_allocation_weights(inputs['hsa_data'].get('return_mean', 6.0))
 
-    stress_results = run_simulation_path(
-        inputs,
-        account_returns['pretax'],
-        account_returns['roth'],
-        account_returns['taxable'],
-        account_returns['hsa']
-    )
+    crisis_macro_summary = []
+    for t in range(crisis_start_t, crisis_end_t):
+        k = t - crisis_start_t
+        hist_yr = start_yr + k
+        h_data = HISTORICAL_RETURNS.get(hist_yr, {'stocks': 7.0, 'bonds': 4.0, 'cash': 2.0, 'inflation': base_inf})
+        s_val = h_data['stocks']
+        b_val = h_data['bonds']
+        c_val = h_data['cash']
+        inf_val = h_data['inflation']
 
-    det_pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
-    det_roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
-    det_taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
-    det_hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
+        inflation_rates[t] = inf_val
 
-    baseline_results = run_simulation_path(
-        inputs,
-        [det_pretax_m] * years,
-        [det_roth_m] * years,
-        [det_taxable_m] * years,
-        [det_hsa_m] * years
-    )
+        r_pre_hist = blend_return(w_pre[0], w_pre[1], w_pre[2], s_val, b_val, c_val) / 100.0
+        r_roth_hist = blend_return(w_roth[0], w_roth[1], w_roth[2], s_val, b_val, c_val) / 100.0
+        r_tax_hist = blend_return(w_tax[0], w_tax[1], w_tax[2], s_val, b_val, c_val) / 100.0
+        r_hsa_hist = blend_return(w_hsa[0], w_hsa[1], w_hsa[2], s_val, b_val, c_val) / 100.0
 
-    balances = [r['ending_assets']['total'] for r in stress_results]
-    baseline_balances = [r['ending_assets']['total'] for r in baseline_results]
+        returns_pre[:, t] = r_pre_hist
+        returns_roth[:, t] = r_roth_hist
+        returns_taxable[:, t] = r_tax_hist
+        returns_hsa[:, t] = r_hsa_hist
 
-    peak_balance = max(0.0, balances[0])
-    max_drawdown = 0.0
-    lowest_balance = balances[0]
-    lowest_balance_year = inputs['current_year']
-    lowest_balance_age = inputs['user_age']
-
-    for idx, b in enumerate(balances):
-        if b > peak_balance:
-            peak_balance = b
-        elif peak_balance > 0.0:
-            dd = (peak_balance - b) / peak_balance * 100.0
-            if dd > max_drawdown:
-                max_drawdown = dd
-        if b < lowest_balance:
-            lowest_balance = b
-            lowest_balance_year = inputs['current_year'] + idx
-            lowest_balance_age = inputs['user_age'] + idx
-
-    survived = all(b > 0.0 for b in balances)
-    depletion_year = None
-    depletion_age = None
-    if not survived:
-        for idx, b in enumerate(balances):
-            if b <= 0.0:
-                depletion_year = inputs['current_year'] + idx
-                depletion_age = inputs['user_age'] + idx
-                break
-
-    yearly_data = []
-    has_wrapped = False
-    for t in range(years):
-        res = stress_results[t]
-        base_res = baseline_results[t]
-        y_yr = inputs['current_year'] + t
-        u_age = inputs['user_age'] + t
-        s_age = (inputs['spouse_age'] + t) if inputs['is_married'] else None
-
-        h_idx = (t - t_ret) if (crisis_timing == 'retirement' and t >= t_ret) else (t if crisis_timing != 'retirement' else 0)
-        raw_hist_yr = start_yr + h_idx
-        is_wrapped = (raw_hist_yr > MAX_HISTORICAL_YEAR)
-        if is_wrapped:
-            has_wrapped = True
-            h_actual_year = MIN_HISTORICAL_YEAR + (raw_hist_yr - MAX_HISTORICAL_YEAR - 1)
-        else:
-            h_actual_year = raw_hist_yr
-
-        s_ret = hist_seq['stocks'][h_idx]
-        b_ret = hist_seq['bonds'][h_idx]
-        inf_ret = hist_seq['inflation'][h_idx]
-
-        milestones = []
-        if u_age == inputs['user_ret_age']:
-            milestones.append(f"You Retire ({u_age})")
-        if u_age == inputs['user_rmd_start_age']:
-            milestones.append(f"RMDs Start ({u_age})")
-        if u_age == inputs['user_age_death']:
-            milestones.append(f"Final Year ({u_age})")
-
-        yearly_data.append({
-            'year': y_yr,
-            'user_age': u_age,
-            'spouse_age': s_age,
-            'historical_year': h_actual_year,
-            'is_wrapped': is_wrapped,
-            'stocks_ret': s_ret,
-            'bonds_ret': b_ret,
-            'inflation_ret': inf_ret,
-            'portfolio_ret': round(account_returns['pretax'][t] * 100.0, 2),
-            'beg_assets': res['beginning_assets']['total'],
-            'ending_assets': res['ending_assets']['total'],
-            'baseline_ending_assets': base_res['ending_assets']['total'],
-            'income': res['income_sources_total'],
-            'spending': res['desired_spending'] + res['additional_spending'],
-            'taxes': res['taxes_paid'],
-            'withdrawals': res['withdrawals']['total'],
-            'milestones': milestones
+        crisis_macro_summary.append({
+            'plan_year': inputs['current_year'] + t,
+            'user_age': inputs['user_age'] + t,
+            'historical_year': hist_yr,
+            'stocks': s_val,
+            'bonds': b_val,
+            'inflation': inf_val
         })
 
-    summary = {
-        'survived': survived,
-        'depletion_year': depletion_year,
-        'depletion_age': depletion_age,
-        'max_drawdown': round(max_drawdown, 1),
-        'lowest_balance': round(lowest_balance, 2),
-        'lowest_balance_year': lowest_balance_year,
-        'lowest_balance_age': lowest_balance_age,
-        'ending_balance': round(balances[-1], 2),
-        'baseline_ending_balance': round(baseline_balances[-1], 2),
-        'balance_delta': round(balances[-1] - baseline_balances[-1], 2),
-        'start_year': start_yr,
-        'has_wrapped': has_wrapped
+    nb_inp = prepare_numba_inputs(inputs, custom_inflation_rates=inflation_rates)
+    ending_wealths = np.empty(runs, dtype=np.float64)
+    trajectories = np.empty((runs, years + 1), dtype=np.float64)
+
+    njit_simulate_all_paths(
+        runs, years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
+        nb_inp['filing_status_code'], inputs['desired_spending_start_age'], nb_inp['desired_spending'], nb_inp['survivor_spending'],
+        inputs['adjust_spending_inflation'], inputs['inflation_rate'], nb_inp['hsa_user_for_medical_code'], nb_inp['user_rmd_start_age'], nb_inp['spouse_rmd_start_age'],
+        nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_user_init'],
+        nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa_user'],
+        nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
+        returns_pre, returns_roth, returns_taxable, returns_hsa,
+        nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
+        nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
+        ending_wealths,
+        trajectories,
+        nb_inp['inf_factors']
+    )
+
+    successes = float(np.sum(ending_wealths >= 0.0))
+    stress_success = (successes / runs) * 100.0
+
+    mc_p10 = [float(val) for val in np.percentile(trajectories, 10, axis=0)]
+    mc_p50 = [float(val) for val in np.percentile(trajectories, 50, axis=0)]
+    mc_p90 = [float(val) for val in np.percentile(trajectories, 90, axis=0)]
+
+    stress_stats = {
+        'run_mean': float(np.mean(ending_wealths)),
+        'run_median': float(np.median(ending_wealths)),
+        'run_10': float(np.percentile(ending_wealths, 10)),
+        'run_25': float(np.percentile(ending_wealths, 25)),
+        'run_min': float(np.min(ending_wealths)),
+        'run_max': float(np.max(ending_wealths)),
+        'run_success': float(stress_success),
+        'mc_p10': mc_p10,
+        'mc_p50': mc_p50,
+        'mc_p90': mc_p90
     }
+
+    if regular_mc_results is None:
+        regular_mc_results = generate_runs(sim_input)
+
+    deltas = {
+        'delta_success': stress_stats['run_success'] - regular_mc_results['run_success'],
+        'delta_mean': stress_stats['run_mean'] - regular_mc_results['run_mean'],
+        'delta_median': stress_stats['run_median'] - regular_mc_results['run_median'],
+        'delta_25': stress_stats['run_25'] - regular_mc_results['run_25'],
+        'delta_10': stress_stats['run_10'] - regular_mc_results['run_10'],
+        'delta_max': stress_stats['run_max'] - regular_mc_results['run_max'],
+        'delta_min': stress_stats['run_min'] - regular_mc_results['run_min'],
+    }
+
+    chart_labels = [f"Age {inputs['user_age'] + t} ({inputs['current_year'] + t})" for t in range(years + 1)]
+    actual_crisis_start_year = inputs['current_year'] + crisis_start_t
+    actual_crisis_end_year = inputs['current_year'] + max(crisis_start_t, crisis_end_t - 1)
 
     return {
         'scenario': scenario_info,
-        'summary': summary,
-        'yearly_data': yearly_data,
+        'crisis_timing': crisis_timing,
+        'asset_allocation': asset_allocation,
+        'crisis_start_year': actual_crisis_start_year,
+        'crisis_end_year': actual_crisis_end_year,
+        'crisis_length': crisis_length,
+        'crisis_macro': crisis_macro_summary,
+        'desired_spending': float(inputs['desired_spending']),
+        'stress_results': stress_stats,
+        'regular_results': {
+            'run_success': regular_mc_results['run_success'],
+            'run_mean': regular_mc_results['run_mean'],
+            'run_median': regular_mc_results['run_median'],
+            'run_10': regular_mc_results['run_10'],
+            'run_25': regular_mc_results['run_25'],
+            'run_min': regular_mc_results['run_min'],
+            'run_max': regular_mc_results['run_max'],
+            'mc_p10': regular_mc_results['mc_p10'],
+            'mc_p50': regular_mc_results['mc_p50'],
+            'mc_p90': regular_mc_results['mc_p90'],
+        },
+        'deltas': deltas,
+        'chart_labels': chart_labels,
         'scenarios_list': CRISIS_SCENARIOS
     }
-
-
-def scan_worst_historical_cohort(sim_input, asset_allocation='matched', crisis_timing='retirement'):
-    from core.historical_data import MIN_HISTORICAL_YEAR, MAX_HISTORICAL_YEAR
-    worst_year = None
-    worst_ending = float('inf')
-    worst_depletion_age = float('inf')
-
-    for yr in range(MIN_HISTORICAL_YEAR, 2005):
-        res = run_historical_stress_test(sim_input, scenario_key='custom', custom_start_year=yr, asset_allocation=asset_allocation, crisis_timing=crisis_timing)
-        s = res['summary']
-        if not s['survived']:
-            if s['depletion_age'] < worst_depletion_age:
-                worst_depletion_age = s['depletion_age']
-                worst_ending = s['ending_balance']
-                worst_year = yr
-        elif worst_depletion_age == float('inf') and s['ending_balance'] < worst_ending:
-            worst_ending = s['ending_balance']
-            worst_year = yr
-
-    return worst_year or 1966
