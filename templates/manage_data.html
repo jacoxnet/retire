@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Save / Load / Clear Data - Retirement Calculator{% endblock %}
+
+{% block content %}
+<div class="container main-content mt-4 mb-5">
+    <div class="text-center mb-5">
+        <h1 class="pageheading mb-2">Plan Data Management</h1>
+        <p class="text-secondary lead fs-6">Export your retirement plan to a file, restore a previously saved plan, or reset all inputs.</p>
+    </div>
+
+    <!-- Alert / Messages Container -->
+    {% if messages %}
+        <div class="row justify-content-center mb-4">
+            <div class="col-lg-10">
+                {% for message in messages %}
+                    <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags %}{{ message.tags }}{% else %}primary{% endif %} alert-dismissible fade show text-center shadow-sm" role="alert">
+                        <i class="fa {% if message.tags == 'error' %}fa-circle-exclamation{% else %}fa-circle-check{% endif %} me-2"></i>
+                        <strong>{{ message }}</strong>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- 3 Action Choice Cards -->
+    <div class="row g-4 justify-content-center">
+        <!-- Choice 1: Save Plan (JSON) -->
+        <div class="col-md-4">
+            <div class="card p-4 h-100 shadow-sm border-0 text-center hover-shadow transition-all bg-white">
+                <div class="card-body d-flex flex-column justify-content-between p-0">
+                    <div>
+                        <div class="p-3 bg-primary bg-opacity-10 rounded-circle d-inline-block mb-3">
+                            <i class="fa fa-download fa-2x text-primary"></i>
+                        </div>
+                        <h4 class="fw-bold text-primary mb-2">Save Plan (JSON)</h4>
+                        <p class="text-muted small mb-4">
+                            Download your complete retirement plan inputs, accounts, spending, and income streams to a local <code>.json</code> file.
+                        </p>
+                    </div>
+                    <button type="button" class="btn btn-primary py-2 fw-semibold shadow-sm w-100" id="btnSaveJSON">
+                        <i class="fa fa-download me-2"></i>Save Plan (.json)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Choice 2: Load Plan (JSON) -->
+        <div class="col-md-4">
+            <div class="card p-4 h-100 shadow-sm border-0 text-center hover-shadow transition-all bg-white">
+                <div class="card-body d-flex flex-column justify-content-between p-0">
+                    <div>
+                        <div class="p-3 bg-success bg-opacity-10 rounded-circle d-inline-block mb-3">
+                            <i class="fa fa-upload fa-2x text-success"></i>
+                        </div>
+                        <h4 class="fw-bold text-success mb-2">Load Plan (JSON)</h4>
+                        <p class="text-muted small mb-4">
+                            Restore an existing retirement plan file from your computer to quickly inspect or update the simulation.
+                        </p>
+                    </div>
+                    <div>
+                        <input type="file" id="jsonFileInput" accept=".json" style="display: none;">
+                        <button type="button" class="btn btn-success py-2 fw-semibold shadow-sm w-100" id="btnTriggerLoad">
+                            <i class="fa fa-upload me-2"></i>Load Plan (.json)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Choice 3: Clear Data -->
+        <div class="col-md-4">
+            <div class="card p-4 h-100 shadow-sm border-0 text-center hover-shadow transition-all bg-white">
+                <div class="card-body d-flex flex-column justify-content-between p-0">
+                    <div>
+                        <div class="p-3 bg-danger bg-opacity-10 rounded-circle d-inline-block mb-3">
+                            <i class="fa fa-trash-can fa-2x text-danger"></i>
+                        </div>
+                        <h4 class="fw-bold text-danger mb-2">Clear Data</h4>
+                        <p class="text-muted small mb-4">
+                            Reset all current retirement parameters, accounts, income streams, and taxes back to default sample values.
+                        </p>
+                    </div>
+                    <form method="POST" action="{% url 'clear_data' %}" id="clearDataForm" onsubmit="return confirm('Are you sure you want to clear all data and reset to default values? This action cannot be undone.');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger py-2 fw-semibold shadow-sm w-100" id="btnClearData">
+                            <i class="fa fa-trash me-2"></i>Clear Data
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Navigation Links -->
+    <div class="text-center mt-5">
+        <a href="{% url 'enter' %}" class="btn btn-outline-secondary">
+            <i class="fa fa-pen-to-square me-1"></i> Return to Data Entry
+        </a>
+    </div>
+</div>
+
+<!-- Hidden Form for Load Plan submission -->
+<form id="loadPlanForm" method="POST" action="{% url 'load_plan' %}" style="display: none;">
+    {% csrf_token %}
+    <input type="hidden" name="json_data" id="loadPlanInput">
+    <input type="hidden" name="next" value="enter">
+</form>
+
+{{ plan_data_json|json_script:"current-plan-json" }}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Save Plan (JSON)
+    const btnSaveJSON = document.getElementById('btnSaveJSON');
+    if (btnSaveJSON) {
+        btnSaveJSON.addEventListener('click', function() {
+            const planScript = document.getElementById('current-plan-json');
+            let planData = {};
+            if (planScript) {
+                try {
+                    planData = JSON.parse(planScript.textContent);
+                } catch (e) {
+                    console.error('Error parsing plan data JSON:', e);
+                }
+            }
+            const userName = (planData.user_name || 'retirement').toLowerCase().replace(/\s+/g, '_');
+            const fileName = `${userName}_plan.json`;
+            const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(planData, null, 4));
+            
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", jsonStr);
+            downloadAnchor.setAttribute("download", fileName);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+    }
+
+    // 2. Load Plan (JSON)
+    const btnTriggerLoad = document.getElementById('btnTriggerLoad');
+    const jsonFileInput = document.getElementById('jsonFileInput');
+    const loadPlanForm = document.getElementById('loadPlanForm');
+    const loadPlanInput = document.getElementById('loadPlanInput');
+
+    if (btnTriggerLoad && jsonFileInput) {
+        btnTriggerLoad.addEventListener('click', function() {
+            jsonFileInput.click();
+        });
+
+        jsonFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const raw = JSON.parse(event.target.result);
+                    if (typeof raw !== 'object' || raw === null) {
+                        alert('Invalid JSON file format.');
+                        return;
+                    }
+                    loadPlanInput.value = JSON.stringify(raw);
+                    loadPlanForm.submit();
+                } catch (err) {
+                    alert('Error reading JSON file: ' + err.message);
+                } finally {
+                    jsonFileInput.value = '';
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -33,6 +33,98 @@ def get_bool(val):
         return True
     return False
 
+def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, is_married, spouse_age, spouse_retirement_age, spouse_age_death):
+    asset_map = {
+        'pretax': {
+            'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
+            'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
+            'return_mean': 6.0, 'return_std': 10.0
+        },
+        'spouse_pretax': {
+            'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
+            'contrib_start_age': spouse_age if is_married else user_age,
+            'contrib_end_age_type': 'spouse_retirement' if is_married else 'retirement',
+            'contrib_end_age_specified': spouse_retirement_age if is_married else user_retirement_age,
+            'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0
+        },
+        'roth': {
+            'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
+            'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
+            'return_mean': 6.0, 'return_std': 10.0
+        },
+        'taxable': {
+            'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
+            'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
+            'return_mean': 5.0, 'return_std': 8.0
+        },
+        'hsa': {
+            'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
+            'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
+            'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True
+        },
+        'spouse_hsa': {
+            'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
+            'contrib_start_age': spouse_age if is_married else user_age,
+            'contrib_end_age_type': 'spouse_retirement' if is_married else 'retirement',
+            'contrib_end_age_specified': spouse_retirement_age if is_married else user_retirement_age,
+            'contrib_adjust_inflation': True, 'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True
+        }
+    }
+
+    grouped = {k: [] for k in asset_map}
+    for acc in accounts:
+        atype = acc.get('type', 'pretax')
+        aowner = acc.get('owner', 'user')
+        if not is_married:
+            aowner = 'user'
+        
+        if atype == 'pretax':
+            target_key = 'spouse_pretax' if aowner == 'spouse' else 'pretax'
+        elif atype == 'hsa':
+            target_key = 'spouse_hsa' if aowner == 'spouse' else 'hsa'
+        elif atype == 'roth':
+            target_key = 'roth'
+        elif atype == 'taxable':
+            target_key = 'taxable'
+        else:
+            target_key = 'taxable'
+        grouped[target_key].append(acc)
+
+    result = {}
+    for key, acc_list in grouped.items():
+        base = dict(asset_map[key])
+        if acc_list:
+            base['present_balance'] = sum(float(a.get('balance', 0.0)) for a in acc_list)
+            base['contrib_amount'] = sum(float(a.get('contrib_amount', 0.0)) for a in acc_list)
+            
+            total_bal = sum(max(0.0, float(a.get('balance', 0.0))) for a in acc_list)
+            if total_bal > 0:
+                weights = [max(0.0, float(a.get('balance', 0.0))) for a in acc_list]
+            else:
+                weights = [max(0.0, float(a.get('contrib_amount', 0.0))) for a in acc_list]
+            total_w = sum(weights)
+            if total_w > 0:
+                base['return_mean'] = sum(float(a.get('return_mean', 6.0)) * w for a, w in zip(acc_list, weights)) / total_w
+                base['return_std'] = sum(float(a.get('return_std', 10.0)) * w for a, w in zip(acc_list, weights)) / total_w
+            else:
+                base['return_mean'] = sum(float(a.get('return_mean', 6.0)) for a in acc_list) / len(acc_list)
+                base['return_std'] = sum(float(a.get('return_std', 10.0)) for a in acc_list) / len(acc_list)
+            
+            primary = acc_list[0]
+            base['contrib_freq'] = primary.get('contrib_freq', 'annual')
+            base['contrib_start_age'] = primary.get('contrib_start_age', base['contrib_start_age'])
+            base['contrib_end_age_type'] = primary.get('contrib_end_age_type', base['contrib_end_age_type'])
+            base['contrib_end_age_specified'] = primary.get('contrib_end_age_specified', base['contrib_end_age_specified'])
+            base['contrib_adjust_inflation'] = primary.get('contrib_adjust_inflation', True)
+            if 'hsa_for_medical' in base:
+                base['hsa_for_medical'] = any(a.get('hsa_for_medical', True) for a in acc_list)
+        result[f'{key}_assets'] = base
+    return result
+
 def get_default_data():
     return {
         'goal_seeking': False,
@@ -65,9 +157,10 @@ def get_default_data():
             'spouse_freq': 'monthly',
             'spouse_start_age': 67,
         },
+        'accounts': [],
         'pretax_assets': {
-            'present_balance': 500000.0,
-            'contrib_amount': 5000.0,
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
             'contrib_end_age_type': 'retirement',
@@ -88,8 +181,8 @@ def get_default_data():
             'return_std': 10.0
         },
         'roth_assets': {
-            'present_balance': 100000.0,
-            'contrib_amount': 2000.0,
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
             'contrib_end_age_type': 'retirement',
@@ -99,8 +192,8 @@ def get_default_data():
             'return_std': 10.0
         },
         'taxable_assets': {
-            'present_balance': 200000.0,
-            'contrib_amount': 1000.0,
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
             'contrib_end_age_type': 'retirement',
@@ -110,8 +203,8 @@ def get_default_data():
             'return_std': 8.0
         },
         'hsa_assets': {
-            'present_balance': 20000.0,
-            'contrib_amount': 1000.0,
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
             'contrib_end_age_type': 'retirement',
@@ -148,6 +241,13 @@ def get_session_sim_data(request):
         request.session['cached_version'] = -1
     return request.session['simulation_data']
 
+@require_http_methods(["GET"])
+def manage_data_view(request):
+    data = get_session_sim_data(request)
+    return render(request, 'manage_data.html', {
+        'plan_data_json': data
+    })
+
 @require_http_methods(["GET", "POST"])
 def clear_data_view(request):
     request.session['simulation_data'] = get_default_data()
@@ -155,14 +255,18 @@ def clear_data_view(request):
     request.session['cached_results'] = None
     request.session['cached_version'] = -1
     messages.success(request, "All simulation data has been cleared.")
+    next_url = request.POST.get('next') or request.GET.get('next')
+    if next_url:
+        return redirect(reverse(next_url))
     return redirect(reverse('enter'))
 
 @require_http_methods(["POST"])
 def load_plan_view(request):
     raw_json = request.POST.get('json_data')
+    redirect_target = request.POST.get('next', 'results')
     if not raw_json:
         messages.error(request, "No plan data provided.")
-        return redirect(reverse('results'))
+        return redirect(reverse(redirect_target))
     
     try:
         data = json.loads(raw_json)
@@ -174,6 +278,50 @@ def load_plan_view(request):
         elif 'simulation_type' not in data and 'goal_seeking' in data:
             data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
 
+        if 'accounts' in data and isinstance(data['accounts'], list):
+            agg = aggregate_accounts(
+                data['accounts'],
+                data.get('user_age', 60),
+                data.get('user_retirement_age', 65),
+                data.get('user_age_death', 90),
+                data.get('is_married', False),
+                data.get('spouse_age', 60),
+                data.get('spouse_retirement_age', 65),
+                data.get('spouse_age_death', 90)
+            )
+            for k, v in agg.items():
+                data[k] = v
+        elif 'accounts' not in data:
+            migrated_accounts = []
+            for ac, atype, aowner in [
+                ('pretax', 'pretax', 'user'),
+                ('spouse_pretax', 'pretax', 'spouse'),
+                ('roth', 'roth', 'user'),
+                ('taxable', 'taxable', 'user'),
+                ('hsa', 'hsa', 'user'),
+                ('spouse_hsa', 'hsa', 'spouse'),
+            ]:
+                if ac in ['spouse_pretax', 'spouse_hsa'] and not data.get('is_married'):
+                    continue
+                ac_data = data.get(f'{ac}_assets', {})
+                if ac_data and (ac_data.get('present_balance', 0) > 0 or ac_data.get('contrib_amount', 0) > 0):
+                    migrated_accounts.append({
+                        'name': f"{'Spouse ' if aowner == 'spouse' else ''}{atype.upper()} Account",
+                        'type': atype,
+                        'owner': aowner,
+                        'balance': ac_data.get('present_balance', 0.0),
+                        'contrib_amount': ac_data.get('contrib_amount', 0.0),
+                        'contrib_freq': ac_data.get('contrib_freq', 'annual'),
+                        'contrib_start_age': ac_data.get('contrib_start_age', 60),
+                        'contrib_end_age_type': ac_data.get('contrib_end_age_type', 'retirement'),
+                        'contrib_end_age_specified': ac_data.get('contrib_end_age_specified', 65),
+                        'contrib_adjust_inflation': ac_data.get('contrib_adjust_inflation', True),
+                        'return_mean': ac_data.get('return_mean', 6.0),
+                        'return_std': ac_data.get('return_std', 10.0),
+                        'hsa_for_medical': ac_data.get('hsa_for_medical', True),
+                    })
+            data['accounts'] = migrated_accounts
+
         request.session['simulation_data'] = data
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         request.session['cached_results'] = None
@@ -183,7 +331,7 @@ def load_plan_view(request):
     except Exception as e:
         messages.error(request, f"Error loading plan: {str(e)}")
         
-    return redirect(reverse('results'))
+    return redirect(reverse(redirect_target))
 
 @require_http_methods(["POST"])
 def change_mode_view(request):
@@ -289,80 +437,158 @@ def enter_view(request):
             'spouse_start_age': spouse_ss_start_age,
         }
         
-        # Assets (Pretax User, Pretax Spouse, Roth, Taxable, HSA)
-        pretax_assets = {
-            'present_balance': get_float(request.POST.get('pretax_present_balance'), 500000.0),
-            'contrib_amount': get_float(request.POST.get('pretax_contrib_amount'), 0.0),
-            'contrib_freq': request.POST.get('pretax_contrib_freq', 'annual'),
-            'contrib_start_age': max(min_start_age, get_int(request.POST.get('pretax_contrib_start_age'), user_age)),
-            'contrib_end_age_type': request.POST.get('pretax_contrib_end_age_type', 'retirement'),
-            'contrib_end_age_specified': get_int(request.POST.get('pretax_contrib_end_age_specified'), user_retirement_age),
-            'contrib_adjust_inflation': get_bool(request.POST.get('pretax_contrib_adjust_inflation')),
-            'return_mean': get_float(request.POST.get('pretax_return_mean'), 6.0),
-            'return_std': get_float(request.POST.get('pretax_return_std'), 10.0),
-        }
-        
-        spouse_pretax_assets = {
-            'present_balance': get_float(request.POST.get('spouse_pretax_present_balance'), 0.0) if is_married else 0.0,
-            'contrib_amount': get_float(request.POST.get('spouse_pretax_contrib_amount'), 0.0) if is_married else 0.0,
-            'contrib_freq': request.POST.get('spouse_pretax_contrib_freq', 'annual'),
-            'contrib_start_age': max(min_start_age, get_int(request.POST.get('spouse_pretax_contrib_start_age'), spouse_age if is_married else user_age)),
-            'contrib_end_age_type': request.POST.get('spouse_pretax_contrib_end_age_type', 'spouse_retirement'),
-            'contrib_end_age_specified': get_int(request.POST.get('spouse_pretax_contrib_end_age_specified'), spouse_retirement_age if is_married else user_retirement_age),
-            'contrib_adjust_inflation': get_bool(request.POST.get('spouse_pretax_contrib_adjust_inflation')),
-            'return_mean': get_float(request.POST.get('spouse_pretax_return_mean'), 6.0),
-            'return_std': get_float(request.POST.get('spouse_pretax_return_std'), 10.0),
-        }
-        
-        roth_assets = {
-            'present_balance': get_float(request.POST.get('roth_present_balance'), 0.0),
-            'contrib_amount': get_float(request.POST.get('roth_contrib_amount'), 0.0),
-            'contrib_freq': request.POST.get('roth_contrib_freq', 'annual'),
-            'contrib_start_age': max(min_start_age, get_int(request.POST.get('roth_contrib_start_age'), user_age)),
-            'contrib_end_age_type': request.POST.get('roth_contrib_end_age_type', 'retirement'),
-            'contrib_end_age_specified': get_int(request.POST.get('roth_contrib_end_age_specified'), user_retirement_age),
-            'contrib_adjust_inflation': get_bool(request.POST.get('roth_contrib_adjust_inflation')),
-            'return_mean': get_float(request.POST.get('roth_return_mean'), 6.0),
-            'return_std': get_float(request.POST.get('roth_return_std'), 10.0),
-        }
-        
-        taxable_assets = {
-            'present_balance': get_float(request.POST.get('taxable_present_balance'), 100000.0),
-            'contrib_amount': get_float(request.POST.get('taxable_contrib_amount'), 0.0),
-            'contrib_freq': request.POST.get('taxable_contrib_freq', 'annual'),
-            'contrib_start_age': max(min_start_age, get_int(request.POST.get('taxable_contrib_start_age'), user_age)),
-            'contrib_end_age_type': request.POST.get('taxable_contrib_end_age_type', 'retirement'),
-            'contrib_end_age_specified': get_int(request.POST.get('taxable_contrib_end_age_specified'), user_retirement_age),
-            'contrib_adjust_inflation': get_bool(request.POST.get('taxable_contrib_adjust_inflation')),
-            'return_mean': get_float(request.POST.get('taxable_return_mean'), 5.0),
-            'return_std': get_float(request.POST.get('taxable_return_std'), 8.0),
-        }
-        
-        hsa_assets = {
-            'present_balance': get_float(request.POST.get('hsa_present_balance'), 0.0),
-            'contrib_amount': get_float(request.POST.get('hsa_contrib_amount'), 0.0),
-            'contrib_freq': request.POST.get('hsa_contrib_freq', 'annual'),
-            'contrib_start_age': max(min_start_age, get_int(request.POST.get('hsa_contrib_start_age'), user_age)),
-            'contrib_end_age_type': request.POST.get('hsa_contrib_end_age_type', 'retirement'),
-            'contrib_end_age_specified': get_int(request.POST.get('hsa_contrib_end_age_specified'), user_retirement_age),
-            'contrib_adjust_inflation': get_bool(request.POST.get('hsa_contrib_adjust_inflation')),
-            'return_mean': get_float(request.POST.get('hsa_return_mean'), 5.0),
-            'return_std': get_float(request.POST.get('hsa_return_std'), 8.0),
-            'hsa_for_medical': get_bool(request.POST.get('hsa_for_medical')),
-        }
-        
-        spouse_hsa_assets = {
-            'present_balance': get_float(request.POST.get('spouse_hsa_present_balance'), 0.0),
-            'contrib_amount': get_float(request.POST.get('spouse_hsa_contrib_amount'), 0.0),
-            'contrib_freq': request.POST.get('spouse_hsa_contrib_freq', 'annual'),
-            'contrib_start_age': max(min_start_age, get_int(request.POST.get('spouse_hsa_contrib_start_age'), spouse_age if is_married else user_age)),
-            'contrib_end_age_type': request.POST.get('spouse_hsa_contrib_end_age_type', 'retirement'),
-            'contrib_end_age_specified': get_int(request.POST.get('spouse_hsa_contrib_end_age_specified'), spouse_retirement_age if is_married else user_retirement_age),
-            'contrib_adjust_inflation': get_bool(request.POST.get('spouse_hsa_contrib_adjust_inflation')),
-            'return_mean': get_float(request.POST.get('spouse_hsa_return_mean'), 5.0),
-            'return_std': get_float(request.POST.get('spouse_hsa_return_std'), 8.0),
-            'hsa_for_medical': get_bool(request.POST.get('spouse_hsa_for_medical')),
-        }
+        # Dynamic Accounts List with fallback for legacy form POSTs
+        accounts = []
+        acc_names = request.POST.getlist('account_name[]')
+        if acc_names:
+            acc_types = request.POST.getlist('account_type[]')
+            acc_owners = request.POST.getlist('account_owner[]')
+            acc_balances = request.POST.getlist('account_balance[]')
+            acc_contrib_amts = request.POST.getlist('account_contrib_amount[]')
+            acc_contrib_freqs = request.POST.getlist('account_contrib_freq[]')
+            acc_contrib_starts = request.POST.getlist('account_contrib_start_age[]')
+            acc_contrib_end_types = request.POST.getlist('account_contrib_end_age_type[]')
+            acc_contrib_end_specs = request.POST.getlist('account_contrib_end_age_specified[]')
+            acc_contrib_infs = request.POST.getlist('account_contrib_adjust_inflation[]')
+            acc_return_means = request.POST.getlist('account_return_mean[]')
+            acc_return_stds = request.POST.getlist('account_return_std[]')
+            acc_hsa_meds = request.POST.getlist('account_hsa_for_medical[]')
+
+            for i in range(len(acc_names)):
+                a_type = acc_types[i] if i < len(acc_types) else 'pretax'
+                a_owner = acc_owners[i] if (i < len(acc_owners) and is_married) else 'user'
+                a_name = acc_names[i].strip() if i < len(acc_names) and acc_names[i] else f"{a_owner.title()} {a_type.title()} Account"
+                a_bal = get_float(acc_balances[i]) if i < len(acc_balances) else 0.0
+                a_camt = get_float(acc_contrib_amts[i]) if i < len(acc_contrib_amts) else 0.0
+                a_cfreq = acc_contrib_freqs[i] if i < len(acc_contrib_freqs) else 'annual'
+                def_start = spouse_age if (a_owner == 'spouse' and is_married) else user_age
+                a_cstart = max(min_start_age, get_int(acc_contrib_starts[i], def_start) if i < len(acc_contrib_starts) else def_start)
+                a_cend_type = acc_contrib_end_types[i] if i < len(acc_contrib_end_types) else ('spouse_retirement' if a_owner == 'spouse' else 'retirement')
+                def_ret = spouse_retirement_age if (a_owner == 'spouse' and is_married) else user_retirement_age
+                a_cend_spec = get_int(acc_contrib_end_specs[i], def_ret) if i < len(acc_contrib_end_specs) else def_ret
+                a_cinf = (acc_contrib_infs[i] == 'true') if i < len(acc_contrib_infs) else True
+                a_rmean = get_float(acc_return_means[i], 6.0) if i < len(acc_return_means) else 6.0
+                a_rstd = get_float(acc_return_stds[i], 10.0) if i < len(acc_return_stds) else 10.0
+                a_hsa_med = (acc_hsa_meds[i] == 'true') if i < len(acc_hsa_meds) else True
+
+                accounts.append({
+                    'name': a_name,
+                    'type': a_type,
+                    'owner': a_owner,
+                    'balance': a_bal,
+                    'contrib_amount': a_camt,
+                    'contrib_freq': a_cfreq,
+                    'contrib_start_age': a_cstart,
+                    'contrib_end_age_type': a_cend_type,
+                    'contrib_end_age_specified': a_cend_spec,
+                    'contrib_adjust_inflation': a_cinf,
+                    'return_mean': a_rmean,
+                    'return_std': a_rstd,
+                    'hsa_for_medical': a_hsa_med,
+                })
+
+            # Aggregate accounts into asset categories
+            agg = aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, is_married, spouse_age, spouse_retirement_age, spouse_age_death)
+            pretax_assets = agg['pretax_assets']
+            spouse_pretax_assets = agg['spouse_pretax_assets']
+            roth_assets = agg['roth_assets']
+            taxable_assets = agg['taxable_assets']
+            hsa_assets = agg['hsa_assets']
+            spouse_hsa_assets = agg['spouse_hsa_assets']
+        else:
+            # Fallback for legacy form POSTs
+            pretax_assets = {
+                'present_balance': get_float(request.POST.get('pretax_present_balance'), 0.0),
+                'contrib_amount': get_float(request.POST.get('pretax_contrib_amount'), 0.0),
+                'contrib_freq': request.POST.get('pretax_contrib_freq', 'annual'),
+                'contrib_start_age': max(min_start_age, get_int(request.POST.get('pretax_contrib_start_age'), user_age)),
+                'contrib_end_age_type': request.POST.get('pretax_contrib_end_age_type', 'retirement'),
+                'contrib_end_age_specified': get_int(request.POST.get('pretax_contrib_end_age_specified'), user_retirement_age),
+                'contrib_adjust_inflation': get_bool(request.POST.get('pretax_contrib_adjust_inflation')),
+                'return_mean': get_float(request.POST.get('pretax_return_mean'), 6.0),
+                'return_std': get_float(request.POST.get('pretax_return_std'), 10.0),
+            }
+            spouse_pretax_assets = {
+                'present_balance': get_float(request.POST.get('spouse_pretax_present_balance'), 0.0) if is_married else 0.0,
+                'contrib_amount': get_float(request.POST.get('spouse_pretax_contrib_amount'), 0.0) if is_married else 0.0,
+                'contrib_freq': request.POST.get('spouse_pretax_contrib_freq', 'annual'),
+                'contrib_start_age': max(min_start_age, get_int(request.POST.get('spouse_pretax_contrib_start_age'), spouse_age if is_married else user_age)),
+                'contrib_end_age_type': request.POST.get('spouse_pretax_contrib_end_age_type', 'spouse_retirement'),
+                'contrib_end_age_specified': get_int(request.POST.get('spouse_pretax_contrib_end_age_specified'), spouse_retirement_age if is_married else user_retirement_age),
+                'contrib_adjust_inflation': get_bool(request.POST.get('spouse_pretax_contrib_adjust_inflation')),
+                'return_mean': get_float(request.POST.get('spouse_pretax_return_mean'), 6.0),
+                'return_std': get_float(request.POST.get('spouse_pretax_return_std'), 10.0),
+            }
+            roth_assets = {
+                'present_balance': get_float(request.POST.get('roth_present_balance'), 0.0),
+                'contrib_amount': get_float(request.POST.get('roth_contrib_amount'), 0.0),
+                'contrib_freq': request.POST.get('roth_contrib_freq', 'annual'),
+                'contrib_start_age': max(min_start_age, get_int(request.POST.get('roth_contrib_start_age'), user_age)),
+                'contrib_end_age_type': request.POST.get('roth_contrib_end_age_type', 'retirement'),
+                'contrib_end_age_specified': get_int(request.POST.get('roth_contrib_end_age_specified'), user_retirement_age),
+                'contrib_adjust_inflation': get_bool(request.POST.get('roth_contrib_adjust_inflation')),
+                'return_mean': get_float(request.POST.get('roth_return_mean'), 6.0),
+                'return_std': get_float(request.POST.get('roth_return_std'), 10.0),
+            }
+            taxable_assets = {
+                'present_balance': get_float(request.POST.get('taxable_present_balance'), 0.0),
+                'contrib_amount': get_float(request.POST.get('taxable_contrib_amount'), 0.0),
+                'contrib_freq': request.POST.get('taxable_contrib_freq', 'annual'),
+                'contrib_start_age': max(min_start_age, get_int(request.POST.get('taxable_contrib_start_age'), user_age)),
+                'contrib_end_age_type': request.POST.get('taxable_contrib_end_age_type', 'retirement'),
+                'contrib_end_age_specified': get_int(request.POST.get('taxable_contrib_end_age_specified'), user_retirement_age),
+                'contrib_adjust_inflation': get_bool(request.POST.get('taxable_contrib_adjust_inflation')),
+                'return_mean': get_float(request.POST.get('taxable_return_mean'), 5.0),
+                'return_std': get_float(request.POST.get('taxable_return_std'), 8.0),
+            }
+            hsa_assets = {
+                'present_balance': get_float(request.POST.get('hsa_present_balance'), 0.0),
+                'contrib_amount': get_float(request.POST.get('hsa_contrib_amount'), 0.0),
+                'contrib_freq': request.POST.get('hsa_contrib_freq', 'annual'),
+                'contrib_start_age': max(min_start_age, get_int(request.POST.get('hsa_contrib_start_age'), user_age)),
+                'contrib_end_age_type': request.POST.get('hsa_contrib_end_age_type', 'retirement'),
+                'contrib_end_age_specified': get_int(request.POST.get('hsa_contrib_end_age_specified'), user_retirement_age),
+                'contrib_adjust_inflation': get_bool(request.POST.get('hsa_contrib_adjust_inflation')),
+                'return_mean': get_float(request.POST.get('hsa_return_mean'), 5.0),
+                'return_std': get_float(request.POST.get('hsa_return_std'), 8.0),
+                'hsa_for_medical': get_bool(request.POST.get('hsa_for_medical')),
+            }
+            spouse_hsa_assets = {
+                'present_balance': get_float(request.POST.get('spouse_hsa_present_balance'), 0.0),
+                'contrib_amount': get_float(request.POST.get('spouse_hsa_contrib_amount'), 0.0),
+                'contrib_freq': request.POST.get('spouse_hsa_contrib_freq', 'annual'),
+                'contrib_start_age': max(min_start_age, get_int(request.POST.get('spouse_hsa_contrib_start_age'), spouse_age if is_married else user_age)),
+                'contrib_end_age_type': request.POST.get('spouse_hsa_contrib_end_age_type', 'retirement'),
+                'contrib_end_age_specified': get_int(request.POST.get('spouse_hsa_contrib_end_age_specified'), spouse_retirement_age if is_married else user_retirement_age),
+                'contrib_adjust_inflation': get_bool(request.POST.get('spouse_hsa_contrib_adjust_inflation')),
+                'return_mean': get_float(request.POST.get('spouse_hsa_return_mean'), 5.0),
+                'return_std': get_float(request.POST.get('spouse_hsa_return_std'), 8.0),
+                'hsa_for_medical': get_bool(request.POST.get('spouse_hsa_for_medical')),
+            }
+            for ac_data, atype, aowner in [
+                (pretax_assets, 'pretax', 'user'),
+                (spouse_pretax_assets, 'pretax', 'spouse'),
+                (roth_assets, 'roth', 'user'),
+                (taxable_assets, 'taxable', 'user'),
+                (hsa_assets, 'hsa', 'user'),
+                (spouse_hsa_assets, 'hsa', 'spouse'),
+            ]:
+                if ac_data.get('present_balance', 0) > 0 or ac_data.get('contrib_amount', 0) > 0:
+                    accounts.append({
+                        'name': f"{'Spouse ' if aowner == 'spouse' else ''}{atype.upper()} Account",
+                        'type': atype,
+                        'owner': aowner,
+                        'balance': ac_data.get('present_balance', 0.0),
+                        'contrib_amount': ac_data.get('contrib_amount', 0.0),
+                        'contrib_freq': ac_data.get('contrib_freq', 'annual'),
+                        'contrib_start_age': ac_data.get('contrib_start_age', spouse_age if aowner == 'spouse' and is_married else user_age),
+                        'contrib_end_age_type': ac_data.get('contrib_end_age_type', 'spouse_retirement' if aowner == 'spouse' and is_married else 'retirement'),
+                        'contrib_end_age_specified': ac_data.get('contrib_end_age_specified', spouse_retirement_age if aowner == 'spouse' and is_married else user_retirement_age),
+                        'contrib_adjust_inflation': ac_data.get('contrib_adjust_inflation', True),
+                        'return_mean': ac_data.get('return_mean', 6.0),
+                        'return_std': ac_data.get('return_std', 10.0),
+                        'hsa_for_medical': ac_data.get('hsa_for_medical', True),
+                    })
         
         # Additional Spending Lists
         additional_spending = []
@@ -523,7 +749,25 @@ def enter_view(request):
             if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
                 validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
 
-        # Asset Contributions validation
+        # Account validation
+        for acc in accounts:
+            a_name = acc.get('name', 'Account')
+            if acc.get('balance', 0.0) < 0:
+                validation_errors.append(f"Account '{a_name}' Present Balance cannot be negative.")
+            if acc.get('contrib_amount', 0.0) < 0:
+                validation_errors.append(f"Account '{a_name}' Future Contribution Amount cannot be negative.")
+            a_owner = acc.get('owner', 'user')
+            rel_age = spouse_age if (a_owner == 'spouse' and is_married) else user_age
+            rel_death = spouse_age_death if (a_owner == 'spouse' and is_married) else user_age_death
+            c_start = acc.get('contrib_start_age', rel_age)
+            if c_start < rel_age or c_start > rel_death:
+                validation_errors.append(f"Account '{a_name}' Contribution Start Age ({c_start}) must be between Present Age ({rel_age}) and Age at Death ({rel_death}).")
+            if acc.get('contrib_end_age_type') == 'age':
+                c_end = acc.get('contrib_end_age_specified', rel_age)
+                if c_end < c_start or c_end > 120:
+                    validation_errors.append(f"Account '{a_name}' Specified Contribution End Age ({c_end}) must be greater than or equal to Contribution Start Age ({c_start}) up to 120.")
+
+        # Legacy / Aggregated Asset Contributions validation
         for prefix, asset in [('Pre-Tax', pretax_assets), ('Spouse Pre-Tax', spouse_pretax_assets), ('Roth', roth_assets), ('Taxable', taxable_assets), ('HSA', hsa_assets), ('Spouse HSA', spouse_hsa_assets)]:
             if prefix in ['Spouse Pre-Tax', 'Spouse HSA'] and not is_married:
                 continue
@@ -618,6 +862,7 @@ def enter_view(request):
             'state_tax_rate': state_tax_rate,
             'state_ss_exempt': state_ss_exempt,
             'social_security': social_security,
+            'accounts': accounts,
             'pretax_assets': pretax_assets,
             'spouse_pretax_assets': spouse_pretax_assets,
             'roth_assets': roth_assets,

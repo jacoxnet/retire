@@ -1418,6 +1418,69 @@ class RetirementCalculationTests(TestCase):
         self.assertIn('spouse_hsa_assets', res.context)
         self.assertEqual(res.context['spouse_hsa_assets']['present_balance'], 18000.0)
 
+    def test_manage_data_view(self):
+        """Test the Save/Load/Clear Data dedicated page view."""
+        resp = self.client.get('/manage_data/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Save / Load / Clear Data')
+        self.assertContains(resp, 'Save Plan (JSON)')
+        self.assertContains(resp, 'Load Plan (JSON)')
+        self.assertContains(resp, 'Clear Data')
+
+    def test_dynamic_accounts_aggregation(self):
+        """Test submitting dynamic accounts list and verifying aggregation."""
+        post_data = {
+            'user_name': 'Account Tester',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': 'on',
+            'spouse_name': 'Spouse Tester',
+            'spouse_age': '58',
+            'spouse_retirement_age': '62',
+            'spouse_age_death': '90',
+            'desired_spending': '50000',
+            'survivor_spending': '35000',
+            'inflation_rate': '3.0',
+            'runs': '50',
+            'account_name[]': ['Primary 401(k)', 'Rollover IRA', 'Roth IRA', 'Spouse 401(k)'],
+            'account_type[]': ['pretax', 'pretax', 'roth', 'pretax'],
+            'account_owner[]': ['user', 'user', 'user', 'spouse'],
+            'account_balance[]': ['300000', '200000', '150000', '100000'],
+            'account_contrib_amount[]': ['10000', '0', '7000', '5000'],
+            'account_contrib_freq[]': ['annual', 'annual', 'annual', 'annual'],
+            'account_contrib_start_age[]': ['60', '60', '60', '58'],
+            'account_contrib_end_age_type[]': ['retirement', 'retirement', 'retirement', 'spouse_retirement'],
+            'account_contrib_end_age_specified[]': ['65', '65', '65', '62'],
+            'account_contrib_adjust_inflation[]': ['true', 'true', 'true', 'true'],
+            'account_return_mean[]': ['6.0%', '8.0%', '7.0%', '6.5%'],
+            'account_return_std[]': ['10.0%', '12.0%', '10.0%', '9.5%'],
+            'account_hsa_for_medical[]': ['false', 'false', 'false', 'false'],
+        }
+
+        resp = self.client.post('/', post_data)
+        self.assertRedirects(resp, '/results/')
+
+        session_data = self.client.session['simulation_data']
+        self.assertEqual(len(session_data['accounts']), 4)
+        # Aggregated user pretax: 300,000 + 200,000 = 500,000
+        self.assertEqual(session_data['pretax_assets']['present_balance'], 500000.0)
+        # Weighted mean for pretax: (300k*6% + 200k*8%) / 500k = (1.8m + 1.6m)/500k = 6.8%
+        self.assertAlmostEqual(session_data['pretax_assets']['return_mean'], 6.8, places=1)
+        # Roth balance: 150,000
+        self.assertEqual(session_data['roth_assets']['present_balance'], 150000.0)
+        # Spouse pretax balance: 100,000
+        self.assertEqual(session_data['spouse_pretax_assets']['present_balance'], 100000.0)
+
+    def test_results_historical_stress_no_trajectory_chart(self):
+        """Test results page Tab 5 historical crisis stress test has no trajectory comparison chart element."""
+        resp = self.client.get('/results/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="stressComparisonChartCanvas"')
+        self.assertNotContains(resp, 'stressTrajectoryChart')
+        self.assertContains(resp, 'Select Crisis Scenario')
+
+
 
 
 

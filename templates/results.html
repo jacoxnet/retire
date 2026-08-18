@@ -3,25 +3,9 @@
 {% block title %}Results{% endblock %}
 
 {% block content %}
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="mb-4 text-center">
         <h1 class="pageheading mb-0">Retirement Simulation Results</h1>
-        <div class="d-flex gap-2">
-            <!-- JSON Import / Export Actions -->
-            <button type="button" class="btn btn-secondary btn-sm" id="btnExportJSON">
-                <i class="fa fa-download"></i> Save Plan (JSON)
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('jsonFilePicker').click();">
-                <i class="fa fa-upload"></i> Load Plan (JSON)
-            </button>
-            <input type="file" id="jsonFilePicker" style="display: none;" accept=".json">
-        </div>
     </div>
-
-    <!-- Hidden form to post loaded plan data -->
-    <form id="loadPlanForm" method="POST" action="{% url 'load_plan' %}" style="display: none;">
-        {% csrf_token %}
-        <input type="hidden" name="json_data" id="loadPlanInput">
-    </form>
 
     <!-- Results Tab Navigation -->
     <ul class="nav nav-tabs mb-4 justify-content-center" id="resultsTabs" role="tablist">
@@ -1044,9 +1028,8 @@
             </div>
 
             <!-- Comparison Results Section -->
-            <div class="row g-4 mb-4">
-                <!-- Comparison Table & Key Summary Cards -->
-                <div class="col-lg-7">
+            <div class="row justify-content-center mb-4">
+                <div class="col-12">
                     <div class="card p-4 shadow-sm border-0 h-100 bg-white">
                         <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
                             <h3 class="text-primary mb-0">
@@ -1137,25 +1120,6 @@
                             <p class="mb-0 text-secondary small">
                                 <strong>Stress Test Methodology:</strong> The historical crisis scenario replaces the stochastic market returns and inflation during the designated crisis window (<span id="stressTimelineText">crisis years</span>). All other plan years utilize the regular stochastic Monte Carlo parameters.
                             </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Trajectory Chart Comparison -->
-                <div class="col-lg-5">
-                    <div class="card shadow-sm border-0 chart-card h-100 bg-white">
-                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="card-title text-primary mb-0 fw-bold">
-                                    <i class="fa fa-chart-area me-2"></i>Trajectory Comparison
-                                </h5>
-                                <small class="text-muted">Median (50th) & 10th-90th percentiles over time</small>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="chart-canvas-container" style="height: 380px;">
-                                <canvas id="stressComparisonChartCanvas"></canvas>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1910,102 +1874,6 @@
         setCell('cmpRegMin', formatStressCurrency(reg.run_min));
         setCell('cmpStressMin', formatStressCurrency(stress.run_min));
         setCell('cmpDeltaMin', formatStressDeltaCurrency(deltas.delta_min), true, deltas.delta_min);
-
-        // 4. Comparison Chart
-        renderStressComparisonChart(data);
-    }
-
-    function renderStressComparisonChart(data) {
-        const canvas = document.getElementById('stressComparisonChartCanvas');
-        if (!canvas || !data) return;
-
-        const labels = data.chart_labels || [];
-        const reg = data.regular_results || {};
-        const stress = data.stress_results || {};
-
-        const ctx = canvas.getContext('2d');
-        if (stressComparisonChartInstance) {
-            stressComparisonChartInstance.destroy();
-        }
-
-        stressComparisonChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Regular Sim Median (50th)',
-                        data: reg.mc_p50 || [],
-                        borderColor: '#2563eb',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2.5,
-                        borderDash: [5, 5],
-                        pointRadius: 0,
-                        tension: 0.1,
-                        order: 1
-                    },
-                    {
-                        label: 'Stress Test Median (50th)',
-                        data: stress.mc_p50 || [],
-                        borderColor: '#dc2626',
-                        backgroundColor: 'rgba(220, 38, 38, 0.08)',
-                        fill: true,
-                        borderWidth: 3,
-                        pointRadius: 0,
-                        tension: 0.1,
-                        order: 2
-                    },
-                    {
-                        label: 'Regular Sim (10th Percentile)',
-                        data: reg.mc_p10 || [],
-                        borderColor: '#93c5fd',
-                        backgroundColor: 'transparent',
-                        borderWidth: 1.5,
-                        borderDash: [2, 2],
-                        pointRadius: 0,
-                        tension: 0.1,
-                        order: 3
-                    },
-                    {
-                        label: 'Stress Test (10th Percentile)',
-                        data: stress.mc_p10 || [],
-                        borderColor: '#f87171',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.1,
-                        order: 4
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                events: ['click', 'touchstart'],
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: { boxWidth: 14, font: { size: 11 } }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.dataset.label}: ${formatChartCurrency(context.raw)}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { grid: { display: false } },
-                    y: {
-                        ticks: { callback: value => formatChartCurrency(value) },
-                        title: { display: true, text: 'Portfolio Wealth ($)' }
-                    }
-                }
-            }
-        });
     }
 
     function fetchStressTest() {
@@ -2040,15 +1908,6 @@
         }
         if (initialStress) {
             updateStressComparisonView(initialStress);
-        }
-
-        const stressTabBtn = document.getElementById('stress-tab');
-        if (stressTabBtn) {
-            stressTabBtn.addEventListener('shown.bs.tab', function () {
-                if (initialStress) {
-                    renderStressComparisonChart(initialStress);
-                }
-            });
         }
 
         const scenarioSelect = document.getElementById('stressScenarioSelect');
@@ -2092,154 +1951,6 @@
         });
     }
 
-    // JSON Sanitization & Load Plan (JSON)
-    function sanitizeJSONData(raw) {
-        while (typeof raw === 'string') {
-            try {
-                raw = JSON.parse(raw);
-            } catch (e) {
-                break;
-            }
-        }
-        if (typeof raw !== 'object' || raw === null) return {};
-
-        function clampNum(val, min, max, fallback) {
-            var num = parseFloat(val);
-            if (isNaN(num)) return fallback;
-            if (min !== null && num < min) return min;
-            if (max !== null && num > max) return max;
-            return num;
-        }
-
-        function clampInt(val, min, max, fallback) {
-            return Math.round(clampNum(val, min, max, fallback));
-        }
-
-        var clean = {};
-        clean.simulation_type = raw.simulation_type === 'goal_seeking' || raw.goal_seeking ? 'goal_seeking' : 'regular';
-        clean.goal_seeking = clean.simulation_type === 'goal_seeking';
-        clean.user_name = (raw.user_name || 'User').trim();
-        clean.user_age = clampInt(raw.user_age, 18, 110, 60);
-        clean.user_retirement_age = clampInt(raw.user_retirement_age, 18, 110, 65);
-        clean.user_age_death = clampInt(raw.user_age_death, 18, 120, 90);
-
-        clean.is_married = !!raw.is_married;
-        clean.spouse_name = (raw.spouse_name || 'Spouse').trim();
-        clean.spouse_age = clampInt(raw.spouse_age, 18, 110, 60);
-        clean.spouse_retirement_age = clampInt(raw.spouse_retirement_age, 18, 110, 65);
-        clean.spouse_age_death = clampInt(raw.spouse_age_death, 18, 120, 90);
-
-        clean.filing_status = ['single', 'joint', 'hoh'].includes(raw.filing_status) ? raw.filing_status : (clean.is_married ? 'joint' : 'single');
-        clean.current_year = clampInt(raw.current_year, 2020, 2100, 2026);
-
-        clean.begin_spending_age_type = ['retirement', 'spouse_retirement', 'specified'].includes(raw.begin_spending_age_type) ? raw.begin_spending_age_type : 'retirement';
-        clean.begin_spending_age_specified = clampInt(raw.begin_spending_age_specified, 18, 110, 65);
-
-        clean.desired_spending = clampNum(raw.desired_spending, 0, null, 40000);
-        clean.survivor_spending = clampNum(raw.survivor_spending, 0, null, clean.desired_spending);
-        clean.adjust_spending_inflation = raw.adjust_spending_inflation !== false;
-
-        clean.inflation_rate = clampNum(raw.inflation_rate, -10, 50, 2.5);
-        clean.runs = clampInt(raw.runs, 1, 5000, 1000);
-        clean.target_success_rate = clampNum(raw.target_success_rate, 1, 100, 80);
-
-        var minStartAge = clean.is_married ? Math.min(clean.user_age, clean.spouse_age) : clean.user_age;
-
-        var assetClasses = ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa'];
-        assetClasses.forEach(function(ac) {
-            var rawAc = raw[ac + '_assets'] || {};
-            var isSpouse = (ac === 'spouse_pretax' || ac === 'spouse_hsa');
-            var minAge = isSpouse ? (clean.spouse_age || 18) : clean.user_age;
-            clean[ac + '_assets'] = {
-                present_balance: clampNum(rawAc.present_balance, 0, null, 0),
-                contrib_amount: clampNum(rawAc.contrib_amount, 0, null, 0),
-                contrib_freq: ['annual', 'monthly', 'one-time'].includes(rawAc.contrib_freq) ? rawAc.contrib_freq : 'annual',
-                contrib_start_age: clampInt(rawAc.contrib_start_age, minStartAge, 110, minAge),
-                contrib_end_age_type: ['retirement', 'spouse_retirement', 'first_death', 'age'].includes(rawAc.contrib_end_age_type) ? rawAc.contrib_end_age_type : (isSpouse ? 'spouse_retirement' : 'retirement'),
-                contrib_end_age_specified: clampInt(rawAc.contrib_end_age_specified, 18, 110, (isSpouse ? clean.spouse_retirement_age : clean.user_retirement_age)),
-                contrib_adjust_inflation: rawAc.contrib_adjust_inflation !== false,
-                return_mean: clampNum(rawAc.return_mean, -50, 100, 6.0),
-                return_std: clampNum(rawAc.return_std, 0, 100, 10.0),
-                hsa_for_medical: rawAc.hsa_for_medical !== false
-            };
-        });
-
-        clean.additional_spending = [];
-        if (Array.isArray(raw.additional_spending)) {
-            raw.additional_spending.forEach(function(item) {
-                clean.additional_spending.push({
-                    name: (item.name || 'Additional Expense').trim(),
-                    amount: clampNum(item.amount, 0, null, 0),
-                    start_age: clampInt(item.start_age, 18, 110, 65),
-                    interval: clampInt(item.interval, 0, 50, 0),
-                    adjust_inflation: item.adjust_inflation !== false
-                });
-            });
-        }
-
-        clean.income_sources = [];
-        if (Array.isArray(raw.income_sources)) {
-            raw.income_sources.forEach(function(item) {
-                var adjType = ['inflation', 'fixed_pct', 'inflation_less_pct', 'none'].includes(item.adjust_type) ? item.adjust_type : 'inflation';
-                var adjVal = clampNum(item.adjust_val, 0, 100, 0.0);
-                if (adjType === 'none' || adjType === 'inflation') {
-                    adjVal = 0.0;
-                }
-                var adjStartType = ['start', 'retirement', 'spouse_retirement', 'current_age', 'specified'].includes(item.adjust_start_age_type) ? item.adjust_start_age_type : 'start';
-                var adjStartSpec = clampInt(item.adjust_start_age_specified, 18, 120, 65);
-                clean.income_sources.push({
-                    name: (item.name || 'Income Source').trim(),
-                    amount: clampNum(item.amount, 0, null, 0),
-                    frequency: ['monthly', 'annual', 'one_time', 'one-time'].includes(item.frequency) ? item.frequency : 'monthly',
-                    start_age_type: ['retirement', 'spouse_retirement', 'specified'].includes(item.start_age_type) ? item.start_age_type : 'retirement',
-                    start_age_specified: clampInt(item.start_age_specified, 18, 110, 65),
-                    end_age_type: ['death', 'spouse_death', 'specified'].includes(item.end_age_type) ? item.end_age_type : 'death',
-                    end_age_specified: clampInt(item.end_age_specified, 18, 120, 90),
-                    subject_to_tax: item.subject_to_tax !== false,
-                    is_social_security: !!item.is_social_security,
-                    adjust_type: adjType,
-                    adjust_val: adjVal,
-                    adjust_start_age_type: adjStartType,
-                    adjust_start_age_specified: adjStartSpec
-                });
-            });
-        }
-
-        clean.social_security = {
-            user_entitled: raw.social_security ? raw.social_security.user_entitled !== false : true,
-            user_amount: clampNum(raw.social_security ? raw.social_security.user_amount : 2500, 0, null, 2500),
-            user_freq: ['monthly', 'annual'].includes(raw.social_security?.user_freq) ? raw.social_security.user_freq : 'monthly',
-            user_start_age: clampInt(raw.social_security ? raw.social_security.user_start_age : 67, 62, 70, 67),
-            spouse_entitled: raw.social_security ? !!raw.social_security.spouse_entitled : false,
-            spouse_amount: clampNum(raw.social_security ? raw.social_security.spouse_amount : 0, 0, null, 0),
-            spouse_freq: ['monthly', 'annual'].includes(raw.social_security?.spouse_freq) ? raw.social_security.spouse_freq : 'monthly',
-            spouse_start_age: clampInt(raw.social_security ? raw.social_security.spouse_start_age : 67, 62, 70, 67)
-        };
-
-        return clean;
-    }
-
-    const jsonFilePicker = document.getElementById('jsonFilePicker');
-    if (jsonFilePicker) {
-        jsonFilePicker.addEventListener('change', function(event) {
-            var file = event.target.files[0];
-            if (!file) return;
-
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    var rawData = JSON.parse(e.target.result);
-                    var cleanData = sanitizeJSONData(rawData);
-                    document.getElementById('loadPlanInput').value = JSON.stringify(cleanData);
-                    document.getElementById('loadPlanForm').submit();
-                } catch(err) {
-                    alert("Error parsing plan JSON. Make sure the file format is correct.");
-                    console.error(err);
-                } finally {
-                    jsonFilePicker.value = '';
-                }
-            };
-            reader.readAsText(file);
         });
     }
 
