@@ -604,7 +604,7 @@ class RetirementCalculationTests(TestCase):
             nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_init'],
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-            r_pre, r_roth, r_tax, r_hsa,
+            r_pre, r_pre, r_roth, r_tax, r_hsa, r_hsa,
             nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
             nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code']
         )
@@ -1140,7 +1140,7 @@ class RetirementCalculationTests(TestCase):
             nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_init'],
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-            r_pre, r_roth, r_tax, r_hsa,
+            r_pre, r_pre, r_roth, r_tax, r_hsa, r_hsa,
             nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
             nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code']
         )
@@ -1372,8 +1372,8 @@ class RetirementCalculationTests(TestCase):
             nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_user_init'],
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa_user'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-            np.array(det_r_pre, dtype=np.float64), np.array(det_r_roth, dtype=np.float64),
-            np.array(det_r_tax, dtype=np.float64), np.array(det_r_hsa, dtype=np.float64),
+            np.array(det_r_pre, dtype=np.float64), np.array(det_r_pre, dtype=np.float64), np.array(det_r_roth, dtype=np.float64),
+            np.array(det_r_tax, dtype=np.float64), np.array(det_r_hsa, dtype=np.float64), np.array(det_r_hsa, dtype=np.float64),
             nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
             nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code']
         )
@@ -1479,6 +1479,236 @@ class RetirementCalculationTests(TestCase):
         self.assertNotContains(resp, 'id="stressComparisonChartCanvas"')
         self.assertNotContains(resp, 'stressTrajectoryChart')
         self.assertContains(resp, 'Select Crisis Scenario')
+
+    def test_multi_account_monthly_contribution_annualized_in_aggregate_accounts(self):
+        """Verify that monthly contributions are annualized (multiplied by 12) before summing in aggregate_accounts."""
+        from core.forms import aggregate_accounts
+        accounts = [
+            {
+                'name': '401k A',
+                'type': 'pretax',
+                'balance': 100000.0,
+                'contrib_amount': 500.0, # $500/month = $6000/yr
+                'contrib_freq': 'monthly',
+                'contrib_start_age': 60,
+                'contrib_end_age_type': 'retirement',
+                'contrib_end_age_specified': 65,
+                'contrib_adjust_inflation': True,
+                'return_mean': 6.0,
+                'return_std': 10.0,
+            },
+            {
+                'name': '401k B',
+                'type': 'pretax',
+                'balance': 50000.0,
+                'contrib_amount': 4000.0, # $4000/yr
+                'contrib_freq': 'annual',
+                'contrib_start_age': 60,
+                'contrib_end_age_type': 'retirement',
+                'contrib_end_age_specified': 65,
+                'contrib_adjust_inflation': True,
+                'return_mean': 6.0,
+                'return_std': 10.0,
+            }
+        ]
+        agg = aggregate_accounts(accounts, 60, 65, 90, False, 60, 65, 90)
+        # Total contribution must be 6000 + 4000 = 10000, and freq should be 'annual'
+        self.assertEqual(agg['pretax_assets']['contrib_amount'], 10000.0)
+        self.assertEqual(agg['pretax_assets']['contrib_freq'], 'annual')
+
+    def test_load_plan_view_empty_accounts_preserves_flat_assets(self):
+        """Verify that loading a plan JSON with accounts: [] correctly migrates flat assets and does not wipe them to 0."""
+        import json
+        plan_json = json.dumps({
+            'user_age': 62,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'desired_spending': 50000.0,
+            'accounts': [],
+            'pretax_assets': {'present_balance': 350000.0, 'return_mean': 7.0, 'return_std': 12.0},
+            'roth_assets': {'present_balance': 120000.0, 'return_mean': 7.0, 'return_std': 12.0},
+            'taxable_assets': {'present_balance': 80000.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'hsa_assets': {'present_balance': 25000.0, 'return_mean': 5.0, 'return_std': 8.0}
+        })
+        resp = self.client.post('/load_plan/', {'json_data': plan_json, 'next': 'enter'})
+        self.assertRedirects(resp, '/')
+        session_data = self.client.session['simulation_data']
+        self.assertEqual(session_data['pretax_assets']['present_balance'], 350000.0)
+        self.assertEqual(session_data['roth_assets']['present_balance'], 120000.0)
+        self.assertEqual(session_data['taxable_assets']['present_balance'], 80000.0)
+        self.assertEqual(session_data['hsa_assets']['present_balance'], 25000.0)
+        self.assertTrue(len(session_data['accounts']) >= 4)
+
+    def test_change_mode_view_updates_spouse_hsa_return(self):
+        """Verify change_mode_view updates spouse_hsa_assets return_mean."""
+        session = self.client.session
+        session['simulation_data'] = {
+            'is_married': True,
+            'user_age': 60,
+            'spouse_age': 58,
+            'spouse_hsa_assets': {'present_balance': 15000.0, 'return_mean': 5.0, 'return_std': 8.0}
+        }
+        session.save()
+        resp = self.client.post('/change_mode/', {
+            'simulation_type': 'regular',
+            'spouse_hsa_return_mean': '7.5'
+        })
+        self.assertRedirects(resp, '/results/')
+        data = self.client.session['simulation_data']
+        self.assertEqual(data['spouse_hsa_assets']['return_mean'], 7.5)
+
+    def test_resolve_age_spouse_retirement_timing(self):
+        """Verify that spouse_retirement timing in other_taxes/income_sources resolves to spouse retirement in user timeline."""
+        from core.runs import extract_sim_inputs, run_deterministic
+        sim_input = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': True,
+            'spouse_age': 58,
+            'spouse_retirement_age': 63, # spouse turns 63 when user is 60 + (63 - 58) = 65
+            'spouse_age_death': 90,
+            'desired_spending': 30000.0,
+            'income_sources': [
+                {
+                    'name': 'Spouse Pension',
+                    'amount': 1000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'spouse_retirement',
+                    'start_age_specified': 60,
+                    'end_age_type': 'death',
+                    'end_age_specified': 90,
+                    'adjust_type': 'none',
+                    'subject_to_tax': True
+                }
+            ],
+            'pretax_assets': {'present_balance': 100000.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'roth_assets': {'present_balance': 0.0},
+            'taxable_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0}
+        }
+        rows = run_deterministic(sim_input)
+        # Year 0: user age 60, spouse age 58 -> pension should NOT be active
+        self.assertEqual(rows[0]['income_breakdown'].get('Spouse Pension', 0.0), 0.0)
+        # Year 4: user age 64, spouse age 62 -> pension should NOT be active
+        self.assertEqual(rows[4]['income_breakdown'].get('Spouse Pension', 0.0), 0.0)
+        # Year 5: user age 65, spouse age 63 -> pension should be active ($1000)
+        self.assertEqual(rows[5]['income_breakdown'].get('Spouse Pension', 0.0), 1000.0)
+
+    def test_spouse_contributions_start_age_alignment(self):
+        """Verify spouse account contributions convert start_age from spouse coordinates to user coordinates."""
+        from core.runs import get_contributions_for_year
+        # User is 60, spouse is 58. Spouse starts contributing at spouse age 60 (which occurs at user age 62, t=2).
+        spouse_asset_data = {
+            'is_spouse': True,
+            'contrib_amount': 5000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60, # spouse age 60
+            'contrib_end_age_type': 'spouse_retirement',
+            'user_ret_age': 65,
+            'spouse_ret_age': 65,
+            'contrib_adjust_inflation': False
+        }
+        # At t=0 (user 60, spouse 58): spouse is not 60 yet -> contrib = 0
+        c0 = get_contributions_for_year(0, 60, True, 58, 2026, spouse_asset_data)
+        self.assertEqual(c0, 0.0)
+        # At t=1 (user 61, spouse 59): spouse is not 60 yet -> contrib = 0
+        c1 = get_contributions_for_year(1, 60, True, 58, 2026, spouse_asset_data)
+        self.assertEqual(c1, 0.0)
+        # At t=2 (user 62, spouse 60): spouse is 60 -> contrib = 5000
+        c2 = get_contributions_for_year(2, 60, True, 58, 2026, spouse_asset_data)
+        self.assertEqual(c2, 5000.0)
+
+    def test_distinct_spouse_asset_returns_deterministic(self):
+        """Verify that spouse pretax assets grow at spouse_pretax return rate rather than user pretax return rate."""
+        from core.runs import run_deterministic
+        sim_input = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 70,
+            'is_married': True,
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 70,
+            'desired_spending': 0.0,
+            'pretax_assets': {'present_balance': 100000.0, 'return_mean': 10.0, 'return_std': 0.0},
+            'spouse_pretax_assets': {'present_balance': 100000.0, 'return_mean': 2.0, 'return_std': 0.0},
+            'roth_assets': {'present_balance': 0.0},
+            'taxable_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0},
+            'spouse_hsa_assets': {'present_balance': 0.0}
+        }
+        rows = run_deterministic(sim_input)
+        growth_y1 = rows[0]['growth']
+        # User pretax growth: 100,000 * 10% = 10,000
+        self.assertAlmostEqual(growth_y1['pretax_user'], 10000.0, places=1)
+        # Spouse pretax growth: 100,000 * 2% = 2,000
+        self.assertAlmostEqual(growth_y1['pretax_spouse'], 2000.0, places=1)
+
+    def test_early_pretax_withdrawal_penalty_married_age_distinction(self):
+        """Verify early pre-tax penalty applies only to under-59.5 spouse account, not over-59.5 user account."""
+        from core.runs import njit_rmd_tax_withdraw
+        # User is 62 (>= 59.5, no penalty), Spouse is 50 (< 59.5, penalty applies).
+        # Scenario A: All pretax is user pretax ($100k user, $0 spouse). Deficit of $10,000.
+        (u_end_a, sp_end_a, roth_end, tax_end, hsa_u, hsa_s,
+         u_rmd, sp_rmd, w_pre_a, w_tax, w_roth, w_hu, w_hs,
+         fed_tax_a, st_tax_a, pen_a, hsa_pen_u, hsa_pen_s) = njit_rmd_tax_withdraw(
+            62, 50, True, True, True,
+            100000.0, 0.0, 100000.0, 0.0,
+            0.0, 0.0, 0.0, 0.0,
+            75, 75, 1, 1.0,
+            10000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 1, 1
+        )
+        self.assertEqual(pen_a, 0.0)
+
+        # Scenario B: All pretax is spouse pretax ($0 user, $100k spouse). Deficit of $10,000.
+        (u_end_b, sp_end_b, roth_end, tax_end, hsa_u, hsa_s,
+         u_rmd, sp_rmd, w_pre_b, w_tax, w_roth, w_hu, w_hs,
+         fed_tax_b, st_tax_b, pen_b, hsa_pen_u, hsa_pen_s) = njit_rmd_tax_withdraw(
+            62, 50, True, True, True,
+            0.0, 100000.0, 0.0, 100000.0,
+            0.0, 0.0, 0.0, 0.0,
+            75, 75, 1, 1.0,
+            10000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 1, 1
+        )
+        self.assertGreater(pen_b, 0.0)
+        self.assertAlmostEqual(pen_b, 0.10 * w_pre_b, places=1)
+
+    def test_social_security_survivor_claiming_minimum_age_60(self):
+        """Verify surviving spouse does not receive deceased spouse's Social Security benefit before age 60."""
+        from core.runs import extract_sim_inputs, run_deterministic
+        sim_input = {
+            'user_age': 55,
+            'user_retirement_age': 65,
+            'user_age_death': 56, # user dies at age 56
+            'is_married': True,
+            'spouse_age': 55,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 75,
+            'desired_spending': 30000.0,
+            'social_security': {
+                'user_entitled': True,
+                'user_amount': 3000.0,
+                'user_freq': 'monthly',
+                'user_start_age': 67,
+                'spouse_entitled': False,
+                'spouse_amount': 0.0,
+                'spouse_freq': 'monthly',
+                'spouse_start_age': 67
+            },
+            'pretax_assets': {'present_balance': 500000.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'roth_assets': {'present_balance': 0.0},
+            'taxable_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0}
+        }
+        rows = run_deterministic(sim_input)
+        # Year 2 (spouse age 57, user deceased): survivor benefit should NOT be active (< 60)
+        self.assertEqual(rows[2]['income_breakdown'].get("Spouse's Social Security", 0.0), 0.0)
+        # Year 4 (spouse age 59, user deceased): survivor benefit should NOT be active (< 60)
+        self.assertEqual(rows[4]['income_breakdown'].get("Spouse's Social Security", 0.0), 0.0)
+        # Year 5 (spouse age 60, user deceased): survivor benefit SHOULD be active (>= 60)
+        self.assertGreater(rows[5]['income_breakdown'].get("Spouse's Social Security", 0.0), 0.0)
 
 
 

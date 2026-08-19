@@ -168,7 +168,7 @@ def load_plan_view(request):
         elif 'simulation_type' not in data and 'goal_seeking' in data:
             data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
 
-        if 'accounts' in data and isinstance(data['accounts'], list):
+        if data.get('accounts') and isinstance(data['accounts'], list):
             agg = aggregate_accounts(
                 data['accounts'],
                 data.get('user_age', 60),
@@ -181,7 +181,7 @@ def load_plan_view(request):
             )
             for k, v in agg.items():
                 data[k] = v
-        elif 'accounts' not in data:
+        else:
             data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
 
         request.session['simulation_data'] = data
@@ -221,7 +221,7 @@ def change_mode_view(request):
         data['spouse_age_death'] = get_int(request.POST.get('spouse_age_death'), data.get('spouse_age_death', 90))
 
     # Asset return updates
-    for prefix in ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa']:
+    for prefix in ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa']:
         key = f'{prefix}_return_mean'
         if key in request.POST:
             if prefix + '_assets' not in data or not isinstance(data[prefix + '_assets'], dict):

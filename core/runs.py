@@ -224,6 +224,13 @@ def njit_rmd_tax_withdraw(
 
         # B. Pre-tax extra withdrawals (gross-up solver)
         if deficit > 0.0 and pretax_end > 0.0:
+            tot_pre = pretax_user_end + pretax_spouse_end
+            u_ratio = (pretax_user_end / tot_pre) if tot_pre > 0.0 else 0.0
+            s_ratio = 1.0 - u_ratio
+            user_pen_rate = 0.10 if (user_alive and user_age_t < 59.5) else 0.0
+            spouse_pen_rate = 0.10 if ((spouse_alive or not user_alive) and spouse_age_t < 59.5) else 0.0
+            eff_pre_pen_rate = u_ratio * user_pen_rate + s_ratio * spouse_pen_rate
+
             agi_max = base_agi_ex_ss + pretax_end
             tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
             fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
@@ -231,7 +238,7 @@ def njit_rmd_tax_withdraw(
             st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
             st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
             st_tax_max = st_taxable_max * state_rate
-            pen_max = 0.10 * pretax_end if (user_alive and user_age_t < 59.5) else 0.0
+            pen_max = eff_pre_pen_rate * pretax_end
             net_cash_max = pretax_end - ((fed_tax_max + st_tax_max + pen_max) - total_base_tax)
 
             if net_cash_max <= deficit:
@@ -250,7 +257,7 @@ def njit_rmd_tax_withdraw(
                     st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
                     st_taxable = max(0.0, agi + st_ss - std_deduction_t)
                     st_tax = st_taxable * state_rate
-                    penalty = 0.10 * mid if (user_alive and user_age_t < 59.5) else 0.0
+                    penalty = eff_pre_pen_rate * mid
                     net_cash = mid - ((fed_tax + st_tax + penalty) - total_base_tax)
                     if net_cash < deficit:
                         low = mid
@@ -267,12 +274,10 @@ def njit_rmd_tax_withdraw(
             st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
             st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
             final_state_tax = st_taxable * state_rate
-            final_penalty = 0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0
+            final_penalty = eff_pre_pen_rate * w_pretax_extra
             total_base_tax = final_fed_tax + final_state_tax + final_penalty
 
-            tot_pre = pretax_user_end + pretax_spouse_end
             if tot_pre > 0.0 and w_pretax_extra > 0.0:
-                u_ratio = pretax_user_end / tot_pre
                 w_u = w_pretax_extra * u_ratio
                 w_s = w_pretax_extra - w_u
                 pretax_user_end = max(0.0, pretax_user_end - w_u)
@@ -335,7 +340,7 @@ def njit_rmd_tax_withdraw(
                 st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
                 final_state_tax = st_taxable * state_rate
                 hsa_penalty_user = 0.20 * w_hsa_user if (user_alive and user_age_t < 65.0) else 0.0
-                final_penalty = (0.10 * w_pretax_extra if (user_alive and user_age_t < 59.5) else 0.0) + hsa_penalty_user
+                final_penalty = (eff_pre_pen_rate * w_pretax_extra) + hsa_penalty_user
                 total_base_tax = final_fed_tax + final_state_tax + final_penalty
 
         # E. HSA spouse
@@ -352,7 +357,7 @@ def njit_rmd_tax_withdraw(
                 st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
                 st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
                 st_tax_max = st_taxable_max * state_rate
-                pen_max = 0.20 * hsa_spouse_end if (spouse_alive and spouse_age_t < 65.0) else 0.0
+                pen_max = 0.20 * hsa_spouse_end if ((spouse_alive or not user_alive) and spouse_age_t < 65.0) else 0.0
                 net_cash_max = hsa_spouse_end - ((fed_tax_max + st_tax_max + final_penalty + pen_max) - total_base_tax)
 
                 if net_cash_max <= deficit:
@@ -371,7 +376,7 @@ def njit_rmd_tax_withdraw(
                         st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
                         st_taxable = max(0.0, agi + st_ss - std_deduction_t)
                         st_tax = st_taxable * state_rate
-                        penalty = 0.20 * mid if (spouse_alive and spouse_age_t < 65.0) else 0.0
+                        penalty = 0.20 * mid if ((spouse_alive or not user_alive) and spouse_age_t < 65.0) else 0.0
                         net_cash = mid - ((fed_tax + st_tax + final_penalty + penalty) - total_base_tax)
                         if net_cash < deficit:
                             low = mid
@@ -388,7 +393,7 @@ def njit_rmd_tax_withdraw(
                 st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
                 st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
                 final_state_tax = st_taxable * state_rate
-                hsa_penalty_spouse = 0.20 * w_hsa_spouse if (spouse_alive and spouse_age_t < 65.0) else 0.0
+                hsa_penalty_spouse = 0.20 * w_hsa_spouse if ((spouse_alive or not user_alive) and spouse_age_t < 65.0) else 0.0
                 final_penalty = final_penalty + hsa_penalty_spouse
                 total_base_tax = final_fed_tax + final_state_tax + final_penalty
 
@@ -413,7 +418,8 @@ def simulate_step(
     user_rmd_start_age=75, spouse_rmd_start_age=150, social_security_data=None,
     state_tax_rate=0.0, state_ss_exempt=True, other_taxes_list=None,
     hsa_spouse=0.0, hsa_spouse_for_medical=True, r_hsa_spouse=0.0, contrib_hsa_spouse=0.0,
-    hsa=None, hsa_for_medical=None, r_hsa=None, contrib_hsa=None
+    hsa=None, hsa_for_medical=None, r_hsa=None, contrib_hsa=None,
+    user_ret_age=65, spouse_ret_age=65
 ):
     # Backwards-compatibility aliases
     if hsa is not None:
@@ -530,8 +536,8 @@ def simulate_step(
             name = item.get('name') or 'Other Tax'
             freq = item.get('frequency', 'annual')
             raw_amt = float(item.get('amount', 0.0))
-            start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
-            end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death)
+            end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death)
             
             is_one_time = (freq in ['one_time', 'one-time'])
             in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
@@ -565,7 +571,7 @@ def simulate_step(
                     except (ValueError, TypeError):
                         adj_start_age = start_age
                 else:
-                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death, default_val=start_age)
 
                 years_since_adj = max(0, user_age_t - adj_start_age)
 
@@ -618,12 +624,12 @@ def simulate_step(
         elif user_alive and not spouse_alive and is_married:
             if u_ss_active:
                 u_ss_t = max(u_ss_inf, sp_ss_inf)
-            elif sp_ss_inf > 0.0 and (spouse_age_t is not None and spouse_age_t >= sp_start):
+            elif sp_ss_inf > 0.0 and user_age_t >= 60:
                 u_ss_t = sp_ss_inf
         elif spouse_alive and not user_alive and is_married:
             if sp_ss_active:
                 sp_ss_t = max(sp_ss_inf, u_ss_inf)
-            elif u_ss_inf > 0.0 and user_age_t >= u_start:
+            elif u_ss_inf > 0.0 and (spouse_age_t is not None and spouse_age_t >= 60):
                 sp_ss_t = u_ss_inf
         elif u_ss_active:
             u_ss_t = u_ss_inf
@@ -641,8 +647,8 @@ def simulate_step(
         name = item.get('name') or 'Income Stream'
         freq = item.get('frequency', 'monthly')
         raw_amt = float(item.get('amount', 0.0))
-        start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
-        end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+        start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death)
+        end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death)
         
         is_one_time = (freq in ['one_time', 'one-time'])
         in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
@@ -676,7 +682,7 @@ def simulate_step(
                 except (ValueError, TypeError):
                     adj_start_age = start_age
             else:
-                adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+                adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death, default_val=start_age)
 
             years_since_adj = max(0, user_age_t - adj_start_age)
 
@@ -818,6 +824,7 @@ def simulate_step(
 
 def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data):
     user_age_t = user_age + t
+    is_spouse = bool(asset_data.get('is_spouse', False)) and is_married
     
     amount = asset_data.get('contrib_amount', 0.0)
     freq = asset_data.get('contrib_freq', 'annual')
@@ -825,11 +832,9 @@ def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year
     adjust_inf = asset_data.get('contrib_adjust_inflation', True)
     
     # Resolve end age
-    end_age_type = asset_data.get('contrib_end_age_type', 'age')
+    end_age_type = asset_data.get('contrib_end_age_type', 'spouse_retirement' if is_spouse else 'retirement')
     end_age_spec = asset_data.get('contrib_end_age_specified', 0)
     
-    # We need user retirement age etc. to resolve
-    # Let's pass a custom resolver
     ret_age = asset_data.get('user_ret_age', 65) # fallback if not set
     spouse_ret_age = asset_data.get('spouse_ret_age', 65)
     
@@ -837,20 +842,20 @@ def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year
         end_age_type, end_age_spec, user_age, ret_age, is_married, spouse_age, spouse_ret_age, 100, 100
     )
     
+    start_age_in_user_coords = start_age + (user_age - spouse_age) if is_spouse else start_age
+
     active = False
     if freq == 'one-time':
         # One time contributions can also be 'first_death' for taxable
         if end_age_type == 'first_death':
-            # occurs on the first death year
-            # we need user_age_death and spouse_age_death
             user_age_death = asset_data.get('user_age_death', 90)
             spouse_age_death = asset_data.get('spouse_age_death', 90)
             t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else user_age_death - user_age
             active = (t == t_first_death)
         else:
-            active = (user_age_t == start_age)
+            active = (user_age_t == start_age_in_user_coords)
     else:
-        active = (start_age <= user_age_t <= end_age)
+        active = (start_age_in_user_coords <= user_age_t <= end_age)
         
     if not active:
         return 0.0
@@ -912,6 +917,19 @@ def extract_sim_inputs(sim_input):
     hsa_data = raw.get('hsa_assets', {})
     spouse_hsa_data = raw.get('spouse_hsa_assets', {}) if is_married else {}
     
+    if pretax_data:
+        pretax_data['is_spouse'] = False
+    if spouse_pretax_data:
+        spouse_pretax_data['is_spouse'] = True
+    if roth_data:
+        roth_data['is_spouse'] = False
+    if taxable_data:
+        taxable_data['is_spouse'] = False
+    if hsa_data:
+        hsa_data['is_spouse'] = False
+    if spouse_hsa_data:
+        spouse_hsa_data['is_spouse'] = True
+
     # Inject metadata to assets for contribution calculation
     for asset in [pretax_data, spouse_pretax_data, roth_data, taxable_data, hsa_data, spouse_hsa_data]:
         if asset:
@@ -980,7 +998,7 @@ def extract_sim_inputs(sim_input):
         'rmd_start_age': user_rmd_start_age
     }
 
-def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, returns_hsa, test_spending=None):
+def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, returns_hsa, test_spending=None, returns_pretax_spouse=None, returns_hsa_spouse=None):
     # runs a single path of simulation
     # if test_spending is provided, we override the desired_spending with it (used for goal seeking)
     pretax_user = inputs['pretax_data'].get('present_balance', 0.0)
@@ -990,6 +1008,11 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
     hsa_user = inputs['hsa_data'].get('present_balance', 0.0)
     hsa_spouse = inputs['spouse_hsa_data'].get('present_balance', 0.0) if inputs['is_married'] else 0.0
     
+    if returns_pretax_spouse is None:
+        returns_pretax_spouse = returns_pretax
+    if returns_hsa_spouse is None:
+        returns_hsa_spouse = returns_hsa
+
     desired_spending = test_spending if test_spending is not None else inputs['desired_spending']
     # If married, the survivor spending needs to scale proportionally if we are goal-seeking
     survivor_spending = inputs['survivor_spending']
@@ -1010,11 +1033,11 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
         
         # returns for this year
         r_pre_user = returns_pretax[t]
-        r_pre_spouse = returns_pretax[t]
+        r_pre_spouse = returns_pretax_spouse[t]
         r_roth = returns_roth[t]
         r_tax = returns_taxable[t]
         r_hsa_user = returns_hsa[t]
-        r_hsa_spouse = returns_hsa[t]
+        r_hsa_spouse = returns_hsa_spouse[t]
         
         res = simulate_step(
             t, inputs['user_age'], inputs['is_married'], inputs['spouse_age'],
@@ -1030,7 +1053,8 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
             inputs.get('state_tax_rate', 0.0), inputs.get('state_ss_exempt', True),
             inputs.get('other_taxes', []),
             hsa_spouse=hsa_spouse, hsa_spouse_for_medical=inputs.get('spouse_hsa_for_medical', True),
-            r_hsa_spouse=r_hsa_spouse, contrib_hsa_spouse=c_hsa_spouse
+            r_hsa_spouse=r_hsa_spouse, contrib_hsa_spouse=c_hsa_spouse,
+            user_ret_age=inputs.get('user_ret_age', 65), spouse_ret_age=inputs.get('spouse_ret_age', 65)
         )
         
         year_results.append(res)
@@ -1101,7 +1125,7 @@ def njit_simulate_path(
     pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_user_init,
     c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa_user,
     add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-    r_pre, r_roth, r_tax, r_hsa,
+    r_pre_user, r_pre_spouse, r_roth, r_tax, r_hsa_user, r_hsa_spouse,
     state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
     trajectory_arr=None,
@@ -1151,12 +1175,12 @@ def njit_simulate_path(
         hsa_user_before = max(0.0, hsa_user + c_hsa_user_t)
         hsa_spouse_before = max(0.0, hsa_spouse + c_hsa_spouse_t) if is_married else 0.0
         
-        growth_pre_user = pretax_user_before * r_pre[t]
-        growth_pre_spouse = pretax_spouse_before * r_pre[t] if is_married else 0.0
+        growth_pre_user = pretax_user_before * r_pre_user[t]
+        growth_pre_spouse = pretax_spouse_before * r_pre_spouse[t] if is_married else 0.0
         growth_roth = roth_before * r_roth[t]
         growth_taxable = taxable_before * r_tax[t] if taxable_before > 0.0 else 0.0
-        growth_hsa_user = hsa_user_before * r_hsa[t]
-        growth_hsa_spouse = hsa_spouse_before * r_hsa[t] if is_married else 0.0
+        growth_hsa_user = hsa_user_before * r_hsa_user[t]
+        growth_hsa_spouse = hsa_spouse_before * r_hsa_spouse[t] if is_married else 0.0
         
         pretax_user_mid = pretax_user_before + growth_pre_user
         pretax_spouse_mid = pretax_spouse_before + growth_pre_spouse
@@ -1222,7 +1246,7 @@ def njit_simulate_all_paths(
     pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_user_init,
     c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa_user,
     add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-    returns_pre, returns_roth, returns_taxable, returns_hsa,
+    returns_pre_user, returns_pre_spouse, returns_roth, returns_taxable, returns_hsa_user, returns_hsa_spouse,
     state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
     ending_wealths,
@@ -1238,7 +1262,7 @@ def njit_simulate_all_paths(
                 pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_user_init,
                 c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa_user,
                 add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-                returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
+                returns_pre_user[i], returns_pre_spouse[i], returns_roth[i], returns_taxable[i], returns_hsa_user[i], returns_hsa_spouse[i],
                 state_tax_rate, state_ss_exempt_code, other_taxes_arr,
                 hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
                 trajectories[i],
@@ -1252,7 +1276,7 @@ def njit_simulate_all_paths(
                 pretax_user_init, pretax_spouse_init, roth_init, taxable_init, hsa_user_init,
                 c_pre_user, c_pre_spouse, c_roth, c_tax, c_hsa_user,
                 add_spending_arr, inc_taxable_arr, inc_ss_arr, inc_nontaxable_arr,
-                returns_pre[i], returns_roth[i], returns_taxable[i], returns_hsa[i],
+                returns_pre_user[i], returns_pre_spouse[i], returns_roth[i], returns_taxable[i], returns_hsa_user[i], returns_hsa_spouse[i],
                 state_tax_rate, state_ss_exempt_code, other_taxes_arr,
                 hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
                 None,
@@ -1341,8 +1365,8 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         for item in other_taxes_list:
             freq = item.get('frequency', 'annual')
             raw_amt = float(item.get('amount', 0.0))
-            start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
-            end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            start_age = resolve_age(item.get('start_age_type', 'retirement'), item.get('start_age_specified', 65), user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death)
+            end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death)
             
             is_one_time = (freq in ['one_time', 'one-time'])
             in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
@@ -1376,7 +1400,7 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
                     except (ValueError, TypeError):
                         adj_start_age = start_age
                 else:
-                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death, default_val=start_age)
 
                 years_since_adj = max(0, user_age_t - adj_start_age)
                 start_t = max(0, min(total_years - 1, adj_start_age - user_age))
@@ -1430,12 +1454,12 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         elif user_alive and not spouse_alive and is_married:
             if u_ss_active:
                 u_ss_t = max(u_ss_inf, sp_ss_inf)
-            elif sp_ss_inf > 0.0 and spouse_age_t >= sp_start_age:
+            elif sp_ss_inf > 0.0 and user_age_t >= 60:
                 u_ss_t = sp_ss_inf
         elif spouse_alive and not user_alive and is_married:
             if sp_ss_active:
                 sp_ss_t = max(sp_ss_inf, u_ss_inf)
-            elif u_ss_inf > 0.0 and user_age_t >= u_start_age:
+            elif u_ss_inf > 0.0 and spouse_age_t >= 60:
                 sp_ss_t = u_ss_inf
         elif u_ss_active:
             u_ss_t = u_ss_inf
@@ -1447,8 +1471,8 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         for inc in inputs['income_sources']:
             freq = inc.get('frequency', 'monthly')
             raw_amt = inc.get('amount', 0.0)
-            start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
-            end_age = resolve_age(inc.get('end_age_type', 'death'), inc.get('end_age_specified', 0), user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death)
+            start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death)
+            end_age = resolve_age(inc.get('end_age_type', 'death'), inc.get('end_age_specified', 0), user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death)
             
             active = False
             is_one_time = (freq in ['one_time', 'one-time'])
@@ -1483,7 +1507,7 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
                     except (ValueError, TypeError):
                         adj_start_age = start_age
                 else:
-                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, desired_spending_start_age, is_married, spouse_age, spouse_age, user_age_death, spouse_age_death, default_val=start_age)
+                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death, default_val=start_age)
 
                 years_since_adj = max(0, user_age_t - adj_start_age)
                 start_t = max(0, min(total_years - 1, adj_start_age - user_age))
@@ -1555,20 +1579,26 @@ def generate_runs(sim_input, test_spending=None):
     rng = np.random.default_rng()
     pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
     pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
+    pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
+    pretax_sp_s = inputs['spouse_pretax_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else pretax_s
     roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
     roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
     taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
     taxable_s = inputs['taxable_data'].get('return_std', 10.0) / 100.0
     hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
     hsa_s = inputs['hsa_data'].get('return_std', 10.0) / 100.0
+    hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
+    hsa_sp_s = inputs['spouse_hsa_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else hsa_s
     
     runs = inputs['runs']
     years = inputs['total_years']
     
-    returns_pre = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_pre_user = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_pre_spouse = rng.normal(pretax_sp_m, pretax_sp_s, size=(runs, years))
     returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
     returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
-    returns_hsa = rng.normal(hsa_m, hsa_s, size=(runs, years))
+    returns_hsa_user = rng.normal(hsa_m, hsa_s, size=(runs, years))
+    returns_hsa_spouse = rng.normal(hsa_sp_m, hsa_sp_s, size=(runs, years))
     
     nb_inp = prepare_numba_inputs(inputs, test_spending=test_spending)
     ending_wealths = np.empty(runs, dtype=np.float64)
@@ -1581,7 +1611,7 @@ def generate_runs(sim_input, test_spending=None):
         nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_user_init'],
         nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa_user'],
         nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-        returns_pre, returns_roth, returns_taxable, returns_hsa,
+        returns_pre_user, returns_pre_spouse, returns_roth, returns_taxable, returns_hsa_user, returns_hsa_spouse,
         nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
         nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
         ending_wealths,
@@ -1619,20 +1649,26 @@ def binary_search(sim_input):
     rng = np.random.default_rng()
     pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
     pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
+    pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
+    pretax_sp_s = inputs['spouse_pretax_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else pretax_s
     roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
     roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
     taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
     taxable_s = inputs['taxable_data'].get('return_std', 8.0) / 100.0
     hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
     hsa_s = inputs['hsa_data'].get('return_std', 8.0) / 100.0
+    hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
+    hsa_sp_s = inputs['spouse_hsa_data'].get('return_std', 8.0) / 100.0 if inputs['is_married'] else hsa_s
     
     runs = inputs['runs']
     years = inputs['total_years']
     
-    returns_pre = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_pre_user = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_pre_spouse = rng.normal(pretax_sp_m, pretax_sp_s, size=(runs, years))
     returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
     returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
-    returns_hsa = rng.normal(hsa_m, hsa_s, size=(runs, years))
+    returns_hsa_user = rng.normal(hsa_m, hsa_s, size=(runs, years))
+    returns_hsa_spouse = rng.normal(hsa_sp_m, hsa_sp_s, size=(runs, years))
     
     total_wealth = (
         inputs['pretax_data'].get('present_balance', 0.0) +
@@ -1667,7 +1703,7 @@ def binary_search(sim_input):
             nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_user_init'],
             nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa_user'],
             nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-            returns_pre, returns_roth, returns_taxable, returns_hsa,
+            returns_pre_user, returns_pre_spouse, returns_roth, returns_taxable, returns_hsa_user, returns_hsa_spouse,
             nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
             nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
             ending_wealths,
@@ -1688,12 +1724,15 @@ def binary_search(sim_input):
     solved_srate = best_srate if best_mid > 0 else success_rate
     
     det_pretax_r = [pretax_m] * years
+    det_pre_sp_r = [pretax_sp_m] * years
     det_roth_r = [roth_m] * years
     det_taxable_r = [taxable_m] * years
     det_hsa_r = [hsa_m] * years
+    det_hsa_sp_r = [hsa_sp_m] * years
     
     det_results = run_simulation_path(
-        inputs, det_pretax_r, det_roth_r, det_taxable_r, det_hsa_r, test_spending=solved_spending
+        inputs, det_pretax_r, det_roth_r, det_taxable_r, det_hsa_r,
+        test_spending=solved_spending, returns_pretax_spouse=det_pre_sp_r, returns_hsa_spouse=det_hsa_sp_r
     )
     
     first_year = det_results[0]
@@ -1710,17 +1749,22 @@ def run_deterministic(sim_input):
     years = inputs['total_years']
     
     pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
+    pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
     roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
     taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
     hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
+    hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
     
     det_pretax_r = [pretax_m] * years
+    det_pre_sp_r = [pretax_sp_m] * years
     det_roth_r = [roth_m] * years
     det_taxable_r = [taxable_m] * years
     det_hsa_r = [hsa_m] * years
+    det_hsa_sp_r = [hsa_sp_m] * years
     
     path_results = run_simulation_path(
-        inputs, det_pretax_r, det_roth_r, det_taxable_r, det_hsa_r
+        inputs, det_pretax_r, det_roth_r, det_taxable_r, det_hsa_r,
+        returns_pretax_spouse=det_pre_sp_r, returns_hsa_spouse=det_hsa_sp_r
     )
     
     # Format results for the deterministic tables
@@ -1782,16 +1826,18 @@ def infer_asset_allocation(mean_return):
     Infers stock/bond/cash percentage based on user's expected return.
     Assumes ~10% for pure equity, ~4.5% for intermediate bonds, ~2.5% for cash.
     """
-    if mean_return >= 10.0:
+    if mean_return >= 7.0:
         return 100.0, 0.0, 0.0
-    elif mean_return <= 2.5:
-        return 0.0, 0.0, 100.0
-    elif mean_return <= 4.5:
-        bond_ratio = (mean_return - 2.5) / 2.0
-        return 0.0, float(bond_ratio * 100.0), float((1.0 - bond_ratio) * 100.0)
+    elif mean_return >= 6.0:
+        return 80.0, 20.0, 0.0
+    elif mean_return >= 5.0:
+        return 60.0, 40.0, 0.0
+    elif mean_return >= 4.0:
+        return 40.0, 60.0, 0.0
+    elif mean_return >= 3.0:
+        return 20.0, 80.0, 0.0
     else:
-        stock_ratio = (mean_return - 4.5) / 5.5
-        return float(stock_ratio * 100.0), float((1.0 - stock_ratio) * 100.0), 0.0
+        return 0.0, 100.0, 0.0
 
 
 def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allocation='matched', crisis_timing='retirement', regular_mc_results=None):
@@ -1826,17 +1872,23 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
     rng = np.random.default_rng()
     pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
     pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
+    pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
+    pretax_sp_s = inputs['spouse_pretax_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else pretax_s
     roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
     roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
     taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
     taxable_s = inputs['taxable_data'].get('return_std', 10.0) / 100.0
     hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
     hsa_s = inputs['hsa_data'].get('return_std', 10.0) / 100.0
+    hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
+    hsa_sp_s = inputs['spouse_hsa_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else hsa_s
 
-    returns_pre = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_pre_user = rng.normal(pretax_m, pretax_s, size=(runs, years))
+    returns_pre_spouse = rng.normal(pretax_sp_m, pretax_sp_s, size=(runs, years))
     returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
     returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
-    returns_hsa = rng.normal(hsa_m, hsa_s, size=(runs, years))
+    returns_hsa_user = rng.normal(hsa_m, hsa_s, size=(runs, years))
+    returns_hsa_spouse = rng.normal(hsa_sp_m, hsa_sp_s, size=(runs, years))
 
     base_inf = float(inputs['inflation_rate'])
     inflation_rates = np.full(years, base_inf, dtype=np.float64)
@@ -1856,9 +1908,11 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
             return infer_asset_allocation(acc_mean)
 
     w_pre = get_allocation_weights(inputs['pretax_data'].get('return_mean', 6.0))
+    w_pre_spouse = get_allocation_weights(inputs['spouse_pretax_data'].get('return_mean', 6.0)) if inputs['is_married'] else w_pre
     w_roth = get_allocation_weights(inputs['roth_data'].get('return_mean', 6.0))
     w_tax = get_allocation_weights(inputs['taxable_data'].get('return_mean', 6.0))
     w_hsa = get_allocation_weights(inputs['hsa_data'].get('return_mean', 6.0))
+    w_hsa_spouse = get_allocation_weights(inputs['spouse_hsa_data'].get('return_mean', 6.0)) if inputs['is_married'] else w_hsa
 
     crisis_macro_summary = []
     for t in range(crisis_start_t, crisis_end_t):
@@ -1873,14 +1927,18 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
         inflation_rates[t] = inf_val
 
         r_pre_hist = blend_return(w_pre[0], w_pre[1], w_pre[2], s_val, b_val, c_val) / 100.0
+        r_pre_sp_hist = blend_return(w_pre_spouse[0], w_pre_spouse[1], w_pre_spouse[2], s_val, b_val, c_val) / 100.0
         r_roth_hist = blend_return(w_roth[0], w_roth[1], w_roth[2], s_val, b_val, c_val) / 100.0
         r_tax_hist = blend_return(w_tax[0], w_tax[1], w_tax[2], s_val, b_val, c_val) / 100.0
         r_hsa_hist = blend_return(w_hsa[0], w_hsa[1], w_hsa[2], s_val, b_val, c_val) / 100.0
+        r_hsa_sp_hist = blend_return(w_hsa_spouse[0], w_hsa_spouse[1], w_hsa_spouse[2], s_val, b_val, c_val) / 100.0
 
-        returns_pre[:, t] = r_pre_hist
+        returns_pre_user[:, t] = r_pre_hist
+        returns_pre_spouse[:, t] = r_pre_sp_hist
         returns_roth[:, t] = r_roth_hist
         returns_taxable[:, t] = r_tax_hist
-        returns_hsa[:, t] = r_hsa_hist
+        returns_hsa_user[:, t] = r_hsa_hist
+        returns_hsa_spouse[:, t] = r_hsa_sp_hist
 
         crisis_macro_summary.append({
             'plan_year': inputs['current_year'] + t,
@@ -1902,7 +1960,7 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
         nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_user_init'],
         nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa_user'],
         nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
-        returns_pre, returns_roth, returns_taxable, returns_hsa,
+        returns_pre_user, returns_pre_spouse, returns_roth, returns_taxable, returns_hsa_user, returns_hsa_spouse,
         nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
         nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
         ending_wealths,

@@ -261,39 +261,40 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
             'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
-            'return_mean': 6.0, 'return_std': 10.0
+            'return_mean': 6.0, 'return_std': 10.0, 'is_spouse': False
         },
         'spouse_pretax': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': spouse_age if is_married else user_age,
             'contrib_end_age_type': 'spouse_retirement' if is_married else 'retirement',
             'contrib_end_age_specified': spouse_retirement_age if is_married else user_retirement_age,
-            'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0
+            'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0, 'is_spouse': True
         },
         'roth': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
             'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
-            'return_mean': 6.0, 'return_std': 10.0
+            'return_mean': 6.0, 'return_std': 10.0, 'is_spouse': False
         },
         'taxable': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
             'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
-            'return_mean': 5.0, 'return_std': 8.0
+            'return_mean': 5.0, 'return_std': 8.0, 'is_spouse': False
         },
         'hsa': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
             'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
-            'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True
+            'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True, 'is_spouse': False
         },
         'spouse_hsa': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': spouse_age if is_married else user_age,
             'contrib_end_age_type': 'spouse_retirement' if is_married else 'retirement',
             'contrib_end_age_specified': spouse_retirement_age if is_married else user_retirement_age,
-            'contrib_adjust_inflation': True, 'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True
+            'contrib_adjust_inflation': True, 'return_mean': 5.0, 'return_std': 8.0, 'hsa_for_medical': True,
+            'is_spouse': True
         }
     }
 
@@ -321,13 +322,18 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
         base = dict(asset_map[key])
         if acc_list:
             base['present_balance'] = sum(float(a.get('balance', 0.0)) for a in acc_list)
-            base['contrib_amount'] = sum(float(a.get('contrib_amount', 0.0)) for a in acc_list)
+            annual_contribs = [
+                (float(a.get('contrib_amount', 0.0)) * 12.0 if a.get('contrib_freq') == 'monthly' else float(a.get('contrib_amount', 0.0)))
+                for a in acc_list
+            ]
+            base['contrib_amount'] = sum(annual_contribs)
+            base['contrib_freq'] = 'annual'
 
             total_bal = sum(max(0.0, float(a.get('balance', 0.0))) for a in acc_list)
             if total_bal > 0:
                 weights = [max(0.0, float(a.get('balance', 0.0))) for a in acc_list]
             else:
-                weights = [max(0.0, float(a.get('contrib_amount', 0.0))) for a in acc_list]
+                weights = [max(0.0, c) for c in annual_contribs]
             total_w = sum(weights)
             if total_w > 0:
                 base['return_mean'] = sum(float(a.get('return_mean', 6.0)) * w for a, w in zip(acc_list, weights)) / total_w
@@ -337,7 +343,6 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
                 base['return_std'] = sum(float(a.get('return_std', 10.0)) for a in acc_list) / len(acc_list)
 
             primary = acc_list[0]
-            base['contrib_freq'] = primary.get('contrib_freq', 'annual')
             base['contrib_start_age'] = primary.get('contrib_start_age', base['contrib_start_age'])
             base['contrib_end_age_type'] = primary.get('contrib_end_age_type', base['contrib_end_age_type'])
             base['contrib_end_age_specified'] = primary.get('contrib_end_age_specified', base['contrib_end_age_specified'])
