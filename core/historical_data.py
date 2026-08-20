@@ -129,13 +129,13 @@ CRISIS_SCENARIOS = {
         'badge': 'High Inflation + Drop'
     },
     '2008_gfc': {
-        'name': 'The Great Financial Crisis (2007–2017)',
-        'short_name': '2008 Global Financial Crisis',
+        'name': 'The Great Recession (2007–2009)',
+        'short_name': '2008 Great Recession',
         'start_year': 2007,
-        'end_year': 2017,
-        'length': 11,
-        'description': 'A massive 37% stock market plunge in 2008 counterbalanced by strong Treasury bond gains (+20%), followed by an historic monetary stimulus and economic recovery.',
-        'badge': 'Liquidity Panic'
+        'end_year': 2009,
+        'length': 3,
+        'description': 'The peak-to-trough collapse of the global banking system and subprime mortgage market, featuring a massive 37% stock market plunge in 2008 counterbalanced by strong Treasury bond gains (+20%), followed by the initial 2009 economic rebound.',
+        'badge': 'Subprime Shock & Crash'
     },
     '1929_depression': {
         'name': 'The Great Depression (1929–1941)',
