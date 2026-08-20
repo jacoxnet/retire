@@ -1710,6 +1710,53 @@ class RetirementCalculationTests(TestCase):
         # Year 5 (spouse age 60, user deceased): survivor benefit SHOULD be active (>= 60)
         self.assertGreater(rows[5]['income_breakdown'].get("Spouse's Social Security", 0.0), 0.0)
 
+    def test_infer_asset_allocation_continuous_model(self):
+        """Verify the continuous linear asset allocation inference model (7% stocks, 4% bonds, 2.5% cash)."""
+        from core.runs import infer_asset_allocation
+
+        # Return >= 7.0%: 100% stocks, 0% bonds, 0% cash
+        self.assertEqual(infer_asset_allocation(10.0), (100.0, 0.0, 0.0))
+        self.assertEqual(infer_asset_allocation(8.0), (100.0, 0.0, 0.0))
+        self.assertEqual(infer_asset_allocation(7.0), (100.0, 0.0, 0.0))
+
+        # Return = 6.0%: (6.0 - 4.0)/3.0 = 66.67% stocks, 33.33% bonds
+        s, b, c = infer_asset_allocation(6.0)
+        self.assertAlmostEqual(s, 200.0 / 3.0, places=4)
+        self.assertAlmostEqual(b, 100.0 / 3.0, places=4)
+        self.assertEqual(c, 0.0)
+
+        # Return = 5.0%: (5.0 - 4.0)/3.0 = 33.33% stocks, 66.67% bonds
+        s, b, c = infer_asset_allocation(5.0)
+        self.assertAlmostEqual(s, 100.0 / 3.0, places=4)
+        self.assertAlmostEqual(b, 200.0 / 3.0, places=4)
+        self.assertEqual(c, 0.0)
+
+        # Return = 4.0%: 0% stocks, 100% bonds, 0% cash
+        self.assertEqual(infer_asset_allocation(4.0), (0.0, 100.0, 0.0))
+
+        # Return = 3.9%: (3.9 - 2.5)/1.5 = 93.33% bonds, 6.67% cash
+        s, b, c = infer_asset_allocation(3.9)
+        self.assertEqual(s, 0.0)
+        self.assertAlmostEqual(b, 93.3333, places=3)
+        self.assertAlmostEqual(c, 6.6667, places=3)
+
+        # Return = 3.0%: (3.0 - 2.5)/1.5 = 33.33% bonds, 66.67% cash
+        s, b, c = infer_asset_allocation(3.0)
+        self.assertEqual(s, 0.0)
+        self.assertAlmostEqual(b, 100.0 / 3.0, places=4)
+        self.assertAlmostEqual(c, 200.0 / 3.0, places=4)
+
+        # Return = 2.6%: (2.6 - 2.5)/1.5 = 6.67% bonds, 93.33% cash
+        s, b, c = infer_asset_allocation(2.6)
+        self.assertEqual(s, 0.0)
+        self.assertAlmostEqual(b, 6.6667, places=3)
+        self.assertAlmostEqual(c, 93.3333, places=3)
+
+        # Return <= 2.5%: 0% stocks, 0% bonds, 100% cash
+        self.assertEqual(infer_asset_allocation(2.5), (0.0, 0.0, 100.0))
+        self.assertEqual(infer_asset_allocation(2.0), (0.0, 0.0, 100.0))
+        self.assertEqual(infer_asset_allocation(1.0), (0.0, 0.0, 100.0))
+
 
 
 

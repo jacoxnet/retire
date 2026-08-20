@@ -1823,21 +1823,19 @@ def run_deterministic(sim_input):
 
 def infer_asset_allocation(mean_return):
     """
-    Infers stock/bond/cash percentage based on user's expected return.
-    Assumes ~10% for pure equity, ~4.5% for intermediate bonds, ~2.5% for cash.
+    Infers continuous stock/bond/cash percentage based on user's expected return.
+    Assumes nominal baseline returns: 7.0% for stocks, 4.0% for intermediate bonds, 2.5% for cash.
     """
     if mean_return >= 7.0:
         return 100.0, 0.0, 0.0
-    elif mean_return >= 6.0:
-        return 80.0, 20.0, 0.0
-    elif mean_return >= 5.0:
-        return 60.0, 40.0, 0.0
     elif mean_return >= 4.0:
-        return 40.0, 60.0, 0.0
-    elif mean_return >= 3.0:
-        return 20.0, 80.0, 0.0
+        stock_pct = ((mean_return - 4.0) / 3.0) * 100.0
+        return float(stock_pct), float(100.0 - stock_pct), 0.0
+    elif mean_return >= 2.5:
+        bond_pct = ((mean_return - 2.5) / 1.5) * 100.0
+        return 0.0, float(bond_pct), float(100.0 - bond_pct)
     else:
-        return 0.0, 100.0, 0.0
+        return 0.0, 0.0, 100.0
 
 
 def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allocation='matched', crisis_timing='retirement', regular_mc_results=None):
