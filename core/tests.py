@@ -181,23 +181,32 @@ class RetirementCalculationTests(TestCase):
         self.assertTrue(self.client.session['simulation_data']['goal_seeking'])
         self.assertEqual(self.client.session['simulation_data']['target_success_rate'], 85.0)
 
-        # Switch back to Regular Mode
+        # Switch back to Regular Mode and change runs
         response = self.client.post('/change_mode/', {
-            'simulation_type': 'regular'
+            'simulation_type': 'regular',
+            'runs': '20000'
         })
         self.assertRedirects(response, '/results/')
         self.assertFalse(self.client.session['simulation_data']['goal_seeking'])
+        self.assertEqual(self.client.session['simulation_data']['runs'], 20000)
 
     def test_enter_page_no_simulation_mode_card(self):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
-        # Verify Simulation Mode card and Target Success Rate box are absent from enter.html
+        # Verify Simulation Mode card, Target Success Rate box, and runs input are absent from enter.html
         self.assertNotContains(response, 'simulation-mode-container')
         self.assertNotContains(response, 'id="simulation_type_regular"')
         self.assertNotContains(response, 'id="simulation_type_goal"')
         self.assertNotContains(response, 'id="target_success_rate_group"')
-        # Verify Number of Simulations input is present
-        self.assertContains(response, 'id="runs"')
+        self.assertNotContains(response, 'id="runs"')
+
+    def test_results_page_runs_input(self):
+        self.client.get('/')
+        response = self.client.get('/results/')
+        self.assertEqual(response.status_code, 200)
+        # Verify Number of Simulations input is present on results page with default 10000
+        self.assertContains(response, 'id="input_runs"')
+        self.assertContains(response, 'value="10000"')
 
     def test_change_mode_invalid_target_success_rate(self):
         self.client.get('/')

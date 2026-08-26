@@ -35,7 +35,7 @@ def get_default_data():
         'survivor_spending': 40000.0,
         'adjust_spending_inflation': True,
         'inflation_rate': 3.5,
-        'runs': 1000,
+        'runs': 10000,
         'target_success_rate': 80.0,
         'social_security': {
             'user_entitled': True,
@@ -219,6 +219,13 @@ def change_mode_view(request):
         data['desired_spending'] = get_float(request.POST.get('desired_spending'), data.get('desired_spending', 40000.0))
     if 'inflation_rate' in request.POST:
         data['inflation_rate'] = get_float(request.POST.get('inflation_rate'), data.get('inflation_rate', 2.5))
+    if 'runs' in request.POST:
+        runs_val = get_int(request.POST.get('runs'), data.get('runs', 10000))
+        if runs_val < 1 or runs_val > 100000:
+            messages.error(request, "Number of Simulations must be an integer between 1 and 100,000.")
+            data['runs'] = min(100000, max(1, runs_val))
+        else:
+            data['runs'] = runs_val
     if 'user_age_death' in request.POST:
         data['user_age_death'] = get_int(request.POST.get('user_age_death'), data.get('user_age_death', 90))
     if 'spouse_age_death' in request.POST:
@@ -275,8 +282,8 @@ def enter_view(request):
         adjust_spending_inflation = get_bool(request.POST.get('adjust_spending_inflation'))
         
         inflation_rate = get_float(request.POST.get('inflation_rate'), 2.5)
-        runs = get_int(request.POST.get('runs'), 1000)
         session_data = get_session_sim_data(request)
+        runs = get_int(request.POST.get('runs'), session_data.get('runs', 10000) if isinstance(session_data, dict) else getattr(session_data, 'runs', 10000))
         curr_target_srate = session_data.get('target_success_rate', 80.0) if isinstance(session_data, dict) else getattr(session_data, 'target_success_rate', 80.0)
         raw_target_srate = get_float(request.POST.get('target_success_rate'), curr_target_srate)
         target_success_rate = min(99.0, max(1.0, raw_target_srate))
@@ -474,7 +481,7 @@ def results_view(request):
         "goal_seeking": is_goal_seeking,
         "initial_wealth": total_initial_wealth,
         "years": len(det_rows),
-        "runs": data.get('runs', 100),
+        "runs": data.get('runs', 10000),
         "inflation_rate": data.get('inflation_rate', 2.5),
         "desired_spending": data.get('desired_spending', 40000.0),
         "target_success_rate": data.get('target_success_rate', 80.0),

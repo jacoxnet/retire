@@ -906,7 +906,7 @@ def extract_sim_inputs(sim_input):
     adjust_spending_inflation = bool(raw.get('adjust_spending_inflation', True))
     
     inflation_rate = float(raw.get('inflation_rate', 2.5))
-    runs = int(raw.get('runs', 100))
+    runs = int(raw.get('runs', 10000))
     target_success_rate = float(raw.get('target_success_rate', 80.0))
     
     # Assets: Pretax User, Pretax Spouse, Roth, Taxable, HSA User, HSA Spouse

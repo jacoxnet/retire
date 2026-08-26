@@ -178,6 +178,19 @@
                                     <input type="range" class="form-range range-sync" id="range_hsa_return_mean" data-num="input_hsa_return_mean" min="-10" max="25" step="0.1" value="{{ hsa_assets.return_mean|floatformat:1 }}">
                                 </div>
 
+                                <!-- Number of Simulations (MC Paths) -->
+                                <div class="mt-3 mb-2 p-2 bg-light rounded border">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label for="input_runs" class="form-label small fw-bold mb-0">Number of Simulations (MC Paths)</label>
+                                        <div class="input-group input-group-sm" style="width: 110px;">
+                                            <input type="number" class="form-control text-center px-1 fw-bold" id="input_runs" name="runs" value="{{ runs|default:10000 }}" min="1" max="100000" required>
+                                        </div>
+                                    </div>
+                                    <div class="invalid-feedback" id="input_runs_feedback">
+                                        Number of Simulations must be an integer between 1 and 100,000.
+                                    </div>
+                                </div>
+
                                 <button type="submit" class="btn btn-primary btn-md w-100 mt-3 shadow-sm">
                                     <i class="fa fa-sync-alt me-1"></i> Update Inputs & Re-Run Simulation
                                 </button>
@@ -2122,29 +2135,56 @@
             });
         });
 
-        // Validate Target Success Rate on form submit if Maximum Spending is active
+        // Validate inputs on form submit
         const resultsForm = document.getElementById('resultsInputsForm');
         const resultsGoalRadioEl = document.getElementById('results_sim_type_goal');
         const resultsTargetInputEl = document.getElementById('results_target_success_rate');
+        const resultsRunsInputEl = document.getElementById('input_runs');
 
-        if (resultsForm && resultsGoalRadioEl && resultsTargetInputEl) {
+        if (resultsForm) {
             resultsForm.addEventListener('submit', function(e) {
-                if (resultsGoalRadioEl.checked) {
+                let hasError = false;
+
+                if (resultsRunsInputEl) {
+                    const rVal = parseInt(resultsRunsInputEl.value, 10);
+                    if (isNaN(rVal) || rVal < 1 || rVal > 100000) {
+                        e.preventDefault();
+                        resultsRunsInputEl.classList.add('is-invalid');
+                        resultsRunsInputEl.focus();
+                        hasError = true;
+                    } else {
+                        resultsRunsInputEl.classList.remove('is-invalid');
+                    }
+                }
+
+                if (!hasError && resultsGoalRadioEl && resultsGoalRadioEl.checked && resultsTargetInputEl) {
                     const val = parsePercent(resultsTargetInputEl.value);
                     if (isNaN(val) || val < 1.0 || val > 99.0) {
                         e.preventDefault();
                         resultsTargetInputEl.classList.add('is-invalid');
                         resultsTargetInputEl.focus();
-                        return false;
+                        hasError = true;
                     } else {
                         resultsTargetInputEl.classList.remove('is-invalid');
                     }
                 }
+
+                if (hasError) {
+                    return false;
+                }
             });
 
-            resultsTargetInputEl.addEventListener('input', function() {
-                this.classList.remove('is-invalid');
-            });
+            if (resultsRunsInputEl) {
+                resultsRunsInputEl.addEventListener('input', function() {
+                    this.classList.remove('is-invalid');
+                });
+            }
+
+            if (resultsTargetInputEl) {
+                resultsTargetInputEl.addEventListener('input', function() {
+                    this.classList.remove('is-invalid');
+                });
+            }
         }
     });
 </script>

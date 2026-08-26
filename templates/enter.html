@@ -215,14 +215,6 @@
                                 id="inflation_rate" name="inflation_rate" value="{{ inflation_rate|floatformat:"-2" }}"
                                 step="0.01" required>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="runs" class="form-label">Number of Simulations (MC Paths)</label>
-                            <input type="number" class="form-control {% if runs_error %}is-invalid{% endif %}" id="runs"
-                                name="runs" value="{{ runs }}" min="1" max="100000" required>
-                            <div class="invalid-feedback" id="runs_feedback">
-                                Number of Simulations must be an integer between 1 and 100,000.
-                            </div>
-                        </div>
                     </div>
 
                     <div class="text-center mt-4">
@@ -1409,16 +1401,6 @@
                 }
             }
 
-
-            // 4. Number of Simulations (Runs)
-            var runsInput = document.getElementById('runs');
-            if (runsInput) {
-                var runsVal = parseInt(runsInput.value, 10);
-                if (isNaN(runsVal) || runsVal < 1 || runsVal > 100000) {
-                    setFieldInvalid(runsInput, 'Number of Simulations must be an integer between 1 and 100,000.');
-                    errors.push({ element: runsInput, tab: 'demographics-tab', message: 'Number of Simulations must be an integer between 1 and 100,000.' });
-                }
-            }
 
             // 5. Social Security Claiming Age Validation
             if (document.getElementById('user_ss_entitled')?.value === 'true') {
