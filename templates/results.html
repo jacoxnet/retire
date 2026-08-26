@@ -7,6 +7,19 @@
         <h1 class="pageheading mb-0">Retirement Simulation Results</h1>
     </div>
 
+    <!-- Validation & Notification Alert Container -->
+    <div id="validationAlertContainer" class="mb-3">
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags %}{{ message.tags }}{% else %}primary{% endif %} alert-dismissible fade show text-center"
+            role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
     <!-- Results Tab Navigation -->
     <ul class="nav nav-tabs mb-4 justify-content-center" id="resultsTabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -189,6 +202,9 @@
                             <div class="mb-3" id="results_target_success_group" style="display: {% if goal_seeking %}block{% else %}none{% endif %};">
                                 <label for="results_target_success_rate" class="form-label fw-semibold">Target Success Rate %</label>
                                 <input type="text" inputmode="decimal" class="form-control percent-input" id="results_target_success_rate" name="target_success_rate" value="{{ target_success_rate|default:80.0|floatformat:"-2" }}" min="1" max="99" step="0.1">
+                                <div class="invalid-feedback" id="results_target_success_rate_feedback">
+                                    Target Success Rate must be between 1% and 99%.
+                                </div>
                             </div>
                             <button type="submit" class="btn btn-primary btn-md w-100 shadow-sm">
                                 <i class="fa fa-sync-alt me-1"></i> Update Simulation Mode
@@ -1947,32 +1963,29 @@
             downloadAnchor.setAttribute("download", (dataBlock.user_name || "retirement").toLowerCase().replace(/\s+/g, '_') + "_plan.json");
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
-            downloadAnchor.remove();
-        });
-    }
-
         });
     }
 
     // Toggle target success rate field visibility in Results mode selector
-    const resultsRegRadio = document.getElementById('results_sim_type_regular');
-    const resultsGoalRadio = document.getElementById('results_sim_type_goal');
-    const resultsTargetGroup = document.getElementById('results_target_success_group');
-
     function toggleResultsModeFields() {
+        const resultsGoalRadio = document.getElementById('results_sim_type_goal');
+        const resultsTargetGroup = document.getElementById('results_target_success_group');
         if (resultsGoalRadio && resultsGoalRadio.checked) {
-            resultsTargetGroup.style.display = 'block';
+            if (resultsTargetGroup) resultsTargetGroup.style.display = 'block';
         } else if (resultsTargetGroup) {
             resultsTargetGroup.style.display = 'none';
         }
     }
 
-    if (resultsRegRadio && resultsGoalRadio) {
-        resultsRegRadio.addEventListener('change', toggleResultsModeFields);
-        resultsGoalRadio.addEventListener('change', toggleResultsModeFields);
+    // Percentage Input Formatting & Parsing Utilities
+    function parsePercent(val) {
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        if (!val) return 0;
+        var cleaned = val.toString().replace(/[%,\s]/g, '').trim();
+        var num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
     }
 
-    // Percentage Input Formatting & Parsing Utilities
     function formatPercent(val) {
         if (val === null || val === undefined || val === '') return '';
         var str = val.toString().replace(/[^0-9.-]/g, '');
@@ -2045,6 +2058,16 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        // Toggle Target Success Rate field visibility in Results mode selector
+        const resultsRegRadio = document.getElementById('results_sim_type_regular');
+        const resultsGoalRadio = document.getElementById('results_sim_type_goal');
+
+        if (resultsRegRadio && resultsGoalRadio) {
+            resultsRegRadio.addEventListener('change', toggleResultsModeFields);
+            resultsGoalRadio.addEventListener('change', toggleResultsModeFields);
+            toggleResultsModeFields();
+        }
+
         document.querySelectorAll('.percent-input').forEach(function(el) {
             attachPercentInputListeners(el);
             if (el.value) {
@@ -2098,6 +2121,31 @@
                 }
             });
         });
+
+        // Validate Target Success Rate on form submit if Maximum Spending is active
+        const resultsForm = document.getElementById('resultsInputsForm');
+        const resultsGoalRadioEl = document.getElementById('results_sim_type_goal');
+        const resultsTargetInputEl = document.getElementById('results_target_success_rate');
+
+        if (resultsForm && resultsGoalRadioEl && resultsTargetInputEl) {
+            resultsForm.addEventListener('submit', function(e) {
+                if (resultsGoalRadioEl.checked) {
+                    const val = parsePercent(resultsTargetInputEl.value);
+                    if (isNaN(val) || val < 1.0 || val > 99.0) {
+                        e.preventDefault();
+                        resultsTargetInputEl.classList.add('is-invalid');
+                        resultsTargetInputEl.focus();
+                        return false;
+                    } else {
+                        resultsTargetInputEl.classList.remove('is-invalid');
+                    }
+                }
+            });
+
+            resultsTargetInputEl.addEventListener('input', function() {
+                this.classList.remove('is-invalid');
+            });
+        }
     });
 </script>
 {% endblock %}

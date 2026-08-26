@@ -208,7 +208,11 @@ def change_mode_view(request):
     
     if is_goal:
         target_rate = get_float(request.POST.get('target_success_rate'), data.get('target_success_rate', 80.0))
-        data['target_success_rate'] = min(99.0, max(1.0, target_rate))
+        if target_rate < 1.0 or target_rate > 99.0:
+            messages.error(request, "Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
+            data['target_success_rate'] = min(99.0, max(1.0, target_rate))
+        else:
+            data['target_success_rate'] = target_rate
 
     # Input adjustments from Simulation Inputs card sliders/steppers
     if 'desired_spending' in request.POST:
@@ -272,7 +276,9 @@ def enter_view(request):
         
         inflation_rate = get_float(request.POST.get('inflation_rate'), 2.5)
         runs = get_int(request.POST.get('runs'), 1000)
-        raw_target_srate = get_float(request.POST.get('target_success_rate'), 80.0)
+        session_data = get_session_sim_data(request)
+        curr_target_srate = session_data.get('target_success_rate', 80.0) if isinstance(session_data, dict) else getattr(session_data, 'target_success_rate', 80.0)
+        raw_target_srate = get_float(request.POST.get('target_success_rate'), curr_target_srate)
         target_success_rate = min(99.0, max(1.0, raw_target_srate))
         state_tax_rate = get_float(request.POST.get('state_tax_rate'), 0.0)
         state_ss_exempt = get_bool(request.POST.get('state_ss_exempt'))

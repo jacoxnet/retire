@@ -188,6 +188,27 @@ class RetirementCalculationTests(TestCase):
         self.assertRedirects(response, '/results/')
         self.assertFalse(self.client.session['simulation_data']['goal_seeking'])
 
+    def test_enter_page_no_simulation_mode_card(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        # Verify Simulation Mode card and Target Success Rate box are absent from enter.html
+        self.assertNotContains(response, 'simulation-mode-container')
+        self.assertNotContains(response, 'id="simulation_type_regular"')
+        self.assertNotContains(response, 'id="simulation_type_goal"')
+        self.assertNotContains(response, 'id="target_success_rate_group"')
+        # Verify Number of Simulations input is present
+        self.assertContains(response, 'id="runs"')
+
+    def test_change_mode_invalid_target_success_rate(self):
+        self.client.get('/')
+        response = self.client.post('/change_mode/', {
+            'simulation_type': 'goal_seeking',
+            'target_success_rate': '150.0'
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
+        self.assertEqual(self.client.session['simulation_data']['target_success_rate'], 99.0)
+
     def test_named_additional_spending_breakdown(self):
         post_data = {
             'simulation_type': 'regular',
