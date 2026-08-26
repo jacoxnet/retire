@@ -1,3 +1,5 @@
+import json
+
 """
 Parsing and validation helpers for the plan-entry form.
 
@@ -99,6 +101,8 @@ INCOME_SOURCE_SPEC = [
     ('end_age_specified', 'income_end_age_specified[]', 'int', 90),
     ('subject_to_tax', 'income_subject_to_tax[]', 'bool', True),
     ('is_social_security', 'income_is_ss[]', 'bool', False),
+    ('has_survivor_benefit', 'income_has_survivor_benefit[]', 'bool', False),
+    ('survivor_benefit_pct', 'income_survivor_benefit_pct[]', 'float', 100.0),
     ('adjust_type', 'income_adjust_type[]', 'str', 'inflation'),
     ('adjust_val', 'income_adjust_val[]', 'float', 0.0),
     ('adjust_start_age_type', 'income_adjust_start_age_type[]', 'str', 'start'),
@@ -125,7 +129,45 @@ def parse_additional_spending(post):
 
 
 def parse_income_sources(post):
-    return zip_row_lists(post, 'income_name[]', INCOME_SOURCE_SPEC)
+    rows = zip_row_lists(post, 'income_name[]', INCOME_SOURCE_SPEC)
+    adjustments_json_list = post.getlist('income_adjustments_json[]')
+    for i, row in enumerate(rows):
+        # 1. Parse JSON adjustments if provided
+        if i < len(adjustments_json_list) and adjustments_json_list[i]:
+            try:
+                adjs = json.loads(adjustments_json_list[i])
+                if isinstance(adjs, list) and len(adjs) > 0:
+                    clean_adjs = []
+                    for adj in adjs:
+                        if isinstance(adj, dict):
+                            clean_adjs.append({
+                                'start_type': str(adj.get('start_type', 'current_age')),
+                                'start_spec': get_int(adj.get('start_spec'), 65),
+                                'end_type': str(adj.get('end_type', 'death')),
+                                'end_spec': get_int(adj.get('end_spec'), 90),
+                                'adjust_type': str(adj.get('adjust_type', 'inflation')),
+                                'adjust_val': get_float(adj.get('adjust_val'), 0.0),
+                            })
+                    if clean_adjs:
+                        row['adjustments'] = clean_adjs
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        
+        # 2. If no adjustments schedule, normalize legacy single adjustment into adjustments array
+        if 'adjustments' not in row or not row['adjustments']:
+            row['adjustments'] = [{
+                'start_type': row.get('adjust_start_age_type', 'start'),
+                'start_spec': row.get('adjust_start_age_specified', 65),
+                'end_type': row.get('end_age_type', 'death'),
+                'end_spec': row.get('end_age_specified', 90),
+                'adjust_type': row.get('adjust_type', 'inflation'),
+                'adjust_val': row.get('adjust_val', 0.0)
+            }]
+
+        # 3. Clamp survivor_benefit_pct
+        row['survivor_benefit_pct'] = min(100.0, max(0.0, float(row.get('survivor_benefit_pct', 100.0))))
+        row['has_survivor_benefit'] = bool(row.get('has_survivor_benefit', False))
+    return rows
 
 
 def parse_other_taxes(post):
@@ -410,12 +452,32 @@ def validate_scheduled_items(label, items):
             e_spec = item.get('end_age_specified', 90)
             if e_spec < min_end or e_spec > 120:
                 errors.append(f"{label} '{name}' Specified End Age ({e_spec}) must be greater than or equal to Start Age ({min_end}) up to 120.")
-        if item.get('adjust_type') in ['fixed_pct', 'inflation_less_pct']:
-            a_val = item.get('adjust_val', 0.0)
-            if a_val < 0.0 or a_val > 100.0:
-                errors.append(f"{label} '{name}' Percentage Rate must be between 0% and 100%.")
-        if item.get('adjust_type') != 'none' and item.get('adjust_start_age_type') == 'specified':
-            a_start = item.get('adjust_start_age_specified', 65)
-            if a_start < 18 or a_start > 120:
-                errors.append(f"{label} '{name}' Adjustment Start Age must be between 18 and 120.")
+        if item.get('survivor_benefit_pct', 0.0) < 0.0 or item.get('survivor_benefit_pct', 100.0) > 100.0:
+            errors.append(f"{label} '{name}' Survivor Benefit Percentage must be between 0% and 100%.")
+
+        # Validate multi-period adjustments if present
+        adjustments = item.get('adjustments')
+        if adjustments and isinstance(adjustments, list):
+            for idx, p in enumerate(adjustments, 1):
+                if p.get('adjust_type') in ['fixed_pct', 'inflation_less_pct']:
+                    pval = p.get('adjust_val', 0.0)
+                    if pval < 0.0 or pval > 100.0:
+                        errors.append(f"{label} '{name}' Adjustment Period {idx} Percentage Rate must be between 0% and 100%.")
+                if p.get('start_type') == 'specified':
+                    ps = p.get('start_spec', 65)
+                    if ps < 18 or ps > 120:
+                        errors.append(f"{label} '{name}' Adjustment Period {idx} Start Age must be between 18 and 120.")
+                if p.get('end_type') == 'specified':
+                    pe = p.get('end_spec', 90)
+                    if pe < 18 or pe > 120:
+                        errors.append(f"{label} '{name}' Adjustment Period {idx} End Age must be between 18 and 120.")
+        else:
+            if item.get('adjust_type') in ['fixed_pct', 'inflation_less_pct']:
+                a_val = item.get('adjust_val', 0.0)
+                if a_val < 0.0 or a_val > 100.0:
+                    errors.append(f"{label} '{name}' Percentage Rate must be between 0% and 100%.")
+            if item.get('adjust_type') != 'none' and item.get('adjust_start_age_type') == 'specified':
+                a_start = item.get('adjust_start_age_specified', 65)
+                if a_start < 18 or a_start > 120:
+                    errors.append(f"{label} '{name}' Adjustment Start Age must be between 18 and 120.")
     return errors

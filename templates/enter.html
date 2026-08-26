@@ -921,6 +921,171 @@
         const btnAddIncomeRow = document.getElementById('btnAddIncomeRow');
         const incomeStreamsContainer = document.getElementById('incomeStreamsContainer');
 
+        function serializeCardAdjustments(card) {
+            if (!card) return;
+            var periodRows = card.querySelectorAll('.inc-period-row');
+            var adjs = [];
+            periodRows.forEach(function (pRow, idx) {
+                var startType = pRow.querySelector('.p-start-type')?.value || 'current_age';
+                var startSpec = parseInt(pRow.querySelector('.p-start-spec')?.value, 10) || 65;
+                var endType = pRow.querySelector('.p-end-type')?.value || 'death';
+                var endSpec = parseInt(pRow.querySelector('.p-end-spec')?.value, 10) || 90;
+                var adjType = pRow.querySelector('.p-adj-type')?.value || 'inflation';
+                var adjVal = parsePercent(pRow.querySelector('.p-adj-val')?.value || '0');
+                adjs.push({
+                    start_type: startType,
+                    start_spec: startSpec,
+                    end_type: endType,
+                    end_spec: endSpec,
+                    adjust_type: adjType,
+                    adjust_val: adjVal
+                });
+                var badge = pRow.querySelector('.period-badge');
+                if (badge) badge.textContent = 'Period ' + (idx + 1);
+            });
+            var hiddenJson = card.querySelector('.inc-adjustments-json');
+            if (hiddenJson) {
+                hiddenJson.value = JSON.stringify(adjs);
+            }
+        }
+
+        function updateCardSurvivorSection(card) {
+            if (!card) return;
+            var isMarried = isMarriedCheckbox && isMarriedCheckbox.checked;
+            var endTypeSelect = card.querySelector('.inc-end-type');
+            var endType = endTypeSelect ? endTypeSelect.value : 'death';
+            var survivorGroup = card.querySelector('.inc-survivor-group');
+            var survivorTitle = card.querySelector('.inc-survivor-title');
+            var survivorHint = card.querySelector('.inc-survivor-hint');
+            var survivorPctInput = card.querySelector('.inc-survivor-pct');
+            var hasSurvivorCheck = card.querySelector('.inc-has-survivor');
+            var survivorDetails = card.querySelector('.inc-survivor-details');
+
+            var spouseName = document.getElementById('spouse_name')?.value?.trim() || 'Spouse';
+            var userName = document.getElementById('user_name')?.value?.trim() || 'You';
+
+            if (isMarried && (endType === 'death' || endType === 'spouse_death')) {
+                survivorGroup.style.display = 'block';
+                var isSurvivorActive = hasSurvivorCheck && hasSurvivorCheck.checked;
+                if (survivorDetails) {
+                    survivorDetails.style.display = isSurvivorActive ? 'block' : 'none';
+                }
+                var pctVal = survivorPctInput ? parsePercent(survivorPctInput.value) : 100;
+                if (isNaN(pctVal)) pctVal = 100;
+
+                if (endType === 'death') {
+                    if (survivorTitle) survivorTitle.textContent = 'Survivor Benefit for ' + spouseName;
+                    if (survivorHint) survivorHint.textContent = 'Upon your death, ' + spouseName + ' will receive ' + pctVal + '% of the adjusted benefit until their death.';
+                } else {
+                    if (survivorTitle) survivorTitle.textContent = 'Survivor Benefit for ' + userName;
+                    if (survivorHint) survivorHint.textContent = 'Upon ' + spouseName + '\'s death, ' + userName + ' will receive ' + pctVal + '% of the adjusted benefit until death.';
+                }
+            } else {
+                survivorGroup.style.display = 'none';
+            }
+        }
+
+        function addAdjustmentPeriodRow(periodsContainer, card, pData = {}, canDelete = false) {
+            var pStartType = pData.start_type !== undefined ? pData.start_type : (periodsContainer.children.length === 0 ? 'current_age' : 'retirement');
+            var pStartSpec = pData.start_spec !== undefined ? pData.start_spec : 65;
+            var pEndType = pData.end_type !== undefined ? pData.end_type : (periodsContainer.children.length === 0 ? 'retirement' : 'death');
+            var pEndSpec = pData.end_spec !== undefined ? pData.end_spec : 90;
+            var pAdjType = pData.adjust_type !== undefined ? pData.adjust_type : 'inflation';
+            var pAdjVal = pData.adjust_val !== undefined ? pData.adjust_val : 0.0;
+
+            var pIndex = periodsContainer.children.length + 1;
+            var pRow = document.createElement('div');
+            pRow.className = 'p-2 mb-2 bg-light rounded border inc-period-row';
+            pRow.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-secondary period-badge">Period ${pIndex}</span>
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btnDeletePeriod" title="Remove Period" style="display: ${canDelete ? 'inline-block' : 'none'};">
+                        <i class="fa fa-times me-1"></i> Remove
+                    </button>
+                </div>
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1 fw-semibold">From:</label>
+                        <div class="d-flex gap-1">
+                            <select class="form-select form-select-sm p-start-type">
+                                <option value="current_age" ${pStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
+                                <option value="start" ${pStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
+                                <option value="retirement" ${pStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                <option value="spouse_retirement" ${pStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                <option value="specified" ${pStartType === 'specified' ? 'selected' : ''}>Specify Age</option>
+                            </select>
+                            <input type="number" class="form-control form-control-sm p-start-spec" value="${pStartSpec}" min="18" max="120" style="display: ${pStartType === 'specified' ? 'block' : 'none'}; max-width: 80px;" placeholder="Age">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1 fw-semibold">To:</label>
+                        <div class="d-flex gap-1">
+                            <select class="form-select form-select-sm p-end-type">
+                                <option value="retirement" ${pEndType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
+                                <option value="spouse_retirement" ${pEndType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
+                                <option value="start" ${pEndType === 'start' ? 'selected' : ''}>When Income Starts</option>
+                                <option value="death" ${pEndType === 'death' ? 'selected' : ''}>At Your Death</option>
+                                <option value="spouse_death" ${pEndType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
+                                <option value="specified" ${pEndType === 'specified' ? 'selected' : ''}>Specify Age</option>
+                            </select>
+                            <input type="number" class="form-control form-control-sm p-end-spec" value="${pEndSpec}" min="18" max="120" style="display: ${pEndType === 'specified' ? 'block' : 'none'}; max-width: 80px;" placeholder="Age">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1 fw-semibold">Adjustment:</label>
+                        <div class="d-flex gap-1">
+                            <select class="form-select form-select-sm p-adj-type">
+                                <option value="inflation" ${pAdjType === 'inflation' ? 'selected' : ''}>Inflation</option>
+                                <option value="none" ${pAdjType === 'none' ? 'selected' : ''}>None (0%)</option>
+                                <option value="fixed_pct" ${pAdjType === 'fixed_pct' ? 'selected' : ''}>Fixed %</option>
+                                <option value="inflation_less_pct" ${pAdjType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less %</option>
+                            </select>
+                            <input type="text" inputmode="decimal" class="form-control form-control-sm p-adj-val percent-input" value="${formatPercent(pAdjVal)}" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(pAdjType) ? 'block' : 'none'}; max-width: 80px;" placeholder="%">
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            pRow.querySelector('.p-start-type').addEventListener('change', function () {
+                pRow.querySelector('.p-start-spec').style.display = this.value === 'specified' ? 'block' : 'none';
+                serializeCardAdjustments(card);
+            });
+            pRow.querySelector('.p-start-spec').addEventListener('input', function () {
+                serializeCardAdjustments(card);
+            });
+            pRow.querySelector('.p-end-type').addEventListener('change', function () {
+                pRow.querySelector('.p-end-spec').style.display = this.value === 'specified' ? 'block' : 'none';
+                serializeCardAdjustments(card);
+            });
+            pRow.querySelector('.p-end-spec').addEventListener('input', function () {
+                serializeCardAdjustments(card);
+            });
+            pRow.querySelector('.p-adj-type').addEventListener('change', function () {
+                var showVal = ['fixed_pct', 'inflation_less_pct'].includes(this.value);
+                pRow.querySelector('.p-adj-val').style.display = showVal ? 'block' : 'none';
+                serializeCardAdjustments(card);
+            });
+            pRow.querySelector('.p-adj-val').addEventListener('input', function () {
+                serializeCardAdjustments(card);
+            });
+
+            pRow.querySelector('.btnDeletePeriod').addEventListener('click', function () {
+                pRow.remove();
+                periodsContainer.querySelectorAll('.inc-period-row').forEach(function (row, idx) {
+                    row.querySelector('.period-badge').textContent = 'Period ' + (idx + 1);
+                    if (idx === 0) {
+                        row.querySelector('.btnDeletePeriod').style.display = 'none';
+                    }
+                });
+                serializeCardAdjustments(card);
+            });
+
+            periodsContainer.appendChild(pRow);
+            attachPercentInputListeners(pRow.querySelector('.p-adj-val'));
+            serializeCardAdjustments(card);
+            updateSpouseDropdownOptions();
+        }
+
         function addIncomeRow(data = {}) {
             var name = data.name !== undefined ? data.name : '';
             var amount = data.amount !== undefined ? data.amount : 2500;
@@ -930,11 +1095,8 @@
             var endType = data.end_age_type !== undefined ? data.end_age_type : 'death';
             var endAge = data.end_age_specified !== undefined ? data.end_age_specified : 90;
             var subjectToTax = data.subject_to_tax !== undefined ? data.subject_to_tax : true;
-            var isSS = data.is_social_security !== undefined ? data.is_social_security : false;
-            var adjustType = data.adjust_type !== undefined ? data.adjust_type : 'inflation';
-            var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
-            var adjustStartType = data.adjust_start_age_type !== undefined ? data.adjust_start_age_type : 'start';
-            var adjustStartAge = data.adjust_start_age_specified !== undefined ? data.adjust_start_age_specified : 65;
+            var hasSurvivor = data.has_survivor_benefit !== undefined ? data.has_survivor_benefit : false;
+            var survivorPct = data.survivor_benefit_pct !== undefined ? data.survivor_benefit_pct : 100.0;
 
             var formattedAmt = formatMoney(amount);
 
@@ -991,32 +1153,54 @@
                         </div>
                     </div>
 
-                    <div class="row g-3 mb-3 align-items-start">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Adjust for Inflation?</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select inc-adjust-type" name="income_adjust_type[]">
-                                    <option value="inflation" ${adjustType === 'inflation' ? 'selected' : ''}>Yes</option>
-                                    <option value="none" ${adjustType === 'none' ? 'selected' : ''}>No</option>
-                                    <option value="fixed_pct" ${adjustType === 'fixed_pct' ? 'selected' : ''}>By a Fixed Percentage</option>
-                                    <option value="inflation_less_pct" ${adjustType === 'inflation_less_pct' ? 'selected' : ''}>Inflation less a Fixed Percentage</option>
-                                </select>
-                                <input type="text" inputmode="decimal" class="form-control inc-adjust-val percent-input" name="income_adjust_val[]" value="${formatPercent(adjustVal)}" step="0.1" min="0" max="100" style="display: ${['fixed_pct', 'inflation_less_pct'].includes(adjustType) ? 'block' : 'none'}; max-width: 100px;">
+                    <!-- Survivor Benefit Section -->
+                    <div class="row g-3 mb-3 inc-survivor-group" style="display: none;">
+                        <div class="col-12">
+                            <div class="p-3 bg-light rounded border">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label fw-bold mb-0 inc-survivor-title">Survivor Benefit for Surviving Spouse</label>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input inc-has-survivor" type="checkbox" name="income_has_survivor_benefit[]" value="true" ${hasSurvivor ? 'checked' : ''}>
+                                        <label class="form-check-label fw-semibold small">Provide Survivor Benefit</label>
+                                    </div>
+                                </div>
+                                <div class="inc-survivor-details" style="display: ${hasSurvivor ? 'block' : 'none'};">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-auto">
+                                            <label class="form-label small fw-semibold mb-0">Survivor Percentage:</label>
+                                        </div>
+                                        <div class="col-auto">
+                                            <div class="input-group input-group-sm" style="width: 100px;">
+                                                <input type="text" inputmode="decimal" class="form-control text-center fw-bold percent-input inc-survivor-pct" name="income_survivor_benefit_pct[]" value="${formatPercent(survivorPct)}" min="0" max="100">
+                                            </div>
+                                        </div>
+                                        <div class="col-auto d-flex gap-1">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="100">100%</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="75">75%</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="66.7">66.7%</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="50">50%</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-text small text-muted mt-1 inc-survivor-hint">
+                                        Upon your death, your surviving spouse will receive ${survivorPct}% of the adjusted benefit until their death.
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-6 inc-adjust-start-group" style="display: ${adjustType === 'none' ? 'none' : 'block'};">
-                            <label class="form-label fw-semibold">Adjustment Begins At</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select inc-adjust-start-type" name="income_adjust_start_age_type[]">
-                                    <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
-                                    <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                    <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                    <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
-                                    <option value="specified" ${adjustStartType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                </select>
-                                <input type="number" class="form-control inc-adjust-start-spec" name="income_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${adjustStartType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Adjustment Start Age" placeholder="Age">
-                            </div>
+                    </div>
+
+                    <!-- Multi-Period Adjustment Schedule Section -->
+                    <div class="border rounded p-3 mb-3 bg-white inc-adjustments-schedule-container">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold mb-0 text-primary"><i class="fa fa-chart-line me-1"></i> Adjustment Schedule</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary btnAddAdjustmentPeriod">
+                                <i class="fa fa-plus me-1"></i> Add Another Period
+                            </button>
                         </div>
+                        <div class="inc-adjustment-periods-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <input type="hidden" class="inc-adjustments-json" name="income_adjustments_json[]" value="">
                     </div>
                     
                     <div class="row g-3">
@@ -1034,6 +1218,7 @@
             card.querySelector('.inc-frequency').addEventListener('change', function () {
                 var endGroup = card.querySelector('.inc-end-group');
                 endGroup.style.display = (this.value === 'one_time' || this.value === 'one-time') ? 'none' : 'block';
+                updateCardSurvivorSection(card);
             });
 
             card.querySelector('.inc-start-type').addEventListener('change', function () {
@@ -1044,22 +1229,52 @@
             card.querySelector('.inc-end-type').addEventListener('change', function () {
                 var specInput = card.querySelector('.inc-end-spec');
                 specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+                updateCardSurvivorSection(card);
             });
 
-            card.querySelector('.inc-adjust-type').addEventListener('change', function () {
-                var valInput = card.querySelector('.inc-adjust-val');
-                var show = ['fixed_pct', 'inflation_less_pct'].includes(this.value);
-                valInput.style.display = show ? 'block' : 'none';
-                var startGroup = card.querySelector('.inc-adjust-start-group');
-                if (startGroup) {
-                    startGroup.style.display = (this.value === 'none') ? 'none' : 'block';
-                }
+            card.querySelector('.inc-has-survivor').addEventListener('change', function () {
+                var details = card.querySelector('.inc-survivor-details');
+                details.style.display = this.checked ? 'block' : 'none';
+                updateCardSurvivorSection(card);
             });
 
-            card.querySelector('.inc-adjust-start-type').addEventListener('change', function () {
-                var specInput = card.querySelector('.inc-adjust-start-spec');
-                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            card.querySelector('.inc-survivor-pct').addEventListener('input', function () {
+                updateCardSurvivorSection(card);
             });
+
+            card.querySelectorAll('.btn-preset-survivor').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var pct = this.getAttribute('data-pct');
+                    var input = card.querySelector('.inc-survivor-pct');
+                    if (input) {
+                        input.value = pct + '%';
+                        updateCardSurvivorSection(card);
+                    }
+                });
+            });
+
+            var periodsContainer = card.querySelector('.inc-adjustment-periods-list');
+            card.querySelector('.btnAddAdjustmentPeriod').addEventListener('click', function () {
+                addAdjustmentPeriodRow(periodsContainer, card, {}, true);
+            });
+
+            // Populate adjustment periods
+            if (data.adjustments && Array.isArray(data.adjustments) && data.adjustments.length > 0) {
+                data.adjustments.forEach(function (adj, idx) {
+                    addAdjustmentPeriodRow(periodsContainer, card, adj, idx > 0);
+                });
+            } else if (data.adjust_type !== undefined) {
+                addAdjustmentPeriodRow(periodsContainer, card, {
+                    start_type: data.adjust_start_age_type || 'start',
+                    start_spec: data.adjust_start_age_specified || 65,
+                    end_type: data.end_age_type || 'death',
+                    end_spec: data.end_age_specified || 90,
+                    adjust_type: data.adjust_type,
+                    adjust_val: data.adjust_val || 0.0
+                }, false);
+            } else {
+                addAdjustmentPeriodRow(periodsContainer, card, {}, false);
+            }
 
             card.querySelector('.btnDeleteRow').addEventListener('click', function () {
                 card.remove();
@@ -1069,7 +1284,8 @@
                 incomeStreamsContainer.appendChild(card);
             }
             attachCurrencyInputListeners(card.querySelector('[name="income_amount[]"]'));
-            attachPercentInputListeners(card.querySelector('.inc-adjust-val'));
+            attachPercentInputListeners(card.querySelector('.inc-survivor-pct'));
+            updateCardSurvivorSection(card);
             updateSpouseDropdownOptions();
         }
 
@@ -1278,7 +1494,7 @@
                 document.getElementById('begin_spending_age_type')
             ];
 
-            document.querySelectorAll('.acc-end-age-type, .inc-start-type, .inc-end-type, .inc-adjust-start-type, .ot-start-type, .ot-end-type, .ot-adjust-start-type').forEach(function (s) {
+            document.querySelectorAll('.acc-end-age-type, .inc-start-type, .inc-end-type, .p-start-type, .p-end-type, .ot-start-type, .ot-end-type, .ot-adjust-start-type').forEach(function (s) {
                 selects.push(s);
             });
 
@@ -1292,8 +1508,8 @@
                         opt.style.display = isMarried ? 'block' : 'none';
                         opt.disabled = !isMarried;
                         if (!isMarried && opt.selected) {
-                            if (select.classList.contains('inc-adjust-start-type') || select.classList.contains('ot-adjust-start-type')) {
-                                select.value = 'start';
+                            if (select.classList.contains('p-start-type') || select.classList.contains('ot-adjust-start-type')) {
+                                select.value = 'current_age';
                             } else if (opt.value === 'spouse_death') {
                                 select.value = 'death';
                             } else {
@@ -1305,9 +1521,25 @@
                     }
                 }
             });
+
+            document.querySelectorAll('.income-stream-card').forEach(function(c) {
+                updateCardSurvivorSection(c);
+            });
         }
 
         document.getElementById('is_married').addEventListener('change', updateSpouseDropdownOptions);
+        var spouseNameInputEl = document.getElementById('spouse_name');
+        if (spouseNameInputEl) {
+            spouseNameInputEl.addEventListener('input', function () {
+                document.querySelectorAll('.income-stream-card').forEach(updateCardSurvivorSection);
+            });
+        }
+        var userNameInputEl = document.getElementById('user_name');
+        if (userNameInputEl) {
+            userNameInputEl.addEventListener('input', function () {
+                document.querySelectorAll('.income-stream-card').forEach(updateCardSurvivorSection);
+            });
+        }
         updateSpouseDropdownOptions();
 
         // 9. Form Custom Validation
@@ -1569,6 +1801,7 @@
             // 9. Other Income Streams & Benefits (Tab 4: Income Streams & Benefits)
             var incomeCards = document.querySelectorAll('#incomeStreamsContainer .income-stream-card');
             incomeCards.forEach(function (card, idx) {
+                serializeCardAdjustments(card);
                 var nameInput = card.querySelector('input[name="income_name[]"]');
                 var amtInput = card.querySelector('input[name="income_amount[]"]');
                 var startTypeSelect = card.querySelector('.inc-start-type');
@@ -1576,10 +1809,8 @@
                 var endTypeSelect = card.querySelector('.inc-end-type');
                 var endSpecInput = card.querySelector('.inc-end-spec');
                 var freqSelect = card.querySelector('.inc-frequency');
-                var adjTypeSelect = card.querySelector('.inc-adjust-type');
-                var adjValInput = card.querySelector('.inc-adjust-val');
-                var adjStartTypeSelect = card.querySelector('.inc-adjust-start-type');
-                var adjStartSpecInput = card.querySelector('.inc-adjust-start-spec');
+                var hasSurvivorCheck = card.querySelector('.inc-has-survivor');
+                var survivorPctInput = card.querySelector('.inc-survivor-pct');
 
                 var incName = nameInput ? nameInput.value.trim() : '';
                 if (nameInput && !incName) {
@@ -1616,21 +1847,46 @@
                     }
                 }
 
-                if (adjTypeSelect && ['fixed_pct', 'inflation_less_pct'].includes(adjTypeSelect.value) && adjValInput) {
-                    var iRate = parsePercent(adjValInput.value);
-                    if (isNaN(iRate) || iRate < 0.0 || iRate > 100.0) {
-                        setFieldInvalid(adjValInput, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Percentage Rate must be between 0% and 100%.');
-                        errors.push({ element: adjValInput, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Percentage Rate must be between 0% and 100%.' });
+                if (hasSurvivorCheck && hasSurvivorCheck.checked && survivorPctInput) {
+                    var sPct = parsePercent(survivorPctInput.value);
+                    if (isNaN(sPct) || sPct < 0.0 || sPct > 100.0) {
+                        setFieldInvalid(survivorPctInput, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Survivor Percentage must be between 0% and 100%.');
+                        errors.push({ element: survivorPctInput, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Survivor Percentage must be between 0% and 100%.' });
                     }
                 }
 
-                if (adjTypeSelect && adjTypeSelect.value !== 'none' && adjStartTypeSelect && adjStartTypeSelect.value === 'specified' && adjStartSpecInput) {
-                    var iAdjStart = parseInt(adjStartSpecInput.value, 10);
-                    if (isNaN(iAdjStart) || iAdjStart < 18 || iAdjStart > 120) {
-                        setFieldInvalid(adjStartSpecInput, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Adjustment Start Age must be between 18 and 120.');
-                        errors.push({ element: adjStartSpecInput, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Adjustment Start Age must be between 18 and 120.' });
+                card.querySelectorAll('.inc-period-row').forEach(function (pRow, pIdx) {
+                    var pStartType = pRow.querySelector('.p-start-type');
+                    var pStartSpec = pRow.querySelector('.p-start-spec');
+                    var pEndType = pRow.querySelector('.p-end-type');
+                    var pEndSpec = pRow.querySelector('.p-end-spec');
+                    var pAdjType = pRow.querySelector('.p-adj-type');
+                    var pAdjVal = pRow.querySelector('.p-adj-val');
+
+                    if (pStartType && pStartType.value === 'specified' && pStartSpec) {
+                        var ps = parseInt(pStartSpec.value, 10);
+                        if (isNaN(ps) || ps < 18 || ps > 120) {
+                            setFieldInvalid(pStartSpec, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' Start Age must be between 18 and 120.');
+                            errors.push({ element: pStartSpec, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' Start Age must be between 18 and 120.' });
+                        }
                     }
-                }
+
+                    if (pEndType && pEndType.value === 'specified' && pEndSpec) {
+                        var pe = parseInt(pEndSpec.value, 10);
+                        if (isNaN(pe) || pe < 18 || pe > 120) {
+                            setFieldInvalid(pEndSpec, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' End Age must be between 18 and 120.');
+                            errors.push({ element: pEndSpec, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' End Age must be between 18 and 120.' });
+                        }
+                    }
+
+                    if (pAdjType && ['fixed_pct', 'inflation_less_pct'].includes(pAdjType.value) && pAdjVal) {
+                        var pv = parsePercent(pAdjVal.value);
+                        if (isNaN(pv) || pv < 0.0 || pv > 100.0) {
+                            setFieldInvalid(pAdjVal, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' Percentage Rate must be between 0% and 100%.');
+                            errors.push({ element: pAdjVal, tab: 'income-tab', message: 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' Percentage Rate must be between 0% and 100%.' });
+                        }
+                    }
+                });
             });
 
             if (errors.length > 0) {

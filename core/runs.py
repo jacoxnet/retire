@@ -408,6 +408,171 @@ def njit_rmd_tax_withdraw(
         hsa_penalty_user, hsa_penalty_spouse,
     )
 
+def calculate_income_growth_factor(
+    item, t, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+    user_age_death, spouse_age_death, inflation_rate, start_age=None
+):
+    """
+    Calculates the cumulative compounding growth factor for an income stream at projection step t.
+    Step t corresponds to user age = user_age + t.
+    Supports either:
+    1. 'adjustments' list of dicts (multi-period adjustment schedule).
+    2. Legacy flat fields: adjust_type, adjust_val, adjust_start_age_type, adjust_start_age_specified.
+    """
+    if start_age is None:
+        start_age = resolve_age(
+            item.get('start_age_type', 'retirement'),
+            item.get('start_age_specified', 65),
+            user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+            user_age_death, spouse_age_death
+        )
+
+    end_age = resolve_age(
+        item.get('end_age_type', 'death'),
+        item.get('end_age_specified', 90),
+        user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+        user_age_death, spouse_age_death
+    )
+
+    adjustments = item.get('adjustments')
+    if not adjustments or not isinstance(adjustments, list) or len(adjustments) == 0:
+        adj_type = item.get('adjust_type', 'inflation')
+        adj_val = float(item.get('adjust_val', 0.0))
+        adj_start_type = item.get('adjust_start_age_type', 'start')
+        adj_start_spec = item.get('adjust_start_age_specified', 65)
+
+        if adj_type == 'none':
+            return 1.0
+
+        if adj_start_type in ['start', 'income_start', 'at_start']:
+            adj_start_age = start_age
+        elif adj_start_type in ['current_age', 'current_year', 'now']:
+            adj_start_age = user_age
+        else:
+            adj_start_age = resolve_age(
+                adj_start_type, adj_start_spec,
+                user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+                user_age_death, spouse_age_death, default_val=start_age
+            )
+
+        user_age_t = user_age + t
+        years_since_adj = max(0, user_age_t - adj_start_age)
+        if adj_type == 'inflation':
+            return (1.0 + inflation_rate / 100.0) ** years_since_adj
+        elif adj_type == 'fixed_pct':
+            return (1.0 + adj_val / 100.0) ** years_since_adj
+        elif adj_type == 'inflation_less_pct':
+            rate = max(0.0, inflation_rate - adj_val)
+            return (1.0 + rate / 100.0) ** years_since_adj
+        else:
+            return 1.0
+
+    # Multi-period resolution
+    periods = []
+    for p in adjustments:
+        p_start_type = p.get('start_type', 'current_age')
+        p_start_spec = p.get('start_spec', 65)
+        if p_start_type in ['start', 'income_start', 'at_start']:
+            p_start_age = start_age
+        elif p_start_type in ['current_age', 'current_year', 'now']:
+            p_start_age = user_age
+        else:
+            p_start_age = resolve_age(
+                p_start_type, p_start_spec,
+                user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+                user_age_death, spouse_age_death, default_val=start_age
+            )
+
+        p_end_type = p.get('end_type', 'death')
+        p_end_spec = p.get('end_spec', 90)
+        p_end_age = resolve_age(
+            p_end_type, p_end_spec,
+            user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+            user_age_death, spouse_age_death, default_val=end_age
+        )
+
+        p_adj_type = p.get('adjust_type', 'inflation')
+        p_adj_val = float(p.get('adjust_val', 0.0))
+        periods.append({
+            'start_age': p_start_age,
+            'end_age': p_end_age,
+            'adjust_type': p_adj_type,
+            'adjust_val': p_adj_val
+        })
+
+    factor = 1.0
+    for k in range(t):
+        age_k = user_age + k
+        matched_period = None
+        for p in periods:
+            if p['start_age'] <= age_k < p['end_age']:
+                matched_period = p
+                break
+        
+        if matched_period:
+            p_adj = matched_period['adjust_type']
+            p_val = matched_period['adjust_val']
+            if p_adj == 'inflation':
+                rate = inflation_rate / 100.0
+            elif p_adj == 'fixed_pct':
+                rate = p_val / 100.0
+            elif p_adj == 'inflation_less_pct':
+                rate = max(0.0, (inflation_rate - p_val) / 100.0)
+            else:
+                rate = 0.0
+            factor *= (1.0 + rate)
+        else:
+            # Gap period: 0% growth
+            pass
+
+    return factor
+
+
+def calculate_income_benefit_multiplier(
+    item, user_age_t, user_age_death, spouse_age_t, spouse_age_death,
+    is_married, start_age, end_age
+):
+    """
+    Calculates the payout multiplier (1.0 for full benefit, survivor_pct for survivor benefit, 0.0 for inactive).
+    """
+    freq = item.get('frequency', 'monthly')
+    is_one_time = (freq in ['one_time', 'one-time'])
+    end_type = item.get('end_age_type', 'death')
+    has_survivor = bool(item.get('has_survivor_benefit', False))
+    survivor_pct = float(item.get('survivor_benefit_pct', 100.0)) / 100.0
+    
+    user_alive = (user_age_t <= user_age_death)
+    spouse_alive = is_married and (spouse_age_t is not None) and (spouse_age_t <= spouse_age_death)
+
+    if is_one_time:
+        return 1.0 if (user_age_t == start_age and user_alive) else 0.0
+
+    if end_type in ['death', 'retirement']:
+        # Primary recipient is User
+        if user_alive and (start_age <= user_age_t <= end_age):
+            return 1.0
+        elif not user_alive and is_married and spouse_alive and has_survivor and (user_age_t >= start_age):
+            return survivor_pct
+        else:
+            return 0.0
+
+    elif end_type in ['spouse_death', 'spouse_retirement']:
+        # Primary recipient is Spouse
+        if spouse_alive and (start_age <= user_age_t <= end_age):
+            return 1.0
+        elif not spouse_alive and is_married and user_alive and has_survivor and (user_age_t >= start_age):
+            return survivor_pct
+        else:
+            return 0.0
+
+    else:
+        # Fixed specified age or other
+        if user_alive and (start_age <= user_age_t <= end_age):
+            return 1.0
+        else:
+            return 0.0
+
+
 def simulate_step(
     t, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
     filing_status, desired_spending_start_age, desired_spending, survivor_spending,
@@ -443,17 +608,24 @@ def simulate_step(
         return {
             'beginning_assets': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
             'ending_assets': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
-            'contributions': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
-            'growth': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
+            'withdrawals': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'pretax_rmd': 0.0, 'user_pretax_rmd': 0.0, 'spouse_pretax_rmd': 0.0, 'pretax_extra': 0.0, 'taxable': 0.0, 'roth': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
+            'taxes': {'federal_tax': 0.0, 'state_tax': 0.0, 'early_withdrawal_penalty': 0.0, 'hsa_penalty_user': 0.0, 'hsa_penalty_spouse': 0.0, 'other_taxes': 0.0, 'total_tax': 0.0},
+            'cash_flow': {'desired_spending': 0.0, 'additional_spending': 0.0, 'total_spending': 0.0, 'net_inflows': 0.0, 'total_income': 0.0, 'deficit': 0.0, 'surplus': 0.0},
             'income_sources_total': 0.0,
             'income_sources_breakdown': {},
-            'taxes_paid': 0.0,
-            'tax_breakdown': {'fed_tax': 0.0, 'state_tax': 0.0, 'penalty': 0.0, 'other_taxes': 0.0, 'other_taxes_breakdown': {}},
-            'desired_spending': 0.0,
-            'additional_spending': 0.0,
-            'additional_spending_breakdown': {},
-            'withdrawals': {'user_pretax_rmd': 0.0, 'spouse_pretax_rmd': 0.0, 'pretax_rmd': 0.0, 'pretax_extra': 0.0, 'taxable': 0.0, 'roth': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'hsa': 0.0, 'total': 0.0}
+            'contributions_total': 0.0,
         }
+    
+    # Filing Status
+    if is_married:
+        if user_alive and spouse_alive:
+            filing_status_t = 'joint'
+        else:
+            filing_status_t = 'single'
+    else:
+        filing_status_t = filing_status if filing_status in ['single', 'married_filing_jointly', 'head_of_household'] else 'single'
+        if filing_status_t == 'married_filing_jointly':
+            filing_status_t = 'joint'
     
     t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else user_age_death - user_age
 
@@ -651,52 +823,21 @@ def simulate_step(
         end_age = resolve_age(item.get('end_age_type', 'death'), item.get('end_age_specified', 90), user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death)
         
         is_one_time = (freq in ['one_time', 'one-time'])
-        in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
-        active = False
-        if in_age_range:
-            if not user_alive and item.get('end_age_type') in ['death', 'retirement']:
-                active = False
-            elif not spouse_alive and item.get('end_age_type') in ['spouse_death', 'spouse_retirement']:
-                active = False
-            else:
-                active = True
-                
-        if active:
+        multiplier = calculate_income_benefit_multiplier(
+            item, user_age_t, user_age_death, spouse_age_t, spouse_age_death,
+            is_married, start_age, end_age
+        )
+        if multiplier > 0.0:
             if freq == 'annual' or is_one_time:
                 amt = raw_amt
             else:
                 amt = raw_amt * 12.0
                 
-            adj_type = item.get('adjust_type', 'inflation')
-            adj_val = float(item.get('adjust_val', 0.0))
-            adj_start_type = item.get('adjust_start_age_type', 'start')
-            adj_start_spec = item.get('adjust_start_age_specified', 65)
-
-            if adj_start_type in ['start', 'income_start', 'at_start']:
-                adj_start_age = start_age
-            elif adj_start_type in ['current_age', 'current_year', 'now']:
-                adj_start_age = user_age
-            elif adj_start_type == 'specified':
-                try:
-                    adj_start_age = int(adj_start_spec)
-                except (ValueError, TypeError):
-                    adj_start_age = start_age
-            else:
-                adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death, default_val=start_age)
-
-            years_since_adj = max(0, user_age_t - adj_start_age)
-
-            if adj_type == 'inflation':
-                factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
-            elif adj_type == 'fixed_pct':
-                factor = (1.0 + adj_val / 100.0) ** years_since_adj
-            elif adj_type == 'inflation_less_pct':
-                rate = max(0.0, inflation_rate - adj_val)
-                factor = (1.0 + rate / 100.0) ** years_since_adj
-            else:
-                factor = 1.0
-                
-            item_inc = amt * factor
+            factor = calculate_income_growth_factor(
+                item, t, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
+                user_age_death, spouse_age_death, inflation_rate, start_age=start_age
+            )
+            item_inc = amt * factor * multiplier
             is_ss = bool(item.get('is_social_security', False))
             is_taxable = bool(item.get('subject_to_tax', True))
             
@@ -1474,54 +1615,22 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
             start_age = resolve_age(inc.get('start_age_type', 'retirement'), inc.get('start_age_specified', 0), user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death)
             end_age = resolve_age(inc.get('end_age_type', 'death'), inc.get('end_age_specified', 0), user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death)
             
-            active = False
             is_one_time = (freq in ['one_time', 'one-time'])
-            in_age_range = (user_age_t == start_age) if is_one_time else (start_age <= user_age_t <= end_age)
-            
-            if in_age_range:
-                if not user_alive and inc.get('end_age_type') in ['death', 'retirement']:
-                    active = False
-                elif not spouse_alive and inc.get('end_age_type') in ['spouse_death', 'spouse_retirement']:
-                    active = False
-                else:
-                    active = True
-                    
-            if active:
+            multiplier = calculate_income_benefit_multiplier(
+                inc, user_age_t, user_age_death, spouse_age_t, spouse_age_death,
+                is_married, start_age, end_age
+            )
+            if multiplier > 0.0:
                 if freq == 'annual' or is_one_time:
                     amt = raw_amt
                 else:
                     amt = raw_amt * 12.0
-                    
-                adj_type = inc.get('adjust_type', 'inflation')
-                adj_val = inc.get('adjust_val', 0.0)
-                adj_start_type = inc.get('adjust_start_age_type', 'start')
-                adj_start_spec = inc.get('adjust_start_age_specified', 65)
 
-                if adj_start_type in ['start', 'income_start', 'at_start']:
-                    adj_start_age = start_age
-                elif adj_start_type in ['current_age', 'current_year', 'now']:
-                    adj_start_age = user_age
-                elif adj_start_type == 'specified':
-                    try:
-                        adj_start_age = int(adj_start_spec)
-                    except (ValueError, TypeError):
-                        adj_start_age = start_age
-                else:
-                    adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death, default_val=start_age)
-
-                years_since_adj = max(0, user_age_t - adj_start_age)
-                start_t = max(0, min(total_years - 1, adj_start_age - user_age))
-
-                if adj_type == 'inflation':
-                    factor = (inf_factors[t] / inf_factors[start_t]) if inf_factors[start_t] > 0 else inf_factors[t]
-                elif adj_type == 'fixed_pct':
-                    factor = (1.0 + adj_val / 100.0) ** years_since_adj
-                elif adj_type == 'inflation_less_pct':
-                    rate = max(0.0, inflation_rate - adj_val)
-                    factor = (1.0 + rate / 100.0) ** years_since_adj
-                else:
-                    factor = 1.0
-                inc_amt_t = amt * factor
+                factor = calculate_income_growth_factor(
+                    inc, t, user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'],
+                    user_age_death, spouse_age_death, inflation_rate, start_age=start_age
+                )
+                inc_amt_t = amt * factor * multiplier
                 if inc.get('is_social_security', False):
                     ss_inc += inc_amt_t
                 elif inc.get('subject_to_tax', True):

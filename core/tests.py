@@ -463,6 +463,171 @@ class RetirementCalculationTests(TestCase):
         # Year 3 (Age 63): 1000*12 + 5000 = 17000
         self.assertEqual(rows[3]['income'], 17000)
 
+    def test_income_multi_period_adjustments(self):
+        from core.runs import run_deterministic
+        # Base amount = $10,000/yr starting at age 65
+        # Period 1: Age 60 to 65 -> Inflation (3.0% / yr)
+        # Period 2: Age 65 to 70 -> None (0%)
+        # Period 3: Age 70 to 75 -> Fixed 5.0% / yr
+        data = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 75,
+            'is_married': False,
+            'current_year': 2026,
+            'desired_spending': 0,
+            'inflation_rate': 3.0,
+            'adjust_spending_inflation': False,
+            'social_security': {'user_entitled': False, 'spouse_entitled': False},
+            'income_sources': [
+                {
+                    'name': 'Tiered Pension',
+                    'amount': 10000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'specified',
+                    'start_age_specified': 65,
+                    'end_age_type': 'specified',
+                    'end_age_specified': 75,
+                    'subject_to_tax': False,
+                    'adjustments': [
+                        {'start_type': 'current_age', 'start_spec': 60, 'end_type': 'specified', 'end_spec': 65, 'adjust_type': 'inflation', 'adjust_val': 0.0},
+                        {'start_type': 'specified', 'start_spec': 65, 'end_type': 'specified', 'end_spec': 70, 'adjust_type': 'none', 'adjust_val': 0.0},
+                        {'start_type': 'specified', 'start_spec': 70, 'end_type': 'specified', 'end_spec': 75, 'adjust_type': 'fixed_pct', 'adjust_val': 5.0},
+                    ]
+                }
+            ]
+        }
+        rows = run_deterministic(data)
+        # Year 0 to 4 (ages 60-64): income = 0 (hasn't started)
+        self.assertEqual(rows[0]['income'], 0.0)
+        self.assertEqual(rows[4]['income'], 0.0)
+
+        # Year 5 (age 65): 5 years of 3% inflation = 10000 * (1.03^5) = 11592.74
+        expected_age_65 = 10000.0 * (1.03 ** 5)
+        self.assertAlmostEqual(rows[5]['income'], expected_age_65, places=2)
+
+        # Year 6 to 9 (ages 66-69): 0% growth during gap period -> stays at expected_age_65
+        self.assertAlmostEqual(rows[9]['income'], expected_age_65, places=2)
+
+        # Year 10 (age 70): 5 years inflation, 5 years gap, 0 years 5% -> still expected_age_65
+        self.assertAlmostEqual(rows[10]['income'], expected_age_65, places=2)
+
+        # Year 11 (age 71): 1 year of 5% growth after age 70
+        expected_age_71 = expected_age_65 * 1.05
+        self.assertAlmostEqual(rows[11]['income'], expected_age_71, places=2)
+
+    def test_income_survivor_benefit(self):
+        from core.runs import run_deterministic
+        # User age 60, dies at 65. Spouse age 60, dies at 70.
+        # Pension $40,000/yr starting at 60, ending at User Death, with 75% survivor benefit.
+        data = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 65,
+            'is_married': True,
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 70,
+            'current_year': 2026,
+            'desired_spending': 0,
+            'inflation_rate': 0.0,
+            'adjust_spending_inflation': False,
+            'social_security': {'user_entitled': False, 'spouse_entitled': False},
+            'income_sources': [
+                {
+                    'name': 'Joint Pension',
+                    'amount': 40000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'specified',
+                    'start_age_specified': 60,
+                    'end_age_type': 'death',
+                    'end_age_specified': 65,
+                    'has_survivor_benefit': True,
+                    'survivor_benefit_pct': 75.0,
+                    'adjust_type': 'none',
+                    'subject_to_tax': False,
+                }
+            ]
+        }
+        rows = run_deterministic(data)
+        # Year 0 to 5 (ages 60-65): User is alive -> 100% of $40,000 = $40,000
+        for y in range(6):
+            self.assertEqual(rows[y]['income'], 40000.0)
+
+        # Year 6 to 10 (ages 66-70): User is dead, spouse is alive -> 75% of $40,000 = $30,000
+        for y in range(6, 11):
+            self.assertEqual(rows[y]['income'], 30000.0)
+
+    def test_income_survivor_benefit_spouse_primary(self):
+        from core.runs import run_deterministic
+        # Spouse dies at 63, User lives to 70.
+        # Spouse annuity $20,000/yr ending at spouse_death, 50% survivor benefit to User.
+        data = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 70,
+            'is_married': True,
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 63,
+            'current_year': 2026,
+            'desired_spending': 0,
+            'inflation_rate': 0.0,
+            'adjust_spending_inflation': False,
+            'social_security': {'user_entitled': False, 'spouse_entitled': False},
+            'income_sources': [
+                {
+                    'name': "Spouse's Annuity",
+                    'amount': 20000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'specified',
+                    'start_age_specified': 60,
+                    'end_age_type': 'spouse_death',
+                    'end_age_specified': 63,
+                    'has_survivor_benefit': True,
+                    'survivor_benefit_pct': 50.0,
+                    'adjust_type': 'none',
+                    'subject_to_tax': False,
+                }
+            ]
+        }
+        rows = run_deterministic(data)
+        # Ages 60-63 (years 0-3): Spouse alive -> 20000
+        for y in range(4):
+            self.assertEqual(rows[y]['income'], 20000.0)
+        # Ages 64-70 (years 4-10): Spouse dead, User alive -> 50% of 20000 = 10000
+        for y in range(4, 11):
+            self.assertEqual(rows[y]['income'], 10000.0)
+
+    def test_parse_income_sources_with_multi_period_and_survivor(self):
+        from core.forms import parse_income_sources
+        from django.http import QueryDict
+        qd = QueryDict('', mutable=True)
+        qd.setlist('income_name[]', ['Exec Pension'])
+        qd.setlist('income_amount[]', ['5000'])
+        qd.setlist('income_frequency[]', ['monthly'])
+        qd.setlist('income_start_age_type[]', ['retirement'])
+        qd.setlist('income_start_age_specified[]', ['65'])
+        qd.setlist('income_end_age_type[]', ['death'])
+        qd.setlist('income_end_age_specified[]', ['90'])
+        qd.setlist('income_subject_to_tax[]', ['true'])
+        qd.setlist('income_is_ss[]', ['false'])
+        qd.setlist('income_has_survivor_benefit[]', ['true'])
+        qd.setlist('income_survivor_benefit_pct[]', ['66.7'])
+        qd.setlist('income_adjustments_json[]', ['[{"start_type": "current_age", "start_spec": 60, "end_type": "retirement", "end_spec": 65, "adjust_type": "inflation", "adjust_val": 0.0}, {"start_type": "retirement", "start_spec": 65, "end_type": "death", "end_spec": 90, "adjust_type": "fixed_pct", "adjust_val": 2.5}]'])
+
+        parsed = parse_income_sources(qd)
+        self.assertEqual(len(parsed), 1)
+        item = parsed[0]
+        self.assertEqual(item['name'], 'Exec Pension')
+        self.assertEqual(item['amount'], 5000.0)
+        self.assertTrue(item['has_survivor_benefit'])
+        self.assertAlmostEqual(item['survivor_benefit_pct'], 66.7)
+        self.assertEqual(len(item['adjustments']), 2)
+        self.assertEqual(item['adjustments'][0]['adjust_type'], 'inflation')
+        self.assertEqual(item['adjustments'][1]['adjust_type'], 'fixed_pct')
+        self.assertAlmostEqual(item['adjustments'][1]['adjust_val'], 2.5)
+
     def test_formatted_currency_input_parsing(self):
         # Verify post values formatted with $ and commas are parsed correctly
         post_data = {
