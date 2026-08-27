@@ -241,7 +241,7 @@
                 },
                 {
                     "start_type": "specified",
-                    "start_spec": 79,
+                    "start_spec": 78,
                     "end_type": "spouse_death",
                     "end_spec": 90,
                     "adjust_type": "fixed_pct",
@@ -264,7 +264,5 @@
             "adjust_start_age_type": "current_age",
             "adjust_start_age_specified": 65
         }
-    ],
-    "target_success_rate_error": false,
-    "runs_error": false
+    ]
 }

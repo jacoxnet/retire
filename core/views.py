@@ -265,7 +265,9 @@ def change_mode_view(request):
 @require_http_methods(["GET", "POST"])
 def enter_view(request):
     if request.method == "POST":
-        simulation_type = request.POST.get('simulation_type', 'regular')
+        session_data = get_session_sim_data(request)
+        prev_sim_type = 'goal_seeking' if (isinstance(session_data, dict) and session_data.get('goal_seeking')) else (getattr(session_data, 'simulation_type', 'regular') if not isinstance(session_data, dict) else session_data.get('simulation_type', 'regular'))
+        simulation_type = request.POST.get('simulation_type', prev_sim_type)
         
         # Demographics
         user_name = request.POST.get('user_name', 'User')
@@ -297,7 +299,6 @@ def enter_view(request):
         adjust_spending_inflation = get_bool(request.POST.get('adjust_spending_inflation'))
         
         inflation_rate = get_float(request.POST.get('inflation_rate'), 2.5)
-        session_data = get_session_sim_data(request)
         runs = get_int(request.POST.get('runs'), session_data.get('runs', 10000) if isinstance(session_data, dict) else getattr(session_data, 'runs', 10000))
         curr_target_srate = session_data.get('target_success_rate', 80.0) if isinstance(session_data, dict) else getattr(session_data, 'target_success_rate', 80.0)
         raw_target_srate = get_float(request.POST.get('target_success_rate'), curr_target_srate)
@@ -356,13 +357,16 @@ def enter_view(request):
         
         # Validation checks
         validation_errors = []
-        raw_runs = request.POST.get('runs')
-        try:
-            runs_val = int(raw_runs)
-            if runs_val < 1 or runs_val > 100000:
-                validation_errors.append("Number of Simulations must be an integer between 1 and 100,000.")
-        except (TypeError, ValueError):
-            validation_errors.append("Number of Simulations must be a valid number between 1 and 100,000.")
+        if request.POST.get('runs') is not None:
+            raw_runs = request.POST.get('runs')
+            try:
+                runs_val = int(raw_runs)
+                if runs_val < 1 or runs_val > 100000:
+                    validation_errors.append("Number of Simulations must be an integer between 1 and 100,000.")
+            except (TypeError, ValueError):
+                validation_errors.append("Number of Simulations must be a valid number between 1 and 100,000.")
+        elif runs < 1 or runs > 100000:
+            validation_errors.append("Number of Simulations must be an integer between 1 and 100,000.")
             
         if is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0):
             validation_errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")

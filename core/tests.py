@@ -429,6 +429,30 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Number of Simulations must be an integer between 1 and 100,000.")
 
+    def test_enter_form_without_runs_preserves_loaded_session_runs(self):
+        session = self.client.session
+        session['simulation_data'] = {'user_name': 'James Kirk', 'runs': 25000}
+        session.save()
+
+        post_data = {
+            'user_name': 'James Kirk',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '85',
+            'desired_spending': '180000',
+            'inflation_rate': '2.5',
+            'account_name[]': ['Traditional IRA'],
+            'account_type[]': ['pretax'],
+            'account_owner[]': ['user'],
+            'account_balance[]': ['550000'],
+            'account_return_mean[]': ['6.0'],
+            'account_return_std[]': ['16.0'],
+        }
+        response = self.client.post('/', post_data)
+        self.assertRedirects(response, '/results/')
+        saved_data = self.client.session['simulation_data']
+        self.assertEqual(saved_data['runs'], 25000)
+
     def test_reset_session_data(self):
         session = self.client.session
         session['simulation_data'] = {'user_name': 'Old Name', 'user_age': 99}
