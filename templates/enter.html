@@ -24,6 +24,7 @@
 
     <form method="POST" action="{% url 'enter' %}" id="enterDataForm" novalidate>
         {% csrf_token %}
+        <input type="hidden" name="next" id="enterFormNext" value="results">
 
         <!-- Tab Navigation -->
         <ul class="nav nav-tabs mb-4 justify-content-center" id="dataEntryTabs" role="tablist">
@@ -1504,7 +1505,6 @@
         // Run toggles initially
         toggleSpouseSection();
         toggleSpendingStartAge();
-        toggleGoalSeekingFields();
 
         function updateSpouseDropdownOptions() {
             var isMarried = isMarriedCheckbox.checked;
@@ -1970,6 +1970,20 @@
             viewResultsNav.addEventListener('click', function (e) {
                 e.preventDefault();
                 serializeAllIncomeCards();
+                document.getElementById('enterFormNext').value = 'results';
+                if (handleCustomValidation(enterDataForm)) {
+                    enterDataForm.submit();
+                }
+            });
+        }
+
+        // Intercept Save/Load/Clear Data nav link click to validate and submit form
+        const manageDataNav = document.getElementById('manageDataNav');
+        if (manageDataNav && enterDataForm) {
+            manageDataNav.addEventListener('click', function (e) {
+                e.preventDefault();
+                serializeAllIncomeCards();
+                document.getElementById('enterFormNext').value = 'manage_data';
                 if (handleCustomValidation(enterDataForm)) {
                     enterDataForm.submit();
                 }

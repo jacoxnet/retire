@@ -40,7 +40,7 @@
                         <a class="nav-link js-scroll-trigger {% if request.resolver_match.url_name == 'results' %}active{% endif %}" id="viewResultsNav" href="{% url 'results' %}">Simulation Results</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link js-scroll-trigger {% if request.resolver_match.url_name == 'manage_data' %}active{% endif %}" href="{% url 'manage_data' %}">Save/Load/Clear Data</a>
+                        <a class="nav-link js-scroll-trigger {% if request.resolver_match.url_name == 'manage_data' %}active{% endif %}" id="manageDataNav" href="{% url 'manage_data' %}">Save/Load/Clear Data</a>
                     </li>
                 </ul>
             </div>

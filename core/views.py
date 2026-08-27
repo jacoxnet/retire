@@ -461,7 +461,10 @@ def enter_view(request):
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         SimulationData.objects.create(data=data_block)
-        return redirect(reverse('results'))
+        redirect_target = request.POST.get('next', 'results')
+        if redirect_target not in ('results', 'manage_data'):
+            redirect_target = 'results'
+        return redirect(reverse(redirect_target))
     else:
         if request.GET.get('new_session') == '1' or request.GET.get('reset') == '1':
             request.session['simulation_data'] = get_default_data()
