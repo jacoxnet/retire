@@ -408,9 +408,12 @@
                     </div>
                 </div>
 
-                <div class="text-center mt-4">
+                <div class="text-center mt-4 mb-3">
                     <button type="button" class="btn btn-secondary me-2"
                         onclick="switchTab('spending-tab')">Back</button>
+                    <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab4">
+                        <i class="fa fa-play me-2"></i> Run Simulation
+                    </button>
                 </div>
             </div>
 
@@ -923,13 +926,20 @@
 
         function serializeCardAdjustments(card) {
             if (!card) return;
+            var hasSurvivorCheck = card.querySelector('.inc-has-survivor');
+            var hasSurvivorHidden = card.querySelector('.inc-has-survivor-hidden');
+            if (hasSurvivorCheck && hasSurvivorHidden) {
+                hasSurvivorHidden.value = hasSurvivorCheck.checked ? 'true' : 'false';
+            }
             var periodRows = card.querySelectorAll('.inc-period-row');
             var adjs = [];
             periodRows.forEach(function (pRow, idx) {
                 var startType = pRow.querySelector('.p-start-type')?.value || 'current_age';
-                var startSpec = parseInt(pRow.querySelector('.p-start-spec')?.value, 10) || 65;
+                var sVal = parseInt(pRow.querySelector('.p-start-spec')?.value, 10);
+                var startSpec = isNaN(sVal) ? 65 : sVal;
                 var endType = pRow.querySelector('.p-end-type')?.value || 'death';
-                var endSpec = parseInt(pRow.querySelector('.p-end-spec')?.value, 10) || 90;
+                var eVal = parseInt(pRow.querySelector('.p-end-spec')?.value, 10);
+                var endSpec = isNaN(eVal) ? 90 : eVal;
                 var adjType = pRow.querySelector('.p-adj-type')?.value || 'inflation';
                 var adjVal = parsePercent(pRow.querySelector('.p-adj-val')?.value || '0');
                 adjs.push({
@@ -959,14 +969,19 @@
             var survivorHint = card.querySelector('.inc-survivor-hint');
             var survivorPctInput = card.querySelector('.inc-survivor-pct');
             var hasSurvivorCheck = card.querySelector('.inc-has-survivor');
+            var hasSurvivorHidden = card.querySelector('.inc-has-survivor-hidden');
             var survivorDetails = card.querySelector('.inc-survivor-details');
+
+            var isSurvivorActive = hasSurvivorCheck && hasSurvivorCheck.checked;
+            if (hasSurvivorHidden) {
+                hasSurvivorHidden.value = isSurvivorActive ? 'true' : 'false';
+            }
 
             var spouseName = document.getElementById('spouse_name')?.value?.trim() || 'Spouse';
             var userName = document.getElementById('user_name')?.value?.trim() || 'You';
 
             if (isMarried && (endType === 'death' || endType === 'spouse_death')) {
                 survivorGroup.style.display = 'block';
-                var isSurvivorActive = hasSurvivorCheck && hasSurvivorCheck.checked;
                 if (survivorDetails) {
                     survivorDetails.style.display = isSurvivorActive ? 'block' : 'none';
                 }
@@ -1095,7 +1110,7 @@
             var endType = data.end_age_type !== undefined ? data.end_age_type : 'death';
             var endAge = data.end_age_specified !== undefined ? data.end_age_specified : 90;
             var subjectToTax = data.subject_to_tax !== undefined ? data.subject_to_tax : true;
-            var hasSurvivor = data.has_survivor_benefit !== undefined ? data.has_survivor_benefit : false;
+            var hasSurvivor = data.has_survivor_benefit !== undefined ? (data.has_survivor_benefit === true || data.has_survivor_benefit === 'true') : false;
             var survivorPct = data.survivor_benefit_pct !== undefined ? data.survivor_benefit_pct : 100.0;
 
             var formattedAmt = formatMoney(amount);
@@ -1160,7 +1175,8 @@
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <label class="form-label fw-bold mb-0 inc-survivor-title">Survivor Benefit for Surviving Spouse</label>
                                     <div class="form-check form-switch mb-0">
-                                        <input class="form-check-input inc-has-survivor" type="checkbox" name="income_has_survivor_benefit[]" value="true" ${hasSurvivor ? 'checked' : ''}>
+                                        <input class="form-check-input inc-has-survivor" type="checkbox" ${hasSurvivor ? 'checked' : ''}>
+                                        <input type="hidden" class="inc-has-survivor-hidden" name="income_has_survivor_benefit[]" value="${hasSurvivor ? 'true' : 'false'}">
                                         <label class="form-check-label fw-semibold small">Provide Survivor Benefit</label>
                                     </div>
                                 </div>
@@ -1236,10 +1252,12 @@
                 var details = card.querySelector('.inc-survivor-details');
                 details.style.display = this.checked ? 'block' : 'none';
                 updateCardSurvivorSection(card);
+                serializeCardAdjustments(card);
             });
 
             card.querySelector('.inc-survivor-pct').addEventListener('input', function () {
                 updateCardSurvivorSection(card);
+                serializeCardAdjustments(card);
             });
 
             card.querySelectorAll('.btn-preset-survivor').forEach(function (btn) {
@@ -1249,6 +1267,7 @@
                     if (input) {
                         input.value = pct + '%';
                         updateCardSurvivorSection(card);
+                        serializeCardAdjustments(card);
                     }
                 });
             });
@@ -1921,6 +1940,12 @@
             return true;
         }
 
+        function serializeAllIncomeCards() {
+            document.querySelectorAll('#incomeStreamsContainer .income-stream-card').forEach(function (card) {
+                serializeCardAdjustments(card);
+            });
+        }
+
         if (enterDataForm) {
             enterDataForm.querySelectorAll('.form-control, .form-select').forEach(function (input) {
                 input.addEventListener('input', function () {
@@ -1932,6 +1957,7 @@
             });
 
             enterDataForm.addEventListener('submit', function (e) {
+                serializeAllIncomeCards();
                 if (!handleCustomValidation(enterDataForm)) {
                     e.preventDefault();
                 }
@@ -1943,6 +1969,7 @@
         if (viewResultsNav && enterDataForm) {
             viewResultsNav.addEventListener('click', function (e) {
                 e.preventDefault();
+                serializeAllIncomeCards();
                 if (handleCustomValidation(enterDataForm)) {
                     enterDataForm.submit();
                 }

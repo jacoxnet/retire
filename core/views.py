@@ -184,6 +184,21 @@ def load_plan_view(request):
         else:
             data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
 
+        if data.get('income_sources') and isinstance(data['income_sources'], list):
+            for inc in data['income_sources']:
+                if isinstance(inc, dict):
+                    if 'adjustments' not in inc or not inc['adjustments']:
+                        inc['adjustments'] = [{
+                            'start_type': inc.get('adjust_start_age_type', 'start'),
+                            'start_spec': inc.get('adjust_start_age_specified', 65),
+                            'end_type': inc.get('end_age_type', 'death'),
+                            'end_spec': inc.get('end_age_specified', 90),
+                            'adjust_type': inc.get('adjust_type', 'inflation'),
+                            'adjust_val': inc.get('adjust_val', 0.0)
+                        }]
+                    inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
+                    inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
+
         request.session['simulation_data'] = data
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         request.session['cached_results'] = None
