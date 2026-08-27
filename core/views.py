@@ -7,6 +7,9 @@ from core.forms import (
     parse_account_rows, parse_legacy_accounts,
     parse_additional_spending, parse_income_sources, parse_other_taxes,
     validate_accounts, validate_additional_spending, validate_scheduled_items,
+    calculate_marginal_tax_rate, build_default_balance_sheet,
+    parse_balance_sheet, sync_balance_sheet_to_accounts,
+    sync_accounts_to_balance_sheet,
 )
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
@@ -16,7 +19,7 @@ from django.urls import reverse
 import numpy as np
 
 def get_default_data():
-    return {
+    default_dict = {
         'goal_seeking': False,
         'user_name': 'John Doe',
         'user_age': 60,
@@ -122,6 +125,8 @@ def get_default_data():
         'state_tax_rate': 0.0,
         'state_ss_exempt': True
     }
+    default_dict['balance_sheet'] = build_default_balance_sheet(data=default_dict)
+    return default_dict
 
 def get_session_sim_data(request):
     if 'simulation_data' not in request.session or not request.session['simulation_data']:
@@ -129,6 +134,11 @@ def get_session_sim_data(request):
         request.session['data_version'] = 1
         request.session['cached_results'] = None
         request.session['cached_version'] = -1
+    else:
+        sim_data = request.session['simulation_data']
+        if 'balance_sheet' not in sim_data:
+            sim_data['balance_sheet'] = build_default_balance_sheet(sim_data.get('accounts', []), data=sim_data)
+            request.session['simulation_data'] = sim_data
     return request.session['simulation_data']
 
 @require_http_methods(["GET"])
@@ -167,6 +177,26 @@ def load_plan_view(request):
             data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
         elif 'simulation_type' not in data and 'goal_seeking' in data:
             data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
+
+        # Load or migrate balance sheet
+        if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+            data['balance_sheet'] = parse_balance_sheet(data['balance_sheet'], default_data=data)
+            synced_accs = sync_balance_sheet_to_accounts(
+                data['balance_sheet'],
+                existing_accounts=data.get('accounts', []),
+                user_age=data.get('user_age', 60),
+                user_retirement_age=data.get('user_retirement_age', 65),
+                is_married=data.get('is_married', False),
+                spouse_age=data.get('spouse_age', 60),
+                spouse_retirement_age=data.get('spouse_retirement_age', 65)
+            )
+            if synced_accs:
+                data['accounts'] = synced_accs
+        elif data.get('accounts') and isinstance(data['accounts'], list):
+            data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+        else:
+            data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
+            data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
 
         if data.get('accounts') and isinstance(data['accounts'], list):
             agg = aggregate_accounts(
@@ -341,6 +371,23 @@ def enter_view(request):
                 spouse_age, spouse_retirement_age, min_start_age
             )
 
+        # Balance Sheet Parsing & Sync
+        raw_bs_json = request.POST.get('balance_sheet_json')
+        if raw_bs_json:
+            balance_sheet = parse_balance_sheet(raw_bs_json, default_data=session_data)
+            synced_accs = sync_balance_sheet_to_accounts(
+                balance_sheet, accounts, user_age, user_retirement_age,
+                is_married, spouse_age, spouse_retirement_age, min_start_age
+            )
+            if synced_accs:
+                accounts = synced_accs
+            balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
+        elif isinstance(session_data, dict) and 'balance_sheet' in session_data:
+            balance_sheet = session_data['balance_sheet']
+            balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
+        else:
+            balance_sheet = build_default_balance_sheet(accounts, current_year=current_year)
+
         agg = aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, is_married, spouse_age, spouse_retirement_age, spouse_age_death)
         pretax_assets = agg['pretax_assets']
         spouse_pretax_assets = agg['spouse_pretax_assets']
@@ -449,6 +496,13 @@ def enter_view(request):
             'income_sources': income_sources,
             'other_taxes': other_taxes
         }
+
+        # Calculate marginal tax rate and attach balance sheet
+        calc_tax_rate = calculate_marginal_tax_rate(data_block)
+        if isinstance(balance_sheet, dict):
+            balance_sheet['marginal_tax_rate'] = calc_tax_rate
+        data_block['balance_sheet'] = balance_sheet
+        data_block['marginal_tax_rate'] = calc_tax_rate
         
         if validation_errors:
             for err in validation_errors:

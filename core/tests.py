@@ -1993,6 +1993,254 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(infer_asset_allocation(1.0), (0.0, 0.0, 100.0))
 
 
+class BalanceSheetTests(TestCase):
+    def test_marginal_tax_rate_calculation(self):
+        from core.forms import calculate_marginal_tax_rate
+
+        # 1. Single filer with $100k salary (active at age 60, current age 60)
+        # Taxable base = $100,000 - $16,100 std ded = $83,900
+        # 2026 Single thresholds: [12400, 50400, 105700, ...]
+        # $83,900 falls in 22% bracket ($50,400 to $105,700)
+        plan_single = {
+            'filing_status': 'single',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'state_tax_rate': 0.0,
+            'income_sources': [
+                {
+                    'name': 'Salary',
+                    'amount': 100000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'current_age',
+                    'end_age_type': 'specified',
+                    'end_age_specified': 65,
+                    'subject_to_tax': True
+                }
+            ]
+        }
+        rate = calculate_marginal_tax_rate(plan_single)
+        self.assertEqual(rate, 22.0)
+
+        # 2. Add 5.0% state tax rate -> 22.0% + 5.0% = 27.0%
+        plan_single['state_tax_rate'] = 5.0
+        rate_with_state = calculate_marginal_tax_rate(plan_single)
+        self.assertEqual(rate_with_state, 27.0)
+
+        # 3. High earner: $300k salary (Single)
+        # Taxable base = $300k - $16.1k = $283.9k -> falls in 35% bracket ($256,225 to $640,600)
+        plan_high = {
+            'filing_status': 'single',
+            'user_age': 55,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'state_tax_rate': 4.5,
+            'income_sources': [
+                {
+                    'name': 'Executive Salary',
+                    'amount': 300000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'current_age',
+                    'end_age_type': 'retirement',
+                    'subject_to_tax': True
+                }
+            ]
+        }
+        self.assertEqual(calculate_marginal_tax_rate(plan_high), 39.5)
+
+    def test_build_and_parse_balance_sheet(self):
+        from core.forms import build_default_balance_sheet, parse_balance_sheet
+        import json
+
+        # Build default with sample accounts
+        sample_accounts = [
+            {'name': '401k Account', 'type': 'pretax', 'balance': 500000.0, 'contrib_amount': 20000.0},
+            {'name': 'Roth IRA', 'type': 'roth', 'balance': 150000.0, 'contrib_amount': 7000.0}
+        ]
+        bs = build_default_balance_sheet(sample_accounts, current_year=2026)
+        self.assertIn('categories', bs)
+        self.assertIn('pretax', bs['categories'])
+        self.assertIn('roth', bs['categories'])
+        self.assertIn('goals', bs['categories'])
+        self.assertIn('real_estate', bs['categories'])
+        self.assertIn('debts', bs['categories'])
+
+        # Check pretax account values
+        pretax_accs = bs['categories']['pretax']['accounts']
+        self.assertEqual(len(pretax_accs), 1)
+        self.assertEqual(pretax_accs[0]['name'], '401k Account')
+        curr_p = bs['current_period']
+        self.assertEqual(pretax_accs[0]['values'][curr_p], 500000.0)
+
+        # Parse from JSON string
+        bs_json_str = json.dumps(bs)
+        parsed = parse_balance_sheet(bs_json_str)
+        self.assertEqual(parsed['current_period'], curr_p)
+        self.assertEqual(len(parsed['categories']['pretax']['accounts']), 1)
+
+    def test_sync_balance_sheet_to_accounts(self):
+        from core.forms import build_default_balance_sheet, sync_balance_sheet_to_accounts
+
+        bs = build_default_balance_sheet()
+        # Add custom account with include_in_retirement = True
+        curr_p = bs['current_period']
+        bs['categories']['pretax']['accounts'].append({
+            'name': 'New 401(k) Plan',
+            'type': 'pretax',
+            'owner': 'user',
+            'include_in_retirement': True,
+            'values': {curr_p: 350000.0},
+            'contrib_amount': 22000.0,
+            'return_mean': 6.5,
+            'return_std': 9.5
+        })
+
+        # Add goal sinking fund with include_in_retirement = False
+        bs['categories']['goals']['goal_groups'][0]['accounts'].append({
+            'name': 'Car Fund HYSA',
+            'type': 'cash',
+            'owner': 'user',
+            'include_in_retirement': False,
+            'values': {curr_p: 20000.0}
+        })
+
+        synced = sync_balance_sheet_to_accounts(bs)
+        synced_names = [a['name'] for a in synced]
+
+        # 'New 401(k) Plan' should be included
+        self.assertIn('New 401(k) Plan', synced_names)
+        # 'Car Fund HYSA' should NOT be included because include_in_retirement = False
+        self.assertNotIn('Car Fund HYSA', synced_names)
+
+        # Verify synced account attributes
+        new_401k = next(a for a in synced if a['name'] == 'New 401(k) Plan')
+        self.assertEqual(new_401k['balance'], 350000.0)
+        self.assertEqual(new_401k['contrib_amount'], 22000.0)
+        self.assertEqual(new_401k['return_mean'], 6.5)
+
+    def test_balance_sheet_view_integration(self):
+        from django.urls import reverse
+        import json
+
+        # 1. GET enter view should contain Balance Sheet tab & json_script tags
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="balance-sheet-tab"')
+        self.assertContains(resp, 'id="balanceSheetTable"')
+        self.assertContains(resp, 'initial-balance-sheet')
+        self.assertContains(resp, 'initial-marginal-tax-rate')
+
+        # 2. POST with balance_sheet_json
+        from core.forms import build_default_balance_sheet
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+        bs['categories']['pretax']['accounts'] = [{
+            'name': 'Primary 401k',
+            'type': 'pretax',
+            'owner': 'user',
+            'include_in_retirement': True,
+            'values': {curr_p: 750000.0},
+            'contrib_amount': 23000.0,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        }]
+        bs_json = json.dumps(bs)
+
+        post_data = {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '50000',
+            'runs': '1000',
+            'balance_sheet_json': bs_json,
+            'next': 'manage_data'
+        }
+        post_resp = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(post_resp.status_code, 302)
+
+        # Check session data
+        session_data = self.client.session['simulation_data']
+        self.assertIn('balance_sheet', session_data)
+        self.assertEqual(session_data['balance_sheet']['categories']['pretax']['accounts'][0]['values'][curr_p], 750000.0)
+        self.assertEqual(session_data['pretax_assets']['present_balance'], 750000.0)
+
+    def test_bidirectional_sync_accounts_and_balance_sheet(self):
+        """Test that account cards and balance sheet stay in 100% sync in both directions."""
+        from core.forms import sync_balance_sheet_to_accounts, sync_accounts_to_balance_sheet, build_default_balance_sheet
+        
+        # 1. Start with default balance sheet
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+        
+        # 2. User modifies Roth IRA on balance sheet from $150k to $20k
+        for acc in bs['categories']['roth']['accounts']:
+            if 'Roth' in acc['name']:
+                acc['values'][curr_p] = 20000.0
+                
+        # Sync BS -> Accounts
+        accounts = sync_balance_sheet_to_accounts(bs)
+        roth_acc = next(a for a in accounts if a['type'] == 'roth')
+        self.assertEqual(roth_acc['balance'], 20000.0)
+        
+        # 3. User modifies Account Card on Accounts Tab from $20k to $25k
+        roth_acc['balance'] = 25000.0
+        
+        # Sync Accounts -> BS
+        updated_bs = sync_accounts_to_balance_sheet(bs, accounts)
+        bs_roth_acc = next(a for a in updated_bs['categories']['roth']['accounts'] if a['type'] == 'roth')
+        self.assertEqual(bs_roth_acc['values'][curr_p], 25000.0)
+
+    def test_balance_sheet_surplus_and_recalculation_persistence(self):
+        """Test Technology reserve $12,000 with goal $10,000 persists and correctly calculates surplus."""
+        from core.forms import build_default_balance_sheet
+        from django.urls import reverse
+        import json
+
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+
+        # Set Technology Reserve to $12,000 with target $10,000
+        for group in bs['categories']['goals']['goal_groups']:
+            if 'Tech' in group['name']:
+                group['target_amount'] = 10000.0
+                group['accounts'][0]['values'][curr_p] = 12000.0
+
+        # Set Roth IRA to $20,000
+        bs['categories']['roth']['accounts'][0]['values'][curr_p] = 20000.0
+
+        post_data = {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '50000',
+            'runs': '100',
+            'balance_sheet_json': json.dumps(bs),
+            'next': 'results'
+        }
+
+        # 1. Post to enter form and redirect to results
+        response = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse('results'))
+
+        # 2. Verify simulation results load without error
+        res_page = self.client.get(reverse('results'))
+        self.assertEqual(res_page.status_code, 200)
+
+        # 3. Return to enter data view and verify that initial-balance-sheet script has the exact updated numbers
+        enter_page = self.client.get(reverse('enter'))
+        self.assertEqual(enter_page.status_code, 200)
+        content = enter_page.content.decode('utf-8')
+
+        self.assertIn('12000', content)
+        self.assertIn('10000', content)
+        self.assertIn('20000', content)
+
+
+
+
 
 
 

@@ -481,3 +481,580 @@ def validate_scheduled_items(label, items):
                 if a_start < 18 or a_start > 120:
                     errors.append(f"{label} '{name}' Adjustment Start Age must be between 18 and 120.")
     return errors
+
+
+# ---------------------------------------------------------------------------
+# Balance Sheet & Marginal Tax Rate Helpers
+# ---------------------------------------------------------------------------
+
+FEDERAL_TAX_THRESHOLDS_2026 = {
+    'single': [12400, 50400, 105700, 201775, 256225, 640600],
+    'joint': [24800, 100800, 211400, 403550, 512450, 768700],
+    'hoh': [17700, 67450, 105700, 201775, 256225, 640600],
+}
+
+STANDARD_DEDUCTION_2026 = {
+    'single': 16100,
+    'joint': 32200,
+    'hoh': 24150,
+}
+
+FEDERAL_TAX_BRACKET_RATES = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]
+
+
+def calculate_marginal_tax_rate(data):
+    """Calculate the combined Federal + State marginal tax rate for the user
+    based on current filing status, income streams, and state tax rate.
+    Returns rate as a percentage, e.g. 27.0 for 27%.
+    """
+    if not isinstance(data, dict):
+        return 24.0
+
+    filing_status = data.get('filing_status', 'single')
+    if filing_status not in FEDERAL_TAX_THRESHOLDS_2026:
+        filing_status = 'single'
+
+    user_age = get_int(data.get('user_age'), 60)
+    user_ret_age = get_int(data.get('user_retirement_age'), 65)
+    is_married = get_bool(data.get('is_married'))
+    spouse_age = get_int(data.get('spouse_age'), 60) if is_married else 0
+    spouse_ret_age = get_int(data.get('spouse_retirement_age'), 65) if is_married else 0
+
+    # Calculate active taxable income at current age
+    total_taxable_income = 0.0
+    income_sources = data.get('income_sources', [])
+    if isinstance(income_sources, list):
+        for inc in income_sources:
+            if not isinstance(inc, dict) or not inc.get('subject_to_tax', True):
+                continue
+            amt = float(inc.get('amount', 0.0))
+            if inc.get('frequency') == 'monthly':
+                amt *= 12.0
+            
+            # Check if active at current age
+            stype = inc.get('start_age_type', 'retirement')
+            if stype == 'specified':
+                start_age = get_int(inc.get('start_age_specified'), 65)
+            elif stype == 'retirement':
+                start_age = user_ret_age
+            elif stype == 'spouse_retirement' and is_married:
+                start_age = spouse_ret_age
+            else:
+                start_age = user_age
+            
+            etype = inc.get('end_age_type', 'death')
+            if etype == 'specified':
+                end_age = get_int(inc.get('end_age_specified'), 90)
+            else:
+                end_age = get_int(data.get('user_age_death'), 90)
+
+            if start_age <= user_age <= end_age:
+                total_taxable_income += amt
+
+    # If no active salary or earned income, estimate from desired retirement spending
+    if total_taxable_income <= 0:
+        total_taxable_income = float(data.get('desired_spending', 60000.0))
+
+    std_ded = STANDARD_DEDUCTION_2026.get(filing_status, 16100)
+    taxable_base = max(0.0, total_taxable_income - std_ded)
+
+    thresholds = FEDERAL_TAX_THRESHOLDS_2026.get(filing_status, FEDERAL_TAX_THRESHOLDS_2026['single'])
+    fed_rate = FEDERAL_TAX_BRACKET_RATES[0]
+    for i, threshold in enumerate(thresholds):
+        if taxable_base > threshold:
+            if i + 1 < len(FEDERAL_TAX_BRACKET_RATES):
+                fed_rate = FEDERAL_TAX_BRACKET_RATES[i + 1]
+            else:
+                fed_rate = FEDERAL_TAX_BRACKET_RATES[-1]
+        else:
+            break
+
+    state_rate = float(data.get('state_tax_rate', 0.0)) / 100.0
+    combined_rate = (fed_rate + state_rate) * 100.0
+    return round(combined_rate, 2)
+
+
+def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
+    """Build a comprehensive default balance sheet structure pre-populated with
+    any existing accounts and sensible defaults.
+    """
+    if accounts is None:
+        accounts = []
+
+    p1 = f"{current_year - 1}-12-31"
+    p2 = f"{current_year}-01-31"
+    p3 = f"{current_year}-02-28"
+    periods = [p1, p2, p3]
+    curr_period = p3
+
+    # Group existing accounts by type
+    pretax_accs = []
+    roth_accs = []
+    taxable_accs = []
+    hsa_accs = []
+
+    for acc in accounts:
+        atype = acc.get('type', 'pretax')
+        bal = float(acc.get('balance', 0.0))
+        acc_dict = {
+            'id': f"acc_{len(pretax_accs) + len(roth_accs) + len(taxable_accs) + len(hsa_accs) + 1}",
+            'name': acc.get('name', 'Account'),
+            'institution': acc.get('institution', 'Investment Custodian'),
+            'owner': acc.get('owner', 'user'),
+            'type': atype,
+            'include_in_retirement': True,
+            'values': {
+                p1: round(bal * 0.98, 2),
+                p2: round(bal * 0.99, 2),
+                p3: bal,
+            },
+            'contrib_amount': float(acc.get('contrib_amount', 0.0)),
+            'contrib_freq': acc.get('contrib_freq', 'annual'),
+            'contrib_start_age': acc.get('contrib_start_age', 60),
+            'contrib_end_age_type': acc.get('contrib_end_age_type', 'retirement'),
+            'contrib_end_age_specified': acc.get('contrib_end_age_specified', 65),
+            'contrib_adjust_inflation': acc.get('contrib_adjust_inflation', True),
+            'return_mean': float(acc.get('return_mean', 6.0)),
+            'return_std': float(acc.get('return_std', 10.0)),
+            'hsa_for_medical': acc.get('hsa_for_medical', True),
+        }
+        if atype == 'pretax':
+            pretax_accs.append(acc_dict)
+        elif atype == 'roth':
+            roth_accs.append(acc_dict)
+        elif atype == 'taxable':
+            taxable_accs.append(acc_dict)
+        elif atype == 'hsa':
+            hsa_accs.append(acc_dict)
+
+    if not pretax_accs:
+        pretax_accs.append({
+            'id': 'acc_pretax_1',
+            'name': 'Primary 401(k) / Traditional IRA',
+            'institution': 'Fidelity',
+            'owner': 'user',
+            'type': 'pretax',
+            'include_in_retirement': True,
+            'values': {p1: 490000.0, p2: 498000.0, p3: 500000.0},
+            'contrib_amount': 23000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0,
+        })
+
+    if not roth_accs:
+        roth_accs.append({
+            'id': 'acc_roth_1',
+            'name': 'Roth IRA',
+            'institution': 'Vanguard',
+            'owner': 'user',
+            'type': 'roth',
+            'include_in_retirement': True,
+            'values': {p1: 145000.0, p2: 148000.0, p3: 150000.0},
+            'contrib_amount': 7000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0,
+        })
+
+    if not taxable_accs:
+        taxable_accs.append({
+            'id': 'acc_taxable_1',
+            'name': 'Taxable Brokerage Account',
+            'institution': 'Charles Schwab',
+            'owner': 'user',
+            'type': 'taxable',
+            'include_in_retirement': True,
+            'values': {p1: 95000.0, p2: 98000.0, p3: 100000.0},
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+        })
+
+    # Emergency Fund accounts
+    emergency_accs = [
+        {
+            'id': 'acc_emg_1',
+            'name': 'High-Yield Emergency Savings',
+            'institution': 'Marcus / Ally',
+            'owner': 'user',
+            'type': 'cash',
+            'include_in_retirement': False,
+            'values': {p1: 45000.0, p2: 45000.0, p3: 45000.0},
+        }
+    ]
+
+    # Goal Savings / Sinking Funds (with target goal amount & multi-account support)
+    goal_groups = [
+        {
+            'id': 'goal_car',
+            'name': 'Next Vehicle Replacement',
+            'target_amount': 30000.0,
+            'accounts': [
+                {
+                    'id': 'acc_g_car_1',
+                    'name': 'Car Fund Savings (HYSA)',
+                    'institution': 'Ally Bank',
+                    'owner': 'user',
+                    'type': 'cash',
+                    'include_in_retirement': False,
+                    'values': {p1: 15000.0, p2: 16000.0, p3: 18000.0},
+                },
+                {
+                    'id': 'acc_g_car_2',
+                    'name': 'Short-Term Bond Reserve (Brokerage)',
+                    'institution': 'Vanguard (BSV)',
+                    'owner': 'user',
+                    'type': 'taxable',
+                    'include_in_retirement': False,
+                    'values': {p1: 4000.0, p2: 4000.0, p3: 4500.0},
+                }
+            ]
+        },
+        {
+            'id': 'goal_hvac',
+            'name': 'Home Maintenance & HVAC Reserve',
+            'target_amount': 15000.0,
+            'accounts': [
+                {
+                    'id': 'acc_g_hvac_1',
+                    'name': 'Home Repair Sinking Fund',
+                    'institution': 'Capital One 360',
+                    'owner': 'user',
+                    'type': 'cash',
+                    'include_in_retirement': False,
+                    'values': {p1: 8000.0, p2: 8500.0, p3: 9000.0},
+                }
+            ]
+        },
+        {
+            'id': 'goal_travel',
+            'name': 'Vacation & Travel Fund',
+            'target_amount': 8000.0,
+            'accounts': [
+                {
+                    'id': 'acc_g_trv_1',
+                    'name': 'Travel Savings Account',
+                    'institution': 'Discover Bank',
+                    'owner': 'user',
+                    'type': 'cash',
+                    'include_in_retirement': False,
+                    'values': {p1: 4500.0, p2: 5000.0, p3: 6000.0},
+                }
+            ]
+        },
+        {
+            'id': 'goal_tech',
+            'name': 'Tech & Electronics Sinking Fund',
+            'target_amount': 4000.0,
+            'accounts': [
+                {
+                    'id': 'acc_g_tech_1',
+                    'name': 'Technology Reserve',
+                    'institution': 'Ally Bank',
+                    'owner': 'user',
+                    'type': 'cash',
+                    'include_in_retirement': False,
+                    'values': {p1: 2500.0, p2: 2700.0, p3: 3000.0},
+                }
+            ]
+        }
+    ]
+
+    # Daily Spending / Checking Accounts
+    daily_accs = [
+        {
+            'id': 'acc_daily_1',
+            'name': 'Primary Checking',
+            'institution': 'Chase Bank',
+            'owner': 'user',
+            'type': 'cash',
+            'include_in_retirement': False,
+            'values': {p1: 4500.0, p2: 5000.0, p3: 5200.0},
+        }
+    ]
+
+    # Real Estate & Home Equity
+    real_estate = {
+        'properties': [
+            {
+                'id': 'prop_primary',
+                'name': 'Primary Residence',
+                'market_values': {p1: 650000.0, p2: 650000.0, p3: 660000.0},
+                'mortgages': [
+                    {
+                        'id': 'mort_primary',
+                        'name': 'Primary 30-Yr Mortgage',
+                        'balances': {p1: 245000.0, p2: 244200.0, p3: 243500.0}
+                    }
+                ]
+            }
+        ]
+    }
+
+    # Debts & Liabilities
+    debts = [
+        {
+            'id': 'debt_auto',
+            'name': 'Auto Loan',
+            'institution': 'Toyota Financial Services',
+            'values': {p1: 8500.0, p2: 8100.0, p3: 7800.0},
+        },
+        {
+            'id': 'debt_cc',
+            'name': 'Credit Cards (Monthly Statement Balance)',
+            'institution': 'Chase / Amex',
+            'values': {p1: 1200.0, p2: 950.0, p3: 850.0},
+        }
+    ]
+
+    calc_tax_rate = calculate_marginal_tax_rate(data) if data else 24.0
+
+    return {
+        'periods': periods,
+        'current_period': curr_period,
+        'marginal_tax_rate': calc_tax_rate,
+        'marginal_tax_rate_override': None,
+        'emergency_goal_amount': 50000.0,
+        'categories': {
+            'pretax': {
+                'title': 'Pretax Retirement Accounts',
+                'is_pretax': True,
+                'accounts': pretax_accs,
+            },
+            'roth': {
+                'title': 'Post-Tax (Roth) Retirement Accounts',
+                'is_pretax': False,
+                'accounts': roth_accs,
+            },
+            'taxable': {
+                'title': 'Investment / Taxable Brokerage Accounts',
+                'is_pretax': False,
+                'accounts': taxable_accs,
+            },
+            'hsa': {
+                'title': 'Health Savings Accounts (HSA)',
+                'is_pretax': False,
+                'accounts': hsa_accs,
+            },
+            'emergency': {
+                'title': 'Emergency Fund Accounts',
+                'is_pretax': False,
+                'target_amount': 50000.0,
+                'accounts': emergency_accs,
+            },
+            'goals': {
+                'title': 'Goal Savings (Sinking Funds)',
+                'is_pretax': False,
+                'goal_groups': goal_groups,
+            },
+            'daily': {
+                'title': 'Daily Spending Accounts (Checking & Cash)',
+                'is_pretax': False,
+                'accounts': daily_accs,
+            },
+            'real_estate': real_estate,
+            'debts': debts,
+        }
+    }
+
+
+def parse_balance_sheet(raw_json_or_post, default_data=None):
+    """Parse and normalize the balance sheet data structure from POST input or JSON."""
+    if isinstance(raw_json_or_post, str):
+        try:
+            bs = json.loads(raw_json_or_post)
+            if isinstance(bs, dict) and 'categories' in bs:
+                return bs
+        except Exception:
+            pass
+
+    if isinstance(raw_json_or_post, dict):
+        if 'categories' in raw_json_or_post:
+            return raw_json_or_post
+        if 'balance_sheet_json' in raw_json_or_post:
+            try:
+                bs = json.loads(raw_json_or_post['balance_sheet_json'])
+                if isinstance(bs, dict) and 'categories' in bs:
+                    return bs
+            except Exception:
+                pass
+
+    return build_default_balance_sheet(data=default_data)
+
+
+def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_age=60,
+                                   user_retirement_age=65, is_married=False,
+                                   spouse_age=60, spouse_retirement_age=65, min_start_age=60):
+    """Extract all accounts from the balance sheet where include_in_retirement is True,
+    and format them for the standard `accounts` list consumed by simulation runs.
+    """
+    if not isinstance(balance_sheet, dict) or 'categories' not in balance_sheet:
+        return existing_accounts or []
+
+    categories = balance_sheet.get('categories', {})
+    curr_period = balance_sheet.get('current_period')
+    periods = balance_sheet.get('periods', [])
+    if not curr_period and periods:
+        curr_period = periods[-1]
+
+    existing_by_id = {}
+    if existing_accounts and isinstance(existing_accounts, list):
+        for acc in existing_accounts:
+            if isinstance(acc, dict) and acc.get('name'):
+                existing_by_id[acc.get('name')] = acc
+
+    synced_accounts = []
+
+    def process_account(acc, default_type):
+        if not acc.get('include_in_retirement', False):
+            return
+        
+        atype = acc.get('type', default_type)
+        aowner = acc.get('owner', 'user')
+        if not is_married:
+            aowner = 'user'
+
+        # Get latest balance from values dict
+        vals = acc.get('values', {})
+        bal = 0.0
+        if isinstance(vals, dict):
+            if curr_period and curr_period in vals:
+                bal = get_float(vals[curr_period])
+            elif vals:
+                bal = get_float(list(vals.values())[-1])
+            else:
+                bal = get_float(acc.get('balance', 0.0))
+        else:
+            bal = get_float(acc.get('balance', 0.0))
+
+        def_start = spouse_age if (aowner == 'spouse' and is_married) else user_age
+        def_ret = spouse_retirement_age if (aowner == 'spouse' and is_married) else user_retirement_age
+
+        match = existing_by_id.get(acc.get('name'))
+        if not match and existing_accounts:
+            for e in existing_accounts:
+                if isinstance(e, dict) and e.get('type') == atype and e.get('owner', 'user') == aowner:
+                    match = e
+                    break
+
+        c_amt = get_float(acc.get('contrib_amount', match.get('contrib_amount', 0.0) if match else 0.0))
+        c_freq = acc.get('contrib_freq', match.get('contrib_freq', 'annual') if match else 'annual')
+        c_start = get_int(acc.get('contrib_start_age', match.get('contrib_start_age', def_start) if match else def_start))
+        c_end_type = acc.get('contrib_end_age_type', match.get('contrib_end_age_type', 'spouse_retirement' if aowner == 'spouse' else 'retirement') if match else ('spouse_retirement' if aowner == 'spouse' else 'retirement'))
+        c_end_spec = get_int(acc.get('contrib_end_age_specified', match.get('contrib_end_age_specified', def_ret) if match else def_ret))
+        c_inf = get_bool(acc.get('contrib_adjust_inflation', match.get('contrib_adjust_inflation', True) if match else True))
+        r_mean = get_float(acc.get('return_mean', match.get('return_mean', 6.0) if match else 6.0))
+        r_std = get_float(acc.get('return_std', match.get('return_std', 10.0) if match else 10.0))
+        hsa_med = get_bool(acc.get('hsa_for_medical', match.get('hsa_for_medical', True) if match else True))
+
+        synced_accounts.append({
+            'name': acc.get('name', f"{aowner.title()} {atype.title()} Account"),
+            'institution': acc.get('institution', ''),
+            'type': atype,
+            'owner': aowner,
+            'balance': bal,
+            'contrib_amount': c_amt,
+            'contrib_freq': c_freq,
+            'contrib_start_age': max(min_start_age, c_start),
+            'contrib_end_age_type': c_end_type,
+            'contrib_end_age_specified': c_end_spec,
+            'contrib_adjust_inflation': c_inf,
+            'return_mean': r_mean,
+            'return_std': r_std,
+            'hsa_for_medical': hsa_med,
+        })
+
+    # 1. Standard categories
+    for cat_key in ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily']:
+        cat = categories.get(cat_key, {})
+        for acc in cat.get('accounts', []):
+            process_account(acc, cat_key if cat_key in ['pretax', 'roth', 'taxable', 'hsa'] else 'taxable')
+
+    # 2. Goal groups
+    goals_cat = categories.get('goals', {})
+    for g_group in goals_cat.get('goal_groups', []):
+        for acc in g_group.get('accounts', []):
+            process_account(acc, 'taxable')
+
+    return synced_accounts if synced_accounts else (existing_accounts or [])
+
+
+def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
+    """Synchronize standard account card changes (balance, name, contribs, etc.) into the balance sheet structure."""
+    if not isinstance(balance_sheet, dict) or 'categories' not in balance_sheet:
+        return build_default_balance_sheet(accounts, current_year=current_year)
+
+    curr_period = balance_sheet.get('current_period')
+    periods = balance_sheet.get('periods', [])
+    if not curr_period and periods:
+        curr_period = periods[-1]
+    if not curr_period:
+        curr_period = f"{current_year}-02-28"
+
+    categories = balance_sheet.setdefault('categories', {})
+    for cat_key in ['pretax', 'roth', 'taxable', 'hsa']:
+        if cat_key not in categories:
+            categories[cat_key] = {'title': f"{cat_key.title()} Accounts", 'accounts': []}
+
+    for acc in (accounts or []):
+        atype = acc.get('type', 'pretax')
+        cat_key = atype if atype in ['pretax', 'roth', 'taxable', 'hsa'] else 'taxable'
+        cat_accs = categories[cat_key].setdefault('accounts', [])
+
+        matched = None
+        for b_acc in cat_accs:
+            if b_acc.get('name') == acc.get('name') or (b_acc.get('id') and b_acc.get('id') == acc.get('id')):
+                matched = b_acc
+                break
+        if not matched:
+            for b_acc in cat_accs:
+                if b_acc.get('type') == atype and b_acc.get('owner', 'user') == acc.get('owner', 'user'):
+                    matched = b_acc
+                    break
+
+        bal = get_float(acc.get('balance', 0.0))
+        if matched:
+            matched['name'] = acc.get('name', matched.get('name'))
+            matched['owner'] = acc.get('owner', matched.get('owner', 'user'))
+            matched['type'] = atype
+            matched['include_in_retirement'] = True
+            matched['contrib_amount'] = get_float(acc.get('contrib_amount', matched.get('contrib_amount', 0.0)))
+            matched['return_mean'] = get_float(acc.get('return_mean', matched.get('return_mean', 6.0)))
+            matched['return_std'] = get_float(acc.get('return_std', matched.get('return_std', 10.0)))
+            if 'values' not in matched or not isinstance(matched['values'], dict):
+                matched['values'] = {}
+            matched['values'][curr_period] = bal
+        else:
+            vals = {}
+            for p in periods:
+                vals[p] = bal
+            vals[curr_period] = bal
+            cat_accs.append({
+                'id': f"acc_{cat_key}_{len(cat_accs)+1}",
+                'name': acc.get('name', f"{acc.get('owner', 'User').title()} {atype.title()} Account"),
+                'institution': acc.get('institution', 'Investment Custodian'),
+                'owner': acc.get('owner', 'user'),
+                'type': atype,
+                'include_in_retirement': True,
+                'values': vals,
+                'contrib_amount': get_float(acc.get('contrib_amount', 0.0)),
+                'return_mean': get_float(acc.get('return_mean', 6.0)),
+                'return_std': get_float(acc.get('return_std', 10.0)),
+            })
+
+    return balance_sheet
+

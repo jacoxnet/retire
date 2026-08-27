@@ -829,3 +829,287 @@ tbody tr:hover {
   color: #ffffff;
   border-color: var(--accent-primary);
 }
+
+/* ==========================================================================
+   Balance Sheet & Net Worth Tracker Styling
+   ========================================================================== */
+
+.bs-kpi-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  transition: all 0.2s ease;
+  border-top: 4px solid var(--accent-primary);
+}
+
+.bs-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.bs-kpi-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.bs-kpi-val {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.bs-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+  max-width: 100%;
+}
+
+.bs-table {
+  width: 100%;
+  margin-bottom: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9rem;
+}
+
+.bs-table th, .bs-table td {
+  padding: 0.55rem 0.75rem;
+  vertical-align: middle;
+  border-bottom: 1px solid #edf2f7;
+  white-space: nowrap;
+}
+
+.bs-table thead th {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid #cbd5e1;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.bs-sticky-col {
+  position: sticky;
+  left: 0;
+  background-color: inherit;
+  z-index: 5;
+  min-width: 195px;
+  max-width: 240px;
+  width: 220px;
+  box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.06);
+  white-space: normal !important;
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+.bs-table thead .bs-sticky-col {
+  z-index: 15;
+  background: #f1f5f9;
+}
+
+.bs-inst-col {
+  min-width: 70px;
+  max-width: 95px;
+  width: 80px;
+  font-size: 0.75rem;
+  white-space: normal !important;
+  word-break: break-word;
+  line-height: 1.25;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+
+.bs-inst-col input.form-control {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.35rem;
+}
+
+.bs-category-header {
+  background-color: #f8fafc !important;
+  font-weight: 700;
+  color: #1e293b;
+  border-top: 2px solid #e2e8f0;
+}
+
+.bs-category-header td {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.bs-subtotal-row {
+  background-color: #f8fafc !important;
+  font-weight: 700;
+  color: #0f172a;
+  border-top: 1px solid #cbd5e1;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.bs-deferred-tax-row {
+  background-color: #fffbeb !important;
+  color: #92400e;
+  font-size: 0.85rem;
+  border-bottom: 1px dashed #fcd34d;
+}
+
+.bs-grand-total-row {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.bs-grand-total-row td, .bs-grand-total-row th {
+  color: #ffffff !important;
+  border-color: #334155 !important;
+}
+
+.bs-delta-positive {
+  color: #15803d;
+  background-color: #dcfce7;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.bs-delta-negative {
+  color: #b91c1c;
+  background-color: #fee2e2;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Subtle typographic deltas */
+.bs-delta-text {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bs-delta-text-pos {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.bs-delta-text-neg {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.bs-delta-text-zero {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+/* Seamless Spreadsheet-style Inputs */
+.bs-seamless-input {
+  background-color: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  padding: 0.25rem 0.4rem !important;
+  font-size: 0.875rem;
+  color: #1e293b;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.bs-seamless-input:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+.bs-seamless-input:focus {
+  background-color: #ffffff !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  outline: none !important;
+}
+
+.bs-input-val {
+  width: 120px;
+  text-align: right;
+  font-weight: 500;
+}
+
+/* Collapsible Category Accordions */
+.bs-category-header.clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.bs-category-header.clickable:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.bs-chevron-icon {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-right: 0.5rem;
+}
+
+.bs-category-header.collapsed .bs-chevron-icon {
+  transform: rotate(-90deg);
+}
+
+.bs-count-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.bs-goal-progress {
+  height: 6px;
+  border-radius: 3px;
+  background-color: #e2e8f0;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.bs-goal-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #10b981);
+  transition: width 0.3s ease;
+}
+
+.bs-shortage-btn {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #f59e0b;
+  background-color: #fef3c7;
+  color: #92400e;
+  transition: all 0.15s ease;
+}
+
+.bs-shortage-btn:hover {
+  background-color: #fde68a;
+}
+
+.bs-chart-toggle-btn.active {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+}
