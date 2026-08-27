@@ -210,6 +210,14 @@ class RetirementCalculationTests(TestCase):
 
     def test_change_mode_invalid_target_success_rate(self):
         self.client.get('/')
+        # The redirect to /results/ triggers a full simulation; cap runs since
+        # this test only checks the validation message and clamped session value.
+        session = self.client.session
+        sim_data = session['simulation_data']
+        sim_data['runs'] = 50
+        session['simulation_data'] = sim_data
+        session.save()
+
         response = self.client.post('/change_mode/', {
             'simulation_type': 'goal_seeking',
             'target_success_rate': '150.0'
@@ -259,12 +267,16 @@ class RetirementCalculationTests(TestCase):
         file_path = os.path.join(settings.BASE_DIR, 'saved json files', 'early_suzie_plan.json')
         with open(file_path, 'r') as f:
             plan_data = json.load(f)
-        
+
+        # det_rows is deterministic and doesn't depend on Monte Carlo path count;
+        # override the plan's real-world runs value to keep this smoke test fast.
+        plan_data['runs'] = 50
+
         session = self.client.session
         session['simulation_data'] = plan_data
         session['data_version'] = 1
         session.save()
-        
+
         response = self.client.get('/results/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('det_rows', response.context)
@@ -275,12 +287,16 @@ class RetirementCalculationTests(TestCase):
         file_path = os.path.join(settings.BASE_DIR, 'saved json files', 'aug_5_smith_plan.json')
         with open(file_path, 'r') as f:
             plan_data = json.load(f)
-        
+
+        # det_rows is deterministic and doesn't depend on Monte Carlo path count;
+        # override the plan's real-world runs value to keep this smoke test fast.
+        plan_data['runs'] = 50
+
         session = self.client.session
         session['simulation_data'] = plan_data
         session['data_version'] = 1
         session.save()
-        
+
         response = self.client.get('/results/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('det_rows', response.context)

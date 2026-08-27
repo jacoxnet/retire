@@ -113,7 +113,7 @@ def resolve_age(age_type, specified_val, user_age, user_ret_age, is_married, spo
 # Shared Numba-JIT kernel used by both the deterministic (simulate_step) and
 # Monte Carlo (njit_simulate_path) engines, so the RMD/tax/withdrawal-waterfall
 # and spousal-rollover logic is implemented exactly once.
-@numba.njit
+@numba.njit(cache=True)
 def njit_spousal_rollover(
     t, t_first_death, is_married, user_alive, spouse_alive, filing_status_code,
     pretax_user, pretax_spouse, hsa_user, hsa_spouse,
@@ -143,7 +143,7 @@ def njit_spousal_rollover(
     return (filing_status_t, pretax_user, pretax_spouse, hsa_user, hsa_spouse,
             contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse)
 
-@numba.njit
+@numba.njit(cache=True)
 def njit_rmd_tax_withdraw(
     user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
     pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
@@ -1209,7 +1209,7 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
     return year_results
 
 # Numba JIT compiled helper functions
-@numba.njit
+@numba.njit(cache=True)
 def njit_calculate_tax(taxable_income, thresholds, rates):
     if taxable_income <= 0.0:
         return 0.0
@@ -1228,7 +1228,7 @@ def njit_calculate_tax(taxable_income, thresholds, rates):
     tax += (taxable_income - prev_threshold) * rates[n]
     return tax
 
-@numba.njit
+@numba.njit(cache=True)
 def njit_calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_code):
     if ss_benefits <= 0.0:
         return 0.0
@@ -1258,7 +1258,7 @@ def njit_calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status_code):
     
     return min(line_16, line_17)
 
-@numba.njit
+@numba.njit(cache=True)
 def njit_simulate_path(
     total_years, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
     filing_status_code, desired_spending_start_age, desired_spending, survivor_spending,
@@ -1379,7 +1379,7 @@ def njit_simulate_path(
         
     return pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
 
-@numba.njit(parallel=True)
+@numba.njit(parallel=True, cache=True)
 def njit_simulate_all_paths(
     runs, total_years, user_age, is_married, spouse_age, user_age_death, spouse_age_death,
     filing_status_code, desired_spending_start_age, desired_spending, survivor_spending,
