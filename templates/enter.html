@@ -11,6 +11,13 @@
 
     <!-- Validation & Notification Alert Container -->
     <div id="validationAlertContainer" class="mb-3">
+        <div id="globalDuplicateNotice" class="alert alert-danger d-none mb-3 py-2 px-3 align-items-center shadow-sm" role="alert">
+            <i class="fa-solid fa-triangle-exclamation me-2 fs-5"></i>
+            <div>
+                <strong class="notice-title">Duplicate Account Name:</strong>
+                <span class="notice-desc ms-1"></span>
+            </div>
+        </div>
         {% if messages %}
         {% for message in messages %}
         <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags %}{{ message.tags }}{% else %}primary{% endif %} alert-dismissible fade show text-center"
@@ -237,6 +244,15 @@
                         <div>
                             <h3 class="mb-1 text-primary">Accounts</h3>
                             <p class="text-secondary small mb-0">Configure your investment, retirement, brokerage, and HSA accounts.</p>
+                        </div>
+                    </div>
+
+                    <!-- Duplicate Account Name Notice Banner -->
+                    <div id="accountsDuplicateNotice" class="alert alert-danger d-none mb-3 py-2 px-3 align-items-center shadow-sm" role="alert">
+                        <i class="fa-solid fa-triangle-exclamation me-2 fs-5"></i>
+                        <div>
+                            <strong class="notice-title">Duplicate Account Name Detected:</strong>
+                            <span class="notice-desc ms-1">Multiple accounts cannot have the same name. Please give each account a unique name.</span>
                         </div>
                     </div>
 
@@ -497,6 +513,15 @@
                                 <div class="bs-kpi-val text-danger" id="kpiTotalDebts">$0</div>
                                 <div class="small text-muted" id="kpiTotalDebtsSub">All liabilities</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Duplicate Account Name Notice Banner -->
+                    <div id="bsDuplicateNotice" class="alert alert-danger d-none mb-3 py-2 px-3 align-items-center shadow-sm" role="alert">
+                        <i class="fa-solid fa-triangle-exclamation me-2 fs-5"></i>
+                        <div>
+                            <strong class="notice-title">Duplicate Account Name Detected:</strong>
+                            <span class="notice-desc ms-1">Multiple accounts cannot have the same name. Please give each account a unique name.</span>
                         </div>
                     </div>
 
@@ -846,12 +871,24 @@
         const btnAddAccount = document.getElementById('btnAddAccount');
         const accountsContainer = document.getElementById('accountsContainer');
 
+        function getUniqueAccountDefaultName(baseName, existingNames) {
+            var nameSet = new Set((existingNames || []).map(function(n) { return (n || '').trim().toLowerCase(); }));
+            if (!nameSet.has(baseName.trim().toLowerCase())) return baseName;
+            var counter = 2;
+            while (nameSet.has((baseName + ' ' + counter).trim().toLowerCase())) {
+                counter++;
+            }
+            return baseName + ' ' + counter;
+        }
+
         function addAccountCard(data = {}) {
             var rawType = data.type || 'pretax';
             var type = (rawType === 'cash') ? 'taxable' : rawType;
             var owner = data.owner || 'user';
             var id = data.id || ('acc_' + type + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
-            var defaultName = (owner === 'spouse' ? "Spouse's " : "") + (type === 'pretax' ? 'Traditional 401(k) / IRA' : (type === 'roth' ? 'Roth IRA / 401(k)' : (type === 'hsa' ? 'Health Savings Account (HSA)' : 'Taxable Brokerage')));
+            var baseDefaultName = (owner === 'spouse' ? "Spouse's " : "") + (type === 'pretax' ? 'Traditional 401(k) / IRA' : (type === 'roth' ? 'Roth IRA / 401(k)' : (type === 'hsa' ? 'Health Savings Account (HSA)' : 'Taxable Brokerage')));
+            var existingNames = Array.from(document.querySelectorAll('#accountsContainer [name="account_name[]"]')).map(function(el) { return el.value.trim(); });
+            var defaultName = getUniqueAccountDefaultName(baseDefaultName, existingNames);
             var name = data.name !== undefined ? data.name : defaultName;
             var balance = data.balance !== undefined ? data.balance : 0;
             var contribAmount = data.contrib_amount !== undefined ? data.contrib_amount : 0;
@@ -875,9 +912,10 @@
                 <div class="card p-4 h-100 shadow-sm border account-card">
                     <input type="hidden" name="account_id[]" value="${id}">
                     <div class="d-flex justify-content-between align-items-start mb-3 pb-2 border-bottom">
-                        <div class="flex-grow-1 me-2">
+                        <div class="flex-grow-1 me-2 position-relative">
                             <label class="form-label small fw-bold mb-1">Account Name</label>
-                            <input type="text" class="form-control form-control-sm fw-bold text-primary" name="account_name[]" value="${name}" placeholder="e.g. Primary 401(k), Roth IRA" required>
+                            <input type="text" class="form-control form-control-sm fw-bold text-primary account-name-input" name="account_name[]" value="${name}" placeholder="e.g. Primary 401(k), Roth IRA" required>
+                            <div class="invalid-feedback small fw-semibold">Duplicate account name. Each account must have a unique name.</div>
                         </div>
                         <div class="pt-4">
                             <button type="button" class="btn btn-outline-danger btn-sm btnDeleteAccount" title="Delete Account" aria-label="Delete">
@@ -1015,6 +1053,9 @@
 
             col.querySelector('.btnDeleteAccount').addEventListener('click', function() {
                 col.remove();
+                if (typeof window.validateDuplicateAccountNames === 'function') {
+                    window.validateDuplicateAccountNames();
+                }
                 if (typeof window.syncAccountCardsToBsState === 'function') {
                     window.syncAccountCardsToBsState();
                 }
@@ -1022,11 +1063,17 @@
 
             col.querySelectorAll('input, select').forEach(function(el) {
                 el.addEventListener('input', function() {
+                    if (el.name === 'account_name[]' && typeof window.validateDuplicateAccountNames === 'function') {
+                        window.validateDuplicateAccountNames();
+                    }
                     if (typeof window.syncAccountCardsToBsState === 'function') {
                         window.syncAccountCardsToBsState();
                     }
                 });
                 el.addEventListener('change', function() {
+                    if (el.name === 'account_name[]' && typeof window.validateDuplicateAccountNames === 'function') {
+                        window.validateDuplicateAccountNames();
+                    }
                     if (typeof window.syncAccountCardsToBsState === 'function') {
                         window.syncAccountCardsToBsState();
                     }
@@ -1039,6 +1086,9 @@
             attachPercentInputListeners(col.querySelector('[name="account_return_mean[]"]'));
             attachPercentInputListeners(col.querySelector('[name="account_return_std[]"]'));
             updateSpouseDropdownOptions();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
         }
 
         if (btnAddAccount) {
@@ -1844,6 +1894,127 @@
         }
 
         // =========================================================================
+        // DUPLICATE ACCOUNT NAME VALIDATION
+        // =========================================================================
+        window.validateDuplicateAccountNames = function() {
+            var cardNameMap = new Map();
+            var bsNameMap = new Map();
+
+            // 1. Check Accounts tab card inputs
+            var cardInputs = Array.from(document.querySelectorAll('#accountsContainer [name="account_name[]"]'));
+            cardInputs.forEach(function(input) {
+                var raw = (input.value || '').trim();
+                if (raw) {
+                    var key = raw.toLowerCase();
+                    if (!cardNameMap.has(key)) {
+                        cardNameMap.set(key, { raw: raw, inputs: [] });
+                    }
+                    cardNameMap.get(key).inputs.push(input);
+                }
+            });
+
+            // 2. Check Balance Sheet table inputs
+            var bsInputs = Array.from(document.querySelectorAll('#balanceSheetTable .bs-acc-name-input'));
+            bsInputs.forEach(function(input) {
+                var raw = (input.value || '').trim();
+                if (raw) {
+                    var key = raw.toLowerCase();
+                    if (!bsNameMap.has(key)) {
+                        bsNameMap.set(key, { raw: raw, inputs: [] });
+                    }
+                    bsNameMap.get(key).inputs.push(input);
+                }
+            });
+
+            // Reset error states on all card inputs
+            cardInputs.forEach(function(input) {
+                input.classList.remove('is-invalid');
+                var feedback = input.parentNode ? input.parentNode.querySelector('.invalid-feedback') : null;
+                if (feedback) feedback.style.display = 'none';
+            });
+
+            // Reset error states on all BS inputs
+            bsInputs.forEach(function(input) {
+                input.classList.remove('is-invalid', 'border', 'border-danger', 'bg-danger-subtle', 'text-danger');
+                input.removeAttribute('title');
+            });
+
+            var cardDuplicates = [];
+            cardNameMap.forEach(function(item) {
+                if (item.inputs.length > 1) {
+                    cardDuplicates.push(item);
+                    item.inputs.forEach(function(input) {
+                        input.classList.add('is-invalid');
+                        var feedback = input.parentNode ? input.parentNode.querySelector('.invalid-feedback') : null;
+                        if (feedback) {
+                            feedback.textContent = 'Account name "' + item.raw + '" is used by multiple accounts. Each account must have a unique name.';
+                            feedback.style.display = 'block';
+                        }
+                    });
+                }
+            });
+
+            var bsDuplicates = [];
+            bsNameMap.forEach(function(item) {
+                if (item.inputs.length > 1) {
+                    bsDuplicates.push(item);
+                    item.inputs.forEach(function(input) {
+                        input.classList.add('is-invalid', 'border', 'border-danger', 'bg-danger-subtle', 'text-danger');
+                        input.title = 'Account name "' + item.raw + '" is used by multiple accounts. Each account must have a unique name.';
+                    });
+                }
+            });
+
+            // Accounts Tab Notice Banner
+            var accountsNotice = document.getElementById('accountsDuplicateNotice');
+            if (accountsNotice) {
+                if (cardDuplicates.length > 0) {
+                    var cardDupsStr = cardDuplicates.map(function(d) { return '"' + d.raw + '"'; }).join(', ');
+                    var desc = accountsNotice.querySelector('.notice-desc');
+                    if (desc) desc.textContent = 'Multiple accounts cannot have the same name (' + cardDupsStr + '). Please give each account a unique name.';
+                    accountsNotice.classList.remove('d-none');
+                    accountsNotice.classList.add('d-flex');
+                } else {
+                    accountsNotice.classList.add('d-none');
+                    accountsNotice.classList.remove('d-flex');
+                }
+            }
+
+            // Balance Sheet Tab Notice Banner
+            var bsNotice = document.getElementById('bsDuplicateNotice');
+            if (bsNotice) {
+                if (bsDuplicates.length > 0) {
+                    var bsDupsStr = bsDuplicates.map(function(d) { return '"' + d.raw + '"'; }).join(', ');
+                    var desc = bsNotice.querySelector('.notice-desc');
+                    if (desc) desc.textContent = 'Multiple accounts cannot have the same name (' + bsDupsStr + '). Please give each account a unique name in the Balance Sheet.';
+                    bsNotice.classList.remove('d-none');
+                    bsNotice.classList.add('d-flex');
+                } else {
+                    bsNotice.classList.add('d-none');
+                    bsNotice.classList.remove('d-flex');
+                }
+            }
+
+            // Global Notice Banner (at top of form)
+            var globalNotice = document.getElementById('globalDuplicateNotice');
+            var hasAnyDuplicates = cardDuplicates.length > 0 || bsDuplicates.length > 0;
+            if (globalNotice) {
+                if (hasAnyDuplicates) {
+                    var allDupNames = Array.from(new Set(cardDuplicates.concat(bsDuplicates).map(function(d) { return '"' + d.raw + '"'; }))).join(', ');
+                    var desc = globalNotice.querySelector('.notice-desc');
+                    if (desc) desc.textContent = 'Multiple accounts cannot have the same name (' + allDupNames + '). Please give each account a unique name.';
+                    globalNotice.classList.remove('d-none');
+                    globalNotice.classList.add('d-flex');
+                } else {
+                    globalNotice.classList.add('d-none');
+                    globalNotice.classList.remove('d-flex');
+                }
+            }
+
+            return !hasAnyDuplicates;
+        };
+
+        // =========================================================================
         // BIDIRECTIONAL TAB SYNCHRONIZATION
         // =========================================================================
         window.syncBsStateToAccountCards = function() {
@@ -1959,6 +2130,8 @@
                         addAccountCard(aData);
                     }
                 });
+
+                validateDuplicateAccountNames();
             } finally {
                 window._isSyncing = false;
             }
@@ -2103,9 +2276,11 @@
                     });
                 });
 
+                renderBalanceSheetTable();
                 recalculateBsTableDisplay();
                 updateBsKpis();
                 renderBsHistoricalChart(bsState.chart_metric);
+                validateDuplicateAccountNames();
                 serializeBalanceSheet();
             } finally {
                 window._isSyncing = false;
@@ -2127,6 +2302,7 @@
             renderBalanceSheetTable();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
+            validateDuplicateAccountNames();
             serializeBalanceSheet();
         };
 
@@ -2211,7 +2387,7 @@
                         cat.accounts.forEach(function(acc, aIdx) {
                             bHtml += '<tr>';
                             bHtml += '<td class="bs-sticky-col ps-4">';
-                            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + (acc.name || '') + '" oninput="onBsAccountFieldName(\'' + catKey + '\', ' + aIdx + ', this.value)" placeholder="Account Name">';
+                            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsAccountFieldName(\'' + catKey + '\', ' + aIdx + ', this.value)" placeholder="Account Name">';
                             bHtml += '</td>';
                             bHtml += '<td class="bs-inst-col">';
                             bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (acc.institution || '') + '" oninput="onBsAccountFieldInst(\'' + catKey + '\', ' + aIdx + ', this.value)" placeholder="Inst / Notes">';
@@ -2346,7 +2522,7 @@
                 emgCat.accounts.forEach(function(acc, aIdx) {
                     bHtml += '<tr>';
                     bHtml += '<td class="bs-sticky-col ps-4">';
-                    bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + (acc.name || '') + '" oninput="onBsAccountFieldName(\'emergency\', ' + aIdx + ', this.value)" placeholder="Emergency Account Name">';
+                    bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsAccountFieldName(\'emergency\', ' + aIdx + ', this.value)" placeholder="Emergency Account Name">';
                     bHtml += '</td>';
                     bHtml += '<td class="bs-inst-col">';
                     bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (acc.institution || '') + '" oninput="onBsAccountFieldInst(\'emergency\', ' + aIdx + ', this.value)" placeholder="HYSA / Bank">';
@@ -2485,7 +2661,7 @@
                                 bHtml += '<td class="bs-sticky-col ps-5 text-muted">';
                                 bHtml += '<div class="d-flex align-items-center gap-1">';
                                 bHtml += '<i class="fa-solid fa-arrow-turn-up fa-rotate-90 text-muted me-1 small"></i>';
-                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + (acc.name || '') + '" oninput="onBsGoalAccountName(' + gIdx + ', ' + aIdx + ', this.value)" placeholder="Account Name (e.g. HYSA / Bond)">';
+                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsGoalAccountName(' + gIdx + ', ' + aIdx + ', this.value)" placeholder="Account Name (e.g. HYSA / Bond)">';
                                 bHtml += '</div>';
                                 bHtml += '</td>';
                                 bHtml += '<td class="bs-inst-col">';
@@ -3076,6 +3252,9 @@
             if (!acc) return;
             acc.name = val;
             syncBsStateToAccountCards();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3092,6 +3271,9 @@
             acc.include_in_retirement = checked;
             syncBsStateToAccountCards();
             updateBsKpis();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3125,6 +3307,9 @@
                 acc.name = val;
                 if (acc.include_in_retirement) {
                     syncBsStateToAccountCards();
+                }
+                if (typeof window.validateDuplicateAccountNames === 'function') {
+                    window.validateDuplicateAccountNames();
                 }
                 serializeBalanceSheet();
             }
@@ -3579,9 +3764,19 @@
             bsState.periods.forEach(function(p){ vals[p] = 0.0; });
 
             var isRet = ['pretax', 'roth', 'taxable', 'hsa'].includes(catKey);
+            var baseName = 'New ' + cat.title.replace(' Accounts', '').replace(' (HSA)', '') + ' Account';
+            var existingNames = [];
+            ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'].forEach(function(k) {
+                (bsState.categories[k]?.accounts || []).forEach(function(a) { if (a.name) existingNames.push(a.name); });
+            });
+            (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
+                (g.accounts || []).forEach(function(a) { if (a.name) existingNames.push(a.name); });
+            });
+            var uniqueName = getUniqueAccountDefaultName(baseName, existingNames);
+
             cat.accounts.push({
-                id: 'acc_' + catKey + '_' + (cat.accounts.length + 1) + '_' + Date.now(),
-                name: 'New ' + cat.title.replace(' Accounts', '').replace(' (HSA)', '') + ' Account',
+                id: 'acc_' + catKey + '_' + (cat.accounts.length + 1) + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                name: uniqueName,
                 institution: 'Custodian / Bank',
                 owner: 'user',
                 type: catKey === 'daily' ? 'cash' : (catKey === 'emergency' ? 'cash' : catKey),
@@ -3596,6 +3791,9 @@
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
             syncBsStateToAccountCards();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3607,6 +3805,9 @@
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
             syncBsStateToAccountCards();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3638,6 +3839,9 @@
             renderBalanceSheetTable();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3648,6 +3852,9 @@
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
             syncBsStateToAccountCards();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3657,9 +3864,19 @@
             var vals = {};
             bsState.periods.forEach(function(p){ vals[p] = 0.0; });
 
+            var baseName = 'Additional ' + group.name + ' Account';
+            var existingNames = [];
+            ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'].forEach(function(k) {
+                (bsState.categories[k]?.accounts || []).forEach(function(a) { if (a.name) existingNames.push(a.name); });
+            });
+            (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
+                (g.accounts || []).forEach(function(a) { if (a.name) existingNames.push(a.name); });
+            });
+            var uniqueName = getUniqueAccountDefaultName(baseName, existingNames);
+
             group.accounts.push({
                 id: 'acc_g_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                name: 'Additional ' + group.name + ' Account',
+                name: uniqueName,
                 institution: 'Bank / Investment',
                 owner: 'user',
                 type: 'cash',
@@ -3670,6 +3887,9 @@
             renderBalanceSheetTable();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -3681,6 +3901,9 @@
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
             syncBsStateToAccountCards();
+            if (typeof window.validateDuplicateAccountNames === 'function') {
+                window.validateDuplicateAccountNames();
+            }
             serializeBalanceSheet();
         };
 
@@ -4277,6 +4500,26 @@
                 });
             });
 
+            // Check for duplicate account names across Cards and Balance Sheet
+            var areAccountNamesUnique = validateDuplicateAccountNames();
+            if (!areAccountNamesUnique) {
+                var firstDupCard = document.querySelector('#accountsContainer .account-name-input.is-invalid');
+                var firstDupBs = document.querySelector('#balanceSheetTable .bs-acc-name-input.is-invalid');
+                if (firstDupCard) {
+                    errors.push({
+                        element: firstDupCard,
+                        tab: 'assets-tab',
+                        message: 'Multiple accounts cannot have the same name. Each account must have a unique name.'
+                    });
+                } else if (firstDupBs) {
+                    errors.push({
+                        element: firstDupBs,
+                        tab: 'balance-sheet-tab',
+                        message: 'Multiple accounts cannot have the same name in the Balance Sheet. Each account must have a unique name.'
+                    });
+                }
+            }
+
             if (errors.length > 0) {
                 var firstError = errors[0];
                 switchTab(firstError.tab);
@@ -4288,11 +4531,14 @@
                 errorListHtml += '</ul>';
 
                 if (alertContainer) {
-                    alertContainer.innerHTML = '<div class="alert alert-danger alert-dismissible fade show text-center mb-3" role="alert">' +
-                        '<div class="mb-1"><i class="fa fa-exclamation-triangle me-2"></i><strong>Simulation Cannot Be Run - Please Correct The Following Errors:</strong></div>' +
+                    alertContainer.querySelectorAll('.alert:not(#globalDuplicateNotice)').forEach(function(el) { el.remove(); });
+                    var errDiv = document.createElement('div');
+                    errDiv.className = 'alert alert-danger alert-dismissible fade show text-center mb-3';
+                    errDiv.setAttribute('role', 'alert');
+                    errDiv.innerHTML = '<div class="mb-1"><i class="fa fa-exclamation-triangle me-2"></i><strong>Simulation Cannot Be Run - Please Correct The Following Errors:</strong></div>' +
                         errorListHtml +
-                        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
-                        '</div>';
+                        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+                    alertContainer.appendChild(errDiv);
                 }
 
                 setTimeout(function () {
@@ -4304,7 +4550,7 @@
             }
 
             if (alertContainer) {
-                alertContainer.innerHTML = '';
+                alertContainer.querySelectorAll('.alert:not(#globalDuplicateNotice)').forEach(function(el) { el.remove(); });
             }
             return true;
         }
@@ -4371,6 +4617,10 @@
             return new bootstrap.Popover(popoverTriggerEl);
         });
 
+        // Run initial duplicate account validation
+        if (typeof window.validateDuplicateAccountNames === 'function') {
+            window.validateDuplicateAccountNames();
+        }
     });
 </script>
 {% endblock %}

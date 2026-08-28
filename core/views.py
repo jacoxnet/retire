@@ -7,6 +7,7 @@ from core.forms import (
     parse_account_rows, parse_legacy_accounts,
     parse_additional_spending, parse_income_sources, parse_other_taxes,
     validate_accounts, validate_additional_spending, validate_scheduled_items,
+    validate_balance_sheet_accounts,
     calculate_marginal_tax_rate, build_default_balance_sheet,
     parse_balance_sheet, sync_balance_sheet_to_accounts,
     sync_accounts_to_balance_sheet,
@@ -456,6 +457,7 @@ def enter_view(request):
         # produced them; the derived pretax/roth/taxable/hsa aggregates below are
         # views over the same accounts, so they don't need a second validation pass.
         validation_errors.extend(validate_accounts(accounts, user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+        validation_errors.extend(validate_balance_sheet_accounts(balance_sheet))
         validation_errors.extend(validate_additional_spending(additional_spending, user_age, user_age_death))
         validation_errors.extend(validate_scheduled_items("Income Source", income_sources))
         validation_errors.extend(validate_scheduled_items("Other Tax item", other_taxes))

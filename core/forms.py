@@ -405,22 +405,62 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
 
 def validate_accounts(accounts, user_age, user_age_death, is_married, spouse_age, spouse_age_death):
     errors = []
+    seen_names = {}
     for acc in accounts:
-        a_name = acc.get('name', 'Account')
+        a_name = acc.get('name', '').strip()
+        if a_name:
+            key = a_name.lower()
+            if key in seen_names:
+                errors.append(f"Multiple accounts cannot have the same name: '{a_name}' is used more than once. Each account must have a unique name.")
+            else:
+                seen_names[key] = a_name
+        else:
+            errors.append("Account Name cannot be blank. Each account must have a unique name.")
+
         if acc.get('balance', 0.0) < 0:
-            errors.append(f"Account '{a_name}' Present Balance cannot be negative.")
+            errors.append(f"Account '{a_name or 'Account'}' Present Balance cannot be negative.")
         if acc.get('contrib_amount', 0.0) < 0:
-            errors.append(f"Account '{a_name}' Future Contribution Amount cannot be negative.")
+            errors.append(f"Account '{a_name or 'Account'}' Future Contribution Amount cannot be negative.")
         a_owner = acc.get('owner', 'user')
         rel_age = spouse_age if (a_owner == 'spouse' and is_married) else user_age
         rel_death = spouse_age_death if (a_owner == 'spouse' and is_married) else user_age_death
         c_start = acc.get('contrib_start_age', rel_age)
         if c_start < rel_age or c_start > rel_death:
-            errors.append(f"Account '{a_name}' Contribution Start Age ({c_start}) must be between Present Age ({rel_age}) and Age at Death ({rel_death}).")
+            errors.append(f"Account '{a_name or 'Account'}' Contribution Start Age ({c_start}) must be between Present Age ({rel_age}) and Age at Death ({rel_death}).")
         if acc.get('contrib_end_age_type') == 'age':
             c_end = acc.get('contrib_end_age_specified', rel_age)
             if c_end < c_start or c_end > 120:
-                errors.append(f"Account '{a_name}' Specified Contribution End Age ({c_end}) must be greater than or equal to Contribution Start Age ({c_start}) up to 120.")
+                errors.append(f"Account '{a_name or 'Account'}' Specified Contribution End Age ({c_end}) must be greater than or equal to Contribution Start Age ({c_start}) up to 120.")
+    return errors
+
+
+def validate_balance_sheet_accounts(balance_sheet):
+    """Validate that accounts in the balance sheet have unique names across categories."""
+    errors = []
+    if not isinstance(balance_sheet, dict) or 'categories' not in balance_sheet:
+        return errors
+    seen_names = {}
+    for cat_key in ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily']:
+        cat = balance_sheet['categories'].get(cat_key, {})
+        for acc in cat.get('accounts', []):
+            name = acc.get('name', '').strip()
+            if not name:
+                continue
+            k = name.lower()
+            if k in seen_names:
+                errors.append(f"Multiple accounts cannot have the same name: '{name}' is used more than once in the Balance Sheet. Each account must have a unique name.")
+            else:
+                seen_names[k] = name
+    for group in balance_sheet['categories'].get('goals', {}).get('goal_groups', []):
+        for acc in group.get('accounts', []):
+            name = acc.get('name', '').strip()
+            if not name:
+                continue
+            k = name.lower()
+            if k in seen_names:
+                errors.append(f"Multiple accounts cannot have the same name: '{name}' is used more than once in the Balance Sheet. Each account must have a unique name.")
+            else:
+                seen_names[k] = name
     return errors
 
 

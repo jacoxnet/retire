@@ -2592,6 +2592,92 @@ class BalanceSheetTests(TestCase):
         self.assertEqual(session_data['balance_sheet']['categories']['pretax']['accounts'][0]['name'], 'Fidelity 401k Plan')
         self.assertEqual(session_data['balance_sheet']['categories']['pretax']['accounts'][0]['values'][curr_p], 850000.0)
 
+    def test_duplicate_account_names_validation(self):
+        """Test validate_accounts rejects duplicate and blank account names."""
+        from core.forms import validate_accounts
+
+        # Valid accounts
+        accs_valid = [
+            {'name': 'Primary 401(k)', 'balance': 100000.0, 'contrib_amount': 0, 'contrib_start_age': 60, 'owner': 'user'},
+            {'name': 'Roth IRA', 'balance': 50000.0, 'contrib_amount': 0, 'contrib_start_age': 60, 'owner': 'user'},
+        ]
+        errors = validate_accounts(accs_valid, 60, 90, False, 60, 90)
+        self.assertEqual(errors, [])
+
+        # Duplicate account names (case-insensitive)
+        accs_dup = [
+            {'name': 'Primary 401(k)', 'balance': 100000.0, 'contrib_amount': 0, 'contrib_start_age': 60, 'owner': 'user'},
+            {'name': 'primary 401(k) ', 'balance': 50000.0, 'contrib_amount': 0, 'contrib_start_age': 60, 'owner': 'user'},
+        ]
+        errors = validate_accounts(accs_dup, 60, 90, False, 60, 90)
+        self.assertTrue(any('Multiple accounts cannot have the same name' in e for e in errors))
+
+        # Blank account name
+        accs_blank = [
+            {'name': '   ', 'balance': 100000.0, 'contrib_amount': 0, 'contrib_start_age': 60, 'owner': 'user'},
+        ]
+        errors = validate_accounts(accs_blank, 60, 90, False, 60, 90)
+        self.assertTrue(any('Account Name cannot be blank' in e for e in errors))
+
+    def test_duplicate_balance_sheet_accounts_validation(self):
+        """Test validate_balance_sheet_accounts rejects duplicate account names in balance sheet."""
+        from core.forms import build_default_balance_sheet, validate_balance_sheet_accounts
+
+        bs = build_default_balance_sheet()
+        # Default should have no errors
+        errors = validate_balance_sheet_accounts(bs)
+        self.assertEqual(errors, [])
+
+        # Duplicate between pretax and roth
+        bs['categories']['roth']['accounts'][0]['name'] = bs['categories']['pretax']['accounts'][0]['name']
+        errors = validate_balance_sheet_accounts(bs)
+        self.assertTrue(any('Multiple accounts cannot have the same name' in e for e in errors))
+
+    def test_enter_post_rejects_duplicate_account_names(self):
+        """Test submitting duplicate account names via POST fails validation and shows error notice."""
+        from django.urls import reverse
+        from core.forms import build_default_balance_sheet
+        import json
+
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+        bs['categories']['pretax']['accounts'] = []
+        bs['categories']['roth']['accounts'] = []
+        bs['categories']['hsa']['accounts'] = []
+        bs['categories']['taxable']['accounts'] = [
+            {'id': 'acc_1', 'name': 'My Brokerage', 'type': 'taxable', 'owner': 'user', 'include_in_retirement': True, 'values': {curr_p: 100000.0}},
+            {'id': 'acc_2', 'name': 'my brokerage', 'type': 'taxable', 'owner': 'user', 'include_in_retirement': True, 'values': {curr_p: 50000.0}},
+        ]
+
+        post_data = {
+            'user_name': 'Jane Doe',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '60000',
+            'runs': '100',
+            'account_id[]': ['acc_1', 'acc_2'],
+            'account_name[]': ['My Brokerage', 'my brokerage'],
+            'account_type[]': ['taxable', 'taxable'],
+            'account_owner[]': ['user', 'user'],
+            'account_balance[]': ['100000', '50000'],
+            'account_contrib_amount[]': ['0', '0'],
+            'account_contrib_freq[]': ['annual', 'annual'],
+            'account_contrib_start_age[]': ['60', '60'],
+            'account_contrib_end_age_type[]': ['retirement', 'retirement'],
+            'account_contrib_end_age_specified[]': ['65', '65'],
+            'account_contrib_adjust_inflation[]': ['true', 'true'],
+            'account_return_mean[]': ['6.0%', '6.0%'],
+            'account_return_std[]': ['10.0%', '10.0%'],
+            'balance_sheet_json': json.dumps(bs),
+            'next': 'results'
+        }
+
+        resp = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(resp.status_code, 200)
+        # Should render enter page with error message
+        self.assertContains(resp, "Multiple accounts cannot have the same name")
+
 
 
 
