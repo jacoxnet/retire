@@ -2074,8 +2074,7 @@
                                 bHtml += '</td>';
                             });
 
-                            var delta = calcDelta(accCurrVal, accPrevVal);
-                            bHtml += '<td class="text-center">' + formatDeltaBadge(delta) + '</td>';
+                            bHtml += '<td class="text-center"></td>';
                             bHtml += '<td class="text-center">';
                             bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' onchange="onBsRetireCheck(\'' + catKey + '\', ' + aIdx + ', this.checked)">';
                             bHtml += '</td>';
@@ -2097,14 +2096,21 @@
                 }
 
                 // Category Subtotal Row (Always visible)
+                var catSubtotalLabels = {
+                    pretax: 'Subtotal Pretax Retirement Accounts',
+                    roth: 'Total Roth',
+                    taxable: 'Total Taxable',
+                    hsa: 'Total HSA',
+                    daily: 'Total Spending Accounts'
+                };
+                var subtotalTitle = catSubtotalLabels[catKey] || ('Subtotal ' + cat.title);
                 bHtml += '<tr class="bs-subtotal-row" id="subtotal_row_' + catKey + '">';
-                bHtml += '<td class="bs-sticky-col fw-bold ps-3">Subtotal ' + cat.title + '</td>';
+                bHtml += '<td class="bs-sticky-col fw-bold ps-3">' + subtotalTitle + '</td>';
                 bHtml += '<td></td>';
                 visPeriods.forEach(function(p) {
                     bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(catTotals[p]) + '</td>';
                 });
-                var catDelta = calcDelta(catTotals[currPeriod], catTotals[prevPeriod]);
-                bHtml += '<td class="text-center subtotal-delta">' + formatDeltaBadge(catDelta) + '</td>';
+                bHtml += '<td class="text-center subtotal-delta"></td>';
                 bHtml += '<td colspan="2"></td>';
                 bHtml += '</tr>';
 
@@ -2118,24 +2124,18 @@
                         var defTax = catTotals[p] * taxRate;
                         bHtml += '<td class="text-end text-danger small def-tax-val-' + p + '">(' + formatMoney(defTax) + ')</td>';
                     });
-                    var prevDefTax = catTotals[prevPeriod] * taxRate;
-                    var currDefTax = catTotals[currPeriod] * taxRate;
-                    var taxDelta = calcDelta(currDefTax, prevDefTax);
-                    bHtml += '<td class="text-center def-tax-delta">' + formatDebtDeltaBadge(taxDelta) + '</td>';
+                    bHtml += '<td class="text-center def-tax-delta"></td>';
                     bHtml += '<td colspan="2"></td>';
                     bHtml += '</tr>';
 
                     bHtml += '<tr class="bs-subtotal-row bg-white" id="net_pretax_row">';
-                    bHtml += '<td class="bs-sticky-col ps-4 fw-bold text-success small"><i class="fa-solid fa-shield me-1"></i>Net of Deferred Income Tax</td>';
+                    bHtml += '<td class="bs-sticky-col ps-4 fw-bold text-success small"><i class="fa-solid fa-shield me-1"></i>Total Pretax, Net of Deferred Income Tax</td>';
                     bHtml += '<td class="small text-muted">Purchasing power</td>';
                     visPeriods.forEach(function(p) {
                         var netPretax = catTotals[p] * (1 - taxRate);
                         bHtml += '<td class="text-end fw-bold text-success net-pretax-val-' + p + '">' + formatMoney(netPretax) + '</td>';
                     });
-                    var netPretaxPrev = catTotals[prevPeriod] * (1 - taxRate);
-                    var netPretaxCurr = catTotals[currPeriod] * (1 - taxRate);
-                    var netPretaxDelta = calcDelta(netPretaxCurr, netPretaxPrev);
-                    bHtml += '<td class="text-center net-pretax-delta">' + formatDeltaBadge(netPretaxDelta) + '</td>';
+                    bHtml += '<td class="text-center net-pretax-delta"></td>';
                     bHtml += '<td colspan="2"></td>';
                     bHtml += '</tr>';
                 }
@@ -2202,8 +2202,7 @@
                         bHtml += '</td>';
                     });
 
-                    var delta = calcDelta(accCurrVal, accPrevVal);
-                    bHtml += '<td class="text-center">' + formatDeltaBadge(delta) + '</td>';
+                    bHtml += '<td class="text-center"></td>';
                     bHtml += '<td class="text-center">';
                     bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' onchange="onBsRetireCheck(\'emergency\', ' + aIdx + ', this.checked)">';
                     bHtml += '</td>';
@@ -2228,7 +2227,7 @@
             var emgAccNames = (emgCat.accounts || []).map(function(a){ return a.name + ' (' + formatMoney(a.values ? a.values[currPeriod] : 0) + ')'; });
 
             bHtml += '<tr class="bs-subtotal-row" id="subtotal_row_emergency">';
-            bHtml += '<td class="bs-sticky-col fw-bold ps-3">Subtotal Emergency Funds</td>';
+            bHtml += '<td class="bs-sticky-col fw-bold ps-3">Total Emergency Funds</td>';
             bHtml += '<td id="emg_badge_container">';
             if (emgShortage > 0) {
                 bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
@@ -2240,8 +2239,7 @@
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(emgTotals[p]) + '</td>';
             });
-            var emgDelta = calcDelta(emgTotals[currPeriod], emgTotals[prevPeriod]);
-            bHtml += '<td class="text-center subtotal-delta">' + formatDeltaBadge(emgDelta) + '</td>';
+            bHtml += '<td class="text-center subtotal-delta"></td>';
             bHtml += '<td colspan="2"></td>';
             bHtml += '</tr>';
 
@@ -2342,8 +2340,7 @@
                                     bHtml += '</td>';
                                 });
 
-                                var delta = calcDelta(accCurrVal, accPrevVal);
-                                bHtml += '<td class="text-center">' + formatDeltaBadge(delta) + '</td>';
+                                bHtml += '<td class="text-center"></td>';
                                 bHtml += '<td class="text-center">';
                                 bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' onchange="onBsGoalRetireCheck(' + gIdx + ', ' + aIdx + ', this.checked)">';
                                 bHtml += '</td>';
@@ -2359,13 +2356,12 @@
 
             // Total Sinking Funds Subtotal Row (Always visible)
             bHtml += '<tr class="bs-subtotal-row" id="subtotal_row_goals">';
-            bHtml += '<td class="bs-sticky-col fw-bold ps-3">Subtotal Goal Savings (Sinking Funds)</td>';
+            bHtml += '<td class="bs-sticky-col fw-bold ps-3">Total Sinking Fund Savings</td>';
             bHtml += '<td></td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(totalGoalsByPeriod[p]) + '</td>';
             });
-            var goalsDelta = calcDelta(totalGoalsByPeriod[currPeriod], totalGoalsByPeriod[prevPeriod]);
-            bHtml += '<td class="text-center subtotal-delta">' + formatDeltaBadge(goalsDelta) + '</td>';
+            bHtml += '<td class="text-center subtotal-delta"></td>';
             bHtml += '<td colspan="2"></td>';
             bHtml += '</tr>';
 
@@ -2376,7 +2372,42 @@
             // 7. Daily Spending Accounts (Checking)
             renderCategoryBlock('daily', 'fa-wallet', 'Add Checking Account');
 
-            // 8. Total Gross Liquid Net Worth Row
+            // 8. Liquid Net Worth Calculation Rows
+            var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
+            var liquidNetTaxAndGoalsByPeriod = {};
+            var liquidNetTaxByPeriod = {};
+            visPeriods.forEach(function(p) {
+                var defTax = (pretaxByPeriod[p] || 0) * taxRate;
+                var goalsVal = totalGoalsByPeriod[p] || 0;
+                liquidNetTaxAndGoalsByPeriod[p] = liquidByPeriod[p] - defTax - goalsVal;
+                liquidNetTaxByPeriod[p] = liquidByPeriod[p] - defTax;
+            });
+
+            // Row 1: Liquid Net Worth (net of estimated deferred income tax and savings goal savings)
+            bHtml += '<tr class="table-primary border-top border-primary fw-bold" id="liquid_net_tax_and_goals_row" style="font-size: 0.95rem;">';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-wallet me-2"></i>Liquid Net Worth (net of estimated deferred income tax and savings goal savings)</td>';
+            bHtml += '<td class="small text-muted">Excl. def. tax & sinking funds</td>';
+            visPeriods.forEach(function(p) {
+                bHtml += '<td class="text-end text-primary fw-bold liquid-net-goals-val-' + p + '">' + formatMoney(liquidNetTaxAndGoalsByPeriod[p]) + '</td>';
+            });
+            var lngDelta = calcDelta(liquidNetTaxAndGoalsByPeriod[currPeriod], liquidNetTaxAndGoalsByPeriod[prevPeriod]);
+            bHtml += '<td class="text-center liquid-net-goals-delta">' + formatDeltaBadge(lngDelta) + '</td>';
+            bHtml += '<td colspan="2"></td>';
+            bHtml += '</tr>';
+
+            // Row 2: Liquid Net Worth (net of estimated deferred income tax)
+            bHtml += '<tr class="table-primary fw-bold" id="liquid_net_tax_row" style="font-size: 0.95rem;">';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-money-bill-wave me-2"></i>Liquid Net Worth (net of estimated deferred income tax)</td>';
+            bHtml += '<td class="small text-muted">Excl. deferred tax</td>';
+            visPeriods.forEach(function(p) {
+                bHtml += '<td class="text-end text-primary fw-bold liquid-net-tax-val-' + p + '">' + formatMoney(liquidNetTaxByPeriod[p]) + '</td>';
+            });
+            var lntDelta = calcDelta(liquidNetTaxByPeriod[currPeriod], liquidNetTaxByPeriod[prevPeriod]);
+            bHtml += '<td class="text-center liquid-net-tax-delta">' + formatDeltaBadge(lntDelta) + '</td>';
+            bHtml += '<td colspan="2"></td>';
+            bHtml += '</tr>';
+
+            // Row 3: Total Gross Liquid Net Worth Row
             bHtml += '<tr class="table-primary border-top border-bottom border-primary fw-bold" id="gross_liquid_row" style="font-size: 0.95rem;">';
             bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-coins me-2"></i>GROSS LIQUID NET WORTH</td>';
             bHtml += '<td class="small text-muted">Total liquid assets</td>';
@@ -2428,8 +2459,7 @@
                             bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" oninput="onBsPropMarketVal(this, ' + pIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
                             bHtml += '</td>';
                         });
-                        var propDelta = calcDelta(propCurrVal, propPrevVal);
-                        bHtml += '<td class="text-center">' + formatDeltaBadge(propDelta) + '</td>';
+                        bHtml += '<td class="text-center"></td>';
                         bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="Add mortgage" onclick="addMortgageToProp(' + pIdx + ')"><i class="fa fa-plus me-1"></i>Mortgage</button></td>';
                         bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete property" onclick="removeProperty(' + pIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
                         bHtml += '</tr>';
@@ -2462,8 +2492,7 @@
                                     bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end text-danger" value="' + formatMoney(val) + '" oninput="onBsMortgageVal(this, ' + pIdx + ', ' + mIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
                                     bHtml += '</td>';
                                 });
-                                var mDelta = calcDelta(mCurrVal, mPrevVal);
-                                bHtml += '<td class="text-center">' + formatDebtDeltaBadge(mDelta) + '</td>';
+                                bHtml += '<td class="text-center"></td>';
                                 bHtml += '<td></td>';
                                 bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete mortgage" onclick="removeMortgageFromProp(' + pIdx + ', ' + mIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
                                 bHtml += '</tr>';
@@ -2484,8 +2513,7 @@
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end fw-bold text-info equity-val-' + p + '">' + formatMoney(netEquityByPeriod[p]) + '</td>';
             });
-            var eqDelta = calcDelta(netEquityByPeriod[currPeriod], netEquityByPeriod[prevPeriod]);
-            bHtml += '<td class="text-center equity-delta">' + formatDeltaBadge(eqDelta) + '</td>';
+            bHtml += '<td class="text-center equity-delta"></td>';
             bHtml += '<td colspan="2"></td>';
             bHtml += '</tr>';
 
@@ -2529,8 +2557,7 @@
                             bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end text-danger" value="' + formatMoney(val) + '" oninput="onBsDebtVal(this, ' + dIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
                             bHtml += '</td>';
                         });
-                        var dDelta = calcDelta(dCurrVal, dPrevVal);
-                        bHtml += '<td class="text-center">' + formatDebtDeltaBadge(dDelta) + '</td>';
+                        bHtml += '<td class="text-center"></td>';
                         bHtml += '<td></td>';
                         bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete debt" onclick="removeDebtAccount(' + dIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
                         bHtml += '</tr>';
@@ -2545,8 +2572,7 @@
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end fw-bold text-danger nonmort-debt-val-' + p + '">(' + formatMoney(debtsByPeriod[p]) + ')</td>';
             });
-            var debtsDelta = calcDelta(debtsByPeriod[currPeriod], debtsByPeriod[prevPeriod]);
-            bHtml += '<td class="text-center nonmort-debt-delta">' + formatDebtDeltaBadge(debtsDelta) + '</td>';
+            bHtml += '<td class="text-center nonmort-debt-delta"></td>';
             bHtml += '<td colspan="2"></td>';
             bHtml += '</tr>';
 
@@ -2570,7 +2596,7 @@
             // 11. GRAND TOTAL GROSS NET WORTH ROW (Always visible)
             var grandNetWorthByPeriod = {};
             visPeriods.forEach(function(p) {
-                grandNetWorthByPeriod[p] = liquidByPeriod[p] + netEquityByPeriod[p] - debtsByPeriod[p];
+                grandNetWorthByPeriod[p] = liquidByPeriod[p] + (homeValByPeriod[p] - mortByPeriod[p]) - debtsByPeriod[p];
             });
 
             bHtml += '<tr class="bs-grand-total-row" id="grand_net_worth_row">';
@@ -2630,29 +2656,91 @@
             if (btnSum) btnSum.classList.toggle('active', allCollapsed);
         }
 
-        // =========================================================================
-        // REAL-TIME IN-PLACE DISPLAY UPDATER (PRESERVES ACTIVE FOCUS WHILE TYPING)
-        // =========================================================================
         function recalculateBsTableDisplay() {
             var visPeriods = getVisiblePeriods();
-            var prevPeriod = visPeriods.length > 1 ? visPeriods[visPeriods.length - 2] : visPeriods[0];
             var currPeriod = visPeriods[visPeriods.length - 1];
+            var prevPeriod = visPeriods.length > 1 ? visPeriods[visPeriods.length - 2] : currPeriod;
             var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
 
-            // Recalculate Emergency
+            var liquidByPeriod = {};
+            var pretaxByPeriod = {};
+            var totalGoalsByPeriod = {};
+            var homeValByPeriod = {};
+            var mortByPeriod = {};
+            var debtsByPeriod = {};
+            visPeriods.forEach(function(p) {
+                liquidByPeriod[p] = 0;
+                pretaxByPeriod[p] = 0;
+                totalGoalsByPeriod[p] = 0;
+                homeValByPeriod[p] = 0;
+                mortByPeriod[p] = 0;
+                debtsByPeriod[p] = 0;
+            });
+
+            // 1. Recalculate Standard Categories
+            ['pretax', 'roth', 'taxable', 'hsa', 'daily'].forEach(function(catKey) {
+                var cat = bsState.categories[catKey];
+                if (!cat) return;
+                var subRow = document.getElementById('subtotal_row_' + catKey);
+                var catTotals = {};
+                visPeriods.forEach(function(p) { catTotals[p] = 0; });
+                (cat.accounts || []).forEach(function(a) {
+                    visPeriods.forEach(function(p) {
+                        var val = (a.values && a.values[p] !== undefined) ? a.values[p] : 0.0;
+                        catTotals[p] += val;
+                    });
+                });
+                visPeriods.forEach(function(p) {
+                    liquidByPeriod[p] += catTotals[p];
+                    if (catKey === 'pretax') pretaxByPeriod[p] = catTotals[p];
+                });
+                if (subRow) {
+                    visPeriods.forEach(function(p) {
+                        var cell = subRow.querySelector('.subtotal-val-' + p);
+                        if (cell) cell.textContent = formatMoney(catTotals[p]);
+                    });
+                }
+
+                if (catKey === 'pretax') {
+                    var defRow = document.getElementById('deferred_tax_row');
+                    if (defRow) {
+                        visPeriods.forEach(function(p) {
+                            var defCell = defRow.querySelector('.def-tax-val-' + p);
+                            if (defCell) defCell.textContent = '(' + formatMoney(catTotals[p] * taxRate) + ')';
+                        });
+                    }
+                    var netRow = document.getElementById('net_pretax_row');
+                    if (netRow) {
+                        visPeriods.forEach(function(p) {
+                            var netCell = netRow.querySelector('.net-pretax-val-' + p);
+                            if (netCell) netCell.textContent = formatMoney(catTotals[p] * (1 - taxRate));
+                        });
+                    }
+                }
+            });
+
+            // 2. Recalculate Emergency
             var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 50000.0 };
             var emgTarget = parseFloat(emgCat.target_amount || bsState.emergency_goal_amount || 50000.0);
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
             (emgCat.accounts || []).forEach(function(a) {
-                visPeriods.forEach(function(p) { emgTotals[p] += (a.values && a.values[p] !== undefined) ? a.values[p] : 0; });
+                visPeriods.forEach(function(p) {
+                    var val = (a.values && a.values[p] !== undefined) ? a.values[p] : 0;
+                    emgTotals[p] += val;
+                });
             });
+            visPeriods.forEach(function(p) { liquidByPeriod[p] += emgTotals[p]; });
             var currEmgTotal = emgTotals[currPeriod];
             var emgShortage = Math.max(0, emgTarget - currEmgTotal);
             var emgSurplus = Math.max(0, currEmgTotal - emgTarget);
-            var emgPercent = emgTarget > 0 ? Math.round((currEmgTotal / emgTarget) * 100) : 100;
-            var emgAccNames = (emgCat.accounts || []).map(function(a){ return a.name + ' (' + formatMoney(a.values ? a.values[currPeriod] : 0) + ')'; });
-
+            var emgSubRow = document.getElementById('subtotal_row_emergency');
+            if (emgSubRow) {
+                visPeriods.forEach(function(p) {
+                    var cell = emgSubRow.querySelector('.subtotal-val-' + p);
+                    if (cell) cell.textContent = formatMoney(emgTotals[p]);
+                });
+            }
             var emgBadgeCont = document.getElementById('emg_badge_container');
             if (emgBadgeCont) {
                 var emgHtml = '';
@@ -2665,20 +2753,22 @@
                 emgBadgeCont.innerHTML = emgHtml;
             }
 
-            // Recalculate Goals
+            // 3. Recalculate Goals
             var goalsCat = bsState.categories.goals || { goal_groups: [] };
             (goalsCat.goal_groups || []).forEach(function(group, gIdx) {
                 var gTarget = parseFloat(group.target_amount || 0.0);
                 var gTotals = {};
                 visPeriods.forEach(function(p) { gTotals[p] = 0; });
                 (group.accounts || []).forEach(function(a) {
-                    visPeriods.forEach(function(p) { gTotals[p] += (a.values && a.values[p] !== undefined) ? a.values[p] : 0; });
+                    visPeriods.forEach(function(p) {
+                        var val = (a.values && a.values[p] !== undefined) ? a.values[p] : 0;
+                        gTotals[p] += val;
+                        totalGoalsByPeriod[p] += val;
+                    });
                 });
                 var gCurr = gTotals[currPeriod];
                 var gShortage = Math.max(0, gTarget - gCurr);
                 var gSurplus = Math.max(0, gCurr - gTarget);
-                var gPercent = gTarget > 0 ? Math.round((gCurr / gTarget) * 100) : 100;
-                var gAccNames = (group.accounts || []).map(function(a){ return a.name + ' (' + formatMoney(a.values ? a.values[currPeriod] : 0) + ')'; });
 
                 var badgeCont = document.getElementById('goal_badge_container_' + gIdx);
                 if (badgeCont) {
@@ -2692,49 +2782,107 @@
                     }
                 }
             });
+            visPeriods.forEach(function(p) { liquidByPeriod[p] += totalGoalsByPeriod[p]; });
+            var goalsSubRow = document.getElementById('subtotal_row_goals');
+            if (goalsSubRow) {
+                visPeriods.forEach(function(p) {
+                    var cell = goalsSubRow.querySelector('.subtotal-val-' + p);
+                    if (cell) cell.textContent = formatMoney(totalGoalsByPeriod[p]);
+                });
+            }
 
-            // Recalculate Standard Categories & Deferred Tax Rows
-            ['pretax', 'roth', 'taxable', 'hsa', 'daily'].forEach(function(catKey) {
-                var cat = bsState.categories[catKey];
-                if (!cat) return;
-                var subRow = document.getElementById('subtotal_row_' + catKey);
-                var catTotals = {};
-                visPeriods.forEach(function(p) { catTotals[p] = 0; });
-                (cat.accounts || []).forEach(function(a) {
+            // 4. Update Liquid Net Worth Rows
+            var rowLng = document.getElementById('liquid_net_tax_and_goals_row');
+            if (rowLng) {
+                var lngByPeriod = {};
+                visPeriods.forEach(function(p) {
+                    lngByPeriod[p] = liquidByPeriod[p] - ((pretaxByPeriod[p] || 0) * taxRate) - (totalGoalsByPeriod[p] || 0);
+                    var cell = rowLng.querySelector('.liquid-net-goals-val-' + p);
+                    if (cell) cell.textContent = formatMoney(lngByPeriod[p]);
+                });
+                var dCell = rowLng.querySelector('.liquid-net-goals-delta');
+                if (dCell) dCell.innerHTML = formatDeltaBadge(calcDelta(lngByPeriod[currPeriod], lngByPeriod[prevPeriod]));
+            }
+
+            var rowLnt = document.getElementById('liquid_net_tax_row');
+            if (rowLnt) {
+                var lntByPeriod = {};
+                visPeriods.forEach(function(p) {
+                    lntByPeriod[p] = liquidByPeriod[p] - ((pretaxByPeriod[p] || 0) * taxRate);
+                    var cell = rowLnt.querySelector('.liquid-net-tax-val-' + p);
+                    if (cell) cell.textContent = formatMoney(lntByPeriod[p]);
+                });
+                var dCell = rowLnt.querySelector('.liquid-net-tax-delta');
+                if (dCell) dCell.innerHTML = formatDeltaBadge(calcDelta(lntByPeriod[currPeriod], lntByPeriod[prevPeriod]));
+            }
+
+            var rowGrossLiq = document.getElementById('gross_liquid_row');
+            if (rowGrossLiq) {
+                visPeriods.forEach(function(p) {
+                    var cell = rowGrossLiq.querySelector('.liquid-val-' + p);
+                    if (cell) cell.textContent = formatMoney(liquidByPeriod[p]);
+                });
+                var dCell = rowGrossLiq.querySelector('.liquid-delta');
+                if (dCell) dCell.innerHTML = formatDeltaBadge(calcDelta(liquidByPeriod[currPeriod], liquidByPeriod[prevPeriod]));
+            }
+
+            // 5. Real Estate & Mortgages
+            var reCat = bsState.categories.real_estate || { properties: [] };
+            (reCat.properties || []).forEach(function(prop) {
+                visPeriods.forEach(function(p) {
+                    homeValByPeriod[p] += (prop.market_values && prop.market_values[p] !== undefined) ? prop.market_values[p] : 0.0;
+                });
+                (prop.mortgages || []).forEach(function(m) {
                     visPeriods.forEach(function(p) {
-                        catTotals[p] += (a.values && a.values[p] !== undefined) ? a.values[p] : 0.0;
+                        mortByPeriod[p] += (m.balances && m.balances[p] !== undefined) ? m.balances[p] : 0.0;
                     });
                 });
-                if (subRow) {
-                    visPeriods.forEach(function(p) {
-                        var cell = subRow.querySelector('.subtotal-val-' + p);
-                        if (cell) cell.textContent = formatMoney(catTotals[p]);
-                    });
-                    var dCell = subRow.querySelector('.subtotal-delta');
-                    if (dCell) dCell.innerHTML = formatDeltaBadge(calcDelta(catTotals[currPeriod], catTotals[prevPeriod]));
-                }
-
-                if (catKey === 'pretax') {
-                    var defRow = document.getElementById('deferred_tax_row');
-                    if (defRow) {
-                        visPeriods.forEach(function(p) {
-                            var defCell = defRow.querySelector('.def-tax-val-' + p);
-                            if (defCell) defCell.textContent = '(' + formatMoney(catTotals[p] * taxRate) + ')';
-                        });
-                        var dtDelta = defRow.querySelector('.def-tax-delta');
-                        if (dtDelta) dtDelta.innerHTML = formatDebtDeltaBadge(calcDelta(catTotals[currPeriod] * taxRate, catTotals[prevPeriod] * taxRate));
-                    }
-                    var netRow = document.getElementById('net_pretax_row');
-                    if (netRow) {
-                        visPeriods.forEach(function(p) {
-                            var netCell = netRow.querySelector('.net-pretax-val-' + p);
-                            if (netCell) netCell.textContent = formatMoney(catTotals[p] * (1 - taxRate));
-                        });
-                        var npDelta = netRow.querySelector('.net-pretax-delta');
-                        if (npDelta) npDelta.innerHTML = formatDeltaBadge(calcDelta(catTotals[currPeriod] * (1 - taxRate), catTotals[prevPeriod] * (1 - taxRate)));
-                    }
-                }
             });
+            var netEqRow = document.getElementById('net_home_equity_row');
+            if (netEqRow) {
+                visPeriods.forEach(function(p) {
+                    var cell = netEqRow.querySelector('.equity-val-' + p);
+                    if (cell) cell.textContent = formatMoney(homeValByPeriod[p] - mortByPeriod[p]);
+                });
+            }
+
+            // 6. Debts & Liabilities
+            (bsState.categories.debts || []).forEach(function(d) {
+                visPeriods.forEach(function(p) {
+                    debtsByPeriod[p] += (d.values && d.values[p] !== undefined) ? d.values[p] : 0.0;
+                });
+            });
+            var subDebtsRow = document.getElementById('subtotal_debts_row');
+            if (subDebtsRow) {
+                visPeriods.forEach(function(p) {
+                    var cell = subDebtsRow.querySelector('.nonmort-debt-val-' + p);
+                    if (cell) cell.textContent = '(' + formatMoney(debtsByPeriod[p]) + ')';
+                });
+            }
+            var totDebtsRow = document.getElementById('total_debts_row');
+            if (totDebtsRow) {
+                var totDebtsByP = {};
+                visPeriods.forEach(function(p) {
+                    totDebtsByP[p] = mortByPeriod[p] + debtsByPeriod[p];
+                    var cell = totDebtsRow.querySelector('.total-debts-val-' + p);
+                    if (cell) cell.textContent = '(' + formatMoney(totDebtsByP[p]) + ')';
+                });
+                var dCell = totDebtsRow.querySelector('.total-debts-delta');
+                if (dCell) dCell.innerHTML = formatDebtDeltaBadge(calcDelta(totDebtsByP[currPeriod], totDebtsByP[prevPeriod]));
+            }
+
+            // 7. Grand Net Worth Row
+            var grandRow = document.getElementById('grand_net_worth_row');
+            if (grandRow) {
+                var grandByP = {};
+                visPeriods.forEach(function(p) {
+                    grandByP[p] = liquidByPeriod[p] + (homeValByPeriod[p] - mortByPeriod[p]) - debtsByPeriod[p];
+                    var cell = grandRow.querySelector('.grand-net-worth-val-' + p);
+                    if (cell) cell.textContent = formatMoney(grandByP[p]);
+                });
+                var dCell = grandRow.querySelector('.grand-net-worth-delta');
+                if (dCell) dCell.innerHTML = formatDeltaBadge(calcDelta(grandByP[currPeriod], grandByP[prevPeriod]));
+            }
         }
         window.recalculateBsTableDisplay = recalculateBsTableDisplay;
 
