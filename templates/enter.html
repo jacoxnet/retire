@@ -48,7 +48,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="balance-sheet-tab" data-bs-toggle="tab" data-bs-target="#balance-sheet"
                     type="button" role="tab" aria-controls="balance-sheet" aria-selected="false">
-                    <i class="fa-solid fa-scale-balanced me-1 text-primary"></i> Balance Sheet
+                    <i class="fa-solid fa-scale-balanced me-1 text-primary"></i> Balance Sheet (optional)
                 </button>
             </li>
         </ul>
@@ -419,7 +419,7 @@
                     <button type="button" class="btn btn-secondary me-2"
                         onclick="switchTab('spending-tab')">Back</button>
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('balance-sheet-tab')">Next: Balance Sheet</button>
+                        onclick="switchTab('balance-sheet-tab')">Next: Balance Sheet (optional)</button>
                     <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab4">
                         <i class="fa fa-play me-2"></i> Run Simulation
                     </button>
@@ -2038,7 +2038,7 @@
                 var catTotals = {};
                 visPeriods.forEach(function(p) { catTotals[p] = 0; });
 
-                var isCollapsed = (bsState.view_mode === 'summary') || !!bsState.collapsed_categories[catKey];
+                var isCollapsed = !!bsState.collapsed_categories[catKey];
                 var accCount = (cat.accounts || []).length;
 
                 bHtml += '<tr class="bs-category-header clickable ' + (isCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'' + catKey + '\')">';
@@ -2161,7 +2161,7 @@
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
             var emgTarget = parseFloat(emgCat.target_amount || bsState.emergency_goal_amount || 50000.0);
-            var isEmgCollapsed = (bsState.view_mode === 'summary') || !!bsState.collapsed_categories['emergency'];
+            var isEmgCollapsed = !!bsState.collapsed_categories['emergency'];
             var emgCount = (emgCat.accounts || []).length;
 
             bHtml += '<tr class="bs-category-header clickable ' + (isEmgCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'emergency\')">';
@@ -2231,12 +2231,11 @@
             bHtml += '<td class="bs-sticky-col fw-bold ps-3">Subtotal Emergency Funds</td>';
             bHtml += '<td id="emg_badge_container">';
             if (emgShortage > 0) {
-                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="openGoalShortageModal(\'Emergency Reserve\', ' + emgTarget + ', ' + currEmgTotal + ', ' + JSON.stringify(emgAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
+                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
             } else if (emgTarget > 0) {
                 var emgSurplusStr = emgSurplus > 0 ? ' (Surplus: ' + formatMoney(emgSurplus) + ')' : '';
-                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="openGoalShortageModal(\'Emergency Reserve\', ' + emgTarget + ', ' + currEmgTotal + ', ' + JSON.stringify(emgAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
+                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
             }
-            bHtml += '<div class="bs-goal-progress" style="max-width: 140px;"><div id="emg_progress_bar" class="bs-goal-progress-bar ' + (emgPercent >= 100 ? 'bg-success' : 'bg-warning') + '" style="width: ' + Math.min(100, emgPercent) + '%;"></div></div>';
             bHtml += '</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(emgTotals[p]) + '</td>';
@@ -2254,7 +2253,7 @@
             var goalsCat = bsState.categories.goals || { title: "Goal Savings (Sinking Funds)", goal_groups: [] };
             var totalGoalsByPeriod = {};
             visPeriods.forEach(function(p) { totalGoalsByPeriod[p] = 0; });
-            var isGoalsCatCollapsed = (bsState.view_mode === 'summary') || !!bsState.collapsed_categories['goals'];
+            var isGoalsCatCollapsed = !!bsState.collapsed_categories['goals'];
             var goalGroupCount = (goalsCat.goal_groups || []).length;
 
             bHtml += '<tr class="bs-category-header clickable ' + (isGoalsCatCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'goals\')">';
@@ -2285,7 +2284,7 @@
                     var gSurplus = Math.max(0, gCurr - gTarget);
                     var gPercent = gTarget > 0 ? Math.round((gCurr / gTarget) * 100) : 100;
                     var gAccNames = (group.accounts || []).map(function(a){ return a.name + ' (' + formatMoney(a.values ? a.values[currPeriod] : 0) + ')'; });
-                    var isGoalCollapsed = (bsState.view_mode === 'summary') || !!bsState.collapsed_goals[gIdx];
+                    var isGoalCollapsed = !!bsState.collapsed_goals[gIdx];
 
                     if (!isGoalsCatCollapsed) {
                         // Goal Group Header Row (Target and Shortage/Surplus illustration inline side-by-side)
@@ -2305,13 +2304,12 @@
                         bHtml += '</div>';
                         bHtml += '<div id="goal_badge_container_' + gIdx + '" class="d-inline-flex align-items-center">';
                         if (gShortage > 0) {
-                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="openGoalShortageModal(\'' + (group.name || 'Goal').replace(/'/g, "\\'") + '\', ' + gTarget + ', ' + gCurr + ', ' + JSON.stringify(gAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
+                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
                         } else if (gTarget > 0) {
                             var surplusStr = gSurplus > 0 ? ' (Surplus: ' + formatMoney(gSurplus) + ')' : '';
-                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="openGoalShortageModal(\'' + (group.name || 'Goal').replace(/'/g, "\\'") + '\', ' + gTarget + ', ' + gCurr + ', ' + JSON.stringify(gAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
+                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
                         }
                         bHtml += '</div>';
-                        bHtml += '<div class="bs-goal-progress my-0" style="width: 120px; height: 8px;"><div id="goal_prog_' + gIdx + '" class="bs-goal-progress-bar ' + (gPercent >= 100 ? 'bg-success' : 'bg-warning') + '" style="width: ' + Math.min(100, gPercent) + '%;"></div></div>';
                         bHtml += '</div>';
                         bHtml += '</td>';
                         bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="Add account to this goal" onclick="event.stopPropagation(); addAccountToGoal(' + gIdx + ')"><i class="fa fa-plus"></i></button></td>';
@@ -2394,7 +2392,7 @@
             var reCat = bsState.categories.real_estate || { properties: [] };
             var netEquityByPeriod = {};
             visPeriods.forEach(function(p) { netEquityByPeriod[p] = 0; });
-            var isReCollapsed = (bsState.view_mode === 'summary') || !!bsState.collapsed_categories['real_estate'];
+            var isReCollapsed = !!bsState.collapsed_categories['real_estate'];
             var propCount = (reCat.properties || []).length;
 
             bHtml += '<tr class="bs-category-header clickable ' + (isReCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'real_estate\')">';
@@ -2493,7 +2491,7 @@
 
             // 10. Debts & Liabilities (Non-Mortgage)
             var debtsList = bsState.categories.debts || [];
-            var isDebtsCollapsed = (bsState.view_mode === 'summary') || !!bsState.collapsed_categories['debts'];
+            var isDebtsCollapsed = !!bsState.collapsed_categories['debts'];
             var debtCount = debtsList.length;
 
             bHtml += '<tr class="bs-category-header clickable ' + (isDebtsCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'debts\')">';
@@ -2594,6 +2592,7 @@
         window.toggleBsCategory = function(catKey) {
             if (!bsState.collapsed_categories) bsState.collapsed_categories = {};
             bsState.collapsed_categories[catKey] = !bsState.collapsed_categories[catKey];
+            updateViewModeButtonState();
             renderBalanceSheetTable();
         };
 
@@ -2605,12 +2604,31 @@
 
         window.setBsViewMode = function(mode) {
             bsState.view_mode = mode;
-            var btnDet = document.getElementById('btnBsModeDetailed');
-            var btnSum = document.getElementById('btnBsModeSummary');
-            if (btnDet) btnDet.classList.toggle('active', mode === 'detailed');
-            if (btnSum) btnSum.classList.toggle('active', mode === 'summary');
+            if (!bsState.collapsed_categories) bsState.collapsed_categories = {};
+            if (!bsState.collapsed_goals) bsState.collapsed_goals = {};
+            var allCats = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'goals', 'daily', 'real_estate', 'debts'];
+            if (mode === 'summary') {
+                allCats.forEach(function(k){ bsState.collapsed_categories[k] = true; });
+                var goalsCat = bsState.categories.goals || {};
+                (goalsCat.goal_groups || []).forEach(function(g, idx){ bsState.collapsed_goals[idx] = true; });
+            } else {
+                allCats.forEach(function(k){ bsState.collapsed_categories[k] = false; });
+                var goalsCat = bsState.categories.goals || {};
+                (goalsCat.goal_groups || []).forEach(function(g, idx){ bsState.collapsed_goals[idx] = false; });
+            }
+            updateViewModeButtonState();
             renderBalanceSheetTable();
         };
+
+        function updateViewModeButtonState() {
+            var allCats = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'goals', 'daily', 'real_estate', 'debts'];
+            var allCollapsed = allCats.every(function(k){ return !!bsState.collapsed_categories[k]; });
+            var noneCollapsed = allCats.every(function(k){ return !bsState.collapsed_categories[k]; });
+            var btnDet = document.getElementById('btnBsModeDetailed');
+            var btnSum = document.getElementById('btnBsModeSummary');
+            if (btnDet) btnDet.classList.toggle('active', noneCollapsed);
+            if (btnSum) btnSum.classList.toggle('active', allCollapsed);
+        }
 
         // =========================================================================
         // REAL-TIME IN-PLACE DISPLAY UPDATER (PRESERVES ACTIVE FOCUS WHILE TYPING)
@@ -2639,12 +2657,11 @@
             if (emgBadgeCont) {
                 var emgHtml = '';
                 if (emgShortage > 0) {
-                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm" onclick="openGoalShortageModal(\'Emergency Reserve\', ' + emgTarget + ', ' + currEmgTotal + ', ' + JSON.stringify(emgAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
+                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
                 } else if (emgTarget > 0) {
                     var emgSurplusStr = emgSurplus > 0 ? ' (Surplus: ' + formatMoney(emgSurplus) + ')' : '';
-                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="openGoalShortageModal(\'Emergency Reserve\', ' + emgTarget + ', ' + currEmgTotal + ', ' + JSON.stringify(emgAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
+                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
                 }
-                emgHtml += '<div class="bs-goal-progress" style="max-width: 140px;"><div id="emg_progress_bar" class="bs-goal-progress-bar ' + (emgPercent >= 100 ? 'bg-success' : 'bg-warning') + '" style="width: ' + Math.min(100, emgPercent) + '%;"></div></div>';
                 emgBadgeCont.innerHTML = emgHtml;
             }
 
@@ -2666,18 +2683,13 @@
                 var badgeCont = document.getElementById('goal_badge_container_' + gIdx);
                 if (badgeCont) {
                     if (gShortage > 0) {
-                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm" onclick="openGoalShortageModal(\'' + (group.name || 'Goal').replace(/'/g, "\\'") + '\', ' + gTarget + ', ' + gCurr + ', ' + JSON.stringify(gAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
+                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
                     } else if (gTarget > 0) {
                         var surplusStr = gSurplus > 0 ? ' (Surplus: ' + formatMoney(gSurplus) + ')' : '';
-                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="openGoalShortageModal(\'' + (group.name || 'Goal').replace(/'/g, "\\'") + '\', ' + gTarget + ', ' + gCurr + ', ' + JSON.stringify(gAccNames).replace(/"/g, '&quot;') + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
+                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
                     } else {
                         badgeCont.innerHTML = '';
                     }
-                }
-                var pBar = document.getElementById('goal_prog_' + gIdx);
-                if (pBar) {
-                    pBar.style.width = Math.min(100, gPercent) + '%';
-                    pBar.className = 'bs-goal-progress-bar ' + (gPercent >= 100 ? 'bg-success' : 'bg-warning');
                 }
             });
 
@@ -3439,6 +3451,36 @@
         // =========================================================================
         // GOAL SHORTAGE / SURPLUS POPUP MODAL
         // =========================================================================
+        window.showGoalShortage = function(type, gIdx) {
+            var visPeriods = getVisiblePeriods();
+            var currPeriod = visPeriods[visPeriods.length - 1];
+            if (type === 'emergency') {
+                var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 50000.0 };
+                var emgTarget = parseFloat(emgCat.target_amount || bsState.emergency_goal_amount || 50000.0);
+                var currEmgTotal = 0;
+                var emgAccNames = [];
+                (emgCat.accounts || []).forEach(function(a) {
+                    var val = (a.values && a.values[currPeriod] !== undefined) ? a.values[currPeriod] : 0;
+                    currEmgTotal += val;
+                    emgAccNames.push(a.name + ' (' + formatMoney(val) + ')');
+                });
+                openGoalShortageModal('Emergency Reserve', emgTarget, currEmgTotal, emgAccNames);
+            } else if (type === 'goal') {
+                var goalsCat = bsState.categories.goals || { goal_groups: [] };
+                var group = (goalsCat.goal_groups || [])[gIdx];
+                if (!group) return;
+                var gTarget = parseFloat(group.target_amount || 0.0);
+                var gCurr = 0;
+                var gAccNames = [];
+                (group.accounts || []).forEach(function(a) {
+                    var val = (a.values && a.values[currPeriod] !== undefined) ? a.values[currPeriod] : 0;
+                    gCurr += val;
+                    gAccNames.push(a.name + ' (' + formatMoney(val) + ')');
+                });
+                openGoalShortageModal(group.name || 'Goal', gTarget, gCurr, gAccNames);
+            }
+        };
+
         window.openGoalShortageModal = function(goalName, targetAmt, currentAmt, accountsList) {
             var shortage = Math.max(0, targetAmt - currentAmt);
             var surplus = Math.max(0, currentAmt - targetAmt);
