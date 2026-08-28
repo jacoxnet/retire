@@ -2446,6 +2446,153 @@ class BalanceSheetTests(TestCase):
         self.assertIn('2026-08-28', content)
         self.assertIn('450000', content)
 
+    def test_rename_account_in_multi_account_category_no_clobbering(self):
+        """Test that renaming an account when multiple accounts share owner/type does NOT overwrite the other account."""
+        from core.forms import build_default_balance_sheet, sync_balance_sheet_to_accounts, sync_accounts_to_balance_sheet
+
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+        for k in ['roth', 'taxable', 'hsa', 'emergency', 'daily']:
+            if k in bs['categories']:
+                bs['categories'][k]['accounts'] = []
+
+        # Setup 2 Pretax accounts
+        bs['categories']['pretax']['accounts'] = [
+            {
+                'id': 'acc_pretax_1',
+                'name': 'Primary 401(k)',
+                'type': 'pretax',
+                'owner': 'user',
+                'include_in_retirement': True,
+                'values': {curr_p: 500000.0},
+                'contrib_amount': 20000.0
+            },
+            {
+                'id': 'acc_pretax_2',
+                'name': 'Old Rollover IRA',
+                'type': 'pretax',
+                'owner': 'user',
+                'include_in_retirement': True,
+                'values': {curr_p: 200000.0},
+                'contrib_amount': 0.0
+            }
+        ]
+
+        # Initial sync BS -> Accounts
+        accounts = sync_balance_sheet_to_accounts(bs)
+        self.assertEqual(len(accounts), 2)
+        self.assertEqual(accounts[0]['name'], 'Primary 401(k)')
+        self.assertEqual(accounts[0]['balance'], 500000.0)
+        self.assertEqual(accounts[1]['name'], 'Old Rollover IRA')
+        self.assertEqual(accounts[1]['balance'], 200000.0)
+
+        # User renames Account 2 on Balance Sheet to 'Vanguard Rollover IRA' and changes balance to $250k
+        bs['categories']['pretax']['accounts'][1]['name'] = 'Vanguard Rollover IRA'
+        bs['categories']['pretax']['accounts'][1]['values'][curr_p] = 250000.0
+
+        # Sync BS -> Accounts with existing accounts passed
+        synced_accounts = sync_balance_sheet_to_accounts(bs, existing_accounts=accounts)
+        self.assertEqual(len(synced_accounts), 2)
+
+        # Verify Account 1 is intact and NOT overwritten
+        acc1 = next(a for a in synced_accounts if a['id'] == 'acc_pretax_1')
+        self.assertEqual(acc1['name'], 'Primary 401(k)')
+        self.assertEqual(acc1['balance'], 500000.0)
+
+        # Verify Account 2 has new name and updated balance
+        acc2 = next(a for a in synced_accounts if a['id'] == 'acc_pretax_2')
+        self.assertEqual(acc2['name'], 'Vanguard Rollover IRA')
+        self.assertEqual(acc2['balance'], 250000.0)
+
+        # Now test syncing back from Accounts to Balance Sheet
+        acc2['balance'] = 260000.0
+        updated_bs = sync_accounts_to_balance_sheet(bs, synced_accounts)
+        bs_accs = updated_bs['categories']['pretax']['accounts']
+        self.assertEqual(len(bs_accs), 2)
+        self.assertEqual(bs_accs[0]['name'], 'Primary 401(k)')
+        self.assertEqual(bs_accs[0]['values'][curr_p], 500000.0)
+        self.assertEqual(bs_accs[1]['name'], 'Vanguard Rollover IRA')
+        self.assertEqual(bs_accs[1]['values'][curr_p], 260000.0)
+
+    def test_cash_account_for_retirement_syncs_as_taxable(self):
+        """Test that checking include_in_retirement on cash emergency/daily/goal accounts syncs as taxable."""
+        from core.forms import build_default_balance_sheet, sync_balance_sheet_to_accounts
+
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+
+        # Add emergency fund with include_in_retirement = True
+        bs['categories']['emergency']['accounts'].append({
+            'id': 'acc_emg_ret',
+            'name': 'Emergency HYSA for Retirement',
+            'type': 'cash',
+            'owner': 'user',
+            'include_in_retirement': True,
+            'values': {curr_p: 50000.0}
+        })
+
+        synced = sync_balance_sheet_to_accounts(bs)
+        emg_acc = next(a for a in synced if a['id'] == 'acc_emg_ret')
+        self.assertEqual(emg_acc['type'], 'taxable')
+        self.assertEqual(emg_acc['balance'], 50000.0)
+
+    def test_post_enter_view_with_account_ids_and_renamed_accounts(self):
+        """Test POSTing enter form with account_id fields and renamed balance sheet data."""
+        from django.urls import reverse
+        from core.forms import build_default_balance_sheet
+        import json
+
+        bs = build_default_balance_sheet()
+        curr_p = bs['current_period']
+        bs['categories']['pretax']['accounts'] = [
+            {
+                'id': 'acc_pretax_custom_1',
+                'name': 'Fidelity 401k Plan',
+                'type': 'pretax',
+                'owner': 'user',
+                'include_in_retirement': True,
+                'values': {curr_p: 850000.0},
+                'contrib_amount': 23000.0,
+                'return_mean': 7.0,
+                'return_std': 12.0
+            }
+        ]
+
+        post_data = {
+            'user_name': 'Jane Doe',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '60000',
+            'runs': '100',
+            'account_id[]': ['acc_pretax_custom_1'],
+            'account_name[]': ['Fidelity 401k Plan'],
+            'account_type[]': ['pretax'],
+            'account_owner[]': ['user'],
+            'account_balance[]': ['850,000'],
+            'account_contrib_amount[]': ['23,000'],
+            'account_contrib_freq[]': ['annual'],
+            'account_contrib_start_age[]': ['60'],
+            'account_contrib_end_age_type[]': ['retirement'],
+            'account_contrib_end_age_specified[]': ['65'],
+            'account_contrib_adjust_inflation[]': ['true'],
+            'account_return_mean[]': ['7.0%'],
+            'account_return_std[]': ['12.0%'],
+            'balance_sheet_json': json.dumps(bs),
+            'next': 'manage_data'
+        }
+
+        resp = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(resp.status_code, 302)
+
+        session_data = self.client.session['simulation_data']
+        self.assertEqual(session_data['accounts'][0]['name'], 'Fidelity 401k Plan')
+        self.assertEqual(session_data['accounts'][0]['balance'], 850000.0)
+        self.assertEqual(session_data['accounts'][0]['id'], 'acc_pretax_custom_1')
+        self.assertEqual(session_data['balance_sheet']['categories']['pretax']['accounts'][0]['name'], 'Fidelity 401k Plan')
+        self.assertEqual(session_data['balance_sheet']['categories']['pretax']['accounts'][0]['values'][curr_p], 850000.0)
+
+
 
 
 

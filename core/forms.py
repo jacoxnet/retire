@@ -186,6 +186,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
     if not acc_names:
         return []
 
+    acc_ids = post.getlist('account_id[]')
     acc_types = post.getlist('account_type[]')
     acc_owners = post.getlist('account_owner[]')
     acc_balances = post.getlist('account_balance[]')
@@ -201,6 +202,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
 
     accounts = []
     for i in range(len(acc_names)):
+        a_id = acc_ids[i].strip() if (i < len(acc_ids) and acc_ids[i]) else f"acc_row_{i+1}"
         a_type = acc_types[i] if i < len(acc_types) else 'pretax'
         a_owner = acc_owners[i] if (i < len(acc_owners) and is_married) else 'user'
         a_name = acc_names[i].strip() if i < len(acc_names) and acc_names[i] else f"{a_owner.title()} {a_type.title()} Account"
@@ -208,6 +210,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
         def_ret = spouse_retirement_age if (a_owner == 'spouse' and is_married) else user_retirement_age
 
         accounts.append({
+            'id': a_id,
             'name': a_name,
             'type': a_type,
             'owner': a_owner,
@@ -909,10 +912,14 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
         curr_period = periods[-1]
 
     existing_by_id = {}
+    existing_by_name = {}
     if existing_accounts and isinstance(existing_accounts, list):
         for acc in existing_accounts:
-            if isinstance(acc, dict) and acc.get('name'):
-                existing_by_id[acc.get('name')] = acc
+            if isinstance(acc, dict):
+                if acc.get('id'):
+                    existing_by_id[acc.get('id')] = acc
+                if acc.get('name'):
+                    existing_by_name[acc.get('name')] = acc
 
     synced_accounts = []
 
@@ -921,6 +928,8 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             return
         
         atype = acc.get('type', default_type)
+        if atype == 'cash':
+            atype = 'taxable'
         aowner = acc.get('owner', 'user')
         if not is_married:
             aowner = 'user'
@@ -941,12 +950,11 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
         def_start = spouse_age if (aowner == 'spouse' and is_married) else user_age
         def_ret = spouse_retirement_age if (aowner == 'spouse' and is_married) else user_retirement_age
 
-        match = existing_by_id.get(acc.get('name'))
-        if not match and existing_accounts:
-            for e in existing_accounts:
-                if isinstance(e, dict) and e.get('type') == atype and e.get('owner', 'user') == aowner:
-                    match = e
-                    break
+        match = None
+        if acc.get('id') and acc.get('id') in existing_by_id:
+            match = existing_by_id[acc.get('id')]
+        elif acc.get('name') and acc.get('name') in existing_by_name:
+            match = existing_by_name[acc.get('name')]
 
         c_amt = get_float(acc.get('contrib_amount', match.get('contrib_amount', 0.0) if match else 0.0))
         c_freq = acc.get('contrib_freq', match.get('contrib_freq', 'annual') if match else 'annual')
@@ -958,7 +966,10 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
         r_std = get_float(acc.get('return_std', match.get('return_std', 10.0) if match else 10.0))
         hsa_med = get_bool(acc.get('hsa_for_medical', match.get('hsa_for_medical', True) if match else True))
 
+        acc_id = acc.get('id') or (match.get('id') if match else f"acc_{default_type}_{len(synced_accounts)+1}")
+
         synced_accounts.append({
+            'id': acc_id,
             'name': acc.get('name', f"{aowner.title()} {atype.title()} Account"),
             'institution': acc.get('institution', ''),
             'type': atype,
@@ -1007,21 +1018,46 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
         if cat_key not in categories:
             categories[cat_key] = {'title': f"{cat_key.title()} Accounts", 'accounts': []}
 
+    # Index existing balance sheet accounts across categories
+    bs_accs_by_id = {}
+    bs_accs_by_name = {}
+    for cat_key, cat_data in categories.items():
+        if isinstance(cat_data, dict) and 'accounts' in cat_data:
+            for b_acc in cat_data.get('accounts', []):
+                if isinstance(b_acc, dict):
+                    if b_acc.get('id'):
+                        bs_accs_by_id[b_acc['id']] = (cat_key, b_acc)
+                    if b_acc.get('name'):
+                        bs_accs_by_name[b_acc['name']] = (cat_key, b_acc)
+        elif cat_key == 'goals' and isinstance(cat_data, dict):
+            for g in cat_data.get('goal_groups', []):
+                for b_acc in g.get('accounts', []):
+                    if isinstance(b_acc, dict):
+                        if b_acc.get('id'):
+                            bs_accs_by_id[b_acc['id']] = ('goals', b_acc)
+                        if b_acc.get('name'):
+                            bs_accs_by_name[b_acc['name']] = ('goals', b_acc)
+
     for acc in (accounts or []):
         atype = acc.get('type', 'pretax')
         cat_key = atype if atype in ['pretax', 'roth', 'taxable', 'hsa'] else 'taxable'
         cat_accs = categories[cat_key].setdefault('accounts', [])
 
         matched = None
-        for b_acc in cat_accs:
-            if b_acc.get('name') == acc.get('name') or (b_acc.get('id') and b_acc.get('id') == acc.get('id')):
-                matched = b_acc
-                break
-        if not matched:
-            for b_acc in cat_accs:
-                if b_acc.get('type') == atype and b_acc.get('owner', 'user') == acc.get('owner', 'user'):
-                    matched = b_acc
-                    break
+        if acc.get('id') and acc.get('id') in bs_accs_by_id:
+            old_cat, matched = bs_accs_by_id[acc.get('id')]
+            if old_cat != cat_key and old_cat in categories and 'accounts' in categories[old_cat]:
+                if matched in categories[old_cat]['accounts']:
+                    categories[old_cat]['accounts'].remove(matched)
+                if matched not in cat_accs:
+                    cat_accs.append(matched)
+        elif acc.get('name') and acc.get('name') in bs_accs_by_name:
+            old_cat, matched = bs_accs_by_name[acc.get('name')]
+            if old_cat != cat_key and old_cat in categories and 'accounts' in categories[old_cat]:
+                if matched in categories[old_cat]['accounts']:
+                    categories[old_cat]['accounts'].remove(matched)
+                if matched not in cat_accs:
+                    cat_accs.append(matched)
 
         bal = get_float(acc.get('balance', 0.0))
         if matched:
@@ -1041,7 +1077,7 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
                 vals[p] = bal
             vals[curr_period] = bal
             cat_accs.append({
-                'id': f"acc_{cat_key}_{len(cat_accs)+1}",
+                'id': acc.get('id') or f"acc_{cat_key}_{len(cat_accs)+1}",
                 'name': acc.get('name', f"{acc.get('owner', 'User').title()} {atype.title()} Account"),
                 'institution': acc.get('institution', 'Investment Custodian'),
                 'owner': acc.get('owner', 'user'),

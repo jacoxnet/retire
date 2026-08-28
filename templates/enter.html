@@ -847,8 +847,10 @@
         const accountsContainer = document.getElementById('accountsContainer');
 
         function addAccountCard(data = {}) {
-            var type = data.type || 'pretax';
+            var rawType = data.type || 'pretax';
+            var type = (rawType === 'cash') ? 'taxable' : rawType;
             var owner = data.owner || 'user';
+            var id = data.id || ('acc_' + type + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
             var defaultName = (owner === 'spouse' ? "Spouse's " : "") + (type === 'pretax' ? 'Traditional 401(k) / IRA' : (type === 'roth' ? 'Roth IRA / 401(k)' : (type === 'hsa' ? 'Health Savings Account (HSA)' : 'Taxable Brokerage')));
             var name = data.name !== undefined ? data.name : defaultName;
             var balance = data.balance !== undefined ? data.balance : 0;
@@ -868,8 +870,10 @@
 
             var col = document.createElement('div');
             col.className = 'col-md-6 mb-4 account-card-col';
+            col.dataset.accountId = id;
             col.innerHTML = `
                 <div class="card p-4 h-100 shadow-sm border account-card">
+                    <input type="hidden" name="account_id[]" value="${id}">
                     <div class="d-flex justify-content-between align-items-start mb-3 pb-2 border-bottom">
                         <div class="flex-grow-1 me-2">
                             <label class="form-label small fw-bold mb-1">Account Name</label>
@@ -1062,12 +1066,6 @@
                         if (ownerSelect) ownerSelect.value = 'user';
                     }
                 }
-            });
-        }
-
-        if (btnAddAccount) {
-            btnAddAccount.addEventListener('click', function() {
-                addAccountCard();
             });
         }
 
@@ -1750,6 +1748,23 @@
             console.log("No initial balance sheet data found.");
         }
 
+        function ensureBsAccountIds() {
+            ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'].forEach(function(catKey) {
+                var cat = bsState.categories[catKey];
+                if (cat && cat.accounts) {
+                    cat.accounts.forEach(function(a, idx) {
+                        if (!a.id) a.id = 'acc_' + catKey + '_' + (idx + 1) + '_' + Date.now();
+                    });
+                }
+            });
+            (bsState.categories.goals?.goal_groups || []).forEach(function(g, gIdx) {
+                (g.accounts || []).forEach(function(a, aIdx) {
+                    if (!a.id) a.id = 'acc_goal_' + (gIdx + 1) + '_' + (aIdx + 1) + '_' + Date.now();
+                });
+            });
+        }
+        ensureBsAccountIds();
+
         try {
             var rawTax = JSON.parse(document.getElementById('initial-marginal-tax-rate').textContent);
             if (rawTax) {
@@ -1835,6 +1850,7 @@
             if (window._isSyncing) return;
             window._isSyncing = true;
             try {
+                ensureBsAccountIds();
                 var currPeriod = bsState.current_period;
                 var retireAccounts = [];
 
@@ -1843,8 +1859,11 @@
                     if (cat && cat.accounts) {
                         cat.accounts.forEach(function(a) {
                             if (a.include_in_retirement) {
+                                var aType = a.type || catKey;
+                                if (aType === 'cash') aType = 'taxable';
                                 retireAccounts.push(Object.assign({}, a, {
-                                    balance: (a.values && a.values[currPeriod] !== undefined) ? a.values[currPeriod] : 0
+                                    type: aType,
+                                    balance: (a.values && a.values[currPeriod] !== undefined) ? a.values[currPeriod] : (a.balance || 0)
                                 }));
                             }
                         });
@@ -1854,48 +1873,92 @@
                 (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
                     (g.accounts || []).forEach(function(a) {
                         if (a.include_in_retirement) {
+                            var aType = a.type || 'taxable';
+                            if (aType === 'cash') aType = 'taxable';
                             retireAccounts.push(Object.assign({}, a, {
-                                balance: (a.values && a.values[currPeriod] !== undefined) ? a.values[currPeriod] : 0
+                                type: aType,
+                                balance: (a.values && a.values[currPeriod] !== undefined) ? a.values[currPeriod] : (a.balance || 0)
                             }));
                         }
                     });
                 });
 
-                var cards = document.querySelectorAll('#accountsContainer .account-card-col');
-                if (cards.length === retireAccounts.length) {
-                    cards.forEach(function(col, idx) {
-                        var aData = retireAccounts[idx];
-                        var nameInput = col.querySelector('[name="account_name[]"]');
-                        var typeSelect = col.querySelector('[name="account_type[]"]');
-                        var ownerSelect = col.querySelector('[name="account_owner[]"]');
-                        var balInput = col.querySelector('[name="account_balance[]"]');
-                        var contribInput = col.querySelector('[name="account_contrib_amount[]"]');
+                var container = document.getElementById('accountsContainer');
+                if (!container) return;
 
-                        if (nameInput && nameInput.value !== aData.name) nameInput.value = aData.name;
-                        if (typeSelect && typeSelect.value !== aData.type) typeSelect.value = aData.type;
-                        if (ownerSelect && ownerSelect.value !== aData.owner) ownerSelect.value = aData.owner;
-                        if (balInput) {
+                var existingCardCols = Array.from(container.querySelectorAll('.account-card-col'));
+                var cardsByAccId = new Map();
+                var cardsByName = new Map();
+                existingCardCols.forEach(function(col) {
+                    var cardId = col.dataset.accountId || col.querySelector('[name="account_id[]"]')?.value;
+                    if (cardId) cardsByAccId.set(cardId, col);
+                    var cardName = col.querySelector('[name="account_name[]"]')?.value?.trim();
+                    if (cardName) cardsByName.set(cardName, col);
+                });
+
+                var targetIds = new Set(retireAccounts.map(function(a) { return a.id; }));
+
+                // 1. Remove cards that are no longer in retireAccounts
+                existingCardCols.forEach(function(col) {
+                    var cardId = col.dataset.accountId || col.querySelector('[name="account_id[]"]')?.value;
+                    if (cardId && !targetIds.has(cardId)) {
+                        col.remove();
+                    }
+                });
+
+                // 2. Update existing cards or create new cards in retireAccounts order
+                retireAccounts.forEach(function(aData) {
+                    var cardCol = cardsByAccId.get(aData.id) || (aData.name ? cardsByName.get(aData.name) : null);
+                    if (cardCol && container.contains(cardCol)) {
+                        cardCol.dataset.accountId = aData.id;
+                        var idInput = cardCol.querySelector('[name="account_id[]"]');
+                        if (idInput) idInput.value = aData.id;
+
+                        var nameInput = cardCol.querySelector('[name="account_name[]"]');
+                        var typeSelect = cardCol.querySelector('[name="account_type[]"]');
+                        var ownerSelect = cardCol.querySelector('[name="account_owner[]"]');
+                        var balInput = cardCol.querySelector('[name="account_balance[]"]');
+                        var contribInput = cardCol.querySelector('[name="account_contrib_amount[]"]');
+                        var meanInput = cardCol.querySelector('[name="account_return_mean[]"]');
+                        var stdInput = cardCol.querySelector('[name="account_return_std[]"]');
+
+                        if (nameInput && nameInput.value !== aData.name && document.activeElement !== nameInput) {
+                            nameInput.value = aData.name || '';
+                        }
+                        if (typeSelect && typeSelect.value !== aData.type) {
+                            typeSelect.value = aData.type;
+                        }
+                        if (ownerSelect && ownerSelect.value !== aData.owner) {
+                            ownerSelect.value = aData.owner;
+                        }
+                        if (balInput && document.activeElement !== balInput) {
                             var curVal = parseMoney(balInput.value);
                             if (Math.abs(curVal - aData.balance) > 0.01) {
                                 balInput.value = formatMoney(aData.balance);
                             }
                         }
-                        if (contribInput && aData.contrib_amount !== undefined) {
+                        if (contribInput && aData.contrib_amount !== undefined && document.activeElement !== contribInput) {
                             var curContrib = parseMoney(contribInput.value);
                             if (Math.abs(curContrib - aData.contrib_amount) > 0.01) {
                                 contribInput.value = formatMoney(aData.contrib_amount);
                             }
                         }
-                    });
-                } else {
-                    var container = document.getElementById('accountsContainer');
-                    if (container) {
-                        container.innerHTML = '';
-                        retireAccounts.forEach(function(acc) {
-                            addAccountCard(acc);
-                        });
+                        if (meanInput && aData.return_mean !== undefined && document.activeElement !== meanInput) {
+                            var curMean = parsePercent(meanInput.value);
+                            if (Math.abs(curMean - aData.return_mean) > 0.01) {
+                                meanInput.value = formatPercent(aData.return_mean);
+                            }
+                        }
+                        if (stdInput && aData.return_std !== undefined && document.activeElement !== stdInput) {
+                            var curStd = parsePercent(stdInput.value);
+                            if (Math.abs(curStd - aData.return_std) > 0.01) {
+                                stdInput.value = formatPercent(aData.return_std);
+                            }
+                        }
+                    } else {
+                        addAccountCard(aData);
                     }
-                }
+                });
             } finally {
                 window._isSyncing = false;
             }
@@ -1905,10 +1968,35 @@
             if (window._isSyncing) return;
             window._isSyncing = true;
             try {
+                ensureBsAccountIds();
                 var currPeriod = bsState.current_period;
                 var cards = document.querySelectorAll('#accountsContainer .account-card-col');
 
+                var bsAccsById = new Map();
+                var bsAccsByName = new Map();
+
+                ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'].forEach(function(catKey) {
+                    var cat = bsState.categories[catKey];
+                    if (cat && cat.accounts) {
+                        cat.accounts.forEach(function(a) {
+                            if (a.id) bsAccsById.set(a.id, { catKey: catKey, account: a });
+                            if (a.name) bsAccsByName.set(a.name, { catKey: catKey, account: a });
+                        });
+                    }
+                });
+
+                (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
+                    (g.accounts || []).forEach(function(a) {
+                        if (a.id) bsAccsById.set(a.id, { catKey: 'goals', group: g, account: a });
+                        if (a.name) bsAccsByName.set(a.name, { catKey: 'goals', group: g, account: a });
+                    });
+                });
+
+                var activeCardIds = new Set();
+                var activeCardNames = new Set();
+
                 cards.forEach(function(col) {
+                    var cardId = col.dataset.accountId || col.querySelector('[name="account_id[]"]')?.value;
                     var nameInput = col.querySelector('[name="account_name[]"]');
                     var typeSelect = col.querySelector('[name="account_type[]"]');
                     var ownerSelect = col.querySelector('[name="account_owner[]"]');
@@ -1925,32 +2013,12 @@
                     var rMean = meanInput ? parsePercent(meanInput.value) : 6.0;
                     var rStd = stdInput ? parsePercent(stdInput.value) : 10.0;
 
-                    var catKey = ['pretax', 'roth', 'taxable', 'hsa'].includes(type) ? type : 'taxable';
-                    var cat = bsState.categories[catKey];
-                    if (!cat) {
-                        cat = { title: catKey.toUpperCase() + ' Accounts', accounts: [] };
-                        bsState.categories[catKey] = cat;
-                    }
-                    if (!cat.accounts) cat.accounts = [];
+                    var targetCatKey = ['pretax', 'roth', 'taxable', 'hsa'].includes(type) ? type : 'taxable';
 
-                    var acc = cat.accounts.find(function(a) { return a.name === name || (a.owner === owner && a.type === type); });
-                    if (!acc) {
-                        var vals = {};
-                        (bsState.periods || []).forEach(function(p) { vals[p] = bal; });
-                        acc = {
-                            id: 'acc_' + catKey + '_' + (cat.accounts.length + 1) + '_' + Date.now(),
-                            name: name || ('New ' + catKey.toUpperCase() + ' Account'),
-                            institution: 'Investment Custodian',
-                            owner: owner,
-                            type: type,
-                            include_in_retirement: true,
-                            values: vals,
-                            contrib_amount: contrib,
-                            return_mean: rMean,
-                            return_std: rStd
-                        };
-                        cat.accounts.push(acc);
-                    } else {
+                    var found = (cardId && bsAccsById.has(cardId)) ? bsAccsById.get(cardId) : (name && bsAccsByName.has(name) ? bsAccsByName.get(name) : null);
+
+                    if (found) {
+                        var acc = found.account;
                         acc.name = name || acc.name;
                         acc.type = type;
                         acc.owner = owner;
@@ -1960,7 +2028,79 @@
                         acc.return_std = rStd;
                         if (!acc.values) acc.values = {};
                         acc.values[currPeriod] = bal;
+
+                        activeCardIds.add(acc.id);
+                        if (acc.name) activeCardNames.add(acc.name);
+
+                        // If user switched account type (e.g. pretax -> roth), move to new category
+                        if (found.catKey !== targetCatKey && found.catKey !== 'goals' && found.catKey !== 'emergency' && found.catKey !== 'daily') {
+                            var oldCat = bsState.categories[found.catKey];
+                            if (oldCat && oldCat.accounts) {
+                                oldCat.accounts = oldCat.accounts.filter(function(x) { return x.id !== acc.id; });
+                            }
+                            var newCat = bsState.categories[targetCatKey];
+                            if (!newCat) {
+                                newCat = { title: targetCatKey.toUpperCase() + ' Accounts', accounts: [] };
+                                bsState.categories[targetCatKey] = newCat;
+                            }
+                            if (!newCat.accounts) newCat.accounts = [];
+                            newCat.accounts.push(acc);
+                            found.catKey = targetCatKey;
+                        }
+                    } else {
+                        var newAccId = cardId || ('acc_' + targetCatKey + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+                        col.dataset.accountId = newAccId;
+                        var idInput = col.querySelector('[name="account_id[]"]');
+                        if (idInput) idInput.value = newAccId;
+
+                        var vals = {};
+                        (bsState.periods || []).forEach(function(p) { vals[p] = bal; });
+                        vals[currPeriod] = bal;
+
+                        var newAcc = {
+                            id: newAccId,
+                            name: name || ('New ' + targetCatKey.toUpperCase() + ' Account'),
+                            institution: 'Investment Custodian',
+                            owner: owner,
+                            type: type,
+                            include_in_retirement: true,
+                            values: vals,
+                            contrib_amount: contrib,
+                            return_mean: rMean,
+                            return_std: rStd
+                        };
+
+                        var cat = bsState.categories[targetCatKey];
+                        if (!cat) {
+                            cat = { title: targetCatKey.toUpperCase() + ' Accounts', accounts: [] };
+                            bsState.categories[targetCatKey] = cat;
+                        }
+                        if (!cat.accounts) cat.accounts = [];
+                        cat.accounts.push(newAcc);
+                        bsAccsById.set(newAccId, { catKey: targetCatKey, account: newAcc });
+                        if (newAcc.name) bsAccsByName.set(newAcc.name, { catKey: targetCatKey, account: newAcc });
+                        activeCardIds.add(newAccId);
+                        if (newAcc.name) activeCardNames.add(newAcc.name);
                     }
+                });
+
+                // For any account in bsState that had include_in_retirement: true, if it is no longer in activeCardIds, uncheck it
+                ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'].forEach(function(catKey) {
+                    var cat = bsState.categories[catKey];
+                    if (cat && cat.accounts) {
+                        cat.accounts.forEach(function(a) {
+                            if (a.include_in_retirement && !activeCardIds.has(a.id) && (!a.name || !activeCardNames.has(a.name))) {
+                                a.include_in_retirement = false;
+                            }
+                        });
+                    }
+                });
+                (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
+                    (g.accounts || []).forEach(function(a) {
+                        if (a.include_in_retirement && !activeCardIds.has(a.id) && (!a.name || !activeCardNames.has(a.name))) {
+                            a.include_in_retirement = false;
+                        }
+                    });
                 });
 
                 recalculateBsTableDisplay();
@@ -1973,8 +2113,17 @@
         };
 
         window.syncAllTabs = function() {
-            syncAccountCardsToBsState();
-            syncBsStateToAccountCards();
+            var activePane = document.querySelector('#dataEntryTabsContent .tab-pane.active');
+            var activeTabId = activePane ? activePane.id : '';
+
+            if (activeTabId === 'assets') {
+                syncAccountCardsToBsState();
+                syncBsStateToAccountCards();
+            } else {
+                syncBsStateToAccountCards();
+                syncAccountCardsToBsState();
+            }
+
             renderBalanceSheetTable();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
@@ -2974,6 +3123,9 @@
             var acc = bsState.categories.goals.goal_groups[gIdx]?.accounts[aIdx];
             if (acc) {
                 acc.name = val;
+                if (acc.include_in_retirement) {
+                    syncBsStateToAccountCards();
+                }
                 serializeBalanceSheet();
             }
         };
@@ -2982,6 +3134,9 @@
             var acc = bsState.categories.goals.goal_groups[gIdx]?.accounts[aIdx];
             if (acc) {
                 acc.institution = val;
+                if (acc.include_in_retirement) {
+                    syncBsStateToAccountCards();
+                }
                 serializeBalanceSheet();
             }
         };
@@ -3492,6 +3647,7 @@
             renderBalanceSheetTable();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
+            syncBsStateToAccountCards();
             serializeBalanceSheet();
         };
 
@@ -3502,7 +3658,7 @@
             bsState.periods.forEach(function(p){ vals[p] = 0.0; });
 
             group.accounts.push({
-                id: 'acc_g_' + Date.now(),
+                id: 'acc_g_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                 name: 'Additional ' + group.name + ' Account',
                 institution: 'Bank / Investment',
                 owner: 'user',
@@ -3524,6 +3680,7 @@
             renderBalanceSheetTable();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
+            syncBsStateToAccountCards();
             serializeBalanceSheet();
         };
 
@@ -3706,6 +3863,13 @@
         updateBsKpis();
         renderBsHistoricalChart(bsState.chart_metric);
         serializeBalanceSheet();
+
+        document.getElementById('balanceSheetTable')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                e.preventDefault();
+                e.target.blur();
+            }
+        });
 
         // Run toggles initially
         toggleSpouseSection();
