@@ -2617,14 +2617,14 @@
                 grandNetWorthByPeriod[p] = liquidByPeriod[p] + (homeValByPeriod[p] - mortByPeriod[p]) - debtsByPeriod[p];
             });
 
-            bHtml += '<tr class="bs-grand-total-row" id="grand_net_worth_row">';
-            bHtml += '<td class="bs-sticky-col ps-3 py-3"><i class="fa-solid fa-award text-warning me-2"></i>GROSS NET WORTH</td>';
-            bHtml += '<td class="text-light small">Total Assets − Total Debts</td>';
+            bHtml += '<tr class="table-primary border-top border-bottom border-primary fw-bold" id="grand_net_worth_row" style="font-size: 0.95rem;">';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-award me-2"></i>GROSS NET WORTH</td>';
+            bHtml += '<td class="small text-muted">Total Assets − Total Debts</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end py-3 fw-bold fs-6 grand-net-worth-val-' + p + '">' + formatMoney(grandNetWorthByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end text-primary fw-bold grand-net-worth-val-' + p + '">' + formatMoney(grandNetWorthByPeriod[p]) + '</td>';
             });
             var grandDelta = calcDelta(grandNetWorthByPeriod[currPeriod], grandNetWorthByPeriod[prevPeriod]);
-            bHtml += '<td class="text-center py-3 grand-net-worth-delta">' + formatDeltaBadge(grandDelta) + '</td>';
+            bHtml += '<td class="text-center grand-net-worth-delta">' + formatDeltaBadge(grandDelta) + '</td>';
             bHtml += '<td colspan="2"></td>';
             bHtml += '</tr>';
 
