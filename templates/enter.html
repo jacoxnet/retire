@@ -2032,6 +2032,11 @@
             if (!bsState.collapsed_goals) bsState.collapsed_goals = {};
             if (!bsState.view_mode) bsState.view_mode = 'detailed';
 
+            // Render Spacer Row for Visual Separation Between Asset Categories
+            function renderCategorySpacer() {
+                bHtml += '<tr class="bs-category-spacer" aria-hidden="true"><td colspan="' + (visPeriods.length + 5) + '"></td></tr>';
+            }
+
             // Render Standard Category Block (Collapsible Accordion with Seamless Inputs)
             function renderCategoryBlock(catKey, iconClass, addLabel) {
                 var cat = bsState.categories[catKey] || { title: catKey, accounts: [] };
@@ -2149,14 +2154,21 @@
 
             // 1. Pretax
             renderCategoryBlock('pretax', 'fa-building-columns', 'Add Pretax Account');
+
             // 2. Roth
+            renderCategorySpacer();
             renderCategoryBlock('roth', 'fa-piggy-bank', 'Add Roth Account');
+
             // 3. Taxable
+            renderCategorySpacer();
             renderCategoryBlock('taxable', 'fa-chart-line', 'Add Brokerage Account');
+
             // 4. HSA
+            renderCategorySpacer();
             renderCategoryBlock('hsa', 'fa-heart-pulse', 'Add HSA Account');
 
             // 5. Emergency Fund Block with Target Goal & Shortage Calculation
+            renderCategorySpacer();
             var emgCat = bsState.categories.emergency || { title: "Emergency Fund Accounts", target_amount: 50000.0, accounts: [] };
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
@@ -2248,6 +2260,7 @@
             });
 
             // 6. Goal Savings / Sinking Funds (Multi-Goal Group Support)
+            renderCategorySpacer();
             var goalsCat = bsState.categories.goals || { title: "Goal Savings (Sinking Funds)", goal_groups: [] };
             var totalGoalsByPeriod = {};
             visPeriods.forEach(function(p) { totalGoalsByPeriod[p] = 0; });
@@ -2370,9 +2383,11 @@
             });
 
             // 7. Daily Spending Accounts (Checking)
+            renderCategorySpacer();
             renderCategoryBlock('daily', 'fa-wallet', 'Add Checking Account');
 
             // 8. Liquid Net Worth Calculation Rows
+            renderCategorySpacer();
             var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
             var liquidNetTaxAndGoalsByPeriod = {};
             var liquidNetTaxByPeriod = {};
@@ -2420,6 +2435,7 @@
             bHtml += '</tr>';
 
             // 9. Real Estate & Home Equity
+            renderCategorySpacer();
             var reCat = bsState.categories.real_estate || { properties: [] };
             var netEquityByPeriod = {};
             visPeriods.forEach(function(p) { netEquityByPeriod[p] = 0; });
@@ -2518,6 +2534,7 @@
             bHtml += '</tr>';
 
             // 10. Debts & Liabilities (Non-Mortgage)
+            renderCategorySpacer();
             var debtsList = bsState.categories.debts || [];
             var isDebtsCollapsed = !!bsState.collapsed_categories['debts'];
             var debtCount = debtsList.length;
@@ -2594,6 +2611,7 @@
             bHtml += '</tr>';
 
             // 11. GRAND TOTAL GROSS NET WORTH ROW (Always visible)
+            renderCategorySpacer();
             var grandNetWorthByPeriod = {};
             visPeriods.forEach(function(p) {
                 grandNetWorthByPeriod[p] = liquidByPeriod[p] + (homeValByPeriod[p] - mortByPeriod[p]) - debtsByPeriod[p];

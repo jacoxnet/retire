@@ -935,6 +935,21 @@ tbody tr:hover {
   padding: 0.2rem 0.35rem;
 }
 
+.bs-category-spacer {
+  height: 16px;
+  background-color: #f1f5f9 !important;
+}
+
+.bs-category-spacer td {
+  height: 16px !important;
+  padding: 0 !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+}
+
 .bs-category-header {
   background-color: #f8fafc !important;
   font-weight: 700;
