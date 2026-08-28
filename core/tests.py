@@ -2238,6 +2238,214 @@ class BalanceSheetTests(TestCase):
         self.assertIn('10000', content)
         self.assertIn('20000', content)
 
+    def test_default_data_zero_dollar_amounts(self):
+        """Verify that all default dollar amounts are 0.0 while non-dollar defaults are preserved."""
+        from core.views import get_default_data
+        import datetime
+
+        data = get_default_data()
+
+        # Dollar amounts
+        self.assertEqual(data['desired_spending'], 0.0)
+        self.assertEqual(data['survivor_spending'], 0.0)
+        self.assertEqual(data['social_security']['user_amount'], 0.0)
+        self.assertEqual(data['social_security']['spouse_amount'], 0.0)
+        self.assertEqual(data['pretax_assets']['present_balance'], 0.0)
+        self.assertEqual(data['pretax_assets']['contrib_amount'], 0.0)
+        self.assertEqual(data['roth_assets']['present_balance'], 0.0)
+        self.assertEqual(data['roth_assets']['contrib_amount'], 0.0)
+        self.assertEqual(data['taxable_assets']['present_balance'], 0.0)
+        self.assertEqual(data['taxable_assets']['contrib_amount'], 0.0)
+        self.assertEqual(data['hsa_assets']['present_balance'], 0.0)
+        self.assertEqual(data['hsa_assets']['contrib_amount'], 0.0)
+
+        # Non-dollar defaults preserved
+        self.assertEqual(data['user_name'], 'John Doe')
+        self.assertEqual(data['user_age'], 60)
+        self.assertEqual(data['user_retirement_age'], 65)
+        self.assertEqual(data['user_age_death'], 90)
+        self.assertFalse(data['is_married'])
+        self.assertEqual(data['spouse_name'], 'Jane Doe')
+        self.assertEqual(data['filing_status'], 'single')
+        self.assertEqual(data['inflation_rate'], 3.5)
+        self.assertEqual(data['runs'], 10000)
+        self.assertEqual(data['target_success_rate'], 80.0)
+        self.assertTrue(data['social_security']['user_entitled'])
+        self.assertEqual(data['social_security']['user_start_age'], 67)
+
+        # Balance sheet in default data
+        bs = data['balance_sheet']
+        today_str = datetime.date.today().isoformat()
+        self.assertEqual(bs['periods'], [today_str])
+        self.assertEqual(bs['current_period'], today_str)
+        self.assertEqual(bs['emergency_goal_amount'], 0.0)
+
+        # Balance sheet accounts
+        for cat_key in ['pretax', 'roth', 'taxable']:
+            accs = bs['categories'][cat_key]['accounts']
+            for a in accs:
+                self.assertEqual(a['values'][today_str], 0.0)
+                self.assertEqual(a['contrib_amount'], 0.0)
+
+        for g in bs['categories']['goals']['goal_groups']:
+            self.assertEqual(g['target_amount'], 0.0)
+            for a in g['accounts']:
+                self.assertEqual(a['values'][today_str], 0.0)
+
+        for p in bs['categories']['real_estate']['properties']:
+            self.assertEqual(p['market_values'][today_str], 0.0)
+            for m in p['mortgages']:
+                self.assertEqual(m['balances'][today_str], 0.0)
+
+        for d in bs['categories']['debts']:
+            self.assertEqual(d['values'][today_str], 0.0)
+
+    def test_multi_column_balance_sheet_json_import(self):
+        """Verify that loading a JSON file with multiple balance sheet columns imports all columns accurately."""
+        from django.urls import reverse
+        import json
+
+        multi_column_bs = {
+            'periods': ['2026-06-30', '2026-07-31', '2026-08-28'],
+            'current_period': '2026-08-28',
+            'marginal_tax_rate': 24.0,
+            'emergency_goal_amount': 30000.0,
+            'categories': {
+                'pretax': {
+                    'title': 'Pretax Retirement Accounts',
+                    'is_pretax': True,
+                    'accounts': [
+                        {
+                            'id': 'acc_pretax_1',
+                            'name': 'Primary 401(k)',
+                            'institution': 'Fidelity',
+                            'owner': 'user',
+                            'type': 'pretax',
+                            'include_in_retirement': True,
+                            'values': {
+                                '2026-06-30': 450000.0,
+                                '2026-07-31': 480000.0,
+                                '2026-08-28': 500000.0
+                            },
+                            'contrib_amount': 15000.0,
+                            'return_mean': 6.0,
+                            'return_std': 10.0
+                        }
+                    ]
+                },
+                'roth': {'title': 'Roth Accounts', 'is_pretax': False, 'accounts': []},
+                'taxable': {'title': 'Taxable Accounts', 'is_pretax': False, 'accounts': []},
+                'hsa': {'title': 'HSA Accounts', 'is_pretax': False, 'accounts': []},
+                'emergency': {
+                    'title': 'Emergency Fund',
+                    'is_pretax': False,
+                    'target_amount': 30000.0,
+                    'accounts': [
+                        {
+                            'id': 'acc_emg_1',
+                            'name': 'Emergency HYSA',
+                            'institution': 'Ally',
+                            'owner': 'user',
+                            'type': 'cash',
+                            'include_in_retirement': False,
+                            'values': {
+                                '2026-06-30': 25000.0,
+                                '2026-07-31': 28000.0,
+                                '2026-08-28': 30000.0
+                            }
+                        }
+                    ]
+                },
+                'goals': {'title': 'Goals', 'is_pretax': False, 'goal_groups': []},
+                'daily': {'title': 'Daily', 'is_pretax': False, 'accounts': []},
+                'real_estate': {
+                    'properties': [
+                        {
+                            'id': 'prop_1',
+                            'name': 'Home',
+                            'market_values': {
+                                '2026-06-30': 500000.0,
+                                '2026-07-31': 510000.0,
+                                '2026-08-28': 520000.0
+                            },
+                            'mortgages': [
+                                {
+                                    'id': 'mort_1',
+                                    'name': 'Mortgage',
+                                    'balances': {
+                                        '2026-06-30': 200000.0,
+                                        '2026-07-31': 199000.0,
+                                        '2026-08-28': 198000.0
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                'debts': [
+                    {
+                        'id': 'debt_1',
+                        'name': 'Auto Loan',
+                        'values': {
+                            '2026-06-30': 15000.0,
+                            '2026-07-31': 14000.0,
+                            '2026-08-28': 13000.0
+                        }
+                    }
+                ]
+            }
+        }
+
+        plan_data = {
+            'user_name': 'Multi Column Test',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'desired_spending': 50000.0,
+            'balance_sheet': multi_column_bs,
+            'accounts': [
+                {
+                    'name': 'Primary 401(k)',
+                    'type': 'pretax',
+                    'owner': 'user',
+                    'balance': 500000.0,
+                    'contrib_amount': 15000.0,
+                    'return_mean': 6.0,
+                    'return_std': 10.0
+                }
+            ]
+        }
+
+        # POST to load_plan view
+        resp = self.client.post(reverse('load_plan'), {
+            'json_data': json.dumps(plan_data),
+            'next': 'enter'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        # Check loaded session data contains all 3 periods
+        session_data = self.client.session['simulation_data']
+        self.assertIn('balance_sheet', session_data)
+        bs_loaded = session_data['balance_sheet']
+        self.assertEqual(len(bs_loaded['periods']), 3)
+        self.assertEqual(bs_loaded['periods'], ['2026-06-30', '2026-07-31', '2026-08-28'])
+
+        # Verify historical account values preserved
+        p401k = bs_loaded['categories']['pretax']['accounts'][0]
+        self.assertEqual(p401k['values']['2026-06-30'], 450000.0)
+        self.assertEqual(p401k['values']['2026-07-31'], 480000.0)
+        self.assertEqual(p401k['values']['2026-08-28'], 500000.0)
+
+        # Verify GET enter view includes the multi-column data in initial-balance-sheet script tag
+        enter_resp = self.client.get(reverse('enter'))
+        self.assertEqual(enter_resp.status_code, 200)
+        content = enter_resp.content.decode('utf-8')
+        self.assertIn('2026-06-30', content)
+        self.assertIn('2026-07-31', content)
+        self.assertIn('2026-08-28', content)
+        self.assertIn('450000', content)
+
 
 
 

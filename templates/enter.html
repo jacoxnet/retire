@@ -1077,7 +1077,7 @@
 
         function addSpendingRow(data = {}) {
             var name = data.name !== undefined ? data.name : '';
-            var amount = data.amount !== undefined ? data.amount : 10000;
+            var amount = data.amount !== undefined ? data.amount : 0;
             var startAge = data.start_age !== undefined ? data.start_age : 65;
             var interval = data.interval !== undefined ? data.interval : 0;
             var adjustInflation = data.adjust_inflation !== undefined ? data.adjust_inflation : true;
@@ -1307,7 +1307,7 @@
 
         function addIncomeRow(data = {}) {
             var name = data.name !== undefined ? data.name : '';
-            var amount = data.amount !== undefined ? data.amount : 2500;
+            var amount = data.amount !== undefined ? data.amount : 0;
             var frequency = data.frequency !== undefined ? data.frequency : 'monthly';
             var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
             var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
@@ -1524,7 +1524,7 @@
 
         function addOtherTaxRow(data = {}) {
             var name = data.name !== undefined ? data.name : '';
-            var amount = data.amount !== undefined ? data.amount : 5000;
+            var amount = data.amount !== undefined ? data.amount : 0;
             var frequency = data.frequency !== undefined ? data.frequency : 'annual';
             var startType = data.start_age_type !== undefined ? data.start_age_type : 'retirement';
             var startAge = data.start_age_specified !== undefined ? data.start_age_specified : 65;
@@ -1708,19 +1708,20 @@
         // =========================================================================
         // BALANCE SHEET & NET WORTH TRACKER JS ENGINE (REACTIVE & SYNCHRONIZED)
         // =========================================================================
+        var todayStr = new Date().toISOString().split('T')[0];
         var bsState = {
-            periods: ["2025-12-31", "2026-01-31", "2026-02-28"],
-            current_period: "2026-02-28",
+            periods: [todayStr],
+            current_period: todayStr,
             marginal_tax_rate: 24.0,
             period_view_limit: 3,
             chart_metric: 'gross_net_worth',
-            emergency_goal_amount: 50000.0,
+            emergency_goal_amount: 0.0,
             categories: {
                 pretax: { title: "Pretax Retirement Accounts", is_pretax: true, accounts: [] },
                 roth: { title: "Post-Tax (Roth) Retirement Accounts", is_pretax: false, accounts: [] },
                 taxable: { title: "Investment / Taxable Brokerage Accounts", is_pretax: false, accounts: [] },
                 hsa: { title: "Health Savings Accounts (HSA)", is_pretax: false, accounts: [] },
-                emergency: { title: "Emergency Fund Accounts", is_pretax: false, target_amount: 50000.0, accounts: [] },
+                emergency: { title: "Emergency Fund Accounts", is_pretax: false, target_amount: 0.0, accounts: [] },
                 goals: { title: "Goal Savings (Sinking Funds)", is_pretax: false, goal_groups: [] },
                 daily: { title: "Daily Spending Accounts (Checking & Cash)", is_pretax: false, accounts: [] },
                 real_estate: { properties: [] },
@@ -1739,7 +1740,7 @@
                 if (!bsState.categories.roth) bsState.categories.roth = { title: "Post-Tax (Roth) Retirement Accounts", is_pretax: false, accounts: [] };
                 if (!bsState.categories.taxable) bsState.categories.taxable = { title: "Investment / Taxable Brokerage Accounts", is_pretax: false, accounts: [] };
                 if (!bsState.categories.hsa) bsState.categories.hsa = { title: "Health Savings Accounts (HSA)", is_pretax: false, accounts: [] };
-                if (!bsState.categories.emergency) bsState.categories.emergency = { title: "Emergency Fund Accounts", is_pretax: false, target_amount: 50000.0, accounts: [] };
+                if (!bsState.categories.emergency) bsState.categories.emergency = { title: "Emergency Fund Accounts", is_pretax: false, target_amount: 0.0, accounts: [] };
                 if (!bsState.categories.goals) bsState.categories.goals = { title: "Goal Savings (Sinking Funds)", is_pretax: false, goal_groups: [] };
                 if (!bsState.categories.daily) bsState.categories.daily = { title: "Daily Spending Accounts (Checking & Cash)", is_pretax: false, accounts: [] };
                 if (!bsState.categories.real_estate) bsState.categories.real_estate = { properties: [] };
@@ -1773,7 +1774,7 @@
 
         function getVisiblePeriods() {
             var periods = bsState.periods || [];
-            if (!periods.length) return ["2026-02-28"];
+            if (!periods.length) return [new Date().toISOString().split('T')[0]];
             if (!bsState.period_view_limit || bsState.period_view_limit >= periods.length) {
                 return periods;
             }
@@ -1787,8 +1788,9 @@
                 var monthIdx = parseInt(parts[1], 10) - 1;
                 var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
                 var mStr = monthNames[monthIdx] || parts[1];
+                var dayStr = (parts.length >= 3 && parts[2]) ? parseInt(parts[2], 10) + ', ' : '';
                 var isCurrent = (p === bsState.current_period);
-                return mStr + ' ' + year + (isCurrent ? ' <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">Current</span>' : '');
+                return mStr + ' ' + dayStr + year + (isCurrent ? ' <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">Current</span>' : '');
             }
             return p;
         }
@@ -2169,10 +2171,10 @@
 
             // 5. Emergency Fund Block with Target Goal & Shortage Calculation
             renderCategorySpacer();
-            var emgCat = bsState.categories.emergency || { title: "Emergency Fund Accounts", target_amount: 50000.0, accounts: [] };
+            var emgCat = bsState.categories.emergency || { title: "Emergency Fund Accounts", target_amount: 0.0, accounts: [] };
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
-            var emgTarget = parseFloat(emgCat.target_amount || bsState.emergency_goal_amount || 50000.0);
+            var emgTarget = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
             var isEmgCollapsed = !!bsState.collapsed_categories['emergency'];
             var emgCount = (emgCat.accounts || []).length;
 
@@ -2738,8 +2740,8 @@
             });
 
             // 2. Recalculate Emergency
-            var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 50000.0 };
-            var emgTarget = parseFloat(emgCat.target_amount || bsState.emergency_goal_amount || 50000.0);
+            var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 0.0 };
+            var emgTarget = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
             (emgCat.accounts || []).forEach(function(a) {
@@ -3456,7 +3458,7 @@
         window.addGoalGroup = function() {
             var name = prompt("Enter goal / sinking fund name (e.g. Vacation Fund, Wedding, New Car):", "New Goal Fund");
             if (!name) return;
-            var target = parseMoney(prompt("Enter target dollar goal:", "$10,000"));
+            var target = parseMoney(prompt("Enter target dollar goal:", "$0.00"));
 
             var vals = {};
             bsState.periods.forEach(function(p){ vals[p] = 0.0; });
@@ -3530,7 +3532,7 @@
             if (!name) return;
             var vals = {};
             var mortVals = {};
-            bsState.periods.forEach(function(p){ vals[p] = 500000.0; mortVals[p] = 200000.0; });
+            bsState.periods.forEach(function(p){ vals[p] = 0.0; mortVals[p] = 0.0; });
 
             bsState.categories.real_estate.properties.push({
                 id: 'prop_' + Date.now(),
@@ -3621,8 +3623,8 @@
             var visPeriods = getVisiblePeriods();
             var currPeriod = visPeriods[visPeriods.length - 1];
             if (type === 'emergency') {
-                var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 50000.0 };
-                var emgTarget = parseFloat(emgCat.target_amount || bsState.emergency_goal_amount || 50000.0);
+                var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 0.0 };
+                var emgTarget = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
                 var currEmgTotal = 0;
                 var emgAccNames = [];
                 (emgCat.accounts || []).forEach(function(a) {

@@ -1,4 +1,5 @@
 import json
+import datetime
 
 """
 Parsing and validation helpers for the plan-entry form.
@@ -581,11 +582,9 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
     if accounts is None:
         accounts = []
 
-    p1 = f"{current_year - 1}-12-31"
-    p2 = f"{current_year}-01-31"
-    p3 = f"{current_year}-02-28"
-    periods = [p1, p2, p3]
-    curr_period = p3
+    today_str = datetime.date.today().isoformat()
+    periods = [today_str]
+    curr_period = today_str
 
     # Group existing accounts by type
     pretax_accs = []
@@ -604,9 +603,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'type': atype,
             'include_in_retirement': True,
             'values': {
-                p1: round(bal * 0.98, 2),
-                p2: round(bal * 0.99, 2),
-                p3: bal,
+                curr_period: bal,
             },
             'contrib_amount': float(acc.get('contrib_amount', 0.0)),
             'contrib_freq': acc.get('contrib_freq', 'annual'),
@@ -635,8 +632,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'owner': 'user',
             'type': 'pretax',
             'include_in_retirement': True,
-            'values': {p1: 490000.0, p2: 498000.0, p3: 500000.0},
-            'contrib_amount': 23000.0,
+            'values': {curr_period: 0.0},
+            'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
             'contrib_end_age_type': 'retirement',
@@ -654,8 +651,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'owner': 'user',
             'type': 'roth',
             'include_in_retirement': True,
-            'values': {p1: 145000.0, p2: 148000.0, p3: 150000.0},
-            'contrib_amount': 7000.0,
+            'values': {curr_period: 0.0},
+            'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
             'contrib_end_age_type': 'retirement',
@@ -673,7 +670,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'owner': 'user',
             'type': 'taxable',
             'include_in_retirement': True,
-            'values': {p1: 95000.0, p2: 98000.0, p3: 100000.0},
+            'values': {curr_period: 0.0},
             'contrib_amount': 0.0,
             'contrib_freq': 'annual',
             'contrib_start_age': 60,
@@ -693,7 +690,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'owner': 'user',
             'type': 'cash',
             'include_in_retirement': False,
-            'values': {p1: 45000.0, p2: 45000.0, p3: 45000.0},
+            'values': {curr_period: 0.0},
         }
     ]
 
@@ -702,7 +699,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
         {
             'id': 'goal_car',
             'name': 'Next Vehicle Replacement',
-            'target_amount': 30000.0,
+            'target_amount': 0.0,
             'accounts': [
                 {
                     'id': 'acc_g_car_1',
@@ -711,7 +708,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
                     'owner': 'user',
                     'type': 'cash',
                     'include_in_retirement': False,
-                    'values': {p1: 15000.0, p2: 16000.0, p3: 18000.0},
+                    'values': {curr_period: 0.0},
                 },
                 {
                     'id': 'acc_g_car_2',
@@ -720,14 +717,14 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
                     'owner': 'user',
                     'type': 'taxable',
                     'include_in_retirement': False,
-                    'values': {p1: 4000.0, p2: 4000.0, p3: 4500.0},
+                    'values': {curr_period: 0.0},
                 }
             ]
         },
         {
             'id': 'goal_hvac',
             'name': 'Home Maintenance & HVAC Reserve',
-            'target_amount': 15000.0,
+            'target_amount': 0.0,
             'accounts': [
                 {
                     'id': 'acc_g_hvac_1',
@@ -736,14 +733,14 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
                     'owner': 'user',
                     'type': 'cash',
                     'include_in_retirement': False,
-                    'values': {p1: 8000.0, p2: 8500.0, p3: 9000.0},
+                    'values': {curr_period: 0.0},
                 }
             ]
         },
         {
             'id': 'goal_travel',
             'name': 'Vacation & Travel Fund',
-            'target_amount': 8000.0,
+            'target_amount': 0.0,
             'accounts': [
                 {
                     'id': 'acc_g_trv_1',
@@ -752,14 +749,14 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
                     'owner': 'user',
                     'type': 'cash',
                     'include_in_retirement': False,
-                    'values': {p1: 4500.0, p2: 5000.0, p3: 6000.0},
+                    'values': {curr_period: 0.0},
                 }
             ]
         },
         {
             'id': 'goal_tech',
             'name': 'Tech & Electronics Sinking Fund',
-            'target_amount': 4000.0,
+            'target_amount': 0.0,
             'accounts': [
                 {
                     'id': 'acc_g_tech_1',
@@ -768,7 +765,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
                     'owner': 'user',
                     'type': 'cash',
                     'include_in_retirement': False,
-                    'values': {p1: 2500.0, p2: 2700.0, p3: 3000.0},
+                    'values': {curr_period: 0.0},
                 }
             ]
         }
@@ -783,7 +780,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'owner': 'user',
             'type': 'cash',
             'include_in_retirement': False,
-            'values': {p1: 4500.0, p2: 5000.0, p3: 5200.0},
+            'values': {curr_period: 0.0},
         }
     ]
 
@@ -793,12 +790,12 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             {
                 'id': 'prop_primary',
                 'name': 'Primary Residence',
-                'market_values': {p1: 650000.0, p2: 650000.0, p3: 660000.0},
+                'market_values': {curr_period: 0.0},
                 'mortgages': [
                     {
                         'id': 'mort_primary',
                         'name': 'Primary 30-Yr Mortgage',
-                        'balances': {p1: 245000.0, p2: 244200.0, p3: 243500.0}
+                        'balances': {curr_period: 0.0}
                     }
                 ]
             }
@@ -811,13 +808,13 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'id': 'debt_auto',
             'name': 'Auto Loan',
             'institution': 'Toyota Financial Services',
-            'values': {p1: 8500.0, p2: 8100.0, p3: 7800.0},
+            'values': {curr_period: 0.0},
         },
         {
             'id': 'debt_cc',
             'name': 'Credit Cards (Monthly Statement Balance)',
             'institution': 'Chase / Amex',
-            'values': {p1: 1200.0, p2: 950.0, p3: 850.0},
+            'values': {curr_period: 0.0},
         }
     ]
 
@@ -828,7 +825,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
         'current_period': curr_period,
         'marginal_tax_rate': calc_tax_rate,
         'marginal_tax_rate_override': None,
-        'emergency_goal_amount': 50000.0,
+        'emergency_goal_amount': 0.0,
         'categories': {
             'pretax': {
                 'title': 'Pretax Retirement Accounts',
@@ -853,7 +850,7 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'emergency': {
                 'title': 'Emergency Fund Accounts',
                 'is_pretax': False,
-                'target_amount': 50000.0,
+                'target_amount': 0.0,
                 'accounts': emergency_accs,
             },
             'goals': {
@@ -1003,7 +1000,7 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
     if not curr_period and periods:
         curr_period = periods[-1]
     if not curr_period:
-        curr_period = f"{current_year}-02-28"
+        curr_period = datetime.date.today().isoformat()
 
     categories = balance_sheet.setdefault('categories', {})
     for cat_key in ['pretax', 'roth', 'taxable', 'hsa']:

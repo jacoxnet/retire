@@ -34,15 +34,15 @@ def get_default_data():
         'current_year': 2026,
         'begin_spending_age_type': 'retirement',
         'begin_spending_age_specified': 65,
-        'desired_spending': 40000.0,
-        'survivor_spending': 40000.0,
+        'desired_spending': 0.0,
+        'survivor_spending': 0.0,
         'adjust_spending_inflation': True,
         'inflation_rate': 3.5,
         'runs': 10000,
         'target_success_rate': 80.0,
         'social_security': {
             'user_entitled': True,
-            'user_amount': 2500.0,
+            'user_amount': 0.0,
             'user_freq': 'monthly',
             'user_start_age': 67,
             'spouse_entitled': False,
@@ -261,7 +261,7 @@ def change_mode_view(request):
 
     # Input adjustments from Simulation Inputs card sliders/steppers
     if 'desired_spending' in request.POST:
-        data['desired_spending'] = get_float(request.POST.get('desired_spending'), data.get('desired_spending', 40000.0))
+        data['desired_spending'] = get_float(request.POST.get('desired_spending'), data.get('desired_spending', 0.0))
     if 'inflation_rate' in request.POST:
         data['inflation_rate'] = get_float(request.POST.get('inflation_rate'), data.get('inflation_rate', 2.5))
     if 'runs' in request.POST:
@@ -324,7 +324,7 @@ def enter_view(request):
             begin_spending_age_type = 'retirement'
         begin_spending_age_specified = get_int(request.POST.get('begin_spending_age_specified'), 65)
         
-        desired_spending = get_float(request.POST.get('desired_spending'), 40000.0)
+        desired_spending = get_float(request.POST.get('desired_spending'), 0.0)
         survivor_spending = get_float(request.POST.get('survivor_spending'), desired_spending) if is_married else 0.0
         adjust_spending_inflation = get_bool(request.POST.get('adjust_spending_inflation'))
         
@@ -338,7 +338,7 @@ def enter_view(request):
 
         # Dedicated Social Security
         user_ss_entitled = request.POST.get('user_ss_entitled') == 'true' if request.POST.get('user_ss_entitled') is not None else True
-        user_ss_amount = get_float(request.POST.get('user_ss_amount'), 2500.0)
+        user_ss_amount = get_float(request.POST.get('user_ss_amount'), 0.0)
         user_ss_freq = request.POST.get('user_ss_freq', 'monthly')
         user_ss_start_age = get_int(request.POST.get('user_ss_start_age'), 67)
 
@@ -559,7 +559,7 @@ def results_view(request):
         "years": len(det_rows),
         "runs": data.get('runs', 10000),
         "inflation_rate": data.get('inflation_rate', 2.5),
-        "desired_spending": data.get('desired_spending', 40000.0),
+        "desired_spending": data.get('desired_spending', 0.0),
         "target_success_rate": data.get('target_success_rate', 80.0),
         "user_age_death": data.get('user_age_death', 90),
         "spouse_age_death": data.get('spouse_age_death', 90),
