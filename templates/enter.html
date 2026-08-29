@@ -524,6 +524,7 @@
                     </div>
 
                     <!-- Balance Sheet Spreadsheet Grid -->
+                    <div class="bs-scroll-proxy" id="bsScrollProxy" aria-hidden="true"><div class="bs-scroll-proxy-inner"></div></div>
                     <div class="bs-table-container mb-4">
                         <table class="bs-table align-middle" id="balanceSheetTable">
                             <thead id="bsTableHead">
@@ -808,6 +809,41 @@
                 tabTrigger.show();
             });
         });
+
+        // Balance Sheet: pinned duplicate horizontal scrollbar above the table.
+        (function initBsScrollProxy() {
+            var proxy = document.getElementById('bsScrollProxy');
+            var container = document.querySelector('#balance-sheet .bs-table-container');
+            if (!proxy || !container) return;
+            var lock = false;
+            proxy.addEventListener('scroll', function () {
+                if (lock) return;
+                lock = true;
+                container.scrollLeft = proxy.scrollLeft;
+                lock = false;
+            });
+            container.addEventListener('scroll', function () {
+                if (lock) return;
+                lock = true;
+                proxy.scrollLeft = container.scrollLeft;
+                lock = false;
+            });
+            container.addEventListener('wheel', function (e) {
+                if (!e.shiftKey || e.deltaY === 0) return;
+                if (container.scrollWidth <= container.clientWidth) return;
+                container.scrollLeft += e.deltaY;
+                e.preventDefault();
+            }, { passive: false });
+            window.addEventListener('resize', function () {
+                if (typeof window.syncBsScrollProxy === 'function') window.syncBsScrollProxy();
+            });
+            var bsTabBtn = document.getElementById('balance-sheet-tab');
+            if (bsTabBtn) {
+                bsTabBtn.addEventListener('shown.bs.tab', function () {
+                    if (typeof window.syncBsScrollProxy === 'function') window.syncBsScrollProxy();
+                });
+            }
+        })();
 
         // 1. Dynamic Spouse Section Toggle
         const isMarriedCheckbox = document.getElementById('is_married');
@@ -2597,11 +2633,11 @@
                 if (bsState.periods.length > 1 && pIdx < visPeriods.length - 1) {
                     delBtn = ' <button type="button" class="btn btn-link btn-sm text-danger p-0 ms-1 text-decoration-none" title="Remove snapshot" onclick="removePeriodSnapshot(\'' + p + '\')"><i class="fa fa-times-circle"></i></button>';
                 }
-                hHtml += '<th class="text-end" style="min-width: 130px;">' + formatPeriodHeader(p) + delBtn + '</th>';
+                hHtml += '<th class="text-end" style="min-width: 104px;">' + formatPeriodHeader(p) + delBtn + '</th>';
             });
-            hHtml += '<th class="text-center" style="min-width: 140px;">Change ($ / %)</th>';
-            hHtml += '<th class="text-center" style="min-width: 110px;" title="Include account assets in Monte Carlo & Deterministic retirement simulation">For Retirement?</th>';
-            hHtml += '<th class="text-center" style="min-width: 60px;">Action</th>';
+            hHtml += '<th class="text-center" style="min-width: 120px;">Change ($ / %)</th>';
+            hHtml += '<th class="text-center" style="min-width: 96px;" title="Include account assets in Monte Carlo & Deterministic retirement simulation">For Retirement?</th>';
+            hHtml += '<th class="text-center" style="min-width: 52px;">Action</th>';
             hHtml += '</tr>';
             thead.innerHTML = hHtml;
 
@@ -3227,8 +3263,28 @@
 
             tbody.innerHTML = bHtml;
             formatAllCurrencyInputs();
+            syncBsScrollProxy();
         }
         window.renderBalanceSheetTable = renderBalanceSheetTable;
+
+        // Keeps a duplicate horizontal scrollbar, pinned above the table, in sync
+        // with the (often far-below) native scrollbar of .bs-table-container.
+        function syncBsScrollProxy() {
+            var proxy = document.getElementById('bsScrollProxy');
+            var container = document.querySelector('#balance-sheet .bs-table-container');
+            var table = document.getElementById('balanceSheetTable');
+            if (!proxy || !container || !table) return;
+            var inner = proxy.firstElementChild;
+            var needed = table.scrollWidth - container.clientWidth > 1;
+            proxy.style.display = needed ? 'block' : 'none';
+            if (needed) {
+                inner.style.width = table.scrollWidth + 'px';
+                document.documentElement.style.setProperty('--bs-proxy-h', proxy.offsetHeight + 'px');
+            } else {
+                document.documentElement.style.setProperty('--bs-proxy-h', '0px');
+            }
+        }
+        window.syncBsScrollProxy = syncBsScrollProxy;
 
         window.toggleBsCategory = function(catKey) {
             if (!bsState.collapsed_categories) bsState.collapsed_categories = {};

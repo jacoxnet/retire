@@ -862,6 +862,23 @@ tbody tr:hover {
   line-height: 1.2;
 }
 
+/* Balance Sheet subpage escapes the ~1140px .container cap so the wide
+   accounts table can use almost the whole viewport. */
+@media (min-width: 992px) {
+  #balance-sheet {
+    width: calc(100vw - 3rem);
+    max-width: calc(100vw - 3rem);
+    margin-left: calc(50% - 50vw + 1.5rem);
+    margin-right: calc(50% - 50vw + 1.5rem);
+  }
+}
+
+/* The card's hover lift uses transform, which disables position: sticky for the
+   table header and frozen first column while the pointer is over the card. */
+#balance-sheet .card:hover {
+  transform: none;
+}
+
 .bs-table-container {
   overflow-x: auto;
   border-radius: var(--radius-md);
@@ -869,6 +886,24 @@ tbody tr:hover {
   background: #ffffff;
   box-shadow: var(--shadow-sm);
   max-width: 100%;
+}
+
+/* Pinned duplicate horizontal scrollbar shown directly above the table. */
+.bs-scroll-proxy {
+  display: none; /* shown by syncBsScrollProxy() only when the table overflows */
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.bs-scroll-proxy-inner {
+  height: 1px;
 }
 
 .bs-table {
@@ -895,19 +930,20 @@ tbody tr:hover {
   letter-spacing: 0.03em;
   border-bottom: 2px solid #cbd5e1;
   position: sticky;
-  top: 0;
+  top: var(--bs-proxy-h, 16px);
   z-index: 10;
 }
 
 .bs-sticky-col {
   position: sticky;
   left: 0;
-  background-color: inherit;
+  background-color: #ffffff;
   z-index: 5;
   min-width: 195px;
   max-width: 240px;
   width: 220px;
-  box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.06);
+  border-right: 1px solid #e2e8f0;
+  box-shadow: 4px 0 6px -3px rgba(0, 0, 0, 0.12);
   white-space: normal !important;
   word-break: break-word;
   line-height: 1.3;
@@ -917,6 +953,17 @@ tbody tr:hover {
   z-index: 15;
   background: #f1f5f9;
 }
+
+/* Opaque backgrounds so columns scrolling under the frozen first column
+   never show through it. Match each row type's own colour. */
+.bs-table tbody .bs-sticky-col { background-color: #ffffff; }
+.bs-table tbody tr.bs-category-header .bs-sticky-col,
+.bs-table tbody tr.bs-subtotal-row  .bs-sticky-col { background-color: #f8fafc; }
+.bs-table tbody tr.bs-deferred-tax-row .bs-sticky-col { background-color: #fffbeb; }
+.bs-table tbody tr.bs-grand-total-row  .bs-sticky-col { background-color: #0f172a; }
+.bs-table tbody tr.table-primary .bs-sticky-col { background-color: #cfe2ff; }
+.bs-table tbody tr.table-danger  .bs-sticky-col { background-color: #f8d7da; }
+.bs-table tbody tr.table-light   .bs-sticky-col { background-color: #fcfcfd; }
 
 .bs-inst-col {
   min-width: 70px;
@@ -1054,7 +1101,8 @@ tbody tr:hover {
 }
 
 .bs-input-val {
-  width: 120px;
+  width: 100%;
+  min-width: 88px;
   text-align: right;
   font-weight: 500;
 }
