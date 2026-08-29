@@ -458,7 +458,7 @@ def enter_view(request):
         # views over the same accounts, so they don't need a second validation pass.
         validation_errors.extend(validate_accounts(accounts, user_age, user_age_death, is_married, spouse_age, spouse_age_death))
         validation_errors.extend(validate_balance_sheet_accounts(balance_sheet))
-        validation_errors.extend(validate_additional_spending(additional_spending, user_age, user_age_death))
+        validation_errors.extend(validate_additional_spending(additional_spending, user_age, user_age_death, is_married, spouse_age, spouse_age_death))
         validation_errors.extend(validate_scheduled_items("Income Source", income_sources))
         validation_errors.extend(validate_scheduled_items("Other Tax item", other_taxes))
                 

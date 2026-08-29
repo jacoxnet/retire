@@ -2679,14 +2679,155 @@ class BalanceSheetTests(TestCase):
         self.assertContains(resp, "Multiple accounts cannot have the same name")
 
 
+class AgeDisambiguationTests(TestCase):
+    def test_resolve_age_user_and_spouse_specified(self):
+        from core.runs import resolve_age
 
+        # Single user
+        self.assertEqual(resolve_age('user_specified', 67, 60, 65, False), 67)
+        self.assertEqual(resolve_age('specified', 67, 60, 65, False), 67)
 
+        # Married: User 60, Spouse 58 (Delta = +2 in user coordinates)
+        # When spouse is 65, user is 67.
+        self.assertEqual(resolve_age('spouse_specified', 65, 60, 65, True, 58, 62, 90, 88), 67)
+        self.assertEqual(resolve_age('user_specified', 68, 60, 65, True, 58, 62, 90, 88), 68)
+        self.assertEqual(resolve_age('spouse_retirement', None, 60, 65, True, 58, 62, 90, 88), 64) # 62 + 2 = 64
+        self.assertEqual(resolve_age('spouse_death', None, 60, 65, True, 58, 62, 90, 88), 90) # 88 + 2 = 90
 
+    def test_spouse_account_specified_end_age(self):
+        from core.runs import get_contributions_for_year
 
+        # User is 60, Spouse is 58 (offset = +2)
+        # Spouse account: contrib start age 58, contrib end age specified 62 (in spouse age)
+        acc_spouse = {
+            'is_spouse': True,
+            'contrib_amount': 10000.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 58,
+            'contrib_end_age_type': 'spouse_specified',
+            'contrib_end_age_specified': 62,
+            'contrib_adjust_inflation': False,
+            'user_ret_age': 65,
+            'spouse_ret_age': 65
+        }
+        # Year 0: User is 60 (Spouse 58) -> within 58..62
+        c0 = get_contributions_for_year(0, 60, True, 58, 2026, acc_spouse)
+        self.assertEqual(c0, 10000.0)
 
+        # Year 4: User is 64 (Spouse 62) -> within 58..62
+        c4 = get_contributions_for_year(4, 60, True, 58, 2026, acc_spouse)
+        self.assertEqual(c4, 10000.0)
 
+        # Year 5: User is 65 (Spouse 63) -> past spouse age 62
+        c5 = get_contributions_for_year(5, 60, True, 58, 2026, acc_spouse)
+        self.assertEqual(c5, 0.0)
 
+    def test_additional_spending_spouse_start_age(self):
+        from core.runs import run_deterministic
+        # User is 60, Spouse is 55 (Spouse is 5 years younger; offset = +5)
+        # Additional spending tied to spouse age 60: starts when spouse is 60 (User is 65, year t=5)
+        sim_input = {
+            'user_name': 'Primary',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 80,
+            'is_married': True,
+            'spouse_name': 'Spouse',
+            'spouse_age': 55,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 80,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'inflation_rate': 0.0,
+            'desired_spending': 0.0,
+            'begin_spending_age_type': 'retirement',
+            'taxable_assets': {'present_balance': 500000.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'additional_spending': [
+                {
+                    'name': 'Spouse Celebration',
+                    'amount': 25000.0,
+                    'start_age': 60,
+                    'start_age_type': 'spouse',
+                    'interval': 0,
+                    'adjust_inflation': False
+                }
+            ],
+            'income_sources': []
+        }
+        steps = run_deterministic(sim_input)
 
+        # Year 0..4 (User 60..64, Spouse 55..59): spending should be 0
+        for t in range(5):
+            self.assertEqual(steps[t]['additional_spending'], 0.0, f"Year {t} should have 0 spending")
 
+        # Year 5 (User 65, Spouse 60): spending should be 25,000
+        self.assertEqual(steps[5]['additional_spending'], 25000.0, "Year 5 should have $25k spending")
 
+    def test_income_source_spouse_specified_dates(self):
+        from core.runs import run_deterministic
+        # User 60, Spouse 55. Income stream starts at spouse age 60 (User 65, t=5) and ends at spouse age 62 (User 67, t=7)
+        sim_input = {
+            'user_name': 'Primary',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 80,
+            'is_married': True,
+            'spouse_name': 'Spouse',
+            'spouse_age': 55,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 80,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'inflation_rate': 0.0,
+            'desired_spending': 0.0,
+            'begin_spending_age_type': 'retirement',
+            'social_security': {'user_entitled': False, 'spouse_entitled': False},
+            'taxable_assets': {'present_balance': 100000.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'income_sources': [
+                {
+                    'name': 'Spouse Temporary Contract',
+                    'amount': 30000.0,
+                    'frequency': 'annual',
+                    'start_age_type': 'spouse_specified',
+                    'start_age_specified': 60,
+                    'end_age_type': 'spouse_specified',
+                    'end_age_specified': 62,
+                    'subject_to_tax': False,
+                    'adjustments': [{'start_type': 'start', 'end_type': 'death', 'adjust_type': 'none', 'adjust_val': 0.0}]
+                }
+            ]
+        }
+        steps = run_deterministic(sim_input)
 
+        # Year 0..4 (User 60..64): income 0
+        for t in range(5):
+            self.assertEqual(steps[t]['income'], 0.0, f"Year {t} income should be 0")
+
+        # Year 5..7 (User 65..67, Spouse 60..62): income 30,000
+        for t in range(5, 8):
+            self.assertEqual(steps[t]['income'], 30000.0, f"Year {t} income should be 30000")
+
+        # Year 8+ (User 68+, Spouse 63+): income 0
+        self.assertEqual(steps[8]['income'], 0.0, "Year 8 income should be 0")
+
+    def test_form_validation_for_user_and_spouse_specified_fields(self):
+        from core.forms import validate_additional_spending, validate_accounts
+
+        # Additional spending validation for spouse
+        errors = validate_additional_spending([
+            {'name': 'Trip', 'amount': 5000.0, 'start_age': 55, 'start_age_type': 'spouse', 'interval': 0, 'adjust_inflation': True}
+        ], user_age=60, user_age_death=90, is_married=True, spouse_age=50, spouse_age_death=85)
+        self.assertEqual(len(errors), 0)
+
+        # Invalid start_age for spouse (below spouse present age)
+        errors = validate_additional_spending([
+            {'name': 'Trip', 'amount': 5000.0, 'start_age': 45, 'start_age_type': 'spouse', 'interval': 0, 'adjust_inflation': True}
+        ], user_age=60, user_age_death=90, is_married=True, spouse_age=50, spouse_age_death=85)
+        self.assertIn("cannot be younger than Spouse's Present Age", errors[0])
+
+        # Accounts validation with user_specified and spouse_specified
+        acc_errors = validate_accounts([
+            {'id': 'a1', 'name': 'Acc 1', 'type': 'pretax', 'owner': 'user', 'balance': 1000.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual', 'contrib_start_age': 60, 'contrib_end_age_type': 'user_specified', 'contrib_end_age_specified': 65, 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0, 'hsa_for_medical': True},
+            {'id': 'a2', 'name': 'Acc 2', 'type': 'pretax', 'owner': 'spouse', 'balance': 1000.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual', 'contrib_start_age': 55, 'contrib_end_age_type': 'spouse_specified', 'contrib_end_age_specified': 60, 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0, 'hsa_for_medical': True}
+        ], user_age=60, user_age_death=90, is_married=True, spouse_age=55, spouse_age_death=85)
+        self.assertEqual(len(acc_errors), 0)

@@ -42,7 +42,7 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="assets-tab" data-bs-toggle="tab" data-bs-target="#assets" type="button"
-                    role="tab" aria-controls="assets" aria-selected="false">Accounts</button>
+                    role="tab" aria-controls="assets" aria-selected="false">Accounts for Retirement</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="spending-tab" data-bs-toggle="tab" data-bs-target="#spending"
@@ -188,14 +188,16 @@
                             <select class="form-select" id="begin_spending_age_type" name="begin_spending_age_type">
                                 <option value="retirement" {% if begin_spending_age_type == 'retirement' %}selected{% endif %}>Your Retirement Age</option>
                                 <option value="spouse_retirement" {% if begin_spending_age_type == 'spouse_retirement' %}selected{% endif %}>Spouse's Retirement Age</option>
-                                <option value="specified" {% if begin_spending_age_type == 'specified' %}selected{% endif %}>Specified Age</option>
+                                <option value="user_specified" {% if begin_spending_age_type == 'user_specified' or begin_spending_age_type == 'specified' %}selected{% endif %}>Specify Your Age</option>
+                                <option value="spouse_specified" {% if begin_spending_age_type == 'spouse_specified' %}selected{% endif %}>Specify Spouse's Age</option>
                             </select>
                         </div>
                         <div class="col-md-4 mb-3" id="begin_spending_specified_group"
-                            style="display: {% if begin_spending_age_type == 'specified' %}block{% else %}none{% endif %};">
-                            <label for="begin_spending_age_specified" class="form-label">Specified Spending Start Age</label>
+                            style="display: {% if begin_spending_age_type in 'specified,user_specified,spouse_specified' %}block{% else %}none{% endif %};">
+                            <label for="begin_spending_age_specified" class="form-label" id="begin_spending_specified_label">Specified Spending Start Age</label>
                             <input type="number" class="form-control" id="begin_spending_age_specified"
-                                name="begin_spending_age_specified" value="{{ begin_spending_age_specified }}">
+                                name="begin_spending_age_specified" value="{{ begin_spending_age_specified }}" min="18" max="120" placeholder="Age">
+                            <div class="age-helper-badge small text-muted fst-italic mt-1" id="begin_spending_age_helper"></div>
                         </div>
                     </div>
 
@@ -232,7 +234,7 @@
                     </div>
 
                     <div class="text-center mt-4">
-                        <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Next: Accounts</button>
+                        <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Next: Accounts for Retirement</button>
                     </div>
                 </div>
             </div>
@@ -242,7 +244,7 @@
                 <div class="card p-4 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h3 class="mb-1 text-primary">Accounts</h3>
+                            <h3 class="mb-1 text-primary">Accounts for Retirement</h3>
                             <p class="text-secondary small mb-0">Configure your investment, retirement, brokerage, and HSA accounts.</p>
                         </div>
                     </div>
@@ -286,11 +288,11 @@
                         <table class="table align-middle" id="additionalSpendingTable" style="min-width: 800px;">
                             <thead>
                                 <tr>
-                                    <th style="width: 25%; min-width: 140px;">Spending Item Name</th>
-                                    <th style="width: 20%; min-width: 110px;">Amount (Current)</th>
-                                    <th style="width: 15%; min-width: 80px;">Start Age</th>
-                                    <th style="width: 20%; min-width: 130px;">Interval (Years) <small class="text-muted">(0 for one-time)</small></th>
-                                    <th style="width: 15%; min-width: 110px;">Adjust for Inflation?</th>
+                                    <th style="width: 22%; min-width: 130px;">Spending Item Name</th>
+                                    <th style="width: 16%; min-width: 90px;">Amount (Current $)</th>
+                                    <th style="width: 28%; min-width: 200px;">Start Age</th>
+                                    <th style="width: 16%; min-width: 100px;">Interval (Years) <small class="text-muted">(0 for one-time)</small></th>
+                                    <th style="width: 13%; min-width: 95px;">Adjust for Inflation?</th>
                                     <th style="width: 5%; min-width: 50px;">Action</th>
                                 </tr>
                             </thead>
@@ -454,22 +456,18 @@
                             <p class="text-secondary small mb-0">Track your entire net worth, sinking funds, home equity, and debts over time.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2 align-items-center">
-                            <div class="input-group input-group-sm" style="width: auto;">
-                                <span class="input-group-text bg-light text-muted fw-semibold">
-                                    <i class="fa-solid fa-percent me-1"></i> Pretax Marginal Tax Rate
-                                </span>
-                                <input type="number" step="0.1" min="0" max="60" class="form-control text-end fw-bold" id="bsMarginalTaxRateInput" style="max-width: 80px;" value="{{ balance_sheet.marginal_tax_rate|default:'24.0' }}">
-                                <span class="input-group-text bg-light">%</span>
-                            </div>
                             <div class="btn-group btn-group-sm" role="group" id="bsViewModeBtnGroup">
                                 <button type="button" class="btn btn-outline-primary active" id="btnBsModeDetailed" onclick="setBsViewMode('detailed')"><i class="fa-solid fa-table-list me-1"></i>Detailed View</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnBsModeSummary" onclick="setBsViewMode('summary')"><i class="fa-solid fa-list-check me-1"></i>Summary View</button>
                             </div>
-                            <div class="btn-group btn-group-sm" role="group" id="bsPeriodViewBtnGroup">
-                                <button type="button" class="btn btn-outline-secondary active" data-bs-period-limit="3" onclick="setBsPeriodView(3)">Last 3</button>
-                                <button type="button" class="btn btn-outline-secondary" data-bs-period-limit="6" onclick="setBsPeriodView(6)">Last 6</button>
-                                <button type="button" class="btn btn-outline-secondary" data-bs-period-limit="12" onclick="setBsPeriodView(12)">Last 12</button>
-                                <button type="button" class="btn btn-outline-secondary" data-bs-period-limit="0" onclick="setBsPeriodView(0)">All Periods</button>
+                            <div class="d-flex align-items-center gap-1" id="bsPeriodViewControls">
+                                <div class="input-group input-group-sm" style="width: auto;">
+                                    <span class="input-group-text bg-light text-muted fw-semibold">
+                                        <i class="fa-solid fa-table-columns me-1"></i> Columns:
+                                    </span>
+                                    <input type="number" min="1" max="100" step="1" class="form-control text-center fw-bold" id="bsColLimitInput" style="width: 60px;" value="3" title="Number of latest dated columns to display">
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnBsAllPeriods" onclick="toggleBsAllPeriods()">All Periods</button>
                             </div>
                             <button type="button" class="btn btn-primary btn-sm px-3" id="btnAddPeriodSnapshot" onclick="promptAddPeriodSnapshot()">
                                 <i class="fa fa-calendar-plus me-1"></i> Add Balance Sheet Column
@@ -853,18 +851,85 @@
         }
         if (spouseSsEntitled) spouseSsEntitled.addEventListener('change', toggleSpouseSsFields);
 
+        // Person Labels and Live Age Helper Utilities
+        function getPersonLabels() {
+            var uNameInput = document.getElementById('user_name');
+            var spNameInput = document.getElementById('spouse_name');
+            var uName = (uNameInput ? uNameInput.value.trim() : '') || 'You';
+            var spName = (spNameInput ? spNameInput.value.trim() : '') || 'Spouse';
+            var uAge = parseInt(document.getElementById('user_age').value, 10) || 60;
+            var spAge = parseInt(document.getElementById('spouse_age').value, 10) || 60;
+            var uRetAge = parseInt(document.getElementById('user_retirement_age').value, 10) || 65;
+            var spRetAge = parseInt(document.getElementById('spouse_retirement_age').value, 10) || 65;
+            var uDeathAge = parseInt(document.getElementById('user_age_death').value, 10) || 90;
+            var spDeathAge = parseInt(document.getElementById('spouse_age_death').value, 10) || 90;
+            var isMarried = isMarriedCheckbox ? isMarriedCheckbox.checked : false;
+            var curYear = parseInt(document.getElementById('current_year').value, 10) || 2026;
+
+            return {
+                userName: uName,
+                spouseName: spName,
+                userAge: uAge,
+                spouseAge: spAge,
+                userRetAge: uRetAge,
+                spouseRetAge: spRetAge,
+                userDeathAge: uDeathAge,
+                spouseDeathAge: spDeathAge,
+                isMarried: isMarried,
+                currentYear: curYear
+            };
+        }
+
+        function updateAgeHelperBadge(inputEl, isSpouseTarget) {
+            if (!inputEl) return;
+            var container = inputEl.parentElement;
+            if (!container) return;
+            var badge = container.querySelector('.age-helper-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'age-helper-badge small text-muted fst-italic mt-1';
+                container.appendChild(badge);
+            }
+            var ageVal = parseInt(inputEl.value, 10);
+            if (isNaN(ageVal) || ageVal < 18 || ageVal > 120) {
+                badge.textContent = '';
+                return;
+            }
+            var p = getPersonLabels();
+            var offset = (isSpouseTarget && p.isMarried) ? (ageVal - p.spouseAge) : (ageVal - p.userAge);
+            var calYear = p.currentYear + offset;
+            badge.innerHTML = `<i class="fa-regular fa-calendar me-1"></i>Year ${calYear}`;
+        }
+
         // 2. Spending Start Age Specified Field Toggle
         const beginSpendingAgeType = document.getElementById('begin_spending_age_type');
         const beginSpendingSpecifiedGroup = document.getElementById('begin_spending_specified_group');
 
         function toggleSpendingStartAge() {
-            if (beginSpendingAgeType.value === 'specified') {
-                beginSpendingSpecifiedGroup.style.display = 'block';
+            var val = beginSpendingAgeType.value;
+            var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(val);
+            beginSpendingSpecifiedGroup.style.display = isSpec ? 'block' : 'none';
+            var p = getPersonLabels();
+            var specLabel = document.getElementById('begin_spending_specified_label');
+            var specInput = document.getElementById('begin_spending_age_specified');
+            if (val === 'spouse_specified') {
+                if (specLabel) specLabel.textContent = (p.isMarried ? p.spouseName + "'s " : "Spouse's ") + "Specified Spending Start Age";
+                if (specInput) specInput.placeholder = (p.isMarried ? p.spouseName + "'s " : "Spouse's ") + "Age";
             } else {
-                beginSpendingSpecifiedGroup.style.display = 'none';
+                if (specLabel) specLabel.textContent = (p.isMarried ? p.userName + "'s " : "Your ") + "Specified Spending Start Age";
+                if (specInput) specInput.placeholder = (p.isMarried ? p.userName + "'s " : "Your ") + "Age";
+            }
+            if (specInput) {
+                updateAgeHelperBadge(specInput, val === 'spouse_specified');
             }
         }
         beginSpendingAgeType.addEventListener('change', toggleSpendingStartAge);
+        var beginSpendingAgeSpecInput = document.getElementById('begin_spending_age_specified');
+        if (beginSpendingAgeSpecInput) {
+            beginSpendingAgeSpecInput.addEventListener('input', function() {
+                updateAgeHelperBadge(this, beginSpendingAgeType.value === 'spouse_specified');
+            });
+        }
 
 
         // 4. Dynamic Accounts List Manager
@@ -886,18 +951,17 @@
             var type = (rawType === 'cash') ? 'taxable' : rawType;
             var owner = data.owner || 'user';
             var id = data.id || ('acc_' + type + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
-            var baseDefaultName = (owner === 'spouse' ? "Spouse's " : "") + (type === 'pretax' ? 'Traditional 401(k) / IRA' : (type === 'roth' ? 'Roth IRA / 401(k)' : (type === 'hsa' ? 'Health Savings Account (HSA)' : 'Taxable Brokerage')));
+            var p = getPersonLabels();
+            var baseDefaultName = (owner === 'spouse' ? (p.isMarried ? p.spouseName + "'s " : "Spouse's ") : "") + (type === 'pretax' ? 'Traditional 401(k) / IRA' : (type === 'roth' ? 'Roth IRA / 401(k)' : (type === 'hsa' ? 'Health Savings Account (HSA)' : 'Taxable Brokerage')));
             var existingNames = Array.from(document.querySelectorAll('#accountsContainer [name="account_name[]"]')).map(function(el) { return el.value.trim(); });
             var defaultName = getUniqueAccountDefaultName(baseDefaultName, existingNames);
             var name = data.name !== undefined ? data.name : defaultName;
             var balance = data.balance !== undefined ? data.balance : 0;
             var contribAmount = data.contrib_amount !== undefined ? data.contrib_amount : 0;
             var contribFreq = data.contrib_freq || 'annual';
-            var userAge = parseInt(document.getElementById('user_age').value) || 60;
-            var spouseAge = parseInt(document.getElementById('spouse_age').value) || 60;
-            var contribStartAge = data.contrib_start_age !== undefined ? data.contrib_start_age : (owner === 'spouse' ? spouseAge : userAge);
+            var contribStartAge = data.contrib_start_age !== undefined ? data.contrib_start_age : (owner === 'spouse' ? p.spouseAge : p.userAge);
             var contribEndAgeType = data.contrib_end_age_type || (owner === 'spouse' ? 'spouse_retirement' : 'retirement');
-            var contribEndAgeSpec = data.contrib_end_age_specified !== undefined ? data.contrib_end_age_specified : 65;
+            var contribEndAgeSpec = data.contrib_end_age_specified !== undefined ? data.contrib_end_age_specified : (owner === 'spouse' ? p.spouseRetAge : p.userRetAge);
             var contribAdjustInf = data.contrib_adjust_inflation !== undefined ? data.contrib_adjust_inflation : true;
             var returnMean = data.return_mean !== undefined ? data.return_mean : (['taxable', 'hsa'].includes(type) ? 5.0 : 6.0);
             var returnStd = data.return_std !== undefined ? data.return_std : (['taxable', 'hsa'].includes(type) ? 8.0 : 10.0);
@@ -938,8 +1002,8 @@
                         <div class="col-5 acc-owner-group" style="display: ${isMarried ? 'block' : 'none'};">
                             <label class="form-label small fw-bold mb-1">Owner</label>
                             <select class="form-select form-select-sm acc-owner-select" name="account_owner[]">
-                                <option value="user" ${owner === 'user' ? 'selected' : ''}>You</option>
-                                <option value="spouse" ${owner === 'spouse' ? 'selected' : ''}>Spouse</option>
+                                <option value="user" ${owner === 'user' ? 'selected' : ''}>You (${p.userName})</option>
+                                <option value="spouse" ${owner === 'spouse' ? 'selected' : ''}>Spouse (${p.spouseName})</option>
                             </select>
                         </div>
                     </div>
@@ -969,18 +1033,21 @@
                     <!-- Row 4: Contribution Timing -->
                     <div class="row g-2 mb-3 align-items-start">
                         <div class="col-6">
-                            <label class="form-label small fw-bold mb-1">Contribution Start Age</label>
-                            <input type="number" class="form-control form-control-sm" name="account_contrib_start_age[]" value="${contribStartAge}" min="18" max="120">
+                            <label class="form-label small fw-bold mb-1 acc-start-age-label">${owner === 'spouse' ? (isMarried ? p.spouseName + "'s " : "Spouse's ") : (isMarried ? p.userName + "'s " : "Your ")}Contribution Start Age</label>
+                            <input type="number" class="form-control form-control-sm acc-start-age-input" name="account_contrib_start_age[]" value="${contribStartAge}" min="18" max="120">
+                            <div class="age-helper-badge small text-muted fst-italic mt-1"></div>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-bold mb-1">Contribution End Age</label>
                             <select class="form-select form-select-sm acc-end-age-type" name="account_contrib_end_age_type[]">
-                                <option value="retirement" ${contribEndAgeType === 'retirement' ? 'selected' : ''}>Your Retirement</option>
-                                <option value="spouse_retirement" ${contribEndAgeType === 'spouse_retirement' ? 'selected' : ''}>Spouse Retirement</option>
+                                <option value="retirement" ${contribEndAgeType === 'retirement' ? 'selected' : ''}>${isMarried ? p.userName + "'s Retirement" : "Your Retirement"}</option>
+                                <option value="spouse_retirement" ${contribEndAgeType === 'spouse_retirement' ? 'selected' : ''}>${p.spouseName}'s Retirement</option>
                                 <option value="first_death" ${contribEndAgeType === 'first_death' ? 'selected' : ''}>First Death</option>
-                                <option value="age" ${contribEndAgeType === 'age' ? 'selected' : ''}>Specified Age</option>
+                                <option value="user_specified" ${contribEndAgeType === 'user_specified' || (contribEndAgeType === 'age' && owner !== 'spouse') ? 'selected' : ''}>Specify ${isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                <option value="spouse_specified" ${contribEndAgeType === 'spouse_specified' || (contribEndAgeType === 'age' && owner === 'spouse') ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
                             </select>
-                            <input type="number" class="form-control form-control-sm mt-1 acc-end-age-spec" name="account_contrib_end_age_specified[]" value="${contribEndAgeSpec}" min="18" max="120" style="display: ${contribEndAgeType === 'age' ? 'block' : 'none'};" placeholder="Specified Age">
+                            <input type="number" class="form-control form-control-sm mt-1 acc-end-age-spec" name="account_contrib_end_age_specified[]" value="${contribEndAgeSpec}" min="18" max="120" style="display: ${['age', 'user_specified', 'spouse_specified'].includes(contribEndAgeType) ? 'block' : 'none'};" placeholder="${owner === 'spouse' ? p.spouseName + "'s End Age" : p.userName + "'s End Age"}">
+                            <div class="age-helper-badge small text-muted fst-italic mt-1"></div>
                         </div>
                     </div>
 
@@ -1027,11 +1094,60 @@
                 }
             });
 
+            const ownerSelect = col.querySelector('.acc-owner-select');
+            const startAgeLabel = col.querySelector('.acc-start-age-label');
+            const startAgeInput = col.querySelector('.acc-start-age-input');
             const endAgeTypeSelect = col.querySelector('.acc-end-age-type');
             const endAgeSpecInput = col.querySelector('.acc-end-age-spec');
+
+            function refreshCardBadges() {
+                var curP = getPersonLabels();
+                var curOwner = ownerSelect ? ownerSelect.value : 'user';
+                var isSpouseOwner = curOwner === 'spouse';
+                updateAgeHelperBadge(startAgeInput, isSpouseOwner);
+                var isSpouseEnd = endAgeTypeSelect.value === 'spouse_specified' || (endAgeTypeSelect.value === 'age' && isSpouseOwner);
+                updateAgeHelperBadge(endAgeSpecInput, isSpouseEnd);
+            }
+
+            if (ownerSelect) {
+                ownerSelect.addEventListener('change', function() {
+                    var curP = getPersonLabels();
+                    var isSp = this.value === 'spouse';
+                    if (startAgeLabel) {
+                        startAgeLabel.textContent = (isSp ? (curP.isMarried ? curP.spouseName + "'s " : "Spouse's ") : (curP.isMarried ? curP.userName + "'s " : "Your ")) + "Contribution Start Age";
+                    }
+                    if (isSp) {
+                        if (endAgeTypeSelect.value === 'retirement') endAgeTypeSelect.value = 'spouse_retirement';
+                        if (endAgeTypeSelect.value === 'user_specified') endAgeTypeSelect.value = 'spouse_specified';
+                        if (endAgeSpecInput) endAgeSpecInput.placeholder = curP.spouseName + "'s End Age";
+                    } else {
+                        if (endAgeTypeSelect.value === 'spouse_retirement') endAgeTypeSelect.value = 'retirement';
+                        if (endAgeTypeSelect.value === 'spouse_specified') endAgeTypeSelect.value = 'user_specified';
+                        if (endAgeSpecInput) endAgeSpecInput.placeholder = curP.userName + "'s End Age";
+                    }
+                    refreshCardBadges();
+                });
+            }
+
             endAgeTypeSelect.addEventListener('change', function() {
-                endAgeSpecInput.style.display = (this.value === 'age') ? 'block' : 'none';
+                var isSpec = ['age', 'user_specified', 'spouse_specified'].includes(this.value);
+                endAgeSpecInput.style.display = isSpec ? 'block' : 'none';
+                var curP = getPersonLabels();
+                if (this.value === 'spouse_specified') {
+                    endAgeSpecInput.placeholder = curP.spouseName + "'s End Age";
+                } else if (this.value === 'user_specified') {
+                    endAgeSpecInput.placeholder = curP.userName + "'s End Age";
+                }
+                refreshCardBadges();
             });
+
+            if (startAgeInput) {
+                startAgeInput.addEventListener('input', refreshCardBadges);
+            }
+            if (endAgeSpecInput) {
+                endAgeSpecInput.addEventListener('input', refreshCardBadges);
+            }
+            refreshCardBadges();
 
             const volSelect = col.querySelector('.acc-volatility-select');
             const stdInput = col.querySelector('.acc-return-std');
@@ -1127,24 +1243,36 @@
             var name = data.name !== undefined ? data.name : '';
             var amount = data.amount !== undefined ? data.amount : 0;
             var startAge = data.start_age !== undefined ? data.start_age : 65;
+            var startAgeType = data.start_age_type || 'user';
             var interval = data.interval !== undefined ? data.interval : 0;
             var adjustInflation = data.adjust_inflation !== undefined ? data.adjust_inflation : true;
 
             var formattedAmt = formatMoney(amount);
+            var isMarried = isMarriedCheckbox.checked;
+            var p = getPersonLabels();
 
             var row = document.createElement('tr');
             row.innerHTML = `
                 <td>
-                    <input type="text" class="form-control" name="add_spending_name[]" value="${name}" placeholder="e.g. Car, World Cruise" required style="min-width: 130px;">
+                    <input type="text" class="form-control" name="add_spending_name[]" value="${name}" placeholder="e.g. Car, World Cruise" required style="min-width: 120px;">
                 </td>
                 <td>
-                    <input type="text" inputmode="numeric" class="form-control currency-input" name="add_spending_amount[]" value="${formattedAmt}" required style="min-width: 110px;">
+                    <input type="text" inputmode="numeric" class="form-control currency-input" name="add_spending_amount[]" value="${formattedAmt}" required style="min-width: 90px;">
                 </td>
                 <td>
-                    <input type="number" class="form-control" name="add_spending_start_age[]" value="${startAge}" min="18" max="110" required>
+                    <div class="d-flex flex-column gap-1">
+                        <div class="d-flex gap-1 align-items-center">
+                            <input type="number" class="form-control add-spending-start-age" name="add_spending_start_age[]" value="${startAge}" min="18" max="120" required style="min-width: 75px; max-width: 85px;">
+                            <select class="form-select form-select-sm add-spending-start-type" name="add_spending_start_age_type[]" style="display: ${isMarried ? 'inline-block' : 'none'}; min-width: 110px;">
+                                <option value="user" ${startAgeType === 'user' ? 'selected' : ''}>${p.userName}'s Age</option>
+                                <option value="spouse" ${startAgeType === 'spouse' ? 'selected' : ''}>${p.spouseName}'s Age</option>
+                            </select>
+                        </div>
+                        <div class="age-helper-badge small text-muted fst-italic"></div>
+                    </div>
                 </td>
                 <td>
-                    <input type="number" class="form-control" name="add_spending_interval[]" value="${interval}" min="0" max="50" required>
+                    <input type="number" class="form-control" name="add_spending_interval[]" value="${interval}" min="0" max="50" required style="min-width: 75px;">
                 </td>
                 <td>
                     <select class="form-select" name="add_spending_adjust_inflation[]">
@@ -1158,6 +1286,19 @@
                     </button>
                 </td>
             `;
+
+            var startAgeInput = row.querySelector('.add-spending-start-age');
+            var startTypeSelect = row.querySelector('.add-spending-start-type');
+            function refreshSpendingBadge() {
+                updateAgeHelperBadge(startAgeInput, startTypeSelect ? startTypeSelect.value === 'spouse' : false);
+            }
+            if (startAgeInput) {
+                startAgeInput.addEventListener('input', refreshSpendingBadge);
+            }
+            if (startTypeSelect) {
+                startTypeSelect.addEventListener('change', refreshSpendingBadge);
+            }
+            refreshSpendingBadge();
 
             row.querySelector('.btnDeleteRow').addEventListener('click', function () {
                 row.remove();
@@ -1259,6 +1400,7 @@
             var pEndSpec = pData.end_spec !== undefined ? pData.end_spec : 90;
             var pAdjType = pData.adjust_type !== undefined ? pData.adjust_type : 'inflation';
             var pAdjVal = pData.adjust_val !== undefined ? pData.adjust_val : 0.0;
+            var p = getPersonLabels();
 
             var pIndex = periodsContainer.children.length + 1;
             var pRow = document.createElement('div');
@@ -1273,29 +1415,37 @@
                 <div class="row g-2 align-items-center">
                     <div class="col-md-4">
                         <label class="form-label small mb-1 fw-semibold">From:</label>
-                        <div class="d-flex gap-1">
-                            <select class="form-select form-select-sm p-start-type">
-                                <option value="current_age" ${pStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
-                                <option value="start" ${pStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
-                                <option value="retirement" ${pStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                <option value="spouse_retirement" ${pStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                <option value="specified" ${pStartType === 'specified' ? 'selected' : ''}>Specify Age</option>
-                            </select>
-                            <input type="number" class="form-control form-control-sm p-start-spec" value="${pStartSpec}" min="18" max="120" style="display: ${pStartType === 'specified' ? 'block' : 'none'}; max-width: 80px;" placeholder="Age">
+                        <div class="d-flex flex-column gap-1">
+                            <div class="d-flex gap-1">
+                                <select class="form-select form-select-sm p-start-type">
+                                    <option value="current_age" ${pStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
+                                    <option value="start" ${pStartType === 'start' ? 'selected' : ''}>When Income Starts</option>
+                                    <option value="retirement" ${pStartType === 'retirement' ? 'selected' : ''}>${p.isMarried ? p.userName + "'s " : "Your "}Retirement Age</option>
+                                    <option value="spouse_retirement" ${pStartType === 'spouse_retirement' ? 'selected' : ''}>${p.spouseName}'s Retirement Age</option>
+                                    <option value="user_specified" ${pStartType === 'user_specified' || pStartType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                    <option value="spouse_specified" ${pStartType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                </select>
+                                <input type="number" class="form-control form-control-sm p-start-spec" value="${pStartSpec}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(pStartType) ? 'block' : 'none'}; max-width: 80px;" placeholder="Age">
+                            </div>
+                            <div class="age-helper-badge small text-muted fst-italic"></div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small mb-1 fw-semibold">To:</label>
-                        <div class="d-flex gap-1">
-                            <select class="form-select form-select-sm p-end-type">
-                                <option value="retirement" ${pEndType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                <option value="spouse_retirement" ${pEndType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                <option value="start" ${pEndType === 'start' ? 'selected' : ''}>When Income Starts</option>
-                                <option value="death" ${pEndType === 'death' ? 'selected' : ''}>At Your Death</option>
-                                <option value="spouse_death" ${pEndType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
-                                <option value="specified" ${pEndType === 'specified' ? 'selected' : ''}>Specify Age</option>
-                            </select>
-                            <input type="number" class="form-control form-control-sm p-end-spec" value="${pEndSpec}" min="18" max="120" style="display: ${pEndType === 'specified' ? 'block' : 'none'}; max-width: 80px;" placeholder="Age">
+                        <div class="d-flex flex-column gap-1">
+                            <div class="d-flex gap-1">
+                                <select class="form-select form-select-sm p-end-type">
+                                    <option value="retirement" ${pEndType === 'retirement' ? 'selected' : ''}>${p.isMarried ? p.userName + "'s " : "Your "}Retirement Age</option>
+                                    <option value="spouse_retirement" ${pEndType === 'spouse_retirement' ? 'selected' : ''}>${p.spouseName}'s Retirement Age</option>
+                                    <option value="start" ${pEndType === 'start' ? 'selected' : ''}>When Income Starts</option>
+                                    <option value="death" ${pEndType === 'death' ? 'selected' : ''}>At ${p.isMarried ? p.userName + "'s " : "Your "}Death</option>
+                                    <option value="spouse_death" ${pEndType === 'spouse_death' ? 'selected' : ''}>At ${p.spouseName}'s Death</option>
+                                    <option value="user_specified" ${pEndType === 'user_specified' || pEndType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                    <option value="spouse_specified" ${pEndType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                </select>
+                                <input type="number" class="form-control form-control-sm p-end-spec" value="${pEndSpec}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(pEndType) ? 'block' : 'none'}; max-width: 80px;" placeholder="Age">
+                            </div>
+                            <div class="age-helper-badge small text-muted fst-italic"></div>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -1313,20 +1463,40 @@
                 </div>
             `;
 
-            pRow.querySelector('.p-start-type').addEventListener('change', function () {
-                pRow.querySelector('.p-start-spec').style.display = this.value === 'specified' ? 'block' : 'none';
+            var startTypeSelect = pRow.querySelector('.p-start-type');
+            var startSpecInput = pRow.querySelector('.p-start-spec');
+            var endTypeSelect = pRow.querySelector('.p-end-type');
+            var endSpecInput = pRow.querySelector('.p-end-spec');
+
+            function refreshPeriodBadges() {
+                var isSpouseStart = startTypeSelect ? startTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(startSpecInput, isSpouseStart);
+                var isSpouseEnd = endTypeSelect ? endTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(endSpecInput, isSpouseEnd);
+            }
+
+            startTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                startSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshPeriodBadges();
                 serializeCardAdjustments(card);
             });
-            pRow.querySelector('.p-start-spec').addEventListener('input', function () {
+            startSpecInput.addEventListener('input', function () {
+                refreshPeriodBadges();
                 serializeCardAdjustments(card);
             });
-            pRow.querySelector('.p-end-type').addEventListener('change', function () {
-                pRow.querySelector('.p-end-spec').style.display = this.value === 'specified' ? 'block' : 'none';
+            endTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                endSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshPeriodBadges();
                 serializeCardAdjustments(card);
             });
-            pRow.querySelector('.p-end-spec').addEventListener('input', function () {
+            endSpecInput.addEventListener('input', function () {
+                refreshPeriodBadges();
                 serializeCardAdjustments(card);
             });
+            refreshPeriodBadges();
+
             pRow.querySelector('.p-adj-type').addEventListener('change', function () {
                 var showVal = ['fixed_pct', 'inflation_less_pct'].includes(this.value);
                 pRow.querySelector('.p-adj-val').style.display = showVal ? 'block' : 'none';
@@ -1364,6 +1534,7 @@
             var subjectToTax = data.subject_to_tax !== undefined ? data.subject_to_tax : true;
             var hasSurvivor = data.has_survivor_benefit !== undefined ? (data.has_survivor_benefit === true || data.has_survivor_benefit === 'true') : false;
             var survivorPct = data.survivor_benefit_pct !== undefined ? data.survivor_benefit_pct : 100.0;
+            var p = getPersonLabels();
 
             var formattedAmt = formatMoney(amount);
 
@@ -1398,24 +1569,32 @@
                     <div class="row g-3 mb-3 align-items-start">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Starts At</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select inc-start-type" name="income_start_age_type[]">
-                                    <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                    <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                    <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                </select>
-                                <input type="number" class="form-control inc-start-spec" name="income_start_age_specified[]" value="${startAge}" min="18" max="120" style="display: ${startType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Your Age at Start" placeholder="Age">
+                            <div class="d-flex flex-column gap-1">
+                                <div class="d-flex gap-2">
+                                    <select class="form-select inc-start-type" name="income_start_age_type[]">
+                                        <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>${p.isMarried ? p.userName + "'s " : "Your "}Retirement Age</option>
+                                        <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>${p.spouseName}'s Retirement Age</option>
+                                        <option value="user_specified" ${startType === 'user_specified' || startType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                        <option value="spouse_specified" ${startType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                    </select>
+                                    <input type="number" class="form-control inc-start-spec" name="income_start_age_specified[]" value="${startAge}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(startType) ? 'block' : 'none'}; max-width: 110px;" placeholder="Age">
+                                </div>
+                                <div class="age-helper-badge small text-muted fst-italic"></div>
                             </div>
                         </div>
                         <div class="col-md-6 inc-end-group" style="display: ${frequency === 'one_time' || frequency === 'one-time' ? 'none' : 'block'};">
                             <label class="form-label fw-semibold">Ends At</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select inc-end-type" name="income_end_age_type[]">
-                                    <option value="death" ${endType === 'death' ? 'selected' : ''}>At Your Death</option>
-                                    <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
-                                    <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                </select>
-                                <input type="number" class="form-control inc-end-spec" name="income_end_age_specified[]" value="${endAge}" min="18" max="120" style="display: ${endType === 'specified' ? 'block' : 'none'}; max-width: 110px;" title="Specified Age" placeholder="Age">
+                            <div class="d-flex flex-column gap-1">
+                                <div class="d-flex gap-2">
+                                    <select class="form-select inc-end-type" name="income_end_age_type[]">
+                                        <option value="death" ${endType === 'death' ? 'selected' : ''}>At ${p.isMarried ? p.userName + "'s " : "Your "}Death</option>
+                                        <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At ${p.spouseName}'s Death</option>
+                                        <option value="user_specified" ${endType === 'user_specified' || endType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                        <option value="spouse_specified" ${endType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                    </select>
+                                    <input type="number" class="form-control inc-end-spec" name="income_end_age_specified[]" value="${endAge}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(endType) ? 'block' : 'none'}; max-width: 110px;" placeholder="Age">
+                                </div>
+                                <div class="age-helper-badge small text-muted fst-italic"></div>
                             </div>
                         </div>
                     </div>
@@ -1483,22 +1662,39 @@
                 </div>
             `;
 
+            var startTypeSelect = card.querySelector('.inc-start-type');
+            var startSpecInput = card.querySelector('.inc-start-spec');
+            var endTypeSelect = card.querySelector('.inc-end-type');
+            var endSpecInput = card.querySelector('.inc-end-spec');
+
+            function refreshIncomeBadges() {
+                var isSpouseStart = startTypeSelect ? startTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(startSpecInput, isSpouseStart);
+                var isSpouseEnd = endTypeSelect ? endTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(endSpecInput, isSpouseEnd);
+            }
+
             card.querySelector('.inc-frequency').addEventListener('change', function () {
                 var endGroup = card.querySelector('.inc-end-group');
                 endGroup.style.display = (this.value === 'one_time' || this.value === 'one-time') ? 'none' : 'block';
                 updateCardSurvivorSection(card);
             });
 
-            card.querySelector('.inc-start-type').addEventListener('change', function () {
-                var specInput = card.querySelector('.inc-start-spec');
-                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            startTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                startSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshIncomeBadges();
             });
+            startSpecInput.addEventListener('input', refreshIncomeBadges);
 
-            card.querySelector('.inc-end-type').addEventListener('change', function () {
-                var specInput = card.querySelector('.inc-end-spec');
-                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            endTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                endSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshIncomeBadges();
                 updateCardSurvivorSection(card);
             });
+            endSpecInput.addEventListener('input', refreshIncomeBadges);
+            refreshIncomeBadges();
 
             card.querySelector('.inc-has-survivor').addEventListener('change', function () {
                 var details = card.querySelector('.inc-survivor-details');
@@ -1582,6 +1778,7 @@
             var adjustVal = data.adjust_val !== undefined ? data.adjust_val : 0.0;
             var adjustStartType = data.adjust_start_age_type !== undefined ? data.adjust_start_age_type : 'start';
             var adjustStartAge = data.adjust_start_age_specified !== undefined ? data.adjust_start_age_specified : 65;
+            var p = getPersonLabels();
 
             var formattedAmt = formatMoney(amount);
 
@@ -1616,24 +1813,32 @@
                     <div class="row g-3 mb-3 align-items-start">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Starts At</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select ot-start-type" name="other_tax_start_age_type[]">
-                                    <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                    <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                    <option value="specified" ${startType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                </select>
-                                <input type="number" class="form-control ot-start-spec" name="other_tax_start_age_specified[]" value="${startAge}" min="18" max="120" style="display: ${startType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Your Age at Start" placeholder="Age">
+                            <div class="d-flex flex-column gap-1">
+                                <div class="d-flex gap-2">
+                                    <select class="form-select ot-start-type" name="other_tax_start_age_type[]">
+                                        <option value="retirement" ${startType === 'retirement' ? 'selected' : ''}>${p.isMarried ? p.userName + "'s " : "Your "}Retirement Age</option>
+                                        <option value="spouse_retirement" ${startType === 'spouse_retirement' ? 'selected' : ''}>${p.spouseName}'s Retirement Age</option>
+                                        <option value="user_specified" ${startType === 'user_specified' || startType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                        <option value="spouse_specified" ${startType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                    </select>
+                                    <input type="number" class="form-control ot-start-spec" name="other_tax_start_age_specified[]" value="${startAge}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(startType) ? 'block' : 'none'}; max-width: 110px;" placeholder="Age">
+                                </div>
+                                <div class="age-helper-badge small text-muted fst-italic"></div>
                             </div>
                         </div>
                         <div class="col-md-6 ot-end-group" style="display: ${frequency === 'one_time' || frequency === 'one-time' ? 'none' : 'block'};">
                             <label class="form-label fw-semibold">Ends At</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select ot-end-type" name="other_tax_end_age_type[]">
-                                    <option value="death" ${endType === 'death' ? 'selected' : ''}>At Your Death</option>
-                                    <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At Spouse's Death</option>
-                                    <option value="specified" ${endType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                </select>
-                                <input type="number" class="form-control ot-end-spec" name="other_tax_end_age_specified[]" value="${endAge}" min="18" max="120" style="display: ${endType === 'specified' ? 'block' : 'none'}; max-width: 110px;" title="Specified Age" placeholder="Age">
+                            <div class="d-flex flex-column gap-1">
+                                <div class="d-flex gap-2">
+                                    <select class="form-select ot-end-type" name="other_tax_end_age_type[]">
+                                        <option value="death" ${endType === 'death' ? 'selected' : ''}>At ${p.isMarried ? p.userName + "'s " : "Your "}Death</option>
+                                        <option value="spouse_death" ${endType === 'spouse_death' ? 'selected' : ''}>At ${p.spouseName}'s Death</option>
+                                        <option value="user_specified" ${endType === 'user_specified' || endType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                        <option value="spouse_specified" ${endType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                    </select>
+                                    <input type="number" class="form-control ot-end-spec" name="other_tax_end_age_specified[]" value="${endAge}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(endType) ? 'block' : 'none'}; max-width: 110px;" placeholder="Age">
+                                </div>
+                                <div class="age-helper-badge small text-muted fst-italic"></div>
                             </div>
                         </div>
                     </div>
@@ -1653,35 +1858,59 @@
                         </div>
                         <div class="col-md-6 ot-adjust-start-group" style="display: ${adjustType === 'none' ? 'none' : 'block'};">
                             <label class="form-label fw-semibold">Adjustment Begins At</label>
-                            <div class="d-flex gap-2">
-                                <select class="form-select ot-adjust-start-type" name="other_tax_adjust_start_age_type[]">
-                                    <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Tax Starts</option>
-                                    <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>Your Retirement Age</option>
-                                    <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>Spouse's Retirement Age</option>
-                                    <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
-                                    <option value="specified" ${adjustStartType === 'specified' ? 'selected' : ''}>Specify an Age</option>
-                                </select>
-                                <input type="number" class="form-control ot-adjust-start-spec" name="other_tax_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${adjustStartType === 'specified' ? 'block' : 'none'}; max-width: 130px;" title="Adjustment Start Age" placeholder="Age">
+                            <div class="d-flex flex-column gap-1">
+                                <div class="d-flex gap-2">
+                                    <select class="form-select ot-adjust-start-type" name="other_tax_adjust_start_age_type[]">
+                                        <option value="start" ${adjustStartType === 'start' ? 'selected' : ''}>When Tax Starts</option>
+                                        <option value="retirement" ${adjustStartType === 'retirement' ? 'selected' : ''}>${p.isMarried ? p.userName + "'s " : "Your "}Retirement Age</option>
+                                        <option value="spouse_retirement" ${adjustStartType === 'spouse_retirement' ? 'selected' : ''}>${p.spouseName}'s Retirement Age</option>
+                                        <option value="current_age" ${adjustStartType === 'current_age' ? 'selected' : ''}>At Current Age</option>
+                                        <option value="user_specified" ${adjustStartType === 'user_specified' || adjustStartType === 'specified' ? 'selected' : ''}>Specify ${p.isMarried ? p.userName + "'s " : "Your "}Age</option>
+                                        <option value="spouse_specified" ${adjustStartType === 'spouse_specified' ? 'selected' : ''}>Specify ${p.spouseName}'s Age</option>
+                                    </select>
+                                    <input type="number" class="form-control ot-adjust-start-spec" name="other_tax_adjust_start_age_specified[]" value="${adjustStartAge}" min="18" max="120" style="display: ${['specified', 'user_specified', 'spouse_specified'].includes(adjustStartType) ? 'block' : 'none'}; max-width: 110px;" placeholder="Age">
+                                </div>
+                                <div class="age-helper-badge small text-muted fst-italic"></div>
                             </div>
                         </div>
                     </div>
                 </div>
             `;
 
+            var startTypeSelect = card.querySelector('.ot-start-type');
+            var startSpecInput = card.querySelector('.ot-start-spec');
+            var endTypeSelect = card.querySelector('.ot-end-type');
+            var endSpecInput = card.querySelector('.ot-end-spec');
+            var adjStartTypeSelect = card.querySelector('.ot-adjust-start-type');
+            var adjStartSpecInput = card.querySelector('.ot-adjust-start-spec');
+
+            function refreshTaxBadges() {
+                var isSpouseStart = startTypeSelect ? startTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(startSpecInput, isSpouseStart);
+                var isSpouseEnd = endTypeSelect ? endTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(endSpecInput, isSpouseEnd);
+                var isSpouseAdj = adjStartTypeSelect ? adjStartTypeSelect.value === 'spouse_specified' : false;
+                updateAgeHelperBadge(adjStartSpecInput, isSpouseAdj);
+            }
+
             card.querySelector('.ot-frequency').addEventListener('change', function () {
                 var endGroup = card.querySelector('.ot-end-group');
                 endGroup.style.display = (this.value === 'one_time' || this.value === 'one-time') ? 'none' : 'block';
             });
 
-            card.querySelector('.ot-start-type').addEventListener('change', function () {
-                var specInput = card.querySelector('.ot-start-spec');
-                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            startTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                startSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshTaxBadges();
             });
+            startSpecInput.addEventListener('input', refreshTaxBadges);
 
-            card.querySelector('.ot-end-type').addEventListener('change', function () {
-                var specInput = card.querySelector('.ot-end-spec');
-                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            endTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                endSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshTaxBadges();
             });
+            endSpecInput.addEventListener('input', refreshTaxBadges);
 
             card.querySelector('.ot-adjust-type').addEventListener('change', function () {
                 var valInput = card.querySelector('.ot-adjust-val');
@@ -1693,10 +1922,13 @@
                 }
             });
 
-            card.querySelector('.ot-adjust-start-type').addEventListener('change', function () {
-                var specInput = card.querySelector('.ot-adjust-start-spec');
-                specInput.style.display = this.value === 'specified' ? 'block' : 'none';
+            adjStartTypeSelect.addEventListener('change', function () {
+                var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(this.value);
+                adjStartSpecInput.style.display = isSpec ? 'block' : 'none';
+                refreshTaxBadges();
             });
+            adjStartSpecInput.addEventListener('input', refreshTaxBadges);
+            refreshTaxBadges();
 
             card.querySelector('.btnDeleteRow').addEventListener('click', function () {
                 card.remove();
@@ -1815,24 +2047,62 @@
         }
         ensureBsAccountIds();
 
+        function getCalculatedMarginalTaxRate() {
+            var isMarried = document.getElementById('is_married')?.checked;
+            var stateRate = parsePercent(document.getElementById('state_tax_rate')?.value || '0') / 100.0;
+            var spending = parseMoney(document.getElementById('desired_spending')?.value || '60000');
+            var stdDed = isMarried ? 32200 : 16100;
+            var taxableBase = Math.max(0, spending - stdDed);
+            var thresholds = isMarried ? [24800, 100800, 215400, 410800, 521750, 783700] : [12400, 50400, 107700, 205400, 260875, 652050];
+            var rates = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37];
+            var fedRate = rates[0];
+            for (var i = 0; i < thresholds.length; i++) {
+                if (taxableBase > thresholds[i]) {
+                    fedRate = (i + 1 < rates.length) ? rates[i + 1] : rates[rates.length - 1];
+                } else {
+                    break;
+                }
+            }
+            return (fedRate + stateRate) * 100.0;
+        }
+
         try {
             var rawTax = JSON.parse(document.getElementById('initial-marginal-tax-rate').textContent);
             if (rawTax) {
                 bsState.marginal_tax_rate = parseFloat(rawTax) || 24.0;
+            } else {
+                bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
             }
-        } catch (e) {}
+        } catch (e) {
+            bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
+        }
 
-        var bsTaxInput = document.getElementById('bsMarginalTaxRateInput');
-        if (bsTaxInput) {
-            bsTaxInput.value = bsState.marginal_tax_rate;
-            bsTaxInput.addEventListener('input', function() {
-                var v = parseFloat(this.value);
-                if (!isNaN(v) && v >= 0 && v <= 100) {
-                    bsState.marginal_tax_rate = v;
+        function refreshBsMarginalTaxRate() {
+            bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
+            updateBsKpis();
+            renderBsHistoricalChart(bsState.chart_metric);
+        }
+
+        ['state_tax_rate', 'desired_spending', 'is_married'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', refreshBsMarginalTaxRate);
+                el.addEventListener('input', refreshBsMarginalTaxRate);
+            }
+        });
+
+        // Set default column limit to 3
+        bsState.period_view_limit = 3;
+        var bsColLimitInput = document.getElementById('bsColLimitInput');
+        if (bsColLimitInput) {
+            bsColLimitInput.value = bsState.period_view_limit;
+            bsColLimitInput.addEventListener('input', function() {
+                var v = parseInt(this.value, 10);
+                if (!isNaN(v) && v > 0) {
+                    bsState.period_view_limit = v;
+                    var allBtn = document.getElementById('btnBsAllPeriods');
+                    if (allBtn) allBtn.classList.remove('active');
                     renderBalanceSheetTable();
-                    updateBsKpis();
-                    renderBsHistoricalChart(bsState.chart_metric);
-                    serializeBalanceSheet();
                 }
             });
         }
@@ -1840,7 +2110,7 @@
         function getVisiblePeriods() {
             var periods = bsState.periods || [];
             if (!periods.length) return [new Date().toISOString().split('T')[0]];
-            if (!bsState.period_view_limit || bsState.period_view_limit >= periods.length) {
+            if (!bsState.period_view_limit || bsState.period_view_limit <= 0 || bsState.period_view_limit >= periods.length) {
                 return periods;
             }
             return periods.slice(-bsState.period_view_limit);
@@ -3664,12 +3934,28 @@
         // =========================================================================
         // PERIOD & ACCOUNT STRUCTURE MUTATIONS
         // =========================================================================
-        window.setBsPeriodView = function(limit) {
-            bsState.period_view_limit = limit;
-            document.querySelectorAll('[data-bs-period-limit]').forEach(function(btn) {
-                var bLimit = parseInt(btn.getAttribute('data-bs-period-limit'), 10);
-                btn.classList.toggle('active', bLimit === limit);
-            });
+        window.toggleBsAllPeriods = function() {
+            var allBtn = document.getElementById('btnBsAllPeriods');
+            var input = document.getElementById('bsColLimitInput');
+            if (bsState.period_view_limit === 0) {
+                var val = input ? parseInt(input.value, 10) || 3 : 3;
+                bsState.period_view_limit = val;
+                if (allBtn) allBtn.classList.remove('active');
+            } else {
+                bsState.period_view_limit = 0;
+                if (allBtn) allBtn.classList.add('active');
+            }
+            renderBalanceSheetTable();
+        };
+
+        window.setBsPeriodColLimit = function(limit) {
+            var n = parseInt(limit, 10);
+            if (isNaN(n) || n <= 0) n = 3;
+            bsState.period_view_limit = n;
+            var allBtn = document.getElementById('btnBsAllPeriods');
+            if (allBtn) allBtn.classList.remove('active');
+            var input = document.getElementById('bsColLimitInput');
+            if (input && input.value != n) input.value = n;
             renderBalanceSheetTable();
         };
 
@@ -4099,58 +4385,307 @@
         toggleSpendingStartAge();
 
         function updateSpouseDropdownOptions() {
-            var isMarried = isMarriedCheckbox.checked;
+            var p = getPersonLabels();
+            var isMarried = p.isMarried;
 
-            var selects = [
-                document.getElementById('begin_spending_age_type')
-            ];
-
-            document.querySelectorAll('.acc-end-age-type, .inc-start-type, .inc-end-type, .p-start-type, .p-end-type, .ot-start-type, .ot-end-type, .ot-adjust-start-type').forEach(function (s) {
-                selects.push(s);
-            });
-
-            selects.forEach(function (select) {
-                if (!select) return;
-                var options = select.options;
-                for (var i = 0; i < options.length; i++) {
-                    var opt = options[i];
-                    var isSpouseRelated = opt.value.includes('spouse');
-                    if (isSpouseRelated) {
+            // 1. Retirement Spending Start Age Select
+            var spendSelect = document.getElementById('begin_spending_age_type');
+            if (spendSelect) {
+                for (var i = 0; i < spendSelect.options.length; i++) {
+                    var opt = spendSelect.options[i];
+                    if (opt.value === 'retirement') {
+                        opt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement Age (" + p.userRetAge + ")";
+                    } else if (opt.value === 'spouse_retirement') {
+                        opt.textContent = p.spouseName + "'s Retirement Age (" + p.spouseRetAge + ")";
                         opt.style.display = isMarried ? 'block' : 'none';
                         opt.disabled = !isMarried;
-                        if (!isMarried && opt.selected) {
-                            if (select.classList.contains('p-start-type') || select.classList.contains('ot-adjust-start-type')) {
-                                select.value = 'current_age';
-                            } else if (opt.value === 'spouse_death') {
-                                select.value = 'death';
-                            } else {
-                                select.value = 'retirement';
-                            }
-                            var event = new Event('change');
-                            select.dispatchEvent(event);
+                    } else if (opt.value === 'user_specified' || opt.value === 'specified') {
+                        opt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                    } else if (opt.value === 'spouse_specified') {
+                        opt.textContent = "Specify " + p.spouseName + "'s Age";
+                        opt.style.display = isMarried ? 'block' : 'none';
+                        opt.disabled = !isMarried;
+                    }
+                }
+                if (!isMarried && spendSelect.value.includes('spouse')) {
+                    spendSelect.value = 'retirement';
+                    toggleSpendingStartAge();
+                }
+            }
+
+            // 2. Account Cards Selects & Labels
+            document.querySelectorAll('#accountsContainer .account-card-col').forEach(function(col) {
+                var ownerSelect = col.querySelector('.acc-owner-select');
+                var startAgeLabel = col.querySelector('.acc-start-age-label');
+                var endAgeTypeSelect = col.querySelector('.acc-end-age-type');
+                var endAgeSpecInput = col.querySelector('.acc-end-age-spec');
+                var curOwner = ownerSelect ? ownerSelect.value : 'user';
+                var isSp = curOwner === 'spouse';
+
+                if (ownerSelect) {
+                    for (var i = 0; i < ownerSelect.options.length; i++) {
+                        var oOpt = ownerSelect.options[i];
+                        if (oOpt.value === 'user') oOpt.textContent = "You (" + p.userName + ")";
+                        if (oOpt.value === 'spouse') oOpt.textContent = "Spouse (" + p.spouseName + ")";
+                    }
+                }
+                if (startAgeLabel) {
+                    startAgeLabel.textContent = (isSp ? (isMarried ? p.spouseName + "'s " : "Spouse's ") : (isMarried ? p.userName + "'s " : "Your ")) + "Contribution Start Age";
+                }
+                if (endAgeTypeSelect) {
+                    for (var j = 0; j < endAgeTypeSelect.options.length; j++) {
+                        var eOpt = endAgeTypeSelect.options[j];
+                        if (eOpt.value === 'retirement') {
+                            eOpt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement (" + p.userRetAge + ")";
+                        } else if (eOpt.value === 'spouse_retirement') {
+                            eOpt.textContent = p.spouseName + "'s Retirement (" + p.spouseRetAge + ")";
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
+                        } else if (eOpt.value === 'first_death') {
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
+                        } else if (eOpt.value === 'user_specified' || eOpt.value === 'age') {
+                            eOpt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                        } else if (eOpt.value === 'spouse_specified') {
+                            eOpt.textContent = "Specify " + p.spouseName + "'s Age";
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
                         }
                     }
+                    if (!isMarried && endAgeTypeSelect.value.includes('spouse')) {
+                        endAgeTypeSelect.value = 'retirement';
+                        var changeEvt = new Event('change');
+                        endAgeTypeSelect.dispatchEvent(changeEvt);
+                    }
+                }
+                if (endAgeSpecInput) {
+                    endAgeSpecInput.placeholder = isSp ? p.spouseName + "'s End Age" : p.userName + "'s End Age";
                 }
             });
 
-            document.querySelectorAll('.income-stream-card').forEach(function(c) {
-                updateCardSurvivorSection(c);
+            // 3. Additional Spending Dropdowns & Table Rows
+            document.querySelectorAll('#additionalSpendingTable tbody tr').forEach(function(row) {
+                var startTypeSelect = row.querySelector('.add-spending-start-type');
+                var startAgeInput = row.querySelector('.add-spending-start-age');
+                if (startTypeSelect) {
+                    startTypeSelect.style.display = isMarried ? 'inline-block' : 'none';
+                    for (var k = 0; k < startTypeSelect.options.length; k++) {
+                        var sOpt = startTypeSelect.options[k];
+                        if (sOpt.value === 'user') sOpt.textContent = p.userName + "'s Age";
+                        if (sOpt.value === 'spouse') sOpt.textContent = p.spouseName + "'s Age";
+                    }
+                    if (!isMarried && startTypeSelect.value === 'spouse') {
+                        startTypeSelect.value = 'user';
+                    }
+                }
+                if (startAgeInput) {
+                    updateAgeHelperBadge(startAgeInput, startTypeSelect ? startTypeSelect.value === 'spouse' : false);
+                }
+            });
+
+            // 4. Income Streams & Multi-Period Schedule
+            document.querySelectorAll('.income-stream-card').forEach(function(card) {
+                var incStartSelect = card.querySelector('.inc-start-type');
+                var incEndSelect = card.querySelector('.inc-end-type');
+                if (incStartSelect) {
+                    for (var i = 0; i < incStartSelect.options.length; i++) {
+                        var opt = incStartSelect.options[i];
+                        if (opt.value === 'retirement') {
+                            opt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement Age (" + p.userRetAge + ")";
+                        } else if (opt.value === 'spouse_retirement') {
+                            opt.textContent = p.spouseName + "'s Retirement Age (" + p.spouseRetAge + ")";
+                            opt.style.display = isMarried ? 'block' : 'none';
+                            opt.disabled = !isMarried;
+                        } else if (opt.value === 'user_specified' || opt.value === 'specified') {
+                            opt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                        } else if (opt.value === 'spouse_specified') {
+                            opt.textContent = "Specify " + p.spouseName + "'s Age";
+                            opt.style.display = isMarried ? 'block' : 'none';
+                            opt.disabled = !isMarried;
+                        }
+                    }
+                    if (!isMarried && incStartSelect.value.includes('spouse')) {
+                        incStartSelect.value = 'retirement';
+                        var evt = new Event('change');
+                        incStartSelect.dispatchEvent(evt);
+                    }
+                }
+                if (incEndSelect) {
+                    for (var j = 0; j < incEndSelect.options.length; j++) {
+                        var eOpt = incEndSelect.options[j];
+                        if (eOpt.value === 'death') {
+                            eOpt.textContent = (isMarried ? "At " + p.userName + "'s Death (" + p.userDeathAge + ")" : "At Your Death (" + p.userDeathAge + ")");
+                        } else if (eOpt.value === 'spouse_death') {
+                            eOpt.textContent = "At " + p.spouseName + "'s Death (" + p.spouseDeathAge + ")";
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
+                        } else if (eOpt.value === 'user_specified' || eOpt.value === 'specified') {
+                            eOpt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                        } else if (eOpt.value === 'spouse_specified') {
+                            eOpt.textContent = "Specify " + p.spouseName + "'s Age";
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
+                        }
+                    }
+                    if (!isMarried && incEndSelect.value.includes('spouse')) {
+                        incEndSelect.value = 'death';
+                        var eEvt = new Event('change');
+                        incEndSelect.dispatchEvent(eEvt);
+                    }
+                }
+
+                card.querySelectorAll('.inc-period-row').forEach(function(pRow) {
+                    var pStartSelect = pRow.querySelector('.p-start-type');
+                    var pEndSelect = pRow.querySelector('.p-end-type');
+                    if (pStartSelect) {
+                        for (var i = 0; i < pStartSelect.options.length; i++) {
+                            var pOpt = pStartSelect.options[i];
+                            if (pOpt.value === 'retirement') {
+                                pOpt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement Age (" + p.userRetAge + ")";
+                            } else if (pOpt.value === 'spouse_retirement') {
+                                pOpt.textContent = p.spouseName + "'s Retirement Age (" + p.spouseRetAge + ")";
+                                pOpt.style.display = isMarried ? 'block' : 'none';
+                                pOpt.disabled = !isMarried;
+                            } else if (pOpt.value === 'user_specified' || pOpt.value === 'specified') {
+                                pOpt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                            } else if (pOpt.value === 'spouse_specified') {
+                                pOpt.textContent = "Specify " + p.spouseName + "'s Age";
+                                pOpt.style.display = isMarried ? 'block' : 'none';
+                                pOpt.disabled = !isMarried;
+                            } else if (pOpt.value === 'current_age') {
+                                pOpt.textContent = "At Current Age (" + p.userAge + ")";
+                            }
+                        }
+                        if (!isMarried && pStartSelect.value.includes('spouse')) {
+                            pStartSelect.value = 'current_age';
+                            var pEvt = new Event('change');
+                            pStartSelect.dispatchEvent(pEvt);
+                        }
+                    }
+                    if (pEndSelect) {
+                        for (var j = 0; j < pEndSelect.options.length; j++) {
+                            var peOpt = pEndSelect.options[j];
+                            if (peOpt.value === 'retirement') {
+                                peOpt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement Age (" + p.userRetAge + ")";
+                            } else if (peOpt.value === 'spouse_retirement') {
+                                peOpt.textContent = p.spouseName + "'s Retirement Age (" + p.spouseRetAge + ")";
+                                peOpt.style.display = isMarried ? 'block' : 'none';
+                                peOpt.disabled = !isMarried;
+                            } else if (peOpt.value === 'death') {
+                                peOpt.textContent = (isMarried ? "At " + p.userName + "'s Death (" + p.userDeathAge + ")" : "At Your Death (" + p.userDeathAge + ")");
+                            } else if (peOpt.value === 'spouse_death') {
+                                peOpt.textContent = "At " + p.spouseName + "'s Death (" + p.spouseDeathAge + ")";
+                                peOpt.style.display = isMarried ? 'block' : 'none';
+                                peOpt.disabled = !isMarried;
+                            } else if (peOpt.value === 'user_specified' || peOpt.value === 'specified') {
+                                peOpt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                            } else if (peOpt.value === 'spouse_specified') {
+                                peOpt.textContent = "Specify " + p.spouseName + "'s Age";
+                                peOpt.style.display = isMarried ? 'block' : 'none';
+                                peOpt.disabled = !isMarried;
+                            }
+                        }
+                        if (!isMarried && pEndSelect.value.includes('spouse')) {
+                            pEndSelect.value = 'death';
+                            var peEvt = new Event('change');
+                            pEndSelect.dispatchEvent(peEvt);
+                        }
+                    }
+                });
+
+                updateCardSurvivorSection(card);
+            });
+
+            // 5. Other Taxes Selects
+            document.querySelectorAll('.other-tax-card').forEach(function(card) {
+                var otStartSelect = card.querySelector('.ot-start-type');
+                var otEndSelect = card.querySelector('.ot-end-type');
+                var otAdjStartSelect = card.querySelector('.ot-adjust-start-type');
+
+                if (otStartSelect) {
+                    for (var i = 0; i < otStartSelect.options.length; i++) {
+                        var opt = otStartSelect.options[i];
+                        if (opt.value === 'retirement') {
+                            opt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement Age (" + p.userRetAge + ")";
+                        } else if (opt.value === 'spouse_retirement') {
+                            opt.textContent = p.spouseName + "'s Retirement Age (" + p.spouseRetAge + ")";
+                            opt.style.display = isMarried ? 'block' : 'none';
+                            opt.disabled = !isMarried;
+                        } else if (opt.value === 'user_specified' || opt.value === 'specified') {
+                            opt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                        } else if (opt.value === 'spouse_specified') {
+                            opt.textContent = "Specify " + p.spouseName + "'s Age";
+                            opt.style.display = isMarried ? 'block' : 'none';
+                            opt.disabled = !isMarried;
+                        }
+                    }
+                    if (!isMarried && otStartSelect.value.includes('spouse')) {
+                        otStartSelect.value = 'retirement';
+                        var otEvt = new Event('change');
+                        otStartSelect.dispatchEvent(otEvt);
+                    }
+                }
+
+                if (otEndSelect) {
+                    for (var j = 0; j < otEndSelect.options.length; j++) {
+                        var eOpt = otEndSelect.options[j];
+                        if (eOpt.value === 'death') {
+                            eOpt.textContent = (isMarried ? "At " + p.userName + "'s Death (" + p.userDeathAge + ")" : "At Your Death (" + p.userDeathAge + ")");
+                        } else if (eOpt.value === 'spouse_death') {
+                            eOpt.textContent = "At " + p.spouseName + "'s Death (" + p.spouseDeathAge + ")";
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
+                        } else if (eOpt.value === 'user_specified' || eOpt.value === 'specified') {
+                            eOpt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                        } else if (eOpt.value === 'spouse_specified') {
+                            eOpt.textContent = "Specify " + p.spouseName + "'s Age";
+                            eOpt.style.display = isMarried ? 'block' : 'none';
+                            eOpt.disabled = !isMarried;
+                        }
+                    }
+                    if (!isMarried && otEndSelect.value.includes('spouse')) {
+                        otEndSelect.value = 'death';
+                        var oteEvt = new Event('change');
+                        otEndSelect.dispatchEvent(oteEvt);
+                    }
+                }
+
+                if (otAdjStartSelect) {
+                    for (var k = 0; k < otAdjStartSelect.options.length; k++) {
+                        var aOpt = otAdjStartSelect.options[k];
+                        if (aOpt.value === 'retirement') {
+                            aOpt.textContent = (isMarried ? p.userName + "'s " : "Your ") + "Retirement Age (" + p.userRetAge + ")";
+                        } else if (aOpt.value === 'spouse_retirement') {
+                            aOpt.textContent = p.spouseName + "'s Retirement Age (" + p.spouseRetAge + ")";
+                            aOpt.style.display = isMarried ? 'block' : 'none';
+                            aOpt.disabled = !isMarried;
+                        } else if (aOpt.value === 'current_age') {
+                            aOpt.textContent = "At Current Age (" + p.userAge + ")";
+                        } else if (aOpt.value === 'user_specified' || aOpt.value === 'specified') {
+                            aOpt.textContent = isMarried ? "Specify " + p.userName + "'s Age" : "Specify Your Age";
+                        } else if (aOpt.value === 'spouse_specified') {
+                            aOpt.textContent = "Specify " + p.spouseName + "'s Age";
+                            aOpt.style.display = isMarried ? 'block' : 'none';
+                            aOpt.disabled = !isMarried;
+                        }
+                    }
+                    if (!isMarried && otAdjStartSelect.value.includes('spouse')) {
+                        otAdjStartSelect.value = 'current_age';
+                        var otaEvt = new Event('change');
+                        otAdjStartSelect.dispatchEvent(otaEvt);
+                    }
+                }
             });
         }
 
+        ['user_name', 'spouse_name', 'user_age', 'spouse_age', 'user_retirement_age', 'spouse_retirement_age', 'user_age_death', 'spouse_age_death', 'current_year'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', updateSpouseDropdownOptions);
+                el.addEventListener('change', updateSpouseDropdownOptions);
+            }
+        });
         document.getElementById('is_married').addEventListener('change', updateSpouseDropdownOptions);
-        var spouseNameInputEl = document.getElementById('spouse_name');
-        if (spouseNameInputEl) {
-            spouseNameInputEl.addEventListener('input', function () {
-                document.querySelectorAll('.income-stream-card').forEach(updateCardSurvivorSection);
-            });
-        }
-        var userNameInputEl = document.getElementById('user_name');
-        if (userNameInputEl) {
-            userNameInputEl.addEventListener('input', function () {
-                document.querySelectorAll('.income-stream-card').forEach(updateCardSurvivorSection);
-            });
-        }
         updateSpouseDropdownOptions();
 
         // 9. Form Custom Validation
@@ -4219,14 +4754,16 @@
 
             // 2. Spouse Demographics (if Married)
             var isMarried = isMarriedCheckbox && isMarriedCheckbox.checked;
+            var sAge = 0, sRet = 0, sDeath = 0;
             if (isMarried) {
+                var spouseNameInput = document.getElementById('spouse_name');
                 var spouseAgeInput = document.getElementById('spouse_age');
                 var spouseRetInput = document.getElementById('spouse_retirement_age');
                 var spouseDeathInput = document.getElementById('spouse_age_death');
 
-                var sAge = spouseAgeInput ? parseInt(spouseAgeInput.value, 10) : 0;
-                var sRet = spouseRetInput ? parseInt(spouseRetInput.value, 10) : 0;
-                var sDeath = spouseDeathInput ? parseInt(spouseDeathInput.value, 10) : 0;
+                sAge = spouseAgeInput ? parseInt(spouseAgeInput.value, 10) : 0;
+                sRet = spouseRetInput ? parseInt(spouseRetInput.value, 10) : 0;
+                sDeath = spouseDeathInput ? parseInt(spouseDeathInput.value, 10) : 0;
 
                 if (spouseAgeInput && (isNaN(sAge) || sAge < 18 || sAge > 120)) {
                     setFieldInvalid(spouseAgeInput, 'Spouse\'s Present Age must be an integer between 18 and 120.');
@@ -4340,11 +4877,13 @@
                     }
                 }
 
-                if (endAgeTypeSelect && endAgeTypeSelect.value === 'age' && endAgeSpecInput) {
+                if (endAgeTypeSelect && ['age', 'specified', 'user_specified', 'spouse_specified'].includes(endAgeTypeSelect.value) && endAgeSpecInput) {
                     var cEndAge = parseInt(endAgeSpecInput.value, 10);
-                    var minEnd = isNaN(cStartAge) ? relAge : cStartAge;
-                    if (isNaN(cEndAge) || cEndAge < minEnd || cEndAge > 120) {
-                        var endMsg = 'Account "' + accName + '" Specified Contribution End Age (' + endAgeSpecInput.value + ') must be greater than or equal to Contribution Start Age (' + minEnd + ') up to 120.';
+                    var isSpouseEnd = endAgeTypeSelect.value === 'spouse_specified' || (endAgeTypeSelect.value === 'age' && isSpouseOwner);
+                    var minEnd = isSpouseEnd ? (isNaN(sAge) ? 18 : sAge) : (isNaN(uAge) ? 18 : uAge);
+                    var maxEnd = isSpouseEnd ? (isNaN(sDeath) ? 120 : sDeath) : (isNaN(uDeath) ? 120 : uDeath);
+                    if (isNaN(cEndAge) || cEndAge < minEnd || cEndAge > maxEnd) {
+                        var endMsg = 'Account "' + accName + '" Specified Contribution End Age (' + endAgeSpecInput.value + ') must be between ' + minEnd + ' and ' + maxEnd + '.';
                         setFieldInvalid(endAgeSpecInput, endMsg);
                         errors.push({ element: endAgeSpecInput, tab: 'assets-tab', message: endMsg });
                     }
@@ -4391,10 +4930,13 @@
 
                 if (startInput) {
                     var sStartAge = parseInt(startInput.value, 10);
-                    var minStartAge = isNaN(uAge) ? 18 : uAge;
-                    var maxStartAge = isNaN(uDeath) ? 120 : uDeath;
+                    var sStartType = row.querySelector('.add-spending-start-type') ? row.querySelector('.add-spending-start-type').value : 'user';
+                    var isSpouseSpend = isMarried && sStartType === 'spouse';
+                    var minStartAge = isSpouseSpend ? (isNaN(sAge) ? 18 : sAge) : (isNaN(uAge) ? 18 : uAge);
+                    var maxStartAge = isSpouseSpend ? (isNaN(sDeath) ? 120 : sDeath) : (isNaN(uDeath) ? 120 : uDeath);
+                    var personLabel = isSpouseSpend ? (document.getElementById('spouse_name')?.value?.trim() || "Spouse") : (document.getElementById('user_name')?.value?.trim() || "You");
                     if (isNaN(sStartAge) || sStartAge < minStartAge || sStartAge > maxStartAge) {
-                        var sStartMsg = 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Start Age (' + startInput.value + ') cannot be younger than Your Present Age (' + minStartAge + ').';
+                        var sStartMsg = 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Start Age (' + startInput.value + ') cannot be younger than ' + personLabel + '\'s Present Age (' + minStartAge + ').';
                         setFieldInvalid(startInput, sStartMsg);
                         errors.push({ element: startInput, tab: 'spending-tab', message: sStartMsg });
                     }
@@ -4438,7 +4980,7 @@
                 }
 
                 var iStartAge = 65;
-                if (startTypeSelect && startTypeSelect.value === 'specified' && startSpecInput) {
+                if (startTypeSelect && ['specified', 'user_specified', 'spouse_specified'].includes(startTypeSelect.value) && startSpecInput) {
                     iStartAge = parseInt(startSpecInput.value, 10);
                     if (isNaN(iStartAge) || iStartAge < 18 || iStartAge > 120) {
                         var iStartMsg = 'Income Source "' + (incName || '#' + (idx + 1)) + '" Specified Start Age must be between 18 and 120.';
@@ -4448,11 +4990,10 @@
                 }
 
                 var isOneTime = freqSelect && (freqSelect.value === 'one_time' || freqSelect.value === 'one-time');
-                if (!isOneTime && endTypeSelect && endTypeSelect.value === 'specified' && endSpecInput) {
+                if (!isOneTime && endTypeSelect && ['specified', 'user_specified', 'spouse_specified'].includes(endTypeSelect.value) && endSpecInput) {
                     var iEndAge = parseInt(endSpecInput.value, 10);
-                    var minEnd = (startTypeSelect && startTypeSelect.value === 'specified' && !isNaN(iStartAge)) ? iStartAge : 18;
-                    if (isNaN(iEndAge) || iEndAge < minEnd || iEndAge > 120) {
-                        var iEndMsg = 'Income Source "' + (incName || '#' + (idx + 1)) + '" Specified End Age (' + endSpecInput.value + ') must be greater than or equal to Start Age (' + minEnd + ') up to 120.';
+                    if (isNaN(iEndAge) || iEndAge < 18 || iEndAge > 120) {
+                        var iEndMsg = 'Income Source "' + (incName || '#' + (idx + 1)) + '" Specified End Age (' + endSpecInput.value + ') must be between 18 and 120.';
                         setFieldInvalid(endSpecInput, iEndMsg);
                         errors.push({ element: endSpecInput, tab: 'income-tab', message: iEndMsg });
                     }
@@ -4474,7 +5015,7 @@
                     var pAdjType = pRow.querySelector('.p-adj-type');
                     var pAdjVal = pRow.querySelector('.p-adj-val');
 
-                    if (pStartType && pStartType.value === 'specified' && pStartSpec) {
+                    if (pStartType && ['specified', 'user_specified', 'spouse_specified'].includes(pStartType.value) && pStartSpec) {
                         var ps = parseInt(pStartSpec.value, 10);
                         if (isNaN(ps) || ps < 18 || ps > 120) {
                             setFieldInvalid(pStartSpec, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' Start Age must be between 18 and 120.');
@@ -4482,7 +5023,7 @@
                         }
                     }
 
-                    if (pEndType && pEndType.value === 'specified' && pEndSpec) {
+                    if (pEndType && ['specified', 'user_specified', 'spouse_specified'].includes(pEndType.value) && pEndSpec) {
                         var pe = parseInt(pEndSpec.value, 10);
                         if (isNaN(pe) || pe < 18 || pe > 120) {
                             setFieldInvalid(pEndSpec, 'Income Source "' + (incName || '#' + (idx + 1)) + '" Period ' + (pIdx + 1) + ' End Age must be between 18 and 120.');
@@ -4498,6 +5039,72 @@
                         }
                     }
                 });
+            });
+
+            // 10. Other Taxes Validation (Tab 3: Spending & Other Taxes)
+            var otherTaxCards = document.querySelectorAll('#otherTaxesContainer .other-tax-card');
+            otherTaxCards.forEach(function (card, idx) {
+                var nameInput = card.querySelector('input[name="other_tax_name[]"]');
+                var amtInput = card.querySelector('input[name="other_tax_amount[]"]');
+                var startTypeSelect = card.querySelector('.ot-start-type');
+                var startSpecInput = card.querySelector('.ot-start-spec');
+                var endTypeSelect = card.querySelector('.ot-end-type');
+                var endSpecInput = card.querySelector('.ot-end-spec');
+                var adjStartTypeSelect = card.querySelector('.ot-adjust-start-type');
+                var adjStartSpecInput = card.querySelector('.ot-adjust-start-spec');
+                var adjTypeSelect = card.querySelector('.ot-adjust-type');
+                var adjValInput = card.querySelector('.ot-adjust-val');
+                var freqSelect = card.querySelector('.ot-frequency');
+
+                var taxName = nameInput ? nameInput.value.trim() : '';
+                if (nameInput && !taxName) {
+                    setFieldInvalid(nameInput, 'Other Tax #' + (idx + 1) + ' Description is required.');
+                    errors.push({ element: nameInput, tab: 'spending-tab', message: 'Other Tax #' + (idx + 1) + ' Description is required.' });
+                }
+
+                if (amtInput) {
+                    var tAmt = parseMoney(amtInput.value);
+                    if (isNaN(tAmt) || tAmt < 0) {
+                        setFieldInvalid(amtInput, 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Amount cannot be negative.');
+                        errors.push({ element: amtInput, tab: 'spending-tab', message: 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Amount cannot be negative.' });
+                    }
+                }
+
+                if (startTypeSelect && ['specified', 'user_specified', 'spouse_specified'].includes(startTypeSelect.value) && startSpecInput) {
+                    var tStartAge = parseInt(startSpecInput.value, 10);
+                    if (isNaN(tStartAge) || tStartAge < 18 || tStartAge > 120) {
+                        var tStartMsg = 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Specified Start Age must be between 18 and 120.';
+                        setFieldInvalid(startSpecInput, tStartMsg);
+                        errors.push({ element: startSpecInput, tab: 'spending-tab', message: tStartMsg });
+                    }
+                }
+
+                var isOneTime = freqSelect && (freqSelect.value === 'one_time' || freqSelect.value === 'one-time');
+                if (!isOneTime && endTypeSelect && ['specified', 'user_specified', 'spouse_specified'].includes(endTypeSelect.value) && endSpecInput) {
+                    var tEndAge = parseInt(endSpecInput.value, 10);
+                    if (isNaN(tEndAge) || tEndAge < 18 || tEndAge > 120) {
+                        var tEndMsg = 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Specified End Age must be between 18 and 120.';
+                        setFieldInvalid(endSpecInput, tEndMsg);
+                        errors.push({ element: endSpecInput, tab: 'spending-tab', message: tEndMsg });
+                    }
+                }
+
+                if (adjTypeSelect && ['fixed_pct', 'inflation_less_pct'].includes(adjTypeSelect.value) && adjValInput) {
+                    var av = parsePercent(adjValInput.value);
+                    if (isNaN(av) || av < 0.0 || av > 100.0) {
+                        setFieldInvalid(adjValInput, 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Adjustment Percentage must be between 0% and 100%.');
+                        errors.push({ element: adjValInput, tab: 'spending-tab', message: 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Adjustment Percentage must be between 0% and 100%.' });
+                    }
+                }
+
+                if (adjStartTypeSelect && ['specified', 'user_specified', 'spouse_specified'].includes(adjStartTypeSelect.value) && adjStartSpecInput) {
+                    var tAdjStartAge = parseInt(adjStartSpecInput.value, 10);
+                    if (isNaN(tAdjStartAge) || tAdjStartAge < 18 || tAdjStartAge > 120) {
+                        var tAdjStartMsg = 'Other Tax "' + (taxName || '#' + (idx + 1)) + '" Specified Adjustment Start Age must be between 18 and 120.';
+                        setFieldInvalid(adjStartSpecInput, tAdjStartMsg);
+                        errors.push({ element: adjStartSpecInput, tab: 'spending-tab', message: tAdjStartMsg });
+                    }
+                }
             });
 
             // Check for duplicate account names across Cards and Balance Sheet

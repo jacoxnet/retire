@@ -86,8 +86,18 @@ def calculate_tax(taxable_income, thresholds, rates):
     tax += (taxable_income - prev_threshold) * rates[-1]
     return tax
 
-def resolve_age(age_type, specified_val, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age, user_age_death, spouse_age_death, default_val=100):
-    if age_type == 'specified' or age_type == 'age':
+def resolve_age(age_type, specified_val, user_age=60, user_ret_age=65, is_married=False, spouse_age=None, spouse_ret_age=None, user_age_death=100, spouse_age_death=100, default_val=100):
+    if age_type in ['specified', 'age', 'user_specified']:
+        try:
+            return int(specified_val)
+        except (ValueError, TypeError):
+            return default_val
+    elif age_type == 'spouse_specified':
+        if is_married:
+            try:
+                return int(specified_val) + (user_age - spouse_age)
+            except (ValueError, TypeError):
+                return default_val
         try:
             return int(specified_val)
         except (ValueError, TypeError):
@@ -681,16 +691,18 @@ def simulate_step(
     for item in additional_spending_list:
         name = item.get('name') or 'Additional Expense'
         start_age = item.get('start_age', 0)
+        start_age_type = item.get('start_age_type', 'user')
+        start_age_in_user_coords = start_age + (user_age - spouse_age) if (start_age_type == 'spouse' and is_married) else start_age
         interval = item.get('interval', 0)
         amount = item.get('amount', 0.0)
         adjust_inf = item.get('adjust_inflation', True)
         
         occurs = False
-        if user_age_t >= start_age:
+        if user_age_t >= start_age_in_user_coords:
             if interval == 0:
-                occurs = (user_age_t == start_age)
+                occurs = (user_age_t == start_age_in_user_coords)
             else:
-                occurs = ((user_age_t - start_age) % interval == 0)
+                occurs = ((user_age_t - start_age_in_user_coords) % interval == 0)
                 
         if occurs:
             spending_factor = (1.0 + inflation_rate / 100.0) ** t if adjust_inf else 1.0
@@ -979,9 +991,14 @@ def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year
     ret_age = asset_data.get('user_ret_age', 65) # fallback if not set
     spouse_ret_age = asset_data.get('spouse_ret_age', 65)
     
-    end_age = resolve_age(
-        end_age_type, end_age_spec, user_age, ret_age, is_married, spouse_age, spouse_ret_age, 100, 100
-    )
+    if is_spouse and end_age_type in ['age', 'specified', 'spouse_specified']:
+        end_age = resolve_age(
+            'spouse_specified', end_age_spec, user_age, ret_age, is_married, spouse_age, spouse_ret_age, 100, 100
+        )
+    else:
+        end_age = resolve_age(
+            end_age_type, end_age_spec, user_age, ret_age, is_married, spouse_age, spouse_ret_age, 100, 100
+        )
     
     start_age_in_user_coords = start_age + (user_age - spouse_age) if is_spouse else start_age
 
@@ -1488,15 +1505,17 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         add_s = 0.0
         for item in inputs['additional_spending']:
             start_age = item.get('start_age', 0)
+            start_age_type = item.get('start_age_type', 'user')
+            start_age_in_user_coords = start_age + (user_age - spouse_age) if (start_age_type == 'spouse' and is_married) else start_age
             interval = item.get('interval', 0)
             amount = item.get('amount', 0.0)
             adjust_inf = item.get('adjust_inflation', True)
             occurs = False
-            if user_age_t >= start_age:
+            if user_age_t >= start_age_in_user_coords:
                 if interval == 0:
-                    occurs = (user_age_t == start_age)
+                    occurs = (user_age_t == start_age_in_user_coords)
                 else:
-                    occurs = ((user_age_t - start_age) % interval == 0)
+                    occurs = ((user_age_t - start_age_in_user_coords) % interval == 0)
             if occurs:
                 factor = inf_factors[t] if adjust_inf else 1.0
                 add_s += amount * factor

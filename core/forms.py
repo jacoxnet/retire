@@ -88,6 +88,7 @@ ADDITIONAL_SPENDING_SPEC = [
     ('name', 'add_spending_name[]', 'str', 'Additional Expense'),
     ('amount', 'add_spending_amount[]', 'float', 0.0),
     ('start_age', 'add_spending_start_age[]', 'int', 65),
+    ('start_age_type', 'add_spending_start_age_type[]', 'str', 'user'),
     ('interval', 'add_spending_interval[]', 'int', 0),
     ('adjust_inflation', 'add_spending_adjust_inflation[]', 'bool', True),
 ]
@@ -427,7 +428,7 @@ def validate_accounts(accounts, user_age, user_age_death, is_married, spouse_age
         c_start = acc.get('contrib_start_age', rel_age)
         if c_start < rel_age or c_start > rel_death:
             errors.append(f"Account '{a_name or 'Account'}' Contribution Start Age ({c_start}) must be between Present Age ({rel_age}) and Age at Death ({rel_death}).")
-        if acc.get('contrib_end_age_type') == 'age':
+        if acc.get('contrib_end_age_type') in ['age', 'specified', 'user_specified', 'spouse_specified']:
             c_end = acc.get('contrib_end_age_specified', rel_age)
             if c_end < c_start or c_end > 120:
                 errors.append(f"Account '{a_name or 'Account'}' Specified Contribution End Age ({c_end}) must be greater than or equal to Contribution Start Age ({c_start}) up to 120.")
@@ -464,15 +465,19 @@ def validate_balance_sheet_accounts(balance_sheet):
     return errors
 
 
-def validate_additional_spending(items, user_age, user_age_death):
+def validate_additional_spending(items, user_age, user_age_death, is_married=False, spouse_age=60, spouse_age_death=90):
     errors = []
     for item in items:
         name = item.get('name')
         if item.get('amount', 0.0) < 0:
             errors.append(f"Additional Spending item '{name}' Amount cannot be negative.")
-        s_start = item.get('start_age', user_age)
-        if s_start < user_age or s_start > user_age_death:
-            errors.append(f"Additional Spending item '{name}' Start Age ({s_start}) cannot be younger than Your Present Age ({user_age}) or after Age at Death ({user_age_death}).")
+        stype = item.get('start_age_type', 'user')
+        rel_age = spouse_age if (stype == 'spouse' and is_married) else user_age
+        rel_death = spouse_age_death if (stype == 'spouse' and is_married) else user_age_death
+        s_start = item.get('start_age', rel_age)
+        person_label = "Spouse's Present Age" if (stype == 'spouse' and is_married) else "Your Present Age"
+        if s_start < rel_age or s_start > rel_death:
+            errors.append(f"Additional Spending item '{name}' Start Age ({s_start}) cannot be younger than {person_label} ({rel_age}) or after Age at Death ({rel_death}).")
         if item.get('interval', 0) < 0:
             errors.append(f"Additional Spending item '{name}' Interval must be 0 (for one-time) or a positive number of years.")
     return errors
@@ -487,12 +492,12 @@ def validate_scheduled_items(label, items):
         name = item.get('name')
         if item.get('amount', 0.0) < 0:
             errors.append(f"{label} '{name}' Amount cannot be negative.")
-        if item.get('start_age_type') == 'specified':
+        if item.get('start_age_type') in ['specified', 'user_specified', 'spouse_specified']:
             s_spec = item.get('start_age_specified', 65)
             if s_spec < 18 or s_spec > 120:
                 errors.append(f"{label} '{name}' Specified Start Age must be between 18 and 120.")
-        if item.get('frequency') not in ['one_time', 'one-time'] and item.get('end_age_type') == 'specified':
-            min_end = item.get('start_age_specified', 18) if item.get('start_age_type') == 'specified' else 18
+        if item.get('frequency') not in ['one_time', 'one-time'] and item.get('end_age_type') in ['specified', 'user_specified', 'spouse_specified']:
+            min_end = item.get('start_age_specified', 18) if item.get('start_age_type') in ['specified', 'user_specified', 'spouse_specified'] else 18
             e_spec = item.get('end_age_specified', 90)
             if e_spec < min_end or e_spec > 120:
                 errors.append(f"{label} '{name}' Specified End Age ({e_spec}) must be greater than or equal to Start Age ({min_end}) up to 120.")
@@ -507,11 +512,11 @@ def validate_scheduled_items(label, items):
                     pval = p.get('adjust_val', 0.0)
                     if pval < 0.0 or pval > 100.0:
                         errors.append(f"{label} '{name}' Adjustment Period {idx} Percentage Rate must be between 0% and 100%.")
-                if p.get('start_type') == 'specified':
+                if p.get('start_type') in ['specified', 'user_specified', 'spouse_specified']:
                     ps = p.get('start_spec', 65)
                     if ps < 18 or ps > 120:
                         errors.append(f"{label} '{name}' Adjustment Period {idx} Start Age must be between 18 and 120.")
-                if p.get('end_type') == 'specified':
+                if p.get('end_type') in ['specified', 'user_specified', 'spouse_specified']:
                     pe = p.get('end_spec', 90)
                     if pe < 18 or pe > 120:
                         errors.append(f"{label} '{name}' Adjustment Period {idx} End Age must be between 18 and 120.")
@@ -520,7 +525,7 @@ def validate_scheduled_items(label, items):
                 a_val = item.get('adjust_val', 0.0)
                 if a_val < 0.0 or a_val > 100.0:
                     errors.append(f"{label} '{name}' Percentage Rate must be between 0% and 100%.")
-            if item.get('adjust_type') != 'none' and item.get('adjust_start_age_type') == 'specified':
+            if item.get('adjust_type') != 'none' and item.get('adjust_start_age_type') in ['specified', 'user_specified', 'spouse_specified']:
                 a_start = item.get('adjust_start_age_specified', 65)
                 if a_start < 18 or a_start > 120:
                     errors.append(f"{label} '{name}' Adjustment Start Age must be between 18 and 120.")
@@ -577,18 +582,24 @@ def calculate_marginal_tax_rate(data):
             
             # Check if active at current age
             stype = inc.get('start_age_type', 'retirement')
-            if stype == 'specified':
+            if stype in ['specified', 'user_specified']:
                 start_age = get_int(inc.get('start_age_specified'), 65)
+            elif stype == 'spouse_specified' and is_married:
+                start_age = get_int(inc.get('start_age_specified'), 65) + (user_age - spouse_age)
             elif stype == 'retirement':
                 start_age = user_ret_age
             elif stype == 'spouse_retirement' and is_married:
-                start_age = spouse_ret_age
+                start_age = spouse_ret_age + (user_age - spouse_age)
             else:
                 start_age = user_age
             
             etype = inc.get('end_age_type', 'death')
-            if etype == 'specified':
+            if etype in ['specified', 'user_specified']:
                 end_age = get_int(inc.get('end_age_specified'), 90)
+            elif etype == 'spouse_specified' and is_married:
+                end_age = get_int(inc.get('end_age_specified'), 90) + (user_age - spouse_age)
+            elif etype == 'spouse_death' and is_married:
+                end_age = get_int(data.get('spouse_age_death'), 90) + (user_age - spouse_age)
             else:
                 end_age = get_int(data.get('user_age_death'), 90)
 
