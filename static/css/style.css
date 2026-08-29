@@ -922,6 +922,11 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
+/* Breathing room between the sticky header row and the first data row. */
+.bs-table tbody tr:first-child > td {
+  padding-top: 1.5rem;
+}
+
 .bs-table thead th {
   background: #f1f5f9;
   color: #334155;
@@ -940,9 +945,9 @@ tbody tr:hover {
   left: 0;
   background-color: #ffffff;
   z-index: 5;
-  min-width: 195px;
-  max-width: 240px;
-  width: 220px;
+  min-width: 230px;
+  max-width: 340px;
+  width: 300px;
   border-right: 1px solid #e2e8f0;
   box-shadow: 4px 0 6px -3px rgba(0, 0, 0, 0.12);
   white-space: normal !important;
@@ -967,9 +972,9 @@ tbody tr:hover {
 .bs-table tbody tr.table-light   .bs-sticky-col { background-color: #fcfcfd; }
 
 .bs-inst-col {
-  min-width: 70px;
-  max-width: 95px;
-  width: 80px;
+  min-width: 56px;
+  max-width: 84px;
+  width: 68px;
   font-size: 0.75rem;
   white-space: normal !important;
   word-break: break-word;

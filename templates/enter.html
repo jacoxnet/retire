@@ -55,7 +55,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="balance-sheet-tab" data-bs-toggle="tab" data-bs-target="#balance-sheet"
                     type="button" role="tab" aria-controls="balance-sheet" aria-selected="false">
-                    <i class="fa-solid fa-scale-balanced me-1 text-primary"></i> Balance Sheet (optional)
+                    Balance Sheet (optional)
                 </button>
             </li>
         </ul>
@@ -452,7 +452,7 @@
                 <div class="card p-4 mb-4">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                         <div>
-                            <h3 class="mb-1 text-primary"><i class="fa-solid fa-scale-balanced me-2"></i>Personal Balance Sheet</h3>
+                            <h3 class="mb-1 text-primary">Personal Balance Sheet</h3>
                             <p class="text-secondary small mb-0">Track your entire net worth, sinking funds, home equity, and debts over time.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -540,7 +540,7 @@
                     <div class="card border-0 bg-light p-3 rounded-3 mb-2">
                         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
                             <h5 class="fw-bold text-dark mb-0">
-                                <i class="fa-solid fa-chart-line text-primary me-2"></i>Net Worth & Asset History
+                                Net Worth & Asset History
                             </h5>
                             <div class="btn-group btn-group-sm" role="group" id="bsChartMetricToggle">
                                 <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn active" data-metric="gross_net_worth" onclick="changeBsChartMetric('gross_net_worth')">Gross Net Worth</button>
@@ -2682,7 +2682,7 @@
                 bHtml += '<tr class="bs-category-header clickable ' + (isCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'' + catKey + '\')">';
                 bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
                 bHtml += '<div class="d-flex justify-content-between align-items-center">';
-                bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i><i class="fa ' + iconClass + ' text-primary me-2"></i>' + cat.title + '<span class="bs-count-badge">' + accCount + ' ' + (accCount === 1 ? 'account' : 'accounts') + '</span></span>';
+                bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + cat.title + '<span class="bs-count-badge">' + accCount + ' ' + (accCount === 1 ? 'account' : 'accounts') + '</span></span>';
                 bHtml += '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="event.stopPropagation(); addBsAccount(\'' + catKey + '\')"><i class="fa fa-plus me-1"></i>' + addLabel + '</button>';
                 bHtml += '</div>';
                 bHtml += '</td>';
@@ -2756,10 +2756,10 @@
                 if (cat.is_pretax) {
                     var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
                     bHtml += '<tr class="bs-deferred-tax-row" id="deferred_tax_row">';
-                    bHtml += '<td class="bs-sticky-col ps-4 small"><i class="fa-solid fa-calculator me-1"></i>Est Deferred Income Tax <span class="text-muted">(' + (taxRate * 100).toFixed(1) + '%)</span></td>';
+                    bHtml += '<td class="bs-sticky-col ps-4 small">Est Deferred Income Tax <span class="text-muted">(' + (taxRate * 100).toFixed(1) + '%)</span></td>';
                     bHtml += '<td class="bs-inst-col small text-muted">Fed + State</td>';
                     visPeriods.forEach(function(p) {
-                        var defTax = catTotals[p] * taxRate;
+                        var defTax = Math.round(catTotals[p] * taxRate);
                         bHtml += '<td class="text-end text-danger small def-tax-val-' + p + '">(' + formatMoney(defTax) + ')</td>';
                     });
                     bHtml += '<td class="text-center def-tax-delta"></td>';
@@ -2767,10 +2767,10 @@
                     bHtml += '</tr>';
 
                     bHtml += '<tr class="bs-subtotal-row bg-white" id="net_pretax_row">';
-                    bHtml += '<td class="bs-sticky-col ps-4 fw-bold text-success small"><i class="fa-solid fa-shield me-1"></i>Total Pretax, Net of Deferred Income Tax</td>';
+                    bHtml += '<td class="bs-sticky-col ps-4 fw-bold text-success small">Total Pretax, Net of Deferred Income Tax</td>';
                     bHtml += '<td class="small text-muted">Purchasing power</td>';
                     visPeriods.forEach(function(p) {
-                        var netPretax = catTotals[p] * (1 - taxRate);
+                        var netPretax = Math.round(catTotals[p] * (1 - taxRate));
                         bHtml += '<td class="text-end fw-bold text-success net-pretax-val-' + p + '">' + formatMoney(netPretax) + '</td>';
                     });
                     bHtml += '<td class="text-center net-pretax-delta"></td>';
@@ -2813,7 +2813,7 @@
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">';
             bHtml += '<div class="d-flex align-items-center gap-2">';
-            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i><i class="fa fa-shield-halved text-success me-2"></i>' + emgCat.title + '<span class="bs-count-badge">' + emgCount + ' ' + (emgCount === 1 ? 'account' : 'accounts') + '</span></span>';
+            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + emgCat.title + '<span class="bs-count-badge">' + emgCount + ' ' + (emgCount === 1 ? 'account' : 'accounts') + '</span></span>';
             bHtml += '<div class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded border small" onclick="event.stopPropagation()">';
             bHtml += '<span class="text-muted">Target Goal:</span>';
             bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 100px; height: 24px;" value="' + formatMoney(emgTarget) + '" oninput="onBsEmergencyTargetInput(this)" onblur="renderBalanceSheetTable()">';
@@ -2903,7 +2903,7 @@
             bHtml += '<tr class="bs-category-header clickable ' + (isGoalsCatCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'goals\')">';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center">';
-            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i><i class="fa fa-bullseye text-warning me-2"></i>' + goalsCat.title + '<span class="bs-count-badge">' + goalGroupCount + ' ' + (goalGroupCount === 1 ? 'fund' : 'funds') + '</span></span>';
+            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + goalsCat.title + '<span class="bs-count-badge">' + goalGroupCount + ' ' + (goalGroupCount === 1 ? 'fund' : 'funds') + '</span></span>';
             bHtml += '<button type="button" class="btn btn-outline-warning text-dark btn-sm py-0 px-2" onclick="event.stopPropagation(); addGoalGroup()"><i class="fa fa-plus me-1"></i>Add Sinking Fund / Goal</button>';
             bHtml += '</div>';
             bHtml += '</td>';
@@ -2936,7 +2936,6 @@
                         bHtml += '<td class="bs-sticky-col ps-4 fw-semibold text-primary">';
                         bHtml += '<div class="d-flex align-items-center gap-1">';
                         bHtml += '<i class="fa fa-chevron-down bs-chevron-icon"></i>';
-                        bHtml += '<i class="fa-regular fa-folder-open text-warning me-1"></i>';
                         bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0 fw-semibold" style="height: 26px;" value="' + (group.name || '') + '" oninput="onBsGoalGroupName(' + gIdx + ', this.value)" onclick="event.stopPropagation()">';
                         bHtml += '</div>';
                         bHtml += '</td>';
@@ -2965,10 +2964,7 @@
                             group.accounts.forEach(function(acc, aIdx) {
                                 bHtml += '<tr>';
                                 bHtml += '<td class="bs-sticky-col ps-5 text-muted">';
-                                bHtml += '<div class="d-flex align-items-center gap-1">';
-                                bHtml += '<i class="fa-solid fa-arrow-turn-up fa-rotate-90 text-muted me-1 small"></i>';
                                 bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsGoalAccountName(' + gIdx + ', ' + aIdx + ', this.value)" placeholder="Account Name (e.g. HYSA / Bond)">';
-                                bHtml += '</div>';
                                 bHtml += '</td>';
                                 bHtml += '<td class="bs-inst-col">';
                                 bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (acc.institution || '') + '" oninput="onBsGoalAccountInst(' + gIdx + ', ' + aIdx + ', this.value)" placeholder="Institution">';
@@ -3033,7 +3029,7 @@
 
             // Row 1: Liquid Net Worth (net of estimated deferred income tax and savings goal savings)
             bHtml += '<tr class="table-primary border-top border-primary fw-bold" id="liquid_net_tax_and_goals_row" style="font-size: 0.95rem;">';
-            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-wallet me-2"></i>Liquid Net Worth (net of estimated deferred income tax and savings goal savings)</td>';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary">Liquid Net Worth (net of estimated deferred income tax and savings goal savings)</td>';
             bHtml += '<td class="small text-muted">Excl. def. tax & sinking funds</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end text-primary fw-bold liquid-net-goals-val-' + p + '">' + formatMoney(liquidNetTaxAndGoalsByPeriod[p]) + '</td>';
@@ -3045,7 +3041,7 @@
 
             // Row 2: Liquid Net Worth (net of estimated deferred income tax)
             bHtml += '<tr class="table-primary fw-bold" id="liquid_net_tax_row" style="font-size: 0.95rem;">';
-            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-money-bill-wave me-2"></i>Liquid Net Worth (net of estimated deferred income tax)</td>';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary">Liquid Net Worth (net of estimated deferred income tax)</td>';
             bHtml += '<td class="small text-muted">Excl. deferred tax</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end text-primary fw-bold liquid-net-tax-val-' + p + '">' + formatMoney(liquidNetTaxByPeriod[p]) + '</td>';
@@ -3057,7 +3053,7 @@
 
             // Row 3: Total Gross Liquid Net Worth Row
             bHtml += '<tr class="table-primary border-top border-bottom border-primary fw-bold" id="gross_liquid_row" style="font-size: 0.95rem;">';
-            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-coins me-2"></i>GROSS LIQUID NET WORTH</td>';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary">GROSS LIQUID NET WORTH</td>';
             bHtml += '<td class="small text-muted">Total liquid assets</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end text-primary fw-bold liquid-val-' + p + '">' + formatMoney(liquidByPeriod[p]) + '</td>';
@@ -3078,7 +3074,7 @@
             bHtml += '<tr class="bs-category-header clickable ' + (isReCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'real_estate\')">';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center">';
-            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i><i class="fa fa-house text-info me-2"></i>Real Estate & Home Equity<span class="bs-count-badge">' + propCount + ' ' + (propCount === 1 ? 'property' : 'properties') + '</span></span>';
+            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>Real Estate & Home Equity<span class="bs-count-badge">' + propCount + ' ' + (propCount === 1 ? 'property' : 'properties') + '</span></span>';
             bHtml += '<button type="button" class="btn btn-outline-info text-dark btn-sm py-0 px-2" onclick="event.stopPropagation(); addProperty()"><i class="fa fa-plus me-1"></i>Add Property</button>';
             bHtml += '</div>';
             bHtml += '</td>';
@@ -3128,10 +3124,7 @@
                             if (!isReCollapsed) {
                                 bHtml += '<tr>';
                                 bHtml += '<td class="bs-sticky-col ps-5 text-muted small">';
-                                bHtml += '<div class="d-flex align-items-center gap-1">';
-                                bHtml += '<i class="fa-solid fa-arrow-turn-up fa-rotate-90 text-danger me-1"></i>';
                                 bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0" style="height: 24px;" value="' + (m.name || 'Mortgage') + '" oninput="onBsMortgageName(' + pIdx + ', ' + mIdx + ', this.value)">';
-                                bHtml += '</div>';
                                 bHtml += '</td>';
                                 bHtml += '<td class="bs-inst-col small text-danger">Less: Mortgage</td>';
 
@@ -3157,7 +3150,7 @@
             });
 
             bHtml += '<tr class="bs-subtotal-row" id="net_home_equity_row">';
-            bHtml += '<td class="bs-sticky-col fw-bold ps-3 text-info"><i class="fa-solid fa-house-chimney me-1"></i>NET HOME EQUITY</td>';
+            bHtml += '<td class="bs-sticky-col fw-bold ps-3 text-info">NET HOME EQUITY</td>';
             bHtml += '<td class="small text-muted">Market Value − Mortgages</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end fw-bold text-info equity-val-' + p + '">' + formatMoney(netEquityByPeriod[p]) + '</td>';
@@ -3175,7 +3168,7 @@
             bHtml += '<tr class="bs-category-header clickable ' + (isDebtsCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'debts\')">';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center">';
-            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i><i class="fa fa-credit-card text-danger me-2"></i>Debts & Liabilities (Non-Mortgage)<span class="bs-count-badge">' + debtCount + ' ' + (debtCount === 1 ? 'account' : 'accounts') + '</span></span>';
+            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>Debts & Liabilities (Non-Mortgage)<span class="bs-count-badge">' + debtCount + ' ' + (debtCount === 1 ? 'account' : 'accounts') + '</span></span>';
             bHtml += '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="event.stopPropagation(); addDebtAccount()"><i class="fa fa-plus me-1"></i>Add Debt Account</button>';
             bHtml += '</div>';
             bHtml += '</td>';
@@ -3233,7 +3226,7 @@
             });
 
             bHtml += '<tr class="table-danger border-top border-bottom border-danger fw-bold" id="total_debts_row">';
-            bHtml += '<td class="bs-sticky-col ps-3 text-danger"><i class="fa-solid fa-hand-holding-dollar me-2"></i>TOTAL DEBTS (Including Mortgages)</td>';
+            bHtml += '<td class="bs-sticky-col ps-3 text-danger">TOTAL DEBTS (Including Mortgages)</td>';
             bHtml += '<td class="small text-muted">All liabilities</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end text-danger fw-bold total-debts-val-' + p + '">(' + formatMoney(totalAllDebtsByPeriod[p]) + ')</td>';
@@ -3251,7 +3244,7 @@
             });
 
             bHtml += '<tr class="table-primary border-top border-bottom border-primary fw-bold" id="grand_net_worth_row" style="font-size: 0.95rem;">';
-            bHtml += '<td class="bs-sticky-col ps-3 text-primary"><i class="fa-solid fa-award me-2"></i>GROSS NET WORTH</td>';
+            bHtml += '<td class="bs-sticky-col ps-3 text-primary">GROSS NET WORTH</td>';
             bHtml += '<td class="small text-muted">Total Assets − Total Debts</td>';
             visPeriods.forEach(function(p) {
                 bHtml += '<td class="text-end text-primary fw-bold grand-net-worth-val-' + p + '">' + formatMoney(grandNetWorthByPeriod[p]) + '</td>';
@@ -3379,14 +3372,14 @@
                     if (defRow) {
                         visPeriods.forEach(function(p) {
                             var defCell = defRow.querySelector('.def-tax-val-' + p);
-                            if (defCell) defCell.textContent = '(' + formatMoney(catTotals[p] * taxRate) + ')';
+                            if (defCell) defCell.textContent = '(' + formatMoney(Math.round(catTotals[p] * taxRate)) + ')';
                         });
                     }
                     var netRow = document.getElementById('net_pretax_row');
                     if (netRow) {
                         visPeriods.forEach(function(p) {
                             var netCell = netRow.querySelector('.net-pretax-val-' + p);
-                            if (netCell) netCell.textContent = formatMoney(catTotals[p] * (1 - taxRate));
+                            if (netCell) netCell.textContent = formatMoney(Math.round(catTotals[p] * (1 - taxRate)));
                         });
                     }
                 }
