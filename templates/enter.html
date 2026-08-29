@@ -2934,10 +2934,10 @@
                         // Goal Group Header Row (Target and Shortage/Surplus illustration inline side-by-side)
                         bHtml += '<tr class="table-light clickable ' + (isGoalCollapsed ? 'collapsed' : '') + '" id="goal_group_row_' + gIdx + '" onclick="toggleBsGoalGroup(' + gIdx + ')">';
                         bHtml += '<td class="bs-sticky-col ps-4 fw-semibold text-primary">';
-                        bHtml += '<div class="d-flex align-items-center gap-1" onclick="event.stopPropagation()">';
+                        bHtml += '<div class="d-flex align-items-center gap-1">';
                         bHtml += '<i class="fa fa-chevron-down bs-chevron-icon"></i>';
                         bHtml += '<i class="fa-regular fa-folder-open text-warning me-1"></i>';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0 fw-semibold" style="height: 26px;" value="' + (group.name || '') + '" oninput="onBsGoalGroupName(' + gIdx + ', this.value)">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0 fw-semibold" style="height: 26px;" value="' + (group.name || '') + '" oninput="onBsGoalGroupName(' + gIdx + ', this.value)" onclick="event.stopPropagation()">';
                         bHtml += '</div>';
                         bHtml += '</td>';
                         bHtml += '<td colspan="' + (visPeriods.length + 2) + '" class="py-2">';
@@ -3274,6 +3274,8 @@
             var container = document.querySelector('#balance-sheet .bs-table-container');
             var table = document.getElementById('balanceSheetTable');
             if (!proxy || !container || !table) return;
+            var nav = document.getElementById('mainNav');
+            if (nav) document.documentElement.style.setProperty('--bs-nav-h', nav.offsetHeight + 'px');
             var inner = proxy.firstElementChild;
             var needed = table.scrollWidth - container.clientWidth > 1;
             proxy.style.display = needed ? 'block' : 'none';

@@ -894,7 +894,8 @@ tbody tr:hover {
   overflow-x: auto;
   overflow-y: hidden;
   position: sticky;
-  top: 0;
+  top: var(--bs-nav-h, 56px); /* pin below the sticky navbar, not behind it */
+  margin-bottom: -1px; /* merge border with .bs-table-container */
   z-index: 20;
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -930,7 +931,7 @@ tbody tr:hover {
   letter-spacing: 0.03em;
   border-bottom: 2px solid #cbd5e1;
   position: sticky;
-  top: var(--bs-proxy-h, 16px);
+  top: calc(var(--bs-nav-h, 56px) + var(--bs-proxy-h, 0px));
   z-index: 10;
 }
 
@@ -1114,6 +1115,10 @@ tbody tr:hover {
   transition: background-color 0.15s ease;
 }
 
+.bs-table tr.clickable {
+  cursor: pointer;
+}
+
 .bs-category-header.clickable:hover {
   background-color: #f1f5f9 !important;
 }
@@ -1126,7 +1131,8 @@ tbody tr:hover {
   margin-right: 0.5rem;
 }
 
-.bs-category-header.collapsed .bs-chevron-icon {
+.bs-category-header.collapsed .bs-chevron-icon,
+.bs-table tr.clickable.collapsed .bs-chevron-icon {
   transform: rotate(-90deg);
 }
 
