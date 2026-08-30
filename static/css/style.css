@@ -791,6 +791,29 @@ tbody tr:hover {
   border-color: var(--border-color) var(--border-color) transparent;
 }
 
+#dataEntryTabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+#dataEntryTabs .nav-item {
+  flex: 0 0 auto;
+}
+
+#dataEntryTabs .nav-link {
+  white-space: nowrap;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 991.98px) {
+  #dataEntryTabs {
+    justify-content: flex-start !important;
+    padding-bottom: 4px;
+  }
+}
+
 .font-weight-bold {
   font-weight: 600;
 }
