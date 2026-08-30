@@ -2048,6 +2048,113 @@ class BalanceSheetTests(TestCase):
         }
         self.assertEqual(calculate_marginal_tax_rate(plan_high), 39.5)
 
+    def test_marginal_tax_rate_pensions_and_social_security(self):
+        from core.forms import calculate_marginal_tax_rate
+
+        # 1. Pension $2,000/mo ($24k/yr) vs desired spending $60k/yr -> Base is $60k
+        # Joint filer: std ded = $32,200. Taxable base = $60,000 - $32,200 = $27,800.
+        # Joint thresholds: [24800, 100800, ...] -> falls in 12% bracket ($24,800 to $100,800)
+        plan_pension_low = {
+            'is_married': True,
+            'filing_status': 'joint',
+            'desired_spending': 60000.0,
+            'state_tax_rate': 0.0,
+            'income_sources': [
+                {'name': 'Pension', 'amount': 2000.0, 'frequency': 'monthly', 'subject_to_tax': True}
+            ]
+        }
+        self.assertEqual(calculate_marginal_tax_rate(plan_pension_low), 12.0)
+
+        # 2. Large Pension $200,000/mo ($2.4M/yr)
+        # Joint taxable base = $2.4M - $32.2k = ~$2.36M -> falls in highest 37% bracket
+        plan_pension_high = {
+            'is_married': True,
+            'filing_status': 'joint',
+            'desired_spending': 60000.0,
+            'state_tax_rate': 5.0,
+            'income_sources': [
+                {'name': 'Mega Pension', 'amount': 200000.0, 'frequency': 'monthly', 'subject_to_tax': True}
+            ]
+        }
+        # 37% fed + 5% state = 42.0%
+        self.assertEqual(calculate_marginal_tax_rate(plan_pension_high), 42.0)
+
+        # 3. Social Security included: $3,000/mo user + $2,000/mo spouse = $60,000/yr SS
+        # Plus $50,000 pension -> Gross = $50k + $36.6k taxable SS = $86.6k
+        # Taxable base = $86.6k - $32.2k = $54.4k -> falls in 12% bracket ($24.8k to $100.8k)
+        plan_ss_12 = {
+            'is_married': True,
+            'filing_status': 'joint',
+            'desired_spending': 40000.0,
+            'state_tax_rate': 0.0,
+            'social_security': {
+                'user_entitled': True,
+                'user_amount': 3000.0,
+                'user_freq': 'monthly',
+                'spouse_entitled': True,
+                'spouse_amount': 2000.0,
+                'spouse_freq': 'monthly'
+            },
+            'income_sources': [
+                {'name': 'Pension', 'amount': 50000.0, 'frequency': 'annual', 'subject_to_tax': True}
+            ]
+        }
+        self.assertEqual(calculate_marginal_tax_rate(plan_ss_12), 12.0)
+
+        # 4. Social Security + $110,000 pension -> Gross = $110k + $51k taxable SS = $161k
+        # Taxable base = $161k - $32.2k = $128.8k -> falls in 22% bracket ($100.8k to $211.4k)
+        plan_ss_22 = {
+            'is_married': True,
+            'filing_status': 'joint',
+            'desired_spending': 40000.0,
+            'state_tax_rate': 0.0,
+            'social_security': {
+                'user_entitled': True,
+                'user_amount': 3000.0,
+                'user_freq': 'monthly',
+                'spouse_entitled': True,
+                'spouse_amount': 2000.0,
+                'spouse_freq': 'monthly'
+            },
+            'income_sources': [
+                {'name': 'Pension', 'amount': 110000.0, 'frequency': 'annual', 'subject_to_tax': True}
+            ]
+        }
+        self.assertEqual(calculate_marginal_tax_rate(plan_ss_22), 22.0)
+
+        # 5. Non-taxable income stream is excluded
+        plan_tax_free = {
+            'is_married': False,
+            'filing_status': 'single',
+            'desired_spending': 20000.0,
+            'state_tax_rate': 0.0,
+            'income_sources': [
+                {'name': 'Tax Free Disability', 'amount': 100000.0, 'frequency': 'annual', 'subject_to_tax': False}
+            ]
+        }
+        # Spending $20,000 - $16,100 std ded = $3,900 -> 10% bracket
+        self.assertEqual(calculate_marginal_tax_rate(plan_tax_free), 10.0)
+
+    def test_marginal_tax_rate_manual_override(self):
+        from core.forms import calculate_marginal_tax_rate
+
+        plan = {
+            'filing_status': 'single',
+            'desired_spending': 60000.0,
+            'state_tax_rate': 5.0,
+            'marginal_tax_rate_override': 18.5
+        }
+        self.assertEqual(calculate_marginal_tax_rate(plan), 18.5)
+
+        # Override inside balance_sheet sub-dict
+        plan2 = {
+            'filing_status': 'single',
+            'desired_spending': 60000.0,
+            'state_tax_rate': 5.0,
+            'balance_sheet': {'marginal_tax_rate_override': 28.0}
+        }
+        self.assertEqual(calculate_marginal_tax_rate(plan2), 28.0)
+
     def test_build_and_parse_balance_sheet(self):
         from core.forms import build_default_balance_sheet, parse_balance_sheet
         import json

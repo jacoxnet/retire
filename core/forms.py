@@ -551,68 +551,108 @@ STANDARD_DEDUCTION_2026 = {
 FEDERAL_TAX_BRACKET_RATES = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]
 
 
+def calculate_taxable_ss_forms(agi_ex_ss, ss_benefits, filing_status):
+    """Estimate taxable portion of Social Security benefits based on IRS provisional income thresholds."""
+    if ss_benefits <= 0:
+        return 0.0
+    if filing_status == 'joint':
+        base_limit = 32000
+        step_limit = 12000
+    else:  # single or hoh
+        base_limit = 25000
+        step_limit = 9000
+
+    line_2 = 0.5 * ss_benefits
+    line_5 = agi_ex_ss + line_2
+    line_7 = line_5
+
+    if line_7 <= base_limit:
+        return 0.0
+
+    line_9 = line_7 - base_limit
+    line_10 = step_limit
+    line_11 = max(0.0, line_9 - line_10)
+    line_12 = min(line_9, line_10)
+    line_13 = 0.5 * line_12
+    line_14 = min(line_2, line_13)
+    line_15 = 0.85 * line_11
+    line_16 = line_14 + line_15
+    line_17 = 0.85 * ss_benefits
+
+    return min(line_16, line_17)
+
+
 def calculate_marginal_tax_rate(data):
     """Calculate the combined Federal + State marginal tax rate for the user
-    based on current filing status, income streams, and state tax rate.
+    based on current filing status, all taxable income streams, social security,
+    desired spending, standard deduction, state tax rate, and optional manual override.
     Returns rate as a percentage, e.g. 27.0 for 27%.
     """
     if not isinstance(data, dict):
         return 24.0
 
-    filing_status = data.get('filing_status', 'single')
-    if filing_status not in FEDERAL_TAX_THRESHOLDS_2026:
-        filing_status = 'single'
+    # 1. Check for manual override
+    override = data.get('marginal_tax_rate_override')
+    if override is None and isinstance(data.get('balance_sheet'), dict):
+        override = data['balance_sheet'].get('marginal_tax_rate_override')
+    if override is not None:
+        try:
+            override_val = float(override)
+            if 0.0 <= override_val <= 100.0:
+                return round(override_val, 2)
+        except (ValueError, TypeError):
+            pass
 
-    user_age = get_int(data.get('user_age'), 60)
-    user_ret_age = get_int(data.get('user_retirement_age'), 65)
+    # 2. Filing status
     is_married = get_bool(data.get('is_married'))
-    spouse_age = get_int(data.get('spouse_age'), 60) if is_married else 0
-    spouse_ret_age = get_int(data.get('spouse_retirement_age'), 65) if is_married else 0
+    filing_status = data.get('filing_status', 'joint' if is_married else 'single')
+    if filing_status not in FEDERAL_TAX_THRESHOLDS_2026:
+        filing_status = 'joint' if is_married else 'single'
 
-    # Calculate active taxable income at current age
-    total_taxable_income = 0.0
+    # 3. Sum all taxable income streams
+    total_taxable_streams = 0.0
     income_sources = data.get('income_sources', [])
     if isinstance(income_sources, list):
         for inc in income_sources:
-            if not isinstance(inc, dict) or not inc.get('subject_to_tax', True):
+            if not isinstance(inc, dict):
                 continue
-            amt = float(inc.get('amount', 0.0))
-            if inc.get('frequency') == 'monthly':
+            if inc.get('subject_to_tax') is False or str(inc.get('subject_to_tax')).lower() == 'false':
+                continue
+            amt = float(inc.get('amount', 0.0) or 0.0)
+            freq = inc.get('frequency', 'monthly')
+            if freq == 'monthly':
                 amt *= 12.0
-            
-            # Check if active at current age
-            stype = inc.get('start_age_type', 'retirement')
-            if stype in ['specified', 'user_specified']:
-                start_age = get_int(inc.get('start_age_specified'), 65)
-            elif stype == 'spouse_specified' and is_married:
-                start_age = get_int(inc.get('start_age_specified'), 65) + (user_age - spouse_age)
-            elif stype == 'retirement':
-                start_age = user_ret_age
-            elif stype == 'spouse_retirement' and is_married:
-                start_age = spouse_ret_age + (user_age - spouse_age)
-            else:
-                start_age = user_age
-            
-            etype = inc.get('end_age_type', 'death')
-            if etype in ['specified', 'user_specified']:
-                end_age = get_int(inc.get('end_age_specified'), 90)
-            elif etype == 'spouse_specified' and is_married:
-                end_age = get_int(inc.get('end_age_specified'), 90) + (user_age - spouse_age)
-            elif etype == 'spouse_death' and is_married:
-                end_age = get_int(data.get('spouse_age_death'), 90) + (user_age - spouse_age)
-            else:
-                end_age = get_int(data.get('user_age_death'), 90)
+            elif freq in ['one_time', 'one-time']:
+                amt = 0.0
+            total_taxable_streams += amt
 
-            if start_age <= user_age <= end_age:
-                total_taxable_income += amt
+    # 4. Social Security benefits
+    ss_data = data.get('social_security', {})
+    total_ss = 0.0
+    if isinstance(ss_data, dict):
+        if get_bool(ss_data.get('user_entitled', True)):
+            u_amt = float(ss_data.get('user_amount', 0.0) or 0.0)
+            if ss_data.get('user_freq', 'monthly') == 'monthly':
+                u_amt *= 12.0
+            total_ss += u_amt
+        if is_married and get_bool(ss_data.get('spouse_entitled', False)):
+            sp_amt = float(ss_data.get('spouse_amount', 0.0) or 0.0)
+            if ss_data.get('spouse_freq', 'monthly') == 'monthly':
+                sp_amt *= 12.0
+            total_ss += sp_amt
 
-    # If no active salary or earned income, estimate from desired retirement spending
-    if total_taxable_income <= 0:
-        total_taxable_income = float(data.get('desired_spending', 60000.0))
+    taxable_ss = calculate_taxable_ss_forms(total_taxable_streams, total_ss, filing_status)
+    guaranteed_taxable_income = total_taxable_streams + taxable_ss
 
+    # 5. Desired spending comparison
+    desired_spending = float(data.get('desired_spending', 60000.0) or 0.0)
+    effective_income_base = max(desired_spending, guaranteed_taxable_income)
+
+    # 6. Apply standard deduction
     std_ded = STANDARD_DEDUCTION_2026.get(filing_status, 16100)
-    taxable_base = max(0.0, total_taxable_income - std_ded)
+    taxable_base = max(0.0, effective_income_base - std_ded)
 
+    # 7. Match against federal brackets
     thresholds = FEDERAL_TAX_THRESHOLDS_2026.get(filing_status, FEDERAL_TAX_THRESHOLDS_2026['single'])
     fed_rate = FEDERAL_TAX_BRACKET_RATES[0]
     for i, threshold in enumerate(thresholds):
@@ -624,7 +664,7 @@ def calculate_marginal_tax_rate(data):
         else:
             break
 
-    state_rate = float(data.get('state_tax_rate', 0.0)) / 100.0
+    state_rate = float(data.get('state_tax_rate', 0.0) or 0.0) / 100.0
     combined_rate = (fed_rate + state_rate) * 100.0
     return round(combined_rate, 2)
 

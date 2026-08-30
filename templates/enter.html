@@ -1781,7 +1781,22 @@
 
             card.querySelector('.btnDeleteRow').addEventListener('click', function () {
                 card.remove();
+                if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
             });
+
+            var amtInp = card.querySelector('[name="income_amount[]"]');
+            if (amtInp) {
+                amtInp.addEventListener('input', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+                amtInp.addEventListener('change', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+            }
+            var freqSel = card.querySelector('.inc-frequency');
+            if (freqSel) {
+                freqSel.addEventListener('change', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+            }
+            var taxSel = card.querySelector('[name="income_subject_to_tax[]"]');
+            if (taxSel) {
+                taxSel.addEventListener('change', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+            }
 
             if (incomeStreamsContainer) {
                 incomeStreamsContainer.appendChild(card);
@@ -1790,11 +1805,13 @@
             attachPercentInputListeners(card.querySelector('.inc-survivor-pct'));
             updateCardSurvivorSection(card);
             updateSpouseDropdownOptions();
+            if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
         }
 
         if (btnAddIncomeRow) {
             btnAddIncomeRow.addEventListener('click', function () {
                 addIncomeRow();
+                if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
             });
         }
 
@@ -2029,6 +2046,7 @@
             periods: [todayStr],
             current_period: todayStr,
             marginal_tax_rate: 24.0,
+            marginal_tax_rate_override: null,
             period_view_limit: 3,
             chart_metric: 'gross_net_worth',
             emergency_goal_amount: 0.0,
@@ -2083,13 +2101,97 @@
         }
         ensureBsAccountIds();
 
+        function getEffectiveMarginalTaxRate() {
+            if (bsState.marginal_tax_rate_override !== null && bsState.marginal_tax_rate_override !== undefined && !isNaN(bsState.marginal_tax_rate_override) && bsState.marginal_tax_rate_override !== '') {
+                return parseFloat(bsState.marginal_tax_rate_override);
+            }
+            return parseFloat(bsState.marginal_tax_rate) || 24.0;
+        }
+
+        function calculateTaxableSSClient(agiExSS, ssBenefits, filingStatus) {
+            if (ssBenefits <= 0) return 0.0;
+            var baseLimit = (filingStatus === 'joint') ? 32000 : 25000;
+            var stepLimit = (filingStatus === 'joint') ? 12000 : 9000;
+            var line2 = 0.5 * ssBenefits;
+            var line5 = agiExSS + line2;
+            var line7 = line5;
+            if (line7 <= baseLimit) return 0.0;
+            var line9 = line7 - baseLimit;
+            var line11 = Math.max(0.0, line9 - stepLimit);
+            var line12 = Math.min(line9, stepLimit);
+            var line13 = 0.5 * line12;
+            var line14 = Math.min(line2, line13);
+            var line15 = 0.85 * line11;
+            var line16 = line14 + line15;
+            var line17 = 0.85 * ssBenefits;
+            return Math.min(line16, line17);
+        }
+
         function getCalculatedMarginalTaxRate() {
-            var isMarried = document.getElementById('is_married')?.checked;
+            var isMarried = document.getElementById('is_married')?.checked || false;
+            var filingStatusSelect = document.getElementById('filing_status');
+            var filingStatus = filingStatusSelect ? filingStatusSelect.value : (isMarried ? 'joint' : 'single');
+            if (!isMarried && filingStatus === 'joint') filingStatus = 'single';
+            if (isMarried && filingStatus === 'single') filingStatus = 'joint';
+
             var stateRate = parsePercent(document.getElementById('state_tax_rate')?.value || '0') / 100.0;
             var spending = parseMoney(document.getElementById('desired_spending')?.value || '60000');
-            var stdDed = isMarried ? 32200 : 16100;
-            var taxableBase = Math.max(0, spending - stdDed);
-            var thresholds = isMarried ? [24800, 100800, 215400, 410800, 521750, 783700] : [12400, 50400, 107700, 205400, 260875, 652050];
+
+            // 1. Sum all taxable income streams from DOM cards
+            var totalTaxableStreams = 0.0;
+            var incomeCards = document.querySelectorAll('#incomeStreamsContainer .income-stream-card');
+            incomeCards.forEach(function(card) {
+                var isTaxable = true;
+                var taxSelect = card.querySelector('[name="income_subject_to_tax[]"]');
+                if (taxSelect) {
+                    isTaxable = (taxSelect.value === 'true' || taxSelect.value === true);
+                }
+                if (!isTaxable) return;
+
+                var amtInput = card.querySelector('[name="income_amount[]"]');
+                var freqSelect = card.querySelector('.inc-frequency');
+                var amt = amtInput ? parseMoney(amtInput.value) : 0;
+                var freq = freqSelect ? freqSelect.value : 'monthly';
+
+                if (freq === 'monthly') {
+                    amt *= 12.0;
+                } else if (freq === 'one_time' || freq === 'one-time') {
+                    amt = 0.0;
+                }
+                totalTaxableStreams += amt;
+            });
+
+            // 2. Sum Social Security benefits from DOM
+            var totalSS = 0.0;
+            var userSSEntitled = (document.getElementById('user_ss_entitled')?.value === 'true');
+            if (userSSEntitled) {
+                var uAmt = parseMoney(document.getElementById('user_ss_amount')?.value || '0');
+                var uFreq = document.getElementById('user_ss_freq')?.value || 'monthly';
+                if (uFreq === 'monthly') uAmt *= 12.0;
+                totalSS += uAmt;
+            }
+            var spouseSSEntitled = isMarried && (document.getElementById('spouse_ss_entitled')?.value === 'true');
+            if (spouseSSEntitled) {
+                var spAmt = parseMoney(document.getElementById('spouse_ss_amount')?.value || '0');
+                var spFreq = document.getElementById('spouse_ss_freq')?.value || 'monthly';
+                if (spFreq === 'monthly') spAmt *= 12.0;
+                totalSS += spAmt;
+            }
+
+            var taxableSS = calculateTaxableSSClient(totalTaxableStreams, totalSS, filingStatus);
+            var guaranteedTaxableIncome = totalTaxableStreams + taxableSS;
+            var effectiveIncomeBase = Math.max(spending, guaranteedTaxableIncome);
+
+            var stdDeductions = { 'single': 16100, 'joint': 32200, 'hoh': 24150 };
+            var stdDed = stdDeductions[filingStatus] || (isMarried ? 32200 : 16100);
+            var taxableBase = Math.max(0, effectiveIncomeBase - stdDed);
+
+            var thresholdsMap = {
+                'single': [12400, 50400, 105700, 201775, 256225, 640600],
+                'joint': [24800, 100800, 211400, 403550, 512450, 768700],
+                'hoh': [17700, 67450, 105700, 201775, 256225, 640600]
+            };
+            var thresholds = thresholdsMap[filingStatus] || thresholdsMap['single'];
             var rates = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37];
             var fedRate = rates[0];
             for (var i = 0; i < thresholds.length; i++) {
@@ -2099,7 +2201,7 @@
                     break;
                 }
             }
-            return (fedRate + stateRate) * 100.0;
+            return Math.round(((fedRate + stateRate) * 100.0) * 100) / 100;
         }
 
         try {
@@ -2113,13 +2215,71 @@
             bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
         }
 
-        function refreshBsMarginalTaxRate() {
-            bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
+        window.handleBsTaxRateOverrideInput = function(el) {
+            var raw = el.value.trim();
+            if (raw === '') {
+                bsState.marginal_tax_rate_override = null;
+            } else {
+                var val = parseFloat(raw);
+                if (!isNaN(val) && val >= 0 && val <= 100) {
+                    bsState.marginal_tax_rate_override = val;
+                }
+            }
+            var hasOverride = (bsState.marginal_tax_rate_override !== null);
+            var resetBtn = document.getElementById('bsTaxRateResetBtn');
+            if (resetBtn) resetBtn.style.display = hasOverride ? 'inline-block' : 'none';
+            if (hasOverride) {
+                el.classList.add('is-overridden');
+            } else {
+                el.classList.remove('is-overridden');
+            }
+            recalculateBsTableDisplay();
             updateBsKpis();
             renderBsHistoricalChart(bsState.chart_metric);
+            serializeBalanceSheet();
+        };
+
+        window.resetBsMarginalTaxRateOverride = function() {
+            bsState.marginal_tax_rate_override = null;
+            var autoRate = parseFloat(bsState.marginal_tax_rate) || 24.0;
+            var inputEl = document.getElementById('bsTaxRateOverrideInput');
+            if (inputEl) {
+                inputEl.value = autoRate.toFixed(1);
+                inputEl.classList.remove('is-overridden');
+            }
+            var resetBtn = document.getElementById('bsTaxRateResetBtn');
+            if (resetBtn) resetBtn.style.display = 'none';
+            recalculateBsTableDisplay();
+            updateBsKpis();
+            renderBsHistoricalChart(bsState.chart_metric);
+            serializeBalanceSheet();
+        };
+
+        function refreshBsMarginalTaxRate() {
+            bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
+            var inputEl = document.getElementById('bsTaxRateOverrideInput');
+            var resetBtn = document.getElementById('bsTaxRateResetBtn');
+            var hasOverride = (bsState.marginal_tax_rate_override !== null && bsState.marginal_tax_rate_override !== undefined && bsState.marginal_tax_rate_override !== '');
+            if (!hasOverride) {
+                if (inputEl) {
+                    inputEl.value = bsState.marginal_tax_rate.toFixed(1);
+                    inputEl.classList.remove('is-overridden');
+                }
+                if (resetBtn) resetBtn.style.display = 'none';
+            } else {
+                if (resetBtn) {
+                    resetBtn.title = 'Reset to auto-calculated rate (' + bsState.marginal_tax_rate.toFixed(1) + '%)';
+                }
+            }
+            recalculateBsTableDisplay();
+            updateBsKpis();
+            renderBsHistoricalChart(bsState.chart_metric);
+            serializeBalanceSheet();
         }
 
-        ['state_tax_rate', 'desired_spending', 'is_married'].forEach(function(id) {
+        ['state_tax_rate', 'desired_spending', 'is_married', 'filing_status',
+         'user_ss_entitled', 'user_ss_amount', 'user_ss_freq',
+         'spouse_ss_entitled', 'spouse_ss_amount', 'spouse_ss_freq'].forEach(function(id) {
             var el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', refreshBsMarginalTaxRate);
@@ -2757,9 +2917,24 @@
 
                 // Specific calculation rows for pretax
                 if (cat.is_pretax) {
-                    var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
+                    var effRate = getEffectiveMarginalTaxRate();
+                    var autoRate = parseFloat(bsState.marginal_tax_rate) || 24.0;
+                    var hasOverride = (bsState.marginal_tax_rate_override !== null && bsState.marginal_tax_rate_override !== undefined && bsState.marginal_tax_rate_override !== '');
+                    var taxRate = effRate / 100.0;
                     bHtml += '<tr class="bs-deferred-tax-row" id="deferred_tax_row">';
-                    bHtml += '<td class="bs-sticky-col ps-4 small">Est Deferred Income Tax <span class="text-muted">(' + (taxRate * 100).toFixed(1) + '%)</span></td>';
+                    bHtml += '<td class="bs-sticky-col ps-4 small">';
+                    bHtml += '  <div class="d-flex align-items-center justify-content-between flex-wrap gap-1">';
+                    bHtml += '    <span>Est Deferred Income Tax</span>';
+                    bHtml += '    <div class="d-inline-flex align-items-center" title="Combined Federal + State marginal tax rate. Edit to override, or clear to reset to automatic calculation.">';
+                    bHtml += '      <span class="text-muted small me-1">(</span>';
+                    bHtml += '      <input type="number" step="0.1" min="0" max="99.9" class="form-control form-control-sm text-end px-1 py-0 fw-bold bs-tax-override-input ' + (hasOverride ? 'is-overridden' : '') + '" id="bsTaxRateOverrideInput" value="' + effRate.toFixed(1) + '" oninput="handleBsTaxRateOverrideInput(this)" onchange="if(this.value.trim()===\'\') resetBsMarginalTaxRateOverride();" title="Combined marginal rate. Type a custom percentage to override.">';
+                    bHtml += '      <span class="text-muted small ms-1">%)</span>';
+                    bHtml += '      <button type="button" class="btn btn-link btn-sm text-secondary p-0 ms-1 bs-tax-reset-btn" id="bsTaxRateResetBtn" title="Reset to auto-calculated rate (' + autoRate.toFixed(1) + '%)" style="display: ' + (hasOverride ? 'inline-block' : 'none') + '; text-decoration: none;" onclick="resetBsMarginalTaxRateOverride()">';
+                    bHtml += '        <i class="fa-solid fa-arrow-rotate-left"></i>';
+                    bHtml += '      </button>';
+                    bHtml += '    </div>';
+                    bHtml += '  </div>';
+                    bHtml += '</td>';
                     bHtml += '<td class="bs-inst-col small text-muted">Fed + State</td>';
                     visPeriods.forEach(function(p) {
                         var defTax = Math.round(catTotals[p] * taxRate);
@@ -3020,7 +3195,7 @@
 
             // 8. Liquid Net Worth Calculation Rows
             renderCategorySpacer();
-            var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
+            var taxRate = getEffectiveMarginalTaxRate() / 100.0;
             var liquidNetTaxAndGoalsByPeriod = {};
             var liquidNetTaxByPeriod = {};
             visPeriods.forEach(function(p) {
@@ -3329,7 +3504,7 @@
             var visPeriods = getVisiblePeriods();
             var currPeriod = visPeriods[visPeriods.length - 1];
             var prevPeriod = visPeriods.length > 1 ? visPeriods[visPeriods.length - 2] : currPeriod;
-            var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
+            var taxRate = getEffectiveMarginalTaxRate() / 100.0;
 
             var liquidByPeriod = {};
             var pretaxByPeriod = {};
@@ -3743,7 +3918,7 @@
             var periods = bsState.periods || [];
             var prevP = periods.length > 1 ? periods[periods.length - 2] : currP;
 
-            var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
+            var taxRate = getEffectiveMarginalTaxRate() / 100.0;
 
             var getTotalsForPeriod = function(p) {
                 var pretax = 0, roth = 0, taxable = 0, hsa = 0, emg = 0, goals = 0, daily = 0;
@@ -3819,7 +3994,7 @@
             if (!canvas || typeof Chart === 'undefined') return;
 
             var periods = bsState.periods || [];
-            var taxRate = (bsState.marginal_tax_rate || 24.0) / 100.0;
+            var taxRate = getEffectiveMarginalTaxRate() / 100.0;
 
             var labels = periods.map(function(p) {
                 var parts = p.split('-');
