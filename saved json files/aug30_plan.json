@@ -1,0 +1,695 @@
+{
+    "goal_seeking": false,
+    "user_name": "Ilsa Lund",
+    "user_age": 48,
+    "user_retirement_age": 58,
+    "user_age_death": 90,
+    "is_married": true,
+    "spouse_name": "Victor Laszlo",
+    "spouse_age": 52,
+    "spouse_retirement_age": 62,
+    "spouse_age_death": 88,
+    "filing_status": "joint",
+    "current_year": 2026,
+    "begin_spending_age_type": "spouse_retirement",
+    "begin_spending_age_specified": 65,
+    "desired_spending": 96000,
+    "survivor_spending": 90000,
+    "adjust_spending_inflation": true,
+    "inflation_rate": 3,
+    "runs": 15000,
+    "target_success_rate": 80,
+    "state_tax_rate": 2,
+    "state_ss_exempt": true,
+    "social_security": {
+        "user_entitled": false,
+        "user_amount": 0,
+        "user_freq": "monthly",
+        "user_start_age": 67,
+        "spouse_entitled": true,
+        "spouse_amount": 3000,
+        "spouse_freq": "monthly",
+        "spouse_start_age": 67
+    },
+    "accounts": [
+        {
+            "id": "acc_pretax_1",
+            "name": "Victor's 401(k)",
+            "institution": "Fidelity",
+            "type": "pretax",
+            "owner": "spouse",
+            "balance": 300000,
+            "contrib_amount": 500,
+            "contrib_freq": "annual",
+            "contrib_start_age": 60,
+            "contrib_end_age_type": "retirement",
+            "contrib_end_age_specified": 65,
+            "contrib_adjust_inflation": true,
+            "return_mean": 7,
+            "return_std": 10,
+            "hsa_for_medical": true
+        },
+        {
+            "id": "acc_roth_1",
+            "name": "Ilsa's Roth IRA",
+            "institution": "Vanguard",
+            "type": "roth",
+            "owner": "user",
+            "balance": 250000,
+            "contrib_amount": 4000,
+            "contrib_freq": "annual",
+            "contrib_start_age": 60,
+            "contrib_end_age_type": "retirement",
+            "contrib_end_age_specified": 65,
+            "contrib_adjust_inflation": true,
+            "return_mean": 6,
+            "return_std": 10,
+            "hsa_for_medical": true
+        },
+        {
+            "id": "acc_roth_2_1788094253501_ykagx",
+            "name": "Victor's Roth IRA",
+            "institution": "Fidelity",
+            "type": "roth",
+            "owner": "spouse",
+            "balance": 33500,
+            "contrib_amount": 250,
+            "contrib_freq": "monthly",
+            "contrib_start_age": 60,
+            "contrib_end_age_type": "spouse_retirement",
+            "contrib_end_age_specified": 58,
+            "contrib_adjust_inflation": true,
+            "return_mean": 7,
+            "return_std": 10,
+            "hsa_for_medical": true
+        },
+        {
+            "id": "acc_taxable_1",
+            "name": "Vanguard Brokerage",
+            "institution": "",
+            "type": "taxable",
+            "owner": "user",
+            "balance": 500000,
+            "contrib_amount": 0,
+            "contrib_freq": "annual",
+            "contrib_start_age": 60,
+            "contrib_end_age_type": "retirement",
+            "contrib_end_age_specified": 65,
+            "contrib_adjust_inflation": true,
+            "return_mean": 6,
+            "return_std": 8,
+            "hsa_for_medical": true
+        },
+        {
+            "id": "acc_hsa_1_1788094332945_wj3i4",
+            "name": "Ilsa's HSA",
+            "institution": "Fidleity",
+            "type": "hsa",
+            "owner": "user",
+            "balance": 7550,
+            "contrib_amount": 0,
+            "contrib_freq": "annual",
+            "contrib_start_age": 60,
+            "contrib_end_age_type": "retirement",
+            "contrib_end_age_specified": 58,
+            "contrib_adjust_inflation": true,
+            "return_mean": 5,
+            "return_std": 4.5,
+            "hsa_for_medical": true
+        }
+    ],
+    "pretax_assets": {
+        "present_balance": 0,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 48,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 58,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 10,
+        "is_spouse": false,
+        "user_ret_age": 58,
+        "spouse_ret_age": 62,
+        "user_age_death": 90,
+        "spouse_age_death": 88,
+        "inflation_rate": 3
+    },
+    "spouse_pretax_assets": {
+        "present_balance": 300000,
+        "contrib_amount": 500,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 7,
+        "return_std": 10,
+        "is_spouse": true,
+        "user_ret_age": 58,
+        "spouse_ret_age": 62,
+        "user_age_death": 90,
+        "spouse_age_death": 88,
+        "inflation_rate": 3
+    },
+    "roth_assets": {
+        "present_balance": 283500,
+        "contrib_amount": 7000,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6.118165784832452,
+        "return_std": 10,
+        "is_spouse": false,
+        "user_ret_age": 58,
+        "spouse_ret_age": 62,
+        "user_age_death": 90,
+        "spouse_age_death": 88,
+        "inflation_rate": 3
+    },
+    "taxable_assets": {
+        "present_balance": 500000,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 65,
+        "contrib_adjust_inflation": true,
+        "return_mean": 6,
+        "return_std": 8,
+        "is_spouse": false,
+        "user_ret_age": 58,
+        "spouse_ret_age": 62,
+        "user_age_death": 90,
+        "spouse_age_death": 88,
+        "inflation_rate": 3
+    },
+    "hsa_assets": {
+        "present_balance": 7550,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 60,
+        "contrib_end_age_type": "retirement",
+        "contrib_end_age_specified": 58,
+        "contrib_adjust_inflation": true,
+        "return_mean": 5,
+        "return_std": 4.5,
+        "hsa_for_medical": true,
+        "is_spouse": false,
+        "user_ret_age": 58,
+        "spouse_ret_age": 62,
+        "user_age_death": 90,
+        "spouse_age_death": 88,
+        "inflation_rate": 3
+    },
+    "spouse_hsa_assets": {
+        "present_balance": 0,
+        "contrib_amount": 0,
+        "contrib_freq": "annual",
+        "contrib_start_age": 52,
+        "contrib_end_age_type": "spouse_retirement",
+        "contrib_end_age_specified": 62,
+        "contrib_adjust_inflation": true,
+        "return_mean": 5,
+        "return_std": 8,
+        "hsa_for_medical": true,
+        "is_spouse": true,
+        "user_ret_age": 58,
+        "spouse_ret_age": 62,
+        "user_age_death": 90,
+        "spouse_age_death": 88,
+        "inflation_rate": 3
+    },
+    "additional_spending": [
+        {
+            "name": "Return trip to Morocco",
+            "amount": 5000,
+            "start_age": 70,
+            "start_age_type": "user",
+            "interval": 0,
+            "adjust_inflation": true
+        },
+        {
+            "name": "Purchase of Cafe Americain",
+            "amount": 240000,
+            "start_age": 68,
+            "start_age_type": "user",
+            "interval": 0,
+            "adjust_inflation": true
+        },
+        {
+            "name": "Donation to Resistance",
+            "amount": 10000,
+            "start_age": 48,
+            "start_age_type": "user",
+            "interval": 3,
+            "adjust_inflation": true
+        }
+    ],
+    "income_sources": [
+        {
+            "name": "Pension",
+            "amount": 2000,
+            "frequency": "monthly",
+            "start_age_type": "spouse_retirement",
+            "start_age_specified": 65,
+            "end_age_type": "spouse_death",
+            "end_age_specified": 90,
+            "subject_to_tax": true,
+            "is_social_security": false,
+            "has_survivor_benefit": true,
+            "survivor_benefit_pct": 75,
+            "adjust_type": "inflation",
+            "adjust_val": 0,
+            "adjust_start_age_type": "start",
+            "adjust_start_age_specified": 65,
+            "adjustments": [
+                {
+                    "start_type": "current_age",
+                    "start_spec": 65,
+                    "end_type": "spouse_retirement",
+                    "end_spec": 90,
+                    "adjust_type": "inflation",
+                    "adjust_val": 0
+                },
+                {
+                    "start_type": "spouse_retirement",
+                    "start_spec": 65,
+                    "end_type": "death",
+                    "end_spec": 90,
+                    "adjust_type": "fixed_pct",
+                    "adjust_val": 1
+                }
+            ]
+        }
+    ],
+    "other_taxes": [
+        {
+            "name": "Capital Gains",
+            "amount": 2000,
+            "frequency": "annual",
+            "start_age_type": "user_specified",
+            "start_age_specified": 48,
+            "end_age_type": "death",
+            "end_age_specified": 90,
+            "adjust_type": "inflation",
+            "adjust_val": 0,
+            "adjust_start_age_type": "start",
+            "adjust_start_age_specified": 65
+        }
+    ],
+    "balance_sheet": {
+        "periods": [
+            "2025-12-31",
+            "2026-05-31",
+            "2026-06-30",
+            "2026-07-31",
+            "2026-08-29"
+        ],
+        "current_period": "2026-08-29",
+        "marginal_tax_rate": 14,
+        "period_view_limit": 3,
+        "chart_metric": "breakdown",
+        "emergency_goal_amount": 20000,
+        "categories": {
+            "pretax": {
+                "title": "Pretax Retirement Accounts",
+                "is_pretax": true,
+                "accounts": [
+                    {
+                        "id": "acc_pretax_1",
+                        "name": "Victor's 401(k)",
+                        "institution": "Fidelity",
+                        "owner": "spouse",
+                        "type": "pretax",
+                        "include_in_retirement": true,
+                        "values": {
+                            "2026-08-29": 300000,
+                            "2026-07-31": 290000,
+                            "2026-06-30": 262000,
+                            "2026-05-31": 275000,
+                            "2025-12-31": 290000
+                        },
+                        "contrib_amount": 500,
+                        "contrib_freq": "annual",
+                        "contrib_start_age": 60,
+                        "contrib_end_age_type": "retirement",
+                        "contrib_end_age_specified": 65,
+                        "contrib_adjust_inflation": true,
+                        "return_mean": 7,
+                        "return_std": 10
+                    }
+                ]
+            },
+            "roth": {
+                "title": "Post-Tax (Roth) Retirement Accounts",
+                "is_pretax": false,
+                "accounts": [
+                    {
+                        "id": "acc_roth_1",
+                        "name": "Ilsa's Roth IRA",
+                        "institution": "Vanguard",
+                        "owner": "user",
+                        "type": "roth",
+                        "include_in_retirement": true,
+                        "values": {
+                            "2026-08-29": 250000,
+                            "2026-07-31": 245000,
+                            "2026-06-30": 240000,
+                            "2026-05-31": 242000,
+                            "2025-12-31": 249000
+                        },
+                        "contrib_amount": 4000,
+                        "contrib_freq": "annual",
+                        "contrib_start_age": 60,
+                        "contrib_end_age_type": "retirement",
+                        "contrib_end_age_specified": 65,
+                        "contrib_adjust_inflation": true,
+                        "return_mean": 6,
+                        "return_std": 10
+                    },
+                    {
+                        "id": "acc_roth_2_1788094253501_ykagx",
+                        "name": "Victor's Roth IRA",
+                        "institution": "Fidelity",
+                        "owner": "spouse",
+                        "type": "roth",
+                        "include_in_retirement": true,
+                        "values": {
+                            "2025-12-31": 0,
+                            "2026-05-31": 0,
+                            "2026-06-30": 32000,
+                            "2026-07-31": 30500,
+                            "2026-08-29": 33500
+                        },
+                        "contrib_amount": 250,
+                        "return_mean": 7,
+                        "return_std": 10
+                    }
+                ]
+            },
+            "taxable": {
+                "title": "Investment / Taxable Brokerage Accounts",
+                "is_pretax": false,
+                "accounts": [
+                    {
+                        "id": "acc_taxable_1",
+                        "name": "Vanguard Brokerage",
+                        "institution": "",
+                        "owner": "user",
+                        "type": "taxable",
+                        "include_in_retirement": true,
+                        "values": {
+                            "2026-08-29": 500000,
+                            "2026-07-31": 510000,
+                            "2026-06-30": 490000,
+                            "2026-05-31": 470000,
+                            "2025-12-31": 520000
+                        },
+                        "contrib_amount": 0,
+                        "contrib_freq": "annual",
+                        "contrib_start_age": 60,
+                        "contrib_end_age_type": "retirement",
+                        "contrib_end_age_specified": 65,
+                        "contrib_adjust_inflation": true,
+                        "return_mean": 6,
+                        "return_std": 8
+                    }
+                ]
+            },
+            "hsa": {
+                "title": "Health Savings Accounts (HSA)",
+                "is_pretax": false,
+                "accounts": [
+                    {
+                        "id": "acc_hsa_1_1788094332945_wj3i4",
+                        "name": "Ilsa's HSA",
+                        "institution": "Fidleity",
+                        "owner": "user",
+                        "type": "hsa",
+                        "include_in_retirement": true,
+                        "values": {
+                            "2025-12-31": 0,
+                            "2026-05-31": 0,
+                            "2026-06-30": 7200,
+                            "2026-07-31": 7400,
+                            "2026-08-29": 7550
+                        },
+                        "contrib_amount": 0,
+                        "return_mean": 5,
+                        "return_std": 4.5
+                    }
+                ]
+            },
+            "emergency": {
+                "title": "Emergency Fund Accounts",
+                "is_pretax": false,
+                "target_amount": 20000,
+                "accounts": [
+                    {
+                        "id": "acc_emergency_1_1788093906258_pa8ew",
+                        "name": "Emergency Savings",
+                        "institution": "Capital One",
+                        "owner": "user",
+                        "type": "cash",
+                        "include_in_retirement": false,
+                        "values": {
+                            "2025-12-31": 0,
+                            "2026-05-31": 0,
+                            "2026-06-30": 4000,
+                            "2026-07-31": 4500,
+                            "2026-08-29": 5500
+                        },
+                        "contrib_amount": 0,
+                        "return_mean": 5,
+                        "return_std": 8
+                    },
+                    {
+                        "id": "acc_emergency_2_1788093943468_m6ic7",
+                        "name": "Fidelity Emergency Savings",
+                        "institution": "Fidelity",
+                        "owner": "user",
+                        "type": "cash",
+                        "include_in_retirement": false,
+                        "values": {
+                            "2025-12-31": 0,
+                            "2026-05-31": 0,
+                            "2026-06-30": 12000,
+                            "2026-07-31": 9000,
+                            "2026-08-29": 15000
+                        },
+                        "contrib_amount": 0,
+                        "return_mean": 5,
+                        "return_std": 8
+                    }
+                ]
+            },
+            "goals": {
+                "title": "Goal Savings (Sinking Funds)",
+                "is_pretax": false,
+                "goal_groups": [
+                    {
+                        "id": "goal_car",
+                        "name": "Next Vehicle Replacement",
+                        "target_amount": 35000,
+                        "accounts": [
+                            {
+                                "id": "acc_g_car_1",
+                                "name": "Car Fund Savings (HYSA)",
+                                "institution": "Ally Bank",
+                                "owner": "user",
+                                "type": "cash",
+                                "include_in_retirement": false,
+                                "values": {
+                                    "2026-08-29": 21000,
+                                    "2026-07-31": 21000,
+                                    "2026-06-30": 19000,
+                                    "2026-05-31": 19000,
+                                    "2025-12-31": 18000
+                                }
+                            },
+                            {
+                                "id": "acc_g_car_2",
+                                "name": "Short-Term Bond Reserve (Brokerage)",
+                                "institution": "Vanguard (BSV)",
+                                "owner": "user",
+                                "type": "taxable",
+                                "include_in_retirement": false,
+                                "values": {
+                                    "2026-08-29": 14000,
+                                    "2026-07-31": 14000,
+                                    "2026-06-30": 13000,
+                                    "2026-05-31": 12000,
+                                    "2025-12-31": 11000
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "goal_hvac",
+                        "name": "Home Maintenance & Extraordinary",
+                        "target_amount": 1500,
+                        "accounts": [
+                            {
+                                "id": "acc_g_hvac_1",
+                                "name": "Joint Extraordinary Account",
+                                "institution": "Capital One",
+                                "owner": "user",
+                                "type": "cash",
+                                "include_in_retirement": false,
+                                "values": {
+                                    "2026-08-29": 0,
+                                    "2026-07-31": 0,
+                                    "2026-06-30": 1600,
+                                    "2026-05-31": 1550,
+                                    "2025-12-31": 0
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "goal_travel",
+                        "name": "Vacation & Travel Fund",
+                        "target_amount": 4200,
+                        "accounts": [
+                            {
+                                "id": "acc_g_trv_1",
+                                "name": "Travel Savings Account",
+                                "institution": "Discover Bank",
+                                "owner": "user",
+                                "type": "cash",
+                                "include_in_retirement": false,
+                                "values": {
+                                    "2026-08-29": 5200,
+                                    "2026-07-31": 5200,
+                                    "2026-06-30": 5200,
+                                    "2026-05-31": 4600,
+                                    "2025-12-31": 6200
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "goal_tech",
+                        "name": "Tech & Electronics Fund",
+                        "target_amount": 0,
+                        "accounts": [
+                            {
+                                "id": "acc_g_tech_1",
+                                "name": "Tech Savings",
+                                "institution": "Ally Bank",
+                                "owner": "user",
+                                "type": "cash",
+                                "include_in_retirement": false,
+                                "values": {
+                                    "2026-08-29": 4200,
+                                    "2026-07-31": 2200,
+                                    "2026-06-30": 200,
+                                    "2026-05-31": 0,
+                                    "2025-12-31": 0
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "daily": {
+                "title": "Daily Spending Accounts (Checking & Cash)",
+                "is_pretax": false,
+                "accounts": [
+                    {
+                        "id": "acc_daily_1",
+                        "name": "Primary Checking",
+                        "institution": "Chase Bank",
+                        "owner": "user",
+                        "type": "cash",
+                        "include_in_retirement": false,
+                        "values": {
+                            "2026-08-29": 1000,
+                            "2026-07-31": 1000,
+                            "2026-06-30": 1000,
+                            "2026-05-31": 1500,
+                            "2025-12-31": 3000
+                        }
+                    }
+                ]
+            },
+            "real_estate": {
+                "properties": [
+                    {
+                        "id": "prop_primary",
+                        "name": "Primary Residence",
+                        "market_values": {
+                            "2026-08-29": 330000,
+                            "2026-07-31": 330000,
+                            "2026-06-30": 0,
+                            "2026-05-31": 0,
+                            "2025-12-31": 0
+                        },
+                        "mortgages": [
+                            {
+                                "id": "mort_primary",
+                                "name": "Primary 30-Yr Mortgage",
+                                "balances": {
+                                    "2026-08-29": 295200,
+                                    "2026-07-31": 297000,
+                                    "2026-06-30": 0,
+                                    "2026-05-31": 0,
+                                    "2025-12-31": 0
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "debts": [
+                {
+                    "id": "debt_auto",
+                    "name": "Auto Loan",
+                    "institution": "Toyota Financial Services",
+                    "values": {
+                        "2026-08-29": 0,
+                        "2026-07-31": 0,
+                        "2026-06-30": 0,
+                        "2026-05-31": 0,
+                        "2025-12-31": 0
+                    }
+                },
+                {
+                    "id": "debt_cc",
+                    "name": "Credit Cards ",
+                    "institution": "Chase / Amex",
+                    "values": {
+                        "2026-08-29": 2700,
+                        "2026-07-31": 2100,
+                        "2026-06-30": 2600,
+                        "2026-05-31": 0,
+                        "2025-12-31": 0
+                    }
+                }
+            ]
+        },
+        "marginal_tax_rate_override": null,
+        "collapsed_categories": {
+            "emergency": false,
+            "roth": false,
+            "pretax": false,
+            "taxable": false,
+            "hsa": false,
+            "goals": false,
+            "daily": false,
+            "real_estate": false,
+            "debts": false
+        },
+        "collapsed_goals": {
+            "0": false,
+            "1": false,
+            "2": false,
+            "3": false
+        },
+        "view_mode": "detailed"
+    },
+    "marginal_tax_rate": 14
+}
