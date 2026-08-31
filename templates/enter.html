@@ -460,7 +460,12 @@
                                 <button type="button" class="btn btn-outline-primary active" id="btnBsModeDetailed" onclick="setBsViewMode('detailed')"><i class="fa-solid fa-table-list me-1"></i>Detailed View</button>
                                 <button type="button" class="btn btn-outline-primary" id="btnBsModeSummary" onclick="setBsViewMode('summary')"><i class="fa-solid fa-list-check me-1"></i>Summary View</button>
                             </div>
-                            <div class="d-flex align-items-center gap-1" id="bsPeriodViewControls">
+                            <div class="d-flex flex-wrap align-items-center gap-1" id="bsPeriodViewControls">
+                                <div class="btn-group btn-group-sm" role="group" id="bsFreqFilterBtnGroup" aria-label="Balance sheet column frequency filter">
+                                    <button type="button" class="btn btn-outline-secondary active" id="btnBsFreqAll" onclick="setBsPeriodFrequency('all')" title="Show all recorded dates">All Dates</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnBsFreqQuarterly" onclick="setBsPeriodFrequency('quarterly')" title="Show snapshot closest in date to March 31, June 30, September 30, and December 31">Show Quarter Ends</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnBsFreqYearly" onclick="setBsPeriodFrequency('yearly')" title="Show snapshot closest in date to December 31">Show Year Ends</button>
+                                </div>
                                 <div class="input-group input-group-sm" style="width: auto;">
                                     <span class="input-group-text bg-light text-muted fw-semibold">
                                         <i class="fa-solid fa-table-columns me-1"></i> Columns:
@@ -2048,6 +2053,7 @@
             marginal_tax_rate: 24.0,
             marginal_tax_rate_override: null,
             period_view_limit: 3,
+            period_view_frequency: 'all',
             chart_metric: 'gross_net_worth',
             emergency_goal_amount: 0.0,
             categories: {
@@ -2070,6 +2076,7 @@
             var rawBs = JSON.parse(document.getElementById('initial-balance-sheet').textContent);
             if (rawBs && rawBs.categories) {
                 bsState = Object.assign(bsState, rawBs);
+                if (!bsState.period_view_frequency) bsState.period_view_frequency = 'all';
                 if (!bsState.categories.pretax) bsState.categories.pretax = { title: "Pretax Retirement Accounts", is_pretax: true, accounts: [] };
                 if (!bsState.categories.roth) bsState.categories.roth = { title: "Post-Tax (Roth) Retirement Accounts", is_pretax: false, accounts: [] };
                 if (!bsState.categories.taxable) bsState.categories.taxable = { title: "Investment / Taxable Brokerage Accounts", is_pretax: false, accounts: [] };
@@ -2287,11 +2294,53 @@
             }
         });
 
-        // Set default column limit to 3
-        bsState.period_view_limit = 3;
+        function getFilteredPeriodsByFrequency(periods, freq) {
+            if (!periods || !periods.length) return [];
+            var sorted = Array.from(new Set(periods)).sort();
+            if (freq === 'quarterly') {
+                var qMap = {};
+                sorted.forEach(function(p) {
+                    var parts = p.split('-');
+                    if (parts.length >= 2) {
+                        var y = parts[0];
+                        var m = parseInt(parts[1], 10);
+                        var q = Math.ceil(m / 3);
+                        var key = y + '-Q' + q;
+                        if (!qMap[key] || p > qMap[key]) {
+                            qMap[key] = p;
+                        }
+                    }
+                });
+                var qKeys = Object.keys(qMap).sort();
+                return qKeys.map(function(k) { return qMap[k]; });
+            } else if (freq === 'yearly') {
+                var yMap = {};
+                sorted.forEach(function(p) {
+                    var parts = p.split('-');
+                    if (parts.length >= 1) {
+                        var y = parts[0];
+                        if (!yMap[y] || p > yMap[y]) {
+                            yMap[y] = p;
+                        }
+                    }
+                });
+                var yKeys = Object.keys(yMap).sort();
+                return yKeys.map(function(k) { return yMap[k]; });
+            }
+            return sorted;
+        }
+
+        // Set default column limit and frequency UI
+        if (bsState.period_view_limit === undefined || bsState.period_view_limit === null) {
+            bsState.period_view_limit = 3;
+        }
+        if (!bsState.period_view_frequency) {
+            bsState.period_view_frequency = 'all';
+        }
+
         var bsColLimitInput = document.getElementById('bsColLimitInput');
         if (bsColLimitInput) {
-            bsColLimitInput.value = bsState.period_view_limit;
+            bsColLimitInput.value = bsState.period_view_limit > 0 ? bsState.period_view_limit : 3;
             bsColLimitInput.addEventListener('input', function() {
                 var v = parseInt(this.value, 10);
                 if (!isNaN(v) && v > 0) {
@@ -2299,17 +2348,39 @@
                     var allBtn = document.getElementById('btnBsAllPeriods');
                     if (allBtn) allBtn.classList.remove('active');
                     renderBalanceSheetTable();
+                    serializeBalanceSheet();
                 }
             });
         }
 
+        function updateBsFreqButtonsUI() {
+            var freq = bsState.period_view_frequency || 'all';
+            var btnAll = document.getElementById('btnBsFreqAll');
+            var btnQ = document.getElementById('btnBsFreqQuarterly');
+            var btnY = document.getElementById('btnBsFreqYearly');
+            if (btnAll) btnAll.classList.toggle('active', freq === 'all');
+            if (btnQ) btnQ.classList.toggle('active', freq === 'quarterly');
+            if (btnY) btnY.classList.toggle('active', freq === 'yearly');
+        }
+
+        window.setBsPeriodFrequency = function(freq) {
+            if (!['all', 'quarterly', 'yearly'].includes(freq)) freq = 'all';
+            bsState.period_view_frequency = freq;
+            updateBsFreqButtonsUI();
+            renderBalanceSheetTable();
+            serializeBalanceSheet();
+        };
+
         function getVisiblePeriods() {
-            var periods = bsState.periods || [];
-            if (!periods.length) return [new Date().toISOString().split('T')[0]];
-            if (!bsState.period_view_limit || bsState.period_view_limit <= 0 || bsState.period_view_limit >= periods.length) {
-                return periods;
+            var rawPeriods = bsState.periods || [];
+            if (!rawPeriods.length) return [new Date().toISOString().split('T')[0]];
+            var freq = bsState.period_view_frequency || 'all';
+            var candidatePeriods = getFilteredPeriodsByFrequency(rawPeriods, freq);
+            if (!candidatePeriods.length) return [rawPeriods[rawPeriods.length - 1]];
+            if (!bsState.period_view_limit || bsState.period_view_limit <= 0 || bsState.period_view_limit >= candidatePeriods.length) {
+                return candidatePeriods;
             }
-            return periods.slice(-bsState.period_view_limit);
+            return candidatePeriods.slice(-bsState.period_view_limit);
         }
 
         function formatPeriodHeader(p, delBtn) {
@@ -4175,6 +4246,7 @@
                 if (allBtn) allBtn.classList.add('active');
             }
             renderBalanceSheetTable();
+            serializeBalanceSheet();
         };
 
         window.setBsPeriodColLimit = function(limit) {
@@ -4186,6 +4258,7 @@
             var input = document.getElementById('bsColLimitInput');
             if (input && input.value != n) input.value = n;
             renderBalanceSheetTable();
+            serializeBalanceSheet();
         };
 
         window.promptAddPeriodSnapshot = function() {
@@ -4597,6 +4670,7 @@
         }
 
         // Initialize Balance Sheet Table & Chart on load
+        updateBsFreqButtonsUI();
         renderBalanceSheetTable();
         updateBsKpis();
         renderBsHistoricalChart(bsState.chart_metric);

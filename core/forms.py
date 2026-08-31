@@ -920,6 +920,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
         'marginal_tax_rate': calc_tax_rate,
         'marginal_tax_rate_override': None,
         'emergency_goal_amount': 0.0,
+        'period_view_limit': 3,
+        'period_view_frequency': 'all',
         'categories': {
             'pretax': {
                 'title': 'Pretax Retirement Accounts',

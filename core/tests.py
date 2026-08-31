@@ -2180,9 +2180,13 @@ class BalanceSheetTests(TestCase):
         self.assertEqual(pretax_accs[0]['values'][curr_p], 500000.0)
 
         # Parse from JSON string
+        self.assertEqual(bs.get('period_view_frequency'), 'all')
+        self.assertEqual(bs.get('period_view_limit'), 3)
         bs_json_str = json.dumps(bs)
         parsed = parse_balance_sheet(bs_json_str)
         self.assertEqual(parsed['current_period'], curr_p)
+        self.assertEqual(parsed.get('period_view_frequency'), 'all')
+        self.assertEqual(parsed.get('period_view_limit'), 3)
         self.assertEqual(len(parsed['categories']['pretax']['accounts']), 1)
 
     def test_sync_balance_sheet_to_accounts(self):
@@ -2938,3 +2942,90 @@ class AgeDisambiguationTests(TestCase):
             {'id': 'a2', 'name': 'Acc 2', 'type': 'pretax', 'owner': 'spouse', 'balance': 1000.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual', 'contrib_start_age': 55, 'contrib_end_age_type': 'spouse_specified', 'contrib_end_age_specified': 60, 'contrib_adjust_inflation': True, 'return_mean': 6.0, 'return_std': 10.0, 'hsa_for_medical': True}
         ], user_age=60, user_age_death=90, is_married=True, spouse_age=55, spouse_age_death=85)
         self.assertEqual(len(acc_errors), 0)
+
+    def test_balance_sheet_frequency_filtering_and_persistence(self):
+        """Test balance sheet frequency filtering options ('all', 'quarterly', 'yearly')
+        and persistence through save/load plan operations."""
+        import json
+        from django.urls import reverse
+        from core.forms import build_default_balance_sheet, parse_balance_sheet
+
+        # Test prompt dates
+        test_dates = [
+            "2024-02-24", "2024-02-28", "2024-03-31", "2024-05-26", "2024-07-02",
+            "2024-09-03", "2024-10-02", "2024-10-31", "2024-12-02", "2024-12-15",
+            "2025-02-20", "2025-12-30", "2026-02-28", "2026-03-31", "2026-04-30",
+            "2026-05-18", "2026-05-20", "2026-06-28"
+        ]
+
+        def filter_periods(periods, freq):
+            sorted_p = sorted(list(set(periods)))
+            if freq == 'quarterly':
+                q_map = {}
+                for p in sorted_p:
+                    parts = p.split('-')
+                    if len(parts) >= 2:
+                        y = parts[0]
+                        m = int(parts[1])
+                        q = (m - 1) // 3 + 1
+                        key = f"{y}-Q{q}"
+                        if key not in q_map or p > q_map[key]:
+                            q_map[key] = p
+                return [q_map[k] for k in sorted(q_map.keys())]
+            elif freq == 'yearly':
+                y_map = {}
+                for p in sorted_p:
+                    parts = p.split('-')
+                    if len(parts) >= 1:
+                        y = parts[0]
+                        if y not in y_map or p > y_map[y]:
+                            y_map[y] = p
+                return [y_map[k] for k in sorted(y_map.keys())]
+            return sorted_p
+
+        # 1. Verify quarterly candidate columns
+        quarterly_candidates = filter_periods(test_dates, 'quarterly')
+        expected_quarterly = [
+            "2024-03-31", "2024-05-26", "2024-09-03", "2024-12-15",
+            "2025-02-20", "2025-12-30", "2026-03-31", "2026-06-28"
+        ]
+        self.assertEqual(quarterly_candidates, expected_quarterly)
+
+        # 2. Verify with limit = 4
+        limited_quarterly = quarterly_candidates[-4:]
+        expected_limited_q = ["2025-02-20", "2025-12-30", "2026-03-31", "2026-06-28"]
+        self.assertEqual(limited_quarterly, expected_limited_q)
+
+        # 3. Verify yearly candidate columns
+        yearly_candidates = filter_periods(test_dates, 'yearly')
+        expected_yearly = ["2024-12-15", "2025-12-30", "2026-06-28"]
+        self.assertEqual(yearly_candidates, expected_yearly)
+
+        # 4. Verify persistence in plan load/save
+        bs = build_default_balance_sheet()
+        bs['period_view_frequency'] = 'quarterly'
+        bs['period_view_limit'] = 4
+        bs['periods'] = test_dates
+        bs['current_period'] = test_dates[-1]
+
+        plan_data = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'desired_spending': 50000.0,
+            'balance_sheet': bs,
+            'accounts': []
+        }
+
+        resp = self.client.post(reverse('load_plan'), {
+            'json_data': json.dumps(plan_data),
+            'next': 'enter'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        session_bs = self.client.session['simulation_data']['balance_sheet']
+        self.assertEqual(session_bs.get('period_view_frequency'), 'quarterly')
+        self.assertEqual(session_bs.get('period_view_limit'), 4)
+        self.assertEqual(session_bs.get('periods'), test_dates)
+
