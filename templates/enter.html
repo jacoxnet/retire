@@ -462,15 +462,15 @@
                             </div>
                             <div class="d-flex flex-wrap align-items-center gap-1" id="bsPeriodViewControls">
                                 <div class="btn-group btn-group-sm" role="group" id="bsFreqFilterBtnGroup" aria-label="Balance sheet column frequency filter">
-                                    <button type="button" class="btn btn-outline-secondary active" id="btnBsFreqAll" onclick="setBsPeriodFrequency('all')" title="Show all recorded dates">All Dates</button>
+                                    <button type="button" class="btn btn-outline-secondary active" id="btnBsFreqAll" onclick="setBsPeriodFrequency('all')" title="Show all recorded dates">Show All Dates</button>
                                     <button type="button" class="btn btn-outline-secondary" id="btnBsFreqQuarterly" onclick="setBsPeriodFrequency('quarterly')" title="Show snapshot closest in date to March 31, June 30, September 30, and December 31">Show Quarter Ends</button>
                                     <button type="button" class="btn btn-outline-secondary" id="btnBsFreqYearly" onclick="setBsPeriodFrequency('yearly')" title="Show snapshot closest in date to December 31">Show Year Ends</button>
                                 </div>
                                 <div class="input-group input-group-sm" style="width: auto;">
                                     <span class="input-group-text bg-light text-muted fw-semibold">
-                                        <i class="fa-solid fa-table-columns me-1"></i> Columns:
+                                        <i class="fa-solid fa-table-columns me-1"></i> Max Columns:
                                     </span>
-                                    <input type="number" min="1" max="100" step="1" class="form-control text-center fw-bold" id="bsColLimitInput" style="width: 60px;" value="3" title="Number of latest dated columns to display">
+                                    <input type="number" min="1" max="100" step="1" class="form-control text-center fw-bold" id="bsColLimitInput" style="width: 60px;" value="3" title="Maximum number of latest dated columns to display">
                                 </div>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btnBsAllPeriods" onclick="toggleBsAllPeriods()">All Periods</button>
                             </div>
