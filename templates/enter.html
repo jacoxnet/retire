@@ -644,19 +644,14 @@
 
     function formatMoney(val) {
         if (val === null || val === undefined || val === '') return '';
-        var rawStr = val.toString().replace(/[^0-9.]/g, '');
+        var rawStr = val.toString().replace(/[^0-9.-]/g, '');
         if (!rawStr) return '';
-        var parts = rawStr.split('.');
-        var intPart = parts[0] || '0';
-        if (intPart.length > 1) {
-            intPart = intPart.replace(/^0+/, '') || '0';
-        }
-        var formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        var result = '$' + formattedInt;
-        if (parts.length > 1) {
-            result += '.' + parts[1];
-        }
-        return result;
+        var num = parseFloat(rawStr);
+        if (isNaN(num)) return '';
+        var isNeg = num < 0;
+        var rounded = Math.round(Math.abs(num));
+        var formattedInt = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return (isNeg ? '-$' : '$') + formattedInt;
     }
 
     function formatCurrencyInput(input) {
