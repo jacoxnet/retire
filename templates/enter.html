@@ -291,7 +291,7 @@
                                     <th style="width: 22%; min-width: 130px;">Spending Item Name</th>
                                     <th style="width: 18%; min-width: 110px;">Amount in Today's Dollars</th>
                                     <th style="width: 28%; min-width: 200px;">Start Age</th>
-                                    <th style="width: 16%; min-width: 100px;">Interval (Years) <small class="text-muted">(0 for one-time)</small></th>
+                                    <th style="width: 16%; min-width: 100px;" title="Enter how many years between each occurrence (e.g., 7 for a new car every 7 years). Enter 0 for a one-time expense.">Repeats Every (Years) <small class="text-muted">(0 = one-time)</small></th>
                                     <th style="width: 13%; min-width: 95px;">Adjust for Inflation?</th>
                                     <th style="width: 5%; min-width: 50px;">Action</th>
                                 </tr>
@@ -1313,7 +1313,7 @@
                     </div>
                 </td>
                 <td>
-                    <input type="number" class="form-control" name="add_spending_interval[]" value="${interval}" min="0" max="50" required style="min-width: 75px;">
+                    <input type="number" class="form-control" name="add_spending_interval[]" value="${interval}" min="0" max="50" placeholder="0 (one-time)" title="Enter how many years between each occurrence (e.g., 7 for a new car every 7 years). Enter 0 for a one-time expense." required style="min-width: 75px;">
                 </td>
                 <td>
                     <select class="form-select" name="add_spending_adjust_inflation[]">
@@ -5248,8 +5248,8 @@
                 if (intervalInput) {
                     var sInterval = parseInt(intervalInput.value, 10);
                     if (isNaN(sInterval) || sInterval < 0) {
-                        setFieldInvalid(intervalInput, 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Interval must be 0 or a positive number of years.');
-                        errors.push({ element: intervalInput, tab: 'spending-tab', message: 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" Interval must be 0 or a positive number of years.' });
+                        setFieldInvalid(intervalInput, 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" "Repeats Every" must be 0 (for one-time) or a positive number of years.');
+                        errors.push({ element: intervalInput, tab: 'spending-tab', message: 'Additional Spending item "' + (itemName || '#' + (idx + 1)) + '" "Repeats Every" must be 0 (for one-time) or a positive number of years.' });
                     }
                 }
             });

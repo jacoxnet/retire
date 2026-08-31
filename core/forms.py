@@ -479,7 +479,7 @@ def validate_additional_spending(items, user_age, user_age_death, is_married=Fal
         if s_start < rel_age or s_start > rel_death:
             errors.append(f"Additional Spending item '{name}' Start Age ({s_start}) cannot be younger than {person_label} ({rel_age}) or after Age at Death ({rel_death}).")
         if item.get('interval', 0) < 0:
-            errors.append(f"Additional Spending item '{name}' Interval must be 0 (for one-time) or a positive number of years.")
+            errors.append(f"Additional Spending item '{name}' 'Repeats Every' must be 0 (for one-time) or a positive number of years.")
     return errors
 
 
