@@ -282,7 +282,7 @@
             <div class="tab-pane fade" id="spending" role="tabpanel" aria-labelledby="spending-tab">
                 <div class="card p-4 mb-4">
                     <h3 class="mb-3">Additional Spending</h3>
-                    <p class="text-secondary small mb-3">Enter spending items that do not occur every year (e.g. car purchase every 10 years, college, weddings).</p>
+                    <p class="text-secondary small mb-3">Enter (1) post-retirement spending items that do not occur every year (e.g. car purchase every 10 years, college, weddings) and (2) such pre-retirement spending items to the extent they are expected to be paid with funds from your Accounts for Retirement.</p>
 
                     <div class="table-container mb-3" style="overflow-x: auto;">
                         <table class="table align-middle" id="additionalSpendingTable" style="min-width: 800px;">
@@ -4210,10 +4210,28 @@
                 scales: {
                     y: {
                         ticks: {
-                            callback: function(v) {
-                                if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(1) + 'M';
-                                if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(0) + 'k';
-                                return '$' + v;
+                            callback: function(v, index, ticks) {
+                                var step = 0;
+                                if (ticks && ticks.length > 1) {
+                                    var val0 = (typeof ticks[0] === 'object' && ticks[0] !== null) ? ticks[0].value : ticks[0];
+                                    var val1 = (typeof ticks[1] === 'object' && ticks[1] !== null) ? ticks[1].value : ticks[1];
+                                    step = Math.abs(val1 - val0);
+                                }
+                                var absVal = Math.abs(v);
+                                var sign = v < 0 ? '-' : '';
+                                if (absVal >= 1000000) {
+                                    var decimals = 1;
+                                    if (step > 0 && step < 10000) decimals = 3;
+                                    else if (step > 0 && step < 100000) decimals = 2;
+                                    else if (step >= 1000000) decimals = 0;
+                                    return sign + '$' + (absVal / 1000000).toFixed(decimals) + 'M';
+                                }
+                                if (absVal >= 1000) {
+                                    var kDecimals = 0;
+                                    if (step > 0 && step < 1000) kDecimals = 1;
+                                    return sign + '$' + (absVal / 1000).toFixed(kDecimals) + 'k';
+                                }
+                                return sign + '$' + absVal;
                             }
                         }
                     }
