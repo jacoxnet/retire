@@ -2878,6 +2878,12 @@
                         var contribInput = cardCol.querySelector('[name="account_contrib_amount[]"]');
                         var meanInput = cardCol.querySelector('[name="account_return_mean[]"]');
                         var stdInput = cardCol.querySelector('[name="account_return_std[]"]');
+                        var contribFreqSelect = cardCol.querySelector('[name="account_contrib_freq[]"]');
+                        var startAgeInput = cardCol.querySelector('[name="account_contrib_start_age[]"]');
+                        var endAgeTypeSelect = cardCol.querySelector('.acc-end-age-type');
+                        var endAgeSpecInput = cardCol.querySelector('.acc-end-age-spec');
+                        var infSwitch = cardCol.querySelector('[name="account_contrib_adjust_inflation[]"]');
+                        var hsaMedSwitch = cardCol.querySelector('[name="account_hsa_for_medical[]"]');
 
                         if (nameInput && nameInput.value !== aData.name && document.activeElement !== nameInput) {
                             nameInput.value = aData.name || '';
@@ -2900,6 +2906,29 @@
                                 contribInput.value = formatMoney(aData.contrib_amount);
                             }
                         }
+                        if (contribFreqSelect && aData.contrib_freq !== undefined && contribFreqSelect.value !== aData.contrib_freq) {
+                            contribFreqSelect.value = aData.contrib_freq;
+                        }
+                        if (startAgeInput && aData.contrib_start_age !== undefined && document.activeElement !== startAgeInput) {
+                            var curStart = parseInt(startAgeInput.value, 10);
+                            if (curStart !== parseInt(aData.contrib_start_age, 10)) {
+                                startAgeInput.value = aData.contrib_start_age;
+                            }
+                        }
+                        if (endAgeTypeSelect && aData.contrib_end_age_type !== undefined && endAgeTypeSelect.value !== aData.contrib_end_age_type) {
+                            endAgeTypeSelect.value = aData.contrib_end_age_type;
+                            var isSpec = ['age', 'user_specified', 'spouse_specified'].includes(endAgeTypeSelect.value);
+                            if (endAgeSpecInput) endAgeSpecInput.style.display = isSpec ? 'block' : 'none';
+                        }
+                        if (endAgeSpecInput && aData.contrib_end_age_specified !== undefined && document.activeElement !== endAgeSpecInput) {
+                            var curEndSpec = parseInt(endAgeSpecInput.value, 10);
+                            if (curEndSpec !== parseInt(aData.contrib_end_age_specified, 10)) {
+                                endAgeSpecInput.value = aData.contrib_end_age_specified;
+                            }
+                        }
+                        if (infSwitch && aData.contrib_adjust_inflation !== undefined) {
+                            infSwitch.checked = Boolean(aData.contrib_adjust_inflation);
+                        }
                         if (meanInput && aData.return_mean !== undefined && document.activeElement !== meanInput) {
                             var curMean = parsePercent(meanInput.value);
                             if (Math.abs(curMean - aData.return_mean) > 0.01) {
@@ -2911,6 +2940,9 @@
                             if (Math.abs(curStd - aData.return_std) > 0.01) {
                                 stdInput.value = formatPercent(aData.return_std);
                             }
+                        }
+                        if (hsaMedSwitch && aData.hsa_for_medical !== undefined) {
+                            hsaMedSwitch.checked = Boolean(aData.hsa_for_medical);
                         }
                     } else {
                         addAccountCard(aData);
@@ -2961,16 +2993,28 @@
                     var ownerSelect = col.querySelector('[name="account_owner[]"]');
                     var balInput = col.querySelector('[name="account_balance[]"]');
                     var contribInput = col.querySelector('[name="account_contrib_amount[]"]');
+                    var contribFreqSelect = col.querySelector('[name="account_contrib_freq[]"]');
+                    var startAgeInput = col.querySelector('[name="account_contrib_start_age[]"]');
+                    var endAgeTypeSelect = col.querySelector('.acc-end-age-type');
+                    var endAgeSpecInput = col.querySelector('.acc-end-age-spec');
+                    var infSwitch = col.querySelector('[name="account_contrib_adjust_inflation[]"]');
                     var meanInput = col.querySelector('[name="account_return_mean[]"]');
                     var stdInput = col.querySelector('[name="account_return_std[]"]');
+                    var hsaMedSwitch = col.querySelector('[name="account_hsa_for_medical[]"]');
 
                     var name = nameInput ? nameInput.value.trim() : '';
                     var type = typeSelect ? typeSelect.value : 'pretax';
                     var owner = ownerSelect ? ownerSelect.value : 'user';
                     var bal = balInput ? parseMoney(balInput.value) : 0;
                     var contrib = contribInput ? parseMoney(contribInput.value) : 0;
+                    var contribFreq = contribFreqSelect ? contribFreqSelect.value : 'annual';
+                    var contribStartAge = startAgeInput && startAgeInput.value !== '' ? parseInt(startAgeInput.value, 10) : undefined;
+                    var contribEndAgeType = endAgeTypeSelect ? endAgeTypeSelect.value : 'retirement';
+                    var contribEndAgeSpec = endAgeSpecInput && endAgeSpecInput.value !== '' ? parseInt(endAgeSpecInput.value, 10) : undefined;
+                    var contribAdjustInf = infSwitch ? infSwitch.checked : true;
                     var rMean = meanInput ? parsePercent(meanInput.value) : 6.0;
                     var rStd = stdInput ? parsePercent(stdInput.value) : 10.0;
+                    var hsaForMed = hsaMedSwitch ? hsaMedSwitch.checked : true;
 
                     var targetCatKey = ['pretax', 'roth', 'taxable', 'hsa'].includes(type) ? type : 'taxable';
 
@@ -2983,8 +3027,14 @@
                         acc.owner = owner;
                         acc.include_in_retirement = true;
                         acc.contrib_amount = contrib;
+                        acc.contrib_freq = contribFreq;
+                        if (contribStartAge !== undefined && !isNaN(contribStartAge)) acc.contrib_start_age = contribStartAge;
+                        acc.contrib_end_age_type = contribEndAgeType;
+                        if (contribEndAgeSpec !== undefined && !isNaN(contribEndAgeSpec)) acc.contrib_end_age_specified = contribEndAgeSpec;
+                        acc.contrib_adjust_inflation = contribAdjustInf;
                         acc.return_mean = rMean;
                         acc.return_std = rStd;
+                        acc.hsa_for_medical = hsaForMed;
                         if (!acc.values) acc.values = {};
                         acc.values[currPeriod] = bal;
 
@@ -3025,8 +3075,14 @@
                             include_in_retirement: true,
                             values: vals,
                             contrib_amount: contrib,
+                            contrib_freq: contribFreq,
+                            contrib_start_age: contribStartAge,
+                            contrib_end_age_type: contribEndAgeType,
+                            contrib_end_age_specified: contribEndAgeSpec,
+                            contrib_adjust_inflation: contribAdjustInf,
                             return_mean: rMean,
-                            return_std: rStd
+                            return_std: rStd,
+                            hsa_for_medical: hsaForMed
                         };
 
                         var cat = bsState.categories[targetCatKey];
@@ -3077,12 +3133,12 @@
             var activePane = document.querySelector('#dataEntryTabsContent .tab-pane.active');
             var activeTabId = activePane ? activePane.id : '';
 
-            if (activeTabId === 'assets') {
-                syncAccountCardsToBsState();
+            if (activeTabId === 'balance-sheet') {
                 syncBsStateToAccountCards();
+                syncAccountCardsToBsState();
             } else {
-                syncBsStateToAccountCards();
                 syncAccountCardsToBsState();
+                syncBsStateToAccountCards();
             }
 
             renderBalanceSheetTable();
@@ -4984,10 +5040,25 @@
             document.querySelectorAll('#accountsContainer .account-card-col').forEach(function(col) {
                 var ownerSelect = col.querySelector('.acc-owner-select');
                 var startAgeLabel = col.querySelector('.acc-start-age-label');
+                var startAgeInput = col.querySelector('.acc-start-age-input');
                 var endAgeTypeSelect = col.querySelector('.acc-end-age-type');
                 var endAgeSpecInput = col.querySelector('.acc-end-age-spec');
                 var curOwner = ownerSelect ? ownerSelect.value : 'user';
                 var isSp = curOwner === 'spouse';
+
+                // Auto-adjust start age if below newly entered present age
+                var relPresentAge = isSp && isMarried ? p.spouseAge : p.userAge;
+                if (startAgeInput && startAgeInput.value !== '') {
+                    var curStartVal = parseInt(startAgeInput.value, 10);
+                    if (!isNaN(curStartVal) && curStartVal < relPresentAge) {
+                        startAgeInput.value = relPresentAge;
+                    }
+                    updateAgeHelperBadge(startAgeInput, isSp && isMarried);
+                }
+                if (endAgeSpecInput) {
+                    var isSpouseEnd = endAgeTypeSelect && (endAgeTypeSelect.value === 'spouse_specified' || (endAgeTypeSelect.value === 'age' && isSp));
+                    updateAgeHelperBadge(endAgeSpecInput, isSpouseEnd);
+                }
 
                 if (ownerSelect) {
                     for (var i = 0; i < ownerSelect.options.length; i++) {
@@ -5784,6 +5855,22 @@
                 }
             });
         }
+
+        // Intercept Enter Data and Brand link clicks to validate and submit form
+        document.querySelectorAll('a.nav-link[href*="enter"], a.navbar-brand[href*="enter"]').forEach(function (link) {
+            link.addEventListener('click', function (e) {
+                if (enterDataForm) {
+                    e.preventDefault();
+                    if (typeof window.syncAllTabs === 'function') window.syncAllTabs();
+                    serializeAllIncomeCards();
+                    serializeBalanceSheet();
+                    document.getElementById('enterFormNext').value = 'enter';
+                    if (handleCustomValidation(enterDataForm)) {
+                        enterDataForm.submit();
+                    }
+                }
+            });
+        });
 
         // Initialize Bootstrap Popovers
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));

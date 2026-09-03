@@ -1322,7 +1322,7 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
     if year_results and terminal_life_ins_estate > 0.0:
         year_results[-1]['ending_assets']['terminal_life_insurance'] = terminal_life_ins_estate
         final_port = year_results[-1]['ending_assets']['total']
-        year_results[-1]['ending_assets']['total'] = (final_port if final_port >= 0.0 else 0.0) + terminal_life_ins_estate
+        year_results[-1]['ending_assets']['total'] = final_port + terminal_life_ins_estate
 
     return year_results
 
@@ -1502,7 +1502,7 @@ def njit_simulate_path(
             trajectory_arr[t + 1] = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
         
     ending_portfolio = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
-    terminal_estate = (ending_portfolio if ending_portfolio >= 0.0 else 0.0) + terminal_life_ins_estate
+    terminal_estate = ending_portfolio + terminal_life_ins_estate
     if trajectory_arr is not None:
         trajectory_arr[total_years] = terminal_estate
     return terminal_estate

@@ -3251,4 +3251,172 @@ class AgeDisambiguationTests(TestCase):
         self.assertEqual(len(loaded_taxable), 1)
         self.assertEqual(loaded_taxable[0]['name'], 'Taxable Brokerage (Life Insurance Proceeds)')
 
+    def test_account_start_age_persists_when_ages_change_and_submitting_form(self):
+        """Test that updating an account's contribution start age after changing present age
+        persists across balance sheet sync, form submissions, and results navigation without reverting.
+        """
+        import os
+        plan_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saved json files', 'gemini_and_claude_plan.json')
+        if not os.path.exists(plan_path):
+            self.skipTest("gemini_and_claude_plan.json not found")
+
+        with open(plan_path, 'r') as f:
+            plan_data = json.load(f)
+
+        # 1. Load Gemini & Claude plan into session
+        resp = self.client.post(reverse('load_plan'), {
+            'json_data': json.dumps(plan_data),
+            'next': 'enter'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        session_data = self.client.session.get('simulation_data', {})
+        self.assertEqual(session_data.get('spouse_age'), 38)
+        bs = session_data.get('balance_sheet', {})
+
+        # 2. Change Gemini's age to 39, Claude's age to 41, and change Claude's start ages to 41
+        form_payload = {
+            'user_name': 'Gemini',
+            'user_age': '39',
+            'user_retirement_age': '58',
+            'user_age_death': '98',
+            'is_married': 'on',
+            'spouse_name': 'Claude',
+            'spouse_age': '41',
+            'spouse_retirement_age': '60',
+            'spouse_age_death': '90',
+            'current_year': '2026',
+            'desired_spending': '95000',
+            'survivor_spending': '80000',
+            'balance_sheet_json': json.dumps(bs),
+            'account_id[]': ['acc_g_401k', 'acc_c_403b', 'acc_g_roth', 'acc_c_roth', 'acc_joint_taxable'],
+            'account_name[]': ["Gemini's 401(k)", "Claude's 403(b)", "Gemini's Roth IRA", "Claude's Roth IRA", "Joint Taxable Brokerage"],
+            'account_type[]': ['pretax', 'pretax', 'roth', 'roth', 'taxable'],
+            'account_owner[]': ['user', 'spouse', 'user', 'spouse', 'user'],
+            'account_balance[]': ['180000', '140000', '200000', '200000', '80000'],
+            'account_contrib_amount[]': ['23000', '600', '7000', '7000', '0'],
+            'account_contrib_freq[]': ['annual', 'monthly', 'annual', 'annual', 'annual'],
+            'account_contrib_start_age[]': ['39', '41', '39', '41', '39'],  # Changed to 41!
+            'account_contrib_end_age_type[]': ['retirement', 'spouse_retirement', 'retirement', 'spouse_retirement', 'retirement'],
+            'account_contrib_end_age_specified[]': ['58', '60', '58', '60', '58'],
+            'account_contrib_adjust_inflation[]': ['true', 'true', 'true', 'true', 'true'],
+            'account_return_mean[]': ['6.5', '8.0', '6.5', '8.0', '7.0'],
+            'account_return_std[]': ['11.0', '14.0', '11.0', '14.0', '12.0'],
+            'next': 'results'
+        }
+
+        # 3. Post to enter_view with next='results' (simulating clicking Simulation Results)
+        post_resp = self.client.post(reverse('enter'), form_payload)
+        # Should NOT fail validation; should redirect to results
+        self.assertEqual(post_resp.status_code, 302)
+        self.assertEqual(post_resp.url, reverse('results'))
+
+        # 4. Verify that session accounts saved Claude's start ages as 41
+        updated_session = self.client.session.get('simulation_data', {})
+        accs = updated_session.get('accounts', [])
+        c_403b = next(a for a in accs if a['id'] == 'acc_c_403b')
+        c_roth = next(a for a in accs if a['id'] == 'acc_c_roth')
+        self.assertEqual(c_403b['contrib_start_age'], 41)
+        self.assertEqual(c_roth['contrib_start_age'], 41)
+
+        # 5. Verify that balance_sheet in session also has 41
+        updated_bs = updated_session.get('balance_sheet', {})
+        bs_c_403b = next(a for a in updated_bs['categories']['pretax']['accounts'] if a['id'] == 'acc_c_403b')
+        bs_c_roth = next(a for a in updated_bs['categories']['roth']['accounts'] if a['id'] == 'acc_c_roth')
+        self.assertEqual(bs_c_403b.get('contrib_start_age'), 41)
+        self.assertEqual(bs_c_roth.get('contrib_start_age'), 41)
+
+        # 6. Now load the enter view again (GET) and check that form shows 41
+        get_enter = self.client.get(reverse('enter'))
+        self.assertEqual(get_enter.status_code, 200)
+        # Should not contain any error message
+        self.assertNotContains(get_enter, 'Contribution Start Age (38) must be between Present Age (41)')
+
+    def test_account_start_age_auto_adjusts_when_present_age_increases_without_manual_edit(self):
+        """If present age is increased, accounts owned by that person automatically adjust their
+        contribution start age to at least present age rather than failing with an error about past age.
+        """
+        import os
+        plan_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saved json files', 'gemini_and_claude_plan.json')
+        if not os.path.exists(plan_path):
+            self.skipTest("gemini_and_claude_plan.json not found")
+
+        with open(plan_path, 'r') as f:
+            plan_data = json.load(f)
+
+        # Load plan
+        resp = self.client.post(reverse('load_plan'), {
+            'json_data': json.dumps(plan_data),
+            'next': 'enter'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        session_data = self.client.session.get('simulation_data', {})
+        bs = session_data.get('balance_sheet', {})
+
+        # User only changes present ages on demographics (Claude from 38 -> 41)
+        # and submits the form directly to run simulation (accounts still send raw 38 from unedited cards)
+        form_payload = {
+            'user_name': 'Gemini',
+            'user_age': '39',
+            'user_retirement_age': '58',
+            'user_age_death': '98',
+            'is_married': 'on',
+            'spouse_name': 'Claude',
+            'spouse_age': '41',
+            'spouse_retirement_age': '60',
+            'spouse_age_death': '90',
+            'current_year': '2026',
+            'desired_spending': '95000',
+            'survivor_spending': '80000',
+            'balance_sheet_json': json.dumps(bs),
+            'account_id[]': ['acc_c_403b'],
+            'account_name[]': ["Claude's 403(b)"],
+            'account_type[]': ['pretax'],
+            'account_owner[]': ['spouse'],
+            'account_balance[]': ['140000'],
+            'account_contrib_amount[]': ['600'],
+            'account_contrib_freq[]': ['monthly'],
+            'account_contrib_start_age[]': ['38'],  # Not manually edited yet!
+            'account_contrib_end_age_type[]': ['spouse_retirement'],
+            'account_contrib_end_age_specified[]': ['60'],
+            'account_contrib_adjust_inflation[]': ['true'],
+            'account_return_mean[]': ['8.0'],
+            'account_return_std[]': ['14.0'],
+            'next': 'results'
+        }
+        post_resp = self.client.post(reverse('enter'), form_payload)
+        self.assertEqual(post_resp.status_code, 302)
+        self.assertEqual(post_resp.url, reverse('results'))
+
+        # Check that Claude's 403(b) was safely raised to 41 (def_start)
+        updated_session = self.client.session.get('simulation_data', {})
+        accs = updated_session.get('accounts', [])
+        c_403b = next(a for a in accs if a['id'] == 'acc_c_403b')
+        self.assertEqual(c_403b['contrib_start_age'], 41)
+
+    def test_simulation_success_rate_not_falsely_100_percent_when_underfunded(self):
+        """Verify that underfunded plans (like sept3testplan.json with $155k spending on $475k assets)
+        do not falsely report 100% success rate, and that ending wealth percentiles properly reflect shortfalls.
+        """
+        import os
+        from core.runs import generate_runs
+        plan_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saved json files', 'sept3testplan.json')
+        if not os.path.exists(plan_path):
+            self.skipTest("sept3testplan.json not found")
+
+        with open(plan_path, 'r') as f:
+            plan_data = json.load(f)
+
+        plan_data['runs'] = 500  # fast test
+        mc_res = generate_runs(plan_data)
+        success_rate = mc_res['run_success']
+        # The plan has unsuccessful runs (~25% fail rate) and must not falsely report 100%
+        self.assertNotEqual(success_rate, 100.0)
+        self.assertLess(success_rate, 85.0)
+        self.assertGreater(success_rate, 60.0)
+
+
+
+
 

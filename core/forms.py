@@ -218,7 +218,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
             'balance': get_float(acc_balances[i]) if i < len(acc_balances) else 0.0,
             'contrib_amount': get_float(acc_contrib_amts[i]) if i < len(acc_contrib_amts) else 0.0,
             'contrib_freq': acc_contrib_freqs[i] if i < len(acc_contrib_freqs) else 'annual',
-            'contrib_start_age': max(min_start_age, get_int(acc_contrib_starts[i], def_start) if i < len(acc_contrib_starts) else def_start),
+            'contrib_start_age': max(def_start, get_int(acc_contrib_starts[i], def_start) if i < len(acc_contrib_starts) else def_start),
             'contrib_end_age_type': acc_contrib_end_types[i] if i < len(acc_contrib_end_types) else ('spouse_retirement' if a_owner == 'spouse' else 'retirement'),
             'contrib_end_age_specified': get_int(acc_contrib_end_specs[i], def_ret) if i < len(acc_contrib_end_specs) else def_ret,
             'contrib_adjust_inflation': (acc_contrib_infs[i] == 'true') if i < len(acc_contrib_infs) else True,
@@ -1049,28 +1049,56 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
         elif acc.get('name') and acc.get('name') in existing_by_name:
             match = existing_by_name[acc.get('name')]
 
-        c_amt = get_float(acc.get('contrib_amount', match.get('contrib_amount', 0.0) if match else 0.0))
-        c_freq = acc.get('contrib_freq', match.get('contrib_freq', 'annual') if match else 'annual')
-        c_start = get_int(acc.get('contrib_start_age', match.get('contrib_start_age', def_start) if match else def_start))
-        c_end_type = acc.get('contrib_end_age_type', match.get('contrib_end_age_type', 'spouse_retirement' if aowner == 'spouse' else 'retirement') if match else ('spouse_retirement' if aowner == 'spouse' else 'retirement'))
-        c_end_spec = get_int(acc.get('contrib_end_age_specified', match.get('contrib_end_age_specified', def_ret) if match else def_ret))
-        c_inf = get_bool(acc.get('contrib_adjust_inflation', match.get('contrib_adjust_inflation', True) if match else True))
-        r_mean = get_float(acc.get('return_mean', match.get('return_mean', 6.0) if match else 6.0))
-        r_std = get_float(acc.get('return_std', match.get('return_std', 10.0) if match else 10.0))
-        hsa_med = get_bool(acc.get('hsa_for_medical', match.get('hsa_for_medical', True) if match else True))
+        if match:
+            a_name = acc.get('name') or match.get('name') or f"{aowner.title()} {atype.title()} Account"
+            a_inst = acc.get('institution') or match.get('institution', '')
+            atype = match.get('type') or acc.get('type', default_type)
+            if atype == 'cash':
+                atype = 'taxable'
+            aowner = match.get('owner') or acc.get('owner', 'user')
+            if not is_married:
+                aowner = 'user'
+
+            def_start = spouse_age if (aowner == 'spouse' and is_married) else user_age
+            def_ret = spouse_retirement_age if (aowner == 'spouse' and is_married) else user_retirement_age
+
+            c_amt = get_float(match.get('contrib_amount', acc.get('contrib_amount', 0.0)))
+            c_freq = match.get('contrib_freq') or acc.get('contrib_freq', 'annual')
+            c_start = get_int(match.get('contrib_start_age', acc.get('contrib_start_age', def_start)))
+            c_end_type = match.get('contrib_end_age_type') or acc.get('contrib_end_age_type', 'spouse_retirement' if aowner == 'spouse' else 'retirement')
+            c_end_spec = get_int(match.get('contrib_end_age_specified', acc.get('contrib_end_age_specified', def_ret)))
+            c_inf = get_bool(match.get('contrib_adjust_inflation', acc.get('contrib_adjust_inflation', True)))
+            r_mean = get_float(match.get('return_mean', acc.get('return_mean', 6.0)))
+            r_std = get_float(match.get('return_std', acc.get('return_std', 10.0)))
+            hsa_med = get_bool(match.get('hsa_for_medical', acc.get('hsa_for_medical', True)))
+        else:
+            a_name = acc.get('name', f"{aowner.title()} {atype.title()} Account")
+            a_inst = acc.get('institution', '')
+            def_start = spouse_age if (aowner == 'spouse' and is_married) else user_age
+            def_ret = spouse_retirement_age if (aowner == 'spouse' and is_married) else user_retirement_age
+
+            c_amt = get_float(acc.get('contrib_amount', 0.0))
+            c_freq = acc.get('contrib_freq', 'annual')
+            c_start = get_int(acc.get('contrib_start_age', def_start))
+            c_end_type = acc.get('contrib_end_age_type', 'spouse_retirement' if aowner == 'spouse' else 'retirement')
+            c_end_spec = get_int(acc.get('contrib_end_age_specified', def_ret))
+            c_inf = get_bool(acc.get('contrib_adjust_inflation', True))
+            r_mean = get_float(acc.get('return_mean', 6.0))
+            r_std = get_float(acc.get('return_std', 10.0))
+            hsa_med = get_bool(acc.get('hsa_for_medical', True))
 
         acc_id = acc.get('id') or (match.get('id') if match else f"acc_{default_type}_{len(synced_accounts)+1}")
 
         synced_accounts.append({
             'id': acc_id,
-            'name': acc.get('name', f"{aowner.title()} {atype.title()} Account"),
-            'institution': acc.get('institution', ''),
+            'name': a_name,
+            'institution': a_inst,
             'type': atype,
             'owner': aowner,
             'balance': bal,
             'contrib_amount': c_amt,
             'contrib_freq': c_freq,
-            'contrib_start_age': max(min_start_age, c_start),
+            'contrib_start_age': max(def_start, c_start),
             'contrib_end_age_type': c_end_type,
             'contrib_end_age_specified': c_end_spec,
             'contrib_adjust_inflation': c_inf,
@@ -1159,8 +1187,14 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
             matched['type'] = atype
             matched['include_in_retirement'] = True
             matched['contrib_amount'] = get_float(acc.get('contrib_amount', matched.get('contrib_amount', 0.0)))
+            matched['contrib_freq'] = acc.get('contrib_freq', matched.get('contrib_freq', 'annual'))
+            matched['contrib_start_age'] = get_int(acc.get('contrib_start_age', matched.get('contrib_start_age', 60)))
+            matched['contrib_end_age_type'] = acc.get('contrib_end_age_type', matched.get('contrib_end_age_type', 'retirement'))
+            matched['contrib_end_age_specified'] = get_int(acc.get('contrib_end_age_specified', matched.get('contrib_end_age_specified', 65)))
+            matched['contrib_adjust_inflation'] = get_bool(acc.get('contrib_adjust_inflation', matched.get('contrib_adjust_inflation', True)))
             matched['return_mean'] = get_float(acc.get('return_mean', matched.get('return_mean', 6.0)))
             matched['return_std'] = get_float(acc.get('return_std', matched.get('return_std', 10.0)))
+            matched['hsa_for_medical'] = get_bool(acc.get('hsa_for_medical', matched.get('hsa_for_medical', True)))
             if 'values' not in matched or not isinstance(matched['values'], dict):
                 matched['values'] = {}
             matched['values'][curr_period] = bal
@@ -1178,8 +1212,14 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
                 'include_in_retirement': True,
                 'values': vals,
                 'contrib_amount': get_float(acc.get('contrib_amount', 0.0)),
+                'contrib_freq': acc.get('contrib_freq', 'annual'),
+                'contrib_start_age': get_int(acc.get('contrib_start_age', 60)),
+                'contrib_end_age_type': acc.get('contrib_end_age_type', 'retirement'),
+                'contrib_end_age_specified': get_int(acc.get('contrib_end_age_specified', 65)),
+                'contrib_adjust_inflation': get_bool(acc.get('contrib_adjust_inflation', True)),
                 'return_mean': get_float(acc.get('return_mean', 6.0)),
                 'return_std': get_float(acc.get('return_std', 10.0)),
+                'hsa_for_medical': get_bool(acc.get('hsa_for_medical', True)),
             })
 
     return balance_sheet

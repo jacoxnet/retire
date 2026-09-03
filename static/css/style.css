@@ -945,11 +945,6 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
-/* Breathing room between the sticky header row and the first data row. */
-.bs-table tbody tr:first-child > td {
-  padding-top: 1.5rem;
-}
-
 .bs-table thead th {
   background: #f1f5f9;
   color: #334155;
@@ -959,7 +954,7 @@ tbody tr:hover {
   letter-spacing: 0.03em;
   border-bottom: 2px solid #cbd5e1;
   position: sticky;
-  top: calc(var(--bs-nav-h, 56px) + var(--bs-proxy-h, 0px));
+  top: 0;
   z-index: 10;
 }
 
