@@ -1,4 +1,7 @@
 from django.test import TestCase
+from django.urls import reverse
+import numpy as np
+import json
 from core.runs import calculate_tax, calculate_taxable_ss, get_rmd_start_age
 from core.models import SimulationData
 
@@ -3028,4 +3031,224 @@ class AgeDisambiguationTests(TestCase):
         self.assertEqual(session_bs.get('period_view_frequency'), 'quarterly')
         self.assertEqual(session_bs.get('period_view_limit'), 4)
         self.assertEqual(session_bs.get('periods'), test_dates)
+
+    def test_dual_engine_parity_with_life_insurance(self):
+        """Verify Python engine and Numba JIT engine match 100% with life insurance routing."""
+        import numpy as np
+        from django.urls import reverse
+        from core.runs import extract_sim_inputs, prepare_numba_inputs, run_simulation_path, njit_simulate_path
+        
+        sim_input = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 75,
+            'is_married': True,
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 85,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'desired_spending': 50000.0,
+            'survivor_spending': 40000.0,
+            'adjust_spending_inflation': True,
+            'inflation_rate': 2.5,
+            'user_life_insurance_amount': 250000.0,
+            'user_life_insurance_type': 'permanent',
+            'user_life_insurance_term_age': 70,
+            'spouse_life_insurance_amount': 100000.0,
+            'spouse_life_insurance_type': 'permanent',
+            'spouse_life_insurance_term_age': 70,
+            'taxable_assets': {'present_balance': 50000.0, 'return_mean': 5.0, 'return_std': 8.0},
+            'pretax_assets': {'present_balance': 200000.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'spouse_pretax_assets': {'present_balance': 100000.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'roth_assets': {'present_balance': 50000.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'hsa_assets': {'present_balance': 10000.0, 'return_mean': 5.0, 'return_std': 8.0},
+            'spouse_hsa_assets': {'present_balance': 0.0, 'return_mean': 5.0, 'return_std': 8.0},
+            'runs': 10
+        }
+        inputs = extract_sim_inputs(sim_input)
+        years = inputs['total_years']
+
+        r_pre = np.full(years, 0.06)
+        r_roth = np.full(years, 0.06)
+        r_tax = np.full(years, 0.05)
+        r_hsa = np.full(years, 0.04)
+
+        # 1. Run Python simulation path
+        py_results = run_simulation_path(inputs, r_pre, r_roth, r_tax, r_hsa)
+        py_ending_wealth = py_results[-1]['ending_assets']['total']
+
+        # 2. Run Numba JIT simulation path
+        nb_inp = prepare_numba_inputs(inputs)
+        nb_ending_wealth = njit_simulate_path(
+            years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
+            nb_inp['filing_status_code'], inputs['desired_spending_start_age'], nb_inp['desired_spending'], nb_inp['survivor_spending'],
+            inputs['adjust_spending_inflation'], inputs['inflation_rate'], inputs['hsa_for_medical'], nb_inp['user_rmd_start_age'], nb_inp['spouse_rmd_start_age'],
+            nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'], nb_inp['taxable_init'], nb_inp['hsa_init'],
+            nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
+            nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
+            r_pre, r_pre, r_roth, r_tax, r_hsa, r_hsa,
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
+            nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
+            None,
+            nb_inp['inf_factors'],
+            nb_inp['taxable_deposit_t'],
+            nb_inp['taxable_deposit_amt'],
+            nb_inp['terminal_life_ins_estate']
+        )
+
+        self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
+
+    def test_surviving_spouse_receives_life_insurance_in_taxable_brokerage(self):
+        """When user predeceases spouse, death benefit is deposited in spouse's taxable account in transition year."""
+        from core.runs import extract_sim_inputs, run_simulation_path, run_deterministic, get_life_insurance_routing
+
+        sim_input = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 75,
+            'is_married': True,
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 85,
+            'desired_spending': 40000.0,
+            'survivor_spending': 30000.0,
+            'user_life_insurance_amount': 250000.0,
+            'user_life_insurance_type': 'permanent',
+            'taxable_assets': {'present_balance': 20000.0, 'return_mean': 5.0, 'return_std': 8.0},
+            'pretax_assets': {'present_balance': 300000.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'roth_assets': {'present_balance': 0.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'hsa_assets': {'present_balance': 0.0, 'return_mean': 5.0, 'return_std': 8.0},
+        }
+        routing = get_life_insurance_routing(sim_input)
+        # User dies after 75 - 60 = 15 years (age 75 is t=15). First year deceased is t=16.
+        self.assertEqual(routing['taxable_deposit_t'], 16)
+        self.assertEqual(routing['taxable_deposit_amt'], 250000.0)
+        self.assertEqual(routing['terminal_life_ins_estate'], 0.0)
+
+        det_rows = run_deterministic(sim_input)
+        # Check that milestone appears in deterministic table at t=16
+        t16_row = det_rows[16]
+        self.assertTrue(any('Life Insurance Payout to Spouse (+$250,000)' in m for m in t16_row['milestones']))
+
+    def test_single_user_life_insurance_flows_to_terminal_estate(self):
+        """For single user, policy proceeds flow directly to terminal estate."""
+        from core.runs import extract_sim_inputs, get_life_insurance_routing, run_deterministic
+
+        sim_input = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 85,
+            'is_married': False,
+            'desired_spending': 30000.0,
+            'user_life_insurance_amount': 500000.0,
+            'user_life_insurance_type': 'permanent',
+            'taxable_assets': {'present_balance': 10000.0, 'return_mean': 5.0, 'return_std': 8.0},
+            'pretax_assets': {'present_balance': 100000.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'roth_assets': {'present_balance': 0.0, 'return_mean': 6.0, 'return_std': 10.0},
+            'hsa_assets': {'present_balance': 0.0, 'return_mean': 5.0, 'return_std': 8.0},
+        }
+        routing = get_life_insurance_routing(sim_input)
+        self.assertEqual(routing['taxable_deposit_t'], -1)
+        self.assertEqual(routing['taxable_deposit_amt'], 0.0)
+        self.assertEqual(routing['terminal_life_ins_estate'], 500000.0)
+
+        det_rows = run_deterministic(sim_input)
+        last_row = det_rows[-1]
+        self.assertTrue(any('Life Insurance Payout to Estate / Heirs (+$500,000)' in m for m in last_row['milestones']))
+
+    def test_term_life_insurance_expiration_logic(self):
+        """Term policy expires if assumed death age exceeds term expiration age."""
+        from core.runs import get_life_insurance_routing
+
+        # Scenario A: User dies at 80, term expires at 70 -> Expired ($0 benefit)
+        sim_expired = {
+            'user_age': 60,
+            'user_age_death': 80,
+            'is_married': False,
+            'user_life_insurance_amount': 300000.0,
+            'user_life_insurance_type': 'term',
+            'user_life_insurance_term_age': 70,
+        }
+        routing_exp = get_life_insurance_routing(sim_expired)
+        self.assertFalse(routing_exp['user_policy_active'])
+        self.assertEqual(routing_exp['terminal_life_ins_estate'], 0.0)
+
+        # Scenario B: User dies at 68, term expires at 70 -> Active ($300k benefit)
+        sim_active = {
+            'user_age': 60,
+            'user_age_death': 68,
+            'is_married': False,
+            'user_life_insurance_amount': 300000.0,
+            'user_life_insurance_type': 'term',
+            'user_life_insurance_term_age': 70,
+        }
+        routing_act = get_life_insurance_routing(sim_active)
+        self.assertTrue(routing_act['user_policy_active'])
+        self.assertEqual(routing_act['terminal_life_ins_estate'], 300000.0)
+
+    def test_auto_create_taxable_brokerage_account_when_life_insurance_specified(self):
+        """App auto-creates a Taxable Brokerage account if none exists when life insurance is entered."""
+        # 1. Post to enter_view with only a 401(k) account and life insurance > 0
+        resp = self.client.post('/', {
+            'user_name': 'Test Insurance User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': 'on',
+            'spouse_name': 'Test Insurance Spouse',
+            'spouse_age': '60',
+            'spouse_retirement_age': '65',
+            'spouse_age_death': '92',
+            'desired_spending': '45000',
+            'survivor_spending': '35000',
+            'user_life_insurance_amount': '350000',
+            'user_life_insurance_type': 'permanent',
+            'account_name[]': ['Work 401(k)'],
+            'account_type[]': ['pretax'],
+            'account_owner[]': ['user'],
+            'account_balance[]': ['150000'],
+            'account_contrib_amt[]': ['0'],
+            'account_contrib_freq[]': ['annual'],
+            'account_contrib_start_age[]': ['60'],
+            'account_contrib_end_type[]': ['retirement'],
+            'account_contrib_end_spec[]': ['65'],
+            'account_contrib_adjust_inf[]': ['true'],
+            'account_ret_mean[]': ['6.0'],
+            'account_ret_std[]': ['10.0'],
+            'next': 'results'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        session_data = self.client.session.get('simulation_data', {})
+        accounts = session_data.get('accounts', [])
+        taxable_accounts = [a for a in accounts if a.get('type') == 'taxable']
+        self.assertEqual(len(taxable_accounts), 1)
+        self.assertEqual(taxable_accounts[0]['name'], 'Taxable Brokerage (Life Insurance Proceeds)')
+        self.assertEqual(taxable_accounts[0]['balance'], 0.0)
+
+        # 2. Test load_plan_view auto-creation with JSON plan having life insurance but no taxable account
+        plan_data = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'desired_spending': 40000.0,
+            'user_life_insurance_amount': 200000.0,
+            'user_life_insurance_type': 'permanent',
+            'accounts': [
+                {'name': 'Roth IRA', 'type': 'roth', 'owner': 'user', 'balance': 50000.0}
+            ]
+        }
+        load_resp = self.client.post(reverse('load_plan'), {
+            'json_data': json.dumps(plan_data),
+            'next': 'enter'
+        })
+        self.assertEqual(load_resp.status_code, 302)
+        loaded_session = self.client.session.get('simulation_data', {})
+        loaded_accs = loaded_session.get('accounts', [])
+        loaded_taxable = [a for a in loaded_accs if a.get('type') == 'taxable']
+        self.assertEqual(len(loaded_taxable), 1)
+        self.assertEqual(loaded_taxable[0]['name'], 'Taxable Brokerage (Life Insurance Proceeds)')
+
 

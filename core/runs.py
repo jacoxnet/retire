@@ -594,7 +594,8 @@ def simulate_step(
     state_tax_rate=0.0, state_ss_exempt=True, other_taxes_list=None,
     hsa_spouse=0.0, hsa_spouse_for_medical=True, r_hsa_spouse=0.0, contrib_hsa_spouse=0.0,
     hsa=None, hsa_for_medical=None, r_hsa=None, contrib_hsa=None,
-    user_ret_age=65, spouse_ret_age=65
+    user_ret_age=65, spouse_ret_age=65,
+    life_insurance_payout=0.0
 ):
     # Backwards-compatibility aliases
     if hsa is not None:
@@ -624,6 +625,7 @@ def simulate_step(
             'income_sources_total': 0.0,
             'income_sources_breakdown': {},
             'contributions_total': 0.0,
+            'life_insurance_payout': 0.0,
         }
     
     # Filing Status
@@ -648,11 +650,11 @@ def simulate_step(
         contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse,
     )
 
-    # 2. Add Contributions
+    # 2. Add Contributions and any Life Insurance Payout
     pretax_user_before = max(0.0, pretax_user + contrib_pretax_user)
     pretax_spouse_before = max(0.0, pretax_spouse + contrib_pretax_spouse) if is_married else 0.0
     roth_before = max(0.0, roth + contrib_roth)
-    taxable_before = taxable + contrib_taxable
+    taxable_before = taxable + contrib_taxable + max(0.0, life_insurance_payout)
     hsa_user_before = max(0.0, hsa_user + contrib_hsa_user)
     hsa_spouse_before = max(0.0, hsa_spouse + contrib_hsa_spouse) if is_married else 0.0
     
@@ -972,7 +974,8 @@ def simulate_step(
         'desired_spending': desired_spending_t,
         'additional_spending': add_spending_t,
         'additional_spending_breakdown': add_spending_breakdown_t,
-        'withdrawals': withdrawals
+        'withdrawals': withdrawals,
+        'life_insurance_payout': life_insurance_payout
     }
 
 def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data):
@@ -1023,6 +1026,76 @@ def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year
         inflation_rate = asset_data.get('inflation_rate', 2.5)
         return base_val * (1.0 + inflation_rate / 100.0) ** t
     return base_val
+
+def get_life_insurance_routing(inputs):
+    """
+    Computes life insurance routing:
+    - taxable_deposit_t: year index when death benefit is deposited into taxable assets for surviving spouse (-1 if none)
+    - taxable_deposit_amt: dollar amount deposited into taxable assets for surviving spouse
+    - terminal_life_ins_estate: dollar amount paid to estate/heirs upon final household death
+    - user_policy_active: whether user's policy is active at death
+    - spouse_policy_active: whether spouse's policy is active at death
+    """
+    user_age = int(inputs.get('user_age', 60))
+    user_age_death = int(inputs.get('user_age_death', 90))
+    is_married = bool(inputs.get('is_married', False))
+    spouse_age = int(inputs.get('spouse_age', 60)) if is_married else 60
+    spouse_age_death = int(inputs.get('spouse_age_death', 90)) if is_married else 90
+
+    user_span = user_age_death - user_age + 1
+    spouse_span = (spouse_age_death - spouse_age + 1) if is_married else 0
+    total_years = max(user_span, spouse_span)
+
+    user_life_ins_amount = float(inputs.get('user_life_insurance_amount', 0.0))
+    user_life_ins_type = str(inputs.get('user_life_insurance_type', 'permanent'))
+    user_life_ins_term_age = int(inputs.get('user_life_insurance_term_age', 70))
+    user_policy_active = (user_life_ins_type == 'permanent') or (user_age_death <= user_life_ins_term_age)
+
+    spouse_life_ins_amount = float(inputs.get('spouse_life_insurance_amount', 0.0)) if is_married else 0.0
+    spouse_life_ins_type = str(inputs.get('spouse_life_insurance_type', 'permanent')) if is_married else 'permanent'
+    spouse_life_ins_term_age = int(inputs.get('spouse_life_insurance_term_age', 70)) if is_married else 70
+    spouse_policy_active = is_married and ((spouse_life_ins_type == 'permanent') or (spouse_age_death <= spouse_life_ins_term_age))
+
+    taxable_deposit_t = -1
+    taxable_deposit_amt = 0.0
+    terminal_life_ins_estate = 0.0
+
+    t_user_death_yr = user_age_death - user_age + 1
+    t_spouse_death_yr = (spouse_age_death - spouse_age + 1) if is_married else 0
+
+    if is_married:
+        if t_user_death_yr < t_spouse_death_yr:
+            # User dies first -> spouse survives
+            if user_policy_active and user_life_ins_amount > 0.0 and t_user_death_yr < total_years:
+                taxable_deposit_t = t_user_death_yr
+                taxable_deposit_amt = user_life_ins_amount
+            if spouse_policy_active and spouse_life_ins_amount > 0.0:
+                terminal_life_ins_estate = spouse_life_ins_amount
+        elif t_spouse_death_yr < t_user_death_yr:
+            # Spouse dies first -> user survives
+            if spouse_policy_active and spouse_life_ins_amount > 0.0 and t_spouse_death_yr < total_years:
+                taxable_deposit_t = t_spouse_death_yr
+                taxable_deposit_amt = spouse_life_ins_amount
+            if user_policy_active and user_life_ins_amount > 0.0:
+                terminal_life_ins_estate = user_life_ins_amount
+        else:
+            # Both die together
+            if user_policy_active and user_life_ins_amount > 0.0:
+                terminal_life_ins_estate += user_life_ins_amount
+            if spouse_policy_active and spouse_life_ins_amount > 0.0:
+                terminal_life_ins_estate += spouse_life_ins_amount
+    else:
+        # Unmarried / single
+        if user_policy_active and user_life_ins_amount > 0.0:
+            terminal_life_ins_estate = user_life_ins_amount
+
+    return {
+        'taxable_deposit_t': taxable_deposit_t,
+        'taxable_deposit_amt': taxable_deposit_amt,
+        'terminal_life_ins_estate': terminal_life_ins_estate,
+        'user_policy_active': user_policy_active,
+        'spouse_policy_active': spouse_policy_active,
+    }
 
 def extract_sim_inputs(sim_input):
     # Extracts a flat or structured clean input dict with fallbacks
@@ -1119,6 +1192,15 @@ def extract_sim_inputs(sim_input):
     state_ss_exempt = bool(raw.get('state_ss_exempt', True))
     other_taxes = raw.get('other_taxes', [])
 
+    # Life Insurance
+    user_life_ins_amount = float(raw.get('user_life_insurance_amount', 0.0))
+    user_life_ins_type = str(raw.get('user_life_insurance_type', 'permanent'))
+    user_life_ins_term_age = int(raw.get('user_life_insurance_term_age', 70))
+
+    spouse_life_ins_amount = float(raw.get('spouse_life_insurance_amount', 0.0)) if is_married else 0.0
+    spouse_life_ins_type = str(raw.get('spouse_life_insurance_type', 'permanent')) if is_married else 'permanent'
+    spouse_life_ins_term_age = int(raw.get('spouse_life_insurance_term_age', 70)) if is_married else 70
+
     return {
         'user_age': user_age,
         'user_ret_age': user_ret_age,
@@ -1153,7 +1235,13 @@ def extract_sim_inputs(sim_input):
         'total_years': total_years,
         'user_rmd_start_age': user_rmd_start_age,
         'spouse_rmd_start_age': spouse_rmd_start_age,
-        'rmd_start_age': user_rmd_start_age
+        'rmd_start_age': user_rmd_start_age,
+        'user_life_insurance_amount': user_life_ins_amount,
+        'user_life_insurance_type': user_life_ins_type,
+        'user_life_insurance_term_age': user_life_ins_term_age,
+        'spouse_life_insurance_amount': spouse_life_ins_amount,
+        'spouse_life_insurance_type': spouse_life_ins_type,
+        'spouse_life_insurance_term_age': spouse_life_ins_term_age,
     }
 
 def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, returns_hsa, test_spending=None, returns_pretax_spouse=None, returns_hsa_spouse=None):
@@ -1178,6 +1266,11 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
         ratio = test_spending / inputs['desired_spending']
         survivor_spending = inputs['survivor_spending'] * ratio
         
+    routing = get_life_insurance_routing(inputs)
+    taxable_deposit_t = routing['taxable_deposit_t']
+    taxable_deposit_amt = routing['taxable_deposit_amt']
+    terminal_life_ins_estate = routing['terminal_life_ins_estate']
+
     year_results = []
     
     for t in range(inputs['total_years']):
@@ -1197,6 +1290,8 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
         r_hsa_user = returns_hsa[t]
         r_hsa_spouse = returns_hsa_spouse[t]
         
+        li_payout_t = taxable_deposit_amt if t == taxable_deposit_t else 0.0
+
         res = simulate_step(
             t, inputs['user_age'], inputs['is_married'], inputs['spouse_age'],
             inputs['user_age_death'], inputs['spouse_age_death'], inputs['filing_status'],
@@ -1212,7 +1307,8 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
             inputs.get('other_taxes', []),
             hsa_spouse=hsa_spouse, hsa_spouse_for_medical=inputs.get('spouse_hsa_for_medical', True),
             r_hsa_spouse=r_hsa_spouse, contrib_hsa_spouse=c_hsa_spouse,
-            user_ret_age=inputs.get('user_ret_age', 65), spouse_ret_age=inputs.get('spouse_ret_age', 65)
+            user_ret_age=inputs.get('user_ret_age', 65), spouse_ret_age=inputs.get('spouse_ret_age', 65),
+            life_insurance_payout=li_payout_t
         )
         
         year_results.append(res)
@@ -1223,6 +1319,11 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
         hsa_user = res['ending_assets']['hsa_user']
         hsa_spouse = res['ending_assets']['hsa_spouse']
         
+    if year_results and terminal_life_ins_estate > 0.0:
+        year_results[-1]['ending_assets']['terminal_life_insurance'] = terminal_life_ins_estate
+        final_port = year_results[-1]['ending_assets']['total']
+        year_results[-1]['ending_assets']['total'] = (final_port if final_port >= 0.0 else 0.0) + terminal_life_ins_estate
+
     return year_results
 
 # Numba JIT compiled helper functions
@@ -1287,7 +1388,10 @@ def njit_simulate_path(
     state_tax_rate, state_ss_exempt_code, other_taxes_arr,
     hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
     trajectory_arr=None,
-    inf_factors=None
+    inf_factors=None,
+    taxable_deposit_t=-1,
+    taxable_deposit_amt=0.0,
+    terminal_life_ins_estate=0.0
 ):
     pretax_user = pretax_user_init
     pretax_spouse = pretax_spouse_init
@@ -1325,6 +1429,9 @@ def njit_simulate_path(
             pretax_user, pretax_spouse, hsa_user, hsa_spouse,
             c_pre_user[t], c_pre_spouse[t], c_hsa_user[t], c_hsa_spouse[t],
         )
+
+        if t == taxable_deposit_t and taxable_deposit_amt > 0.0:
+            taxable += taxable_deposit_amt
 
         pretax_user_before = max(0.0, pretax_user + c_pre_user_t)
         pretax_spouse_before = max(0.0, pretax_spouse + c_pre_spouse_t) if is_married else 0.0
@@ -1394,7 +1501,11 @@ def njit_simulate_path(
         if trajectory_arr is not None:
             trajectory_arr[t + 1] = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
         
-    return pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
+    ending_portfolio = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
+    terminal_estate = (ending_portfolio if ending_portfolio >= 0.0 else 0.0) + terminal_life_ins_estate
+    if trajectory_arr is not None:
+        trajectory_arr[total_years] = terminal_estate
+    return terminal_estate
 
 @numba.njit(parallel=True, cache=True)
 def njit_simulate_all_paths(
@@ -1409,7 +1520,11 @@ def njit_simulate_all_paths(
     hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
     ending_wealths,
     trajectories=None,
-    inf_factors=None
+    inf_factors=None,
+    taxable_deposit_t=-1,
+    taxable_deposit_amt=0.0,
+    terminal_life_ins_estate=0.0,
+    success_flags=None
 ):
     for i in numba.prange(runs):
         if trajectories is not None:
@@ -1424,7 +1539,10 @@ def njit_simulate_all_paths(
                 state_tax_rate, state_ss_exempt_code, other_taxes_arr,
                 hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
                 trajectories[i],
-                inf_factors
+                inf_factors,
+                taxable_deposit_t,
+                taxable_deposit_amt,
+                terminal_life_ins_estate
             )
         else:
             ending_wealths[i] = njit_simulate_path(
@@ -1438,8 +1556,13 @@ def njit_simulate_all_paths(
                 state_tax_rate, state_ss_exempt_code, other_taxes_arr,
                 hsa_spouse_init, c_hsa_spouse, hsa_spouse_for_medical_code,
                 None,
-                inf_factors
+                inf_factors,
+                taxable_deposit_t,
+                taxable_deposit_amt,
+                terminal_life_ins_estate
             )
+        if success_flags is not None:
+            success_flags[i] = 1.0 if (ending_wealths[i] - terminal_life_ins_estate >= 0.0) else 0.0
 
 def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None):
     desired_spending = test_spending if test_spending is not None else inputs['desired_spending']
@@ -1669,6 +1792,8 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
     hsa_user_for_medical_code = 1 if inputs.get('hsa_for_medical', True) else 0
     hsa_spouse_for_medical_code = 1 if inputs.get('spouse_hsa_for_medical', True) else 0
     
+    routing = get_life_insurance_routing(inputs)
+
     return {
         'desired_spending': float(desired_spending),
         'survivor_spending': float(survivor_spending),
@@ -1698,7 +1823,10 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         'hsa_spouse_for_medical_code': hsa_spouse_for_medical_code,
         'user_rmd_start_age': inputs['user_rmd_start_age'],
         'spouse_rmd_start_age': inputs['spouse_rmd_start_age'],
-        'inf_factors': inf_factors
+        'inf_factors': inf_factors,
+        'taxable_deposit_t': int(routing['taxable_deposit_t']),
+        'taxable_deposit_amt': float(routing['taxable_deposit_amt']),
+        'terminal_life_ins_estate': float(routing['terminal_life_ins_estate']),
     }
 
 def generate_runs(sim_input, test_spending=None):
@@ -1731,6 +1859,7 @@ def generate_runs(sim_input, test_spending=None):
     nb_inp = prepare_numba_inputs(inputs, test_spending=test_spending)
     ending_wealths = np.empty(runs, dtype=np.float64)
     trajectories = np.empty((runs, years + 1), dtype=np.float64)
+    success_flags = np.empty(runs, dtype=np.float64)
     
     njit_simulate_all_paths(
         runs, years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
@@ -1744,10 +1873,14 @@ def generate_runs(sim_input, test_spending=None):
         nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
         ending_wealths,
         trajectories,
-        nb_inp['inf_factors']
+        nb_inp['inf_factors'],
+        nb_inp['taxable_deposit_t'],
+        nb_inp['taxable_deposit_amt'],
+        nb_inp['terminal_life_ins_estate'],
+        success_flags
     )
     
-    successes = float(np.sum(ending_wealths >= 0.0))
+    successes = float(np.sum(success_flags >= 1.0))
     success_rate = (successes / runs) * 100.0
     
     mc_p10 = [float(val) for val in np.percentile(trajectories, 10, axis=0)]
@@ -1813,6 +1946,7 @@ def binary_search(sim_input):
     target_srate = inputs['target_success_rate'] / 100.0
     
     ending_wealths = np.empty(runs, dtype=np.float64)
+    success_flags = np.empty(runs, dtype=np.float64)
     
     best_mid = 0.0
     best_srate = 0.0
@@ -1836,10 +1970,14 @@ def binary_search(sim_input):
             nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
             ending_wealths,
             None,
-            nb_inp['inf_factors']
+            nb_inp['inf_factors'],
+            nb_inp['taxable_deposit_t'],
+            nb_inp['taxable_deposit_amt'],
+            nb_inp['terminal_life_ins_estate'],
+            success_flags
         )
         
-        success_rate = float(np.mean(ending_wealths >= 0.0))
+        success_rate = float(np.mean(success_flags >= 1.0))
         
         if success_rate >= target_srate:
             best_mid = mid
@@ -1895,6 +2033,11 @@ def run_deterministic(sim_input):
         returns_pretax_spouse=det_pre_sp_r, returns_hsa_spouse=det_hsa_sp_r
     )
     
+    routing = get_life_insurance_routing(inputs)
+    taxable_deposit_t = routing['taxable_deposit_t']
+    taxable_deposit_amt = routing['taxable_deposit_amt']
+    terminal_life_ins_estate = routing['terminal_life_ins_estate']
+
     # Format results for the deterministic tables
     rows = []
     for t in range(years):
@@ -1923,6 +2066,14 @@ def run_deterministic(sim_input):
             milestones.append(f"Your Final Year ({user_age_t})")
         if spouse_alive and spouse_age_t == inputs['spouse_age_death']:
             milestones.append(f"Spouse Final Year ({spouse_age_t})")
+
+        if t == taxable_deposit_t and taxable_deposit_amt > 0:
+            if user_alive and not spouse_alive:
+                milestones.append(f"Life Insurance Payout from Spouse Policy (+${taxable_deposit_amt:,.0f})")
+            elif spouse_alive and not user_alive:
+                milestones.append(f"Life Insurance Payout to Spouse (+${taxable_deposit_amt:,.0f})")
+        if t == years - 1 and terminal_life_ins_estate > 0:
+            milestones.append(f"Life Insurance Payout to Estate / Heirs (+${terminal_life_ins_estate:,.0f})")
 
         rows.append({
             'year_index': t,
@@ -2078,6 +2229,7 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
     nb_inp = prepare_numba_inputs(inputs, custom_inflation_rates=inflation_rates)
     ending_wealths = np.empty(runs, dtype=np.float64)
     trajectories = np.empty((runs, years + 1), dtype=np.float64)
+    success_flags = np.empty(runs, dtype=np.float64)
 
     njit_simulate_all_paths(
         runs, years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
@@ -2091,10 +2243,14 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
         nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
         ending_wealths,
         trajectories,
-        nb_inp['inf_factors']
+        nb_inp['inf_factors'],
+        nb_inp['taxable_deposit_t'],
+        nb_inp['taxable_deposit_amt'],
+        nb_inp['terminal_life_ins_estate'],
+        success_flags
     )
 
-    successes = float(np.sum(ending_wealths >= 0.0))
+    successes = float(np.sum(success_flags >= 1.0))
     stress_success = (successes / runs) * 100.0
 
     mc_p10 = [float(val) for val in np.percentile(trajectories, 10, axis=0)]

@@ -133,6 +133,100 @@
 
                     <hr class="my-4">
 
+                    <!-- Life Insurance & Survivorship -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h3 class="mb-1 text-primary">
+                                    <i class="fa-solid fa-shield-halved me-2"></i>Life Insurance &amp; Survivorship
+                                </h3>
+                                <p class="text-secondary small mb-0">Specify any life insurance proceeds payable upon death. For married couples, benefits payable to a surviving spouse are deposited directly into Taxable Brokerage assets to fund continuing living expenses. Benefits payable with no surviving spouse flow to your terminal estate / heirs.</p>
+                            </div>
+                        </div>
+
+                        <!-- User Life Insurance Policy Card -->
+                        <div class="card p-3 mb-3 bg-light border">
+                            <h5 class="text-secondary mb-3">Your Life Insurance Policy</h5>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="user_life_insurance_amount" id="user_life_insurance_label" class="form-label">
+                                        <span id="user_life_insurance_label_text">
+                                            {% if is_married %}
+                                                Lump-sum death benefit paid to surviving spouse upon your death
+                                            {% else %}
+                                                Lump-sum death benefit paid upon your death (to heirs / estate)
+                                            {% endif %}
+                                        </span>
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0"
+                                            style="cursor: pointer;" data-bs-toggle="popover"
+                                            data-bs-trigger="hover focus" data-bs-html="true"
+                                            data-bs-title="Life Insurance Death Benefit"
+                                            data-bs-content="Fixed nominal lump-sum benefit payable upon your death. If your spouse survives you, this amount is deposited into Taxable Brokerage assets in the year after your death to support ongoing retirement expenses. If no spouse survives (or you are unmarried), this amount is added to your terminal estate / legacy at death.">
+                                        </i>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="text" inputmode="decimal" class="form-control dollar-input"
+                                            id="user_life_insurance_amount" name="user_life_insurance_amount"
+                                            value="{{ user_life_insurance_amount|default:0.0|floatformat:"0"|intcomma }}" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="user_life_insurance_type" class="form-label">Policy Type</label>
+                                    <select class="form-select" id="user_life_insurance_type" name="user_life_insurance_type">
+                                        <option value="permanent" {% if user_life_insurance_type == 'permanent' or not user_life_insurance_type %}selected{% endif %}>Permanent / Whole Life</option>
+                                        <option value="term" {% if user_life_insurance_type == 'term' %}selected{% endif %}>Term Life</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-3" id="user_term_age_group" style="display: {% if user_life_insurance_type == 'term' %}block{% else %}none{% endif %};">
+                                    <label for="user_life_insurance_term_age" class="form-label">Term Expiration Age</label>
+                                    <input type="number" class="form-control" id="user_life_insurance_term_age"
+                                        name="user_life_insurance_term_age" value="{{ user_life_insurance_term_age|default:70 }}" min="18" max="120">
+                                </div>
+                            </div>
+                            <div id="user_life_ins_badge_container"></div>
+                        </div>
+
+                        <!-- Spouse Life Insurance Policy Card (toggled by is_married) -->
+                        <div id="spouse_life_insurance_section" class="card p-3 mb-3 bg-light border" style="display: {% if is_married %}block{% else %}none{% endif %};">
+                            <h5 class="text-secondary mb-3">Spouse's Life Insurance Policy</h5>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="spouse_life_insurance_amount" class="form-label">
+                                        Lump-sum death benefit paid to surviving spouse upon spouse's death
+                                        <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0"
+                                            style="cursor: pointer;" data-bs-toggle="popover"
+                                            data-bs-trigger="hover focus" data-bs-html="true"
+                                            data-bs-title="Spouse Life Insurance Benefit"
+                                            data-bs-content="Fixed nominal lump-sum benefit payable upon your spouse's death. If you survive your spouse, this amount is deposited into your Taxable Brokerage assets in the year after death to support ongoing retirement expenses. If both pass together or you predecease, this amount flows to your estate / heirs.">
+                                        </i>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="text" inputmode="decimal" class="form-control dollar-input"
+                                            id="spouse_life_insurance_amount" name="spouse_life_insurance_amount"
+                                            value="{{ spouse_life_insurance_amount|default:0.0|floatformat:"0"|intcomma }}" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="spouse_life_insurance_type" class="form-label">Policy Type</label>
+                                    <select class="form-select" id="spouse_life_insurance_type" name="spouse_life_insurance_type">
+                                        <option value="permanent" {% if spouse_life_insurance_type == 'permanent' or not spouse_life_insurance_type %}selected{% endif %}>Permanent / Whole Life</option>
+                                        <option value="term" {% if spouse_life_insurance_type == 'term' %}selected{% endif %}>Term Life</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-3" id="spouse_term_age_group" style="display: {% if spouse_life_insurance_type == 'term' %}block{% else %}none{% endif %};">
+                                    <label for="spouse_life_insurance_term_age" class="form-label">Term Expiration Age</label>
+                                    <input type="number" class="form-control" id="spouse_life_insurance_term_age"
+                                        name="spouse_life_insurance_term_age" value="{{ spouse_life_insurance_term_age|default:70 }}" min="18" max="120">
+                                </div>
+                            </div>
+                            <div id="spouse_life_ins_badge_container"></div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
                     <!-- Plan settings -->
                     <h3 class="mb-4">Basic Plan Details</h3>
 
@@ -786,6 +880,9 @@
         if (typeof window.syncAllTabs === 'function') {
             window.syncAllTabs();
         }
+        if (tabId === 'assets-tab' && typeof ensureTaxableAccountForLifeInsurance === 'function') {
+            ensureTaxableAccountForLifeInsurance();
+        }
         var nextTab = document.getElementById(tabId);
         if (nextTab) {
             bootstrap.Tab.getOrCreateInstance(nextTab).show();
@@ -805,6 +902,9 @@
                 event.preventDefault();
                 if (typeof window.syncAllTabs === 'function') {
                     window.syncAllTabs();
+                }
+                if (triggerEl.id === 'assets-tab' && typeof ensureTaxableAccountForLifeInsurance === 'function') {
+                    ensureTaxableAccountForLifeInsurance();
                 }
                 tabTrigger.show();
             });
@@ -865,6 +965,9 @@
             }
             updateSpouseDropdownOptions();
             updateAccountsSpouseOwners();
+            if (typeof updateLifeInsuranceUI === 'function') {
+                updateLifeInsuranceUI();
+            }
         }
         isMarriedCheckbox.addEventListener('change', toggleSpouseSection);
 
@@ -886,6 +989,154 @@
             }
         }
         if (spouseSsEntitled) spouseSsEntitled.addEventListener('change', toggleSpouseSsFields);
+
+        // Life Insurance & Survivorship UI Logic
+        function updateLifeInsuranceUI() {
+            var isMarried = isMarriedCheckbox ? isMarriedCheckbox.checked : false;
+
+            // 1. Dynamic User Policy Label
+            var userLiLabelText = document.getElementById('user_life_insurance_label_text');
+            if (userLiLabelText) {
+                if (isMarried) {
+                    userLiLabelText.textContent = "Lump-sum death benefit paid to surviving spouse upon your death";
+                } else {
+                    userLiLabelText.textContent = "Lump-sum death benefit paid upon your death (to heirs / estate)";
+                }
+            }
+
+            // 2. Toggle Spouse Life Insurance Section
+            var spouseLiSection = document.getElementById('spouse_life_insurance_section');
+            if (spouseLiSection) {
+                spouseLiSection.style.display = isMarried ? 'block' : 'none';
+            }
+
+            // 3. User Policy Term Age Visibility
+            var userLiTypeSelect = document.getElementById('user_life_insurance_type');
+            var userLiType = userLiTypeSelect ? userLiTypeSelect.value : 'permanent';
+            var userTermAgeGroup = document.getElementById('user_term_age_group');
+            if (userTermAgeGroup) {
+                userTermAgeGroup.style.display = (userLiType === 'term') ? 'block' : 'none';
+            }
+
+            // 4. Spouse Policy Term Age Visibility
+            var spouseLiTypeSelect = document.getElementById('spouse_life_insurance_type');
+            var spouseLiType = spouseLiTypeSelect ? spouseLiTypeSelect.value : 'permanent';
+            var spouseTermAgeGroup = document.getElementById('spouse_term_age_group');
+            if (spouseTermAgeGroup) {
+                spouseTermAgeGroup.style.display = (spouseLiType === 'term') ? 'block' : 'none';
+            }
+
+            // 5. User Status Badge
+            var userAmtEl = document.getElementById('user_life_insurance_amount');
+            var userLiAmt = userAmtEl ? (parseFloat(userAmtEl.value.replace(/,/g, '')) || 0) : 0;
+            var userBadgeContainer = document.getElementById('user_life_ins_badge_container');
+            if (userBadgeContainer) {
+                if (userLiAmt > 0) {
+                    if (userLiType === 'term') {
+                        var uAgeDeath = parseInt(document.getElementById('user_age_death').value, 10) || 90;
+                        var uTermAge = parseInt(document.getElementById('user_life_insurance_term_age').value, 10) || 70;
+                        if (uAgeDeath > uTermAge) {
+                            userBadgeContainer.innerHTML = '<div class="alert alert-warning py-1 px-3 small mb-0 d-flex align-items-center">' +
+                                '<i class="fa-solid fa-triangle-exclamation me-2"></i>' +
+                                '<span>Term policy expires at age <strong>' + uTermAge + '</strong>, before your assumed age at death (<strong>' + uAgeDeath + '</strong>). No death benefit will be paid.</span>' +
+                                '</div>';
+                        } else {
+                            userBadgeContainer.innerHTML = '<div class="alert alert-success py-1 px-3 small mb-0 d-flex align-items-center">' +
+                                '<i class="fa-solid fa-circle-check me-2"></i>' +
+                                '<span>Policy active at assumed death (age ' + uAgeDeath + ' &le; expiration age ' + uTermAge + ').</span>' +
+                                '</div>';
+                        }
+                    } else {
+                        userBadgeContainer.innerHTML = '<div class="alert alert-success py-1 px-3 small mb-0 d-flex align-items-center">' +
+                            '<i class="fa-solid fa-circle-check me-2"></i>' +
+                            '<span>Permanent policy &mdash; Benefit is guaranteed payable upon death.</span>' +
+                            '</div>';
+                    }
+                } else {
+                    userBadgeContainer.innerHTML = '';
+                }
+            }
+
+            // 6. Spouse Status Badge
+            var spouseAmtEl = document.getElementById('spouse_life_insurance_amount');
+            var spouseLiAmt = spouseAmtEl ? (parseFloat(spouseAmtEl.value.replace(/,/g, '')) || 0) : 0;
+            var spouseBadgeContainer = document.getElementById('spouse_life_ins_badge_container');
+            if (spouseBadgeContainer) {
+                if (isMarried && spouseLiAmt > 0) {
+                    if (spouseLiType === 'term') {
+                        var spAgeDeath = parseInt(document.getElementById('spouse_age_death').value, 10) || 90;
+                        var spTermAge = parseInt(document.getElementById('spouse_life_insurance_term_age').value, 10) || 70;
+                        if (spAgeDeath > spTermAge) {
+                            spouseBadgeContainer.innerHTML = '<div class="alert alert-warning py-1 px-3 small mb-0 d-flex align-items-center">' +
+                                '<i class="fa-solid fa-triangle-exclamation me-2"></i>' +
+                                '<span>Term policy expires at age <strong>' + spTermAge + '</strong>, before spouse\'s assumed age at death (<strong>' + spAgeDeath + '</strong>). No death benefit will be paid.</span>' +
+                                '</div>';
+                        } else {
+                            spouseBadgeContainer.innerHTML = '<div class="alert alert-success py-1 px-3 small mb-0 d-flex align-items-center">' +
+                                '<i class="fa-solid fa-circle-check me-2"></i>' +
+                                '<span>Policy active at assumed death (age ' + spAgeDeath + ' &le; expiration age ' + spTermAge + ').</span>' +
+                                '</div>';
+                        }
+                    } else {
+                        spouseBadgeContainer.innerHTML = '<div class="alert alert-success py-1 px-3 small mb-0 d-flex align-items-center">' +
+                            '<i class="fa-solid fa-circle-check me-2"></i>' +
+                            '<span>Permanent policy &mdash; Benefit is guaranteed payable upon death.</span>' +
+                            '</div>';
+                    }
+                } else {
+                    spouseBadgeContainer.innerHTML = '';
+                }
+            }
+        }
+
+        function ensureTaxableAccountForLifeInsurance() {
+            var userAmtEl = document.getElementById('user_life_insurance_amount');
+            var userLiAmt = userAmtEl ? (parseFloat(userAmtEl.value.replace(/,/g, '')) || 0) : 0;
+            var spouseAmtEl = document.getElementById('spouse_life_insurance_amount');
+            var spouseLiAmt = spouseAmtEl ? (parseFloat(spouseAmtEl.value.replace(/,/g, '')) || 0) : 0;
+            var isMarried = isMarriedCheckbox ? isMarriedCheckbox.checked : false;
+
+            if (userLiAmt <= 0 && (!isMarried || spouseLiAmt <= 0)) {
+                return;
+            }
+
+            var typeSelects = Array.from(document.querySelectorAll('#accountsContainer [name="account_type[]"]'));
+            var hasTaxable = typeSelects.some(function (sel) { return sel.value === 'taxable'; });
+            if (!hasTaxable && typeof addAccountCard === 'function') {
+                addAccountCard({
+                    name: 'Taxable Brokerage (Life Insurance Proceeds)',
+                    type: 'taxable',
+                    owner: 'user',
+                    balance: 0,
+                    contrib_amount: 0,
+                    return_mean: 5.0,
+                    return_std: 8.0
+                });
+            }
+        }
+
+        // Attach listeners for life insurance
+        ['user_life_insurance_amount', 'user_life_insurance_term_age', 'user_age_death'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', updateLifeInsuranceUI);
+                el.addEventListener('blur', ensureTaxableAccountForLifeInsurance);
+            }
+        });
+        var userLiTypeEl = document.getElementById('user_life_insurance_type');
+        if (userLiTypeEl) userLiTypeEl.addEventListener('change', updateLifeInsuranceUI);
+
+        ['spouse_life_insurance_amount', 'spouse_life_insurance_term_age', 'spouse_age_death'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', updateLifeInsuranceUI);
+                el.addEventListener('blur', ensureTaxableAccountForLifeInsurance);
+            }
+        });
+        var spouseLiTypeEl = document.getElementById('spouse_life_insurance_type');
+        if (spouseLiTypeEl) spouseLiTypeEl.addEventListener('change', updateLifeInsuranceUI);
+
+        updateLifeInsuranceUI();
 
         // Person Labels and Live Age Helper Utilities
         function getPersonLabels() {

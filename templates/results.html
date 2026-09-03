@@ -241,6 +241,12 @@
                                 <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static {% if desired_spending >= 0 %}text-success{% else %}text-danger{% endif %}">${{ desired_spending|floatformat:"0"|intcomma }}</span></p>
                                 <hr>
                                 <h5 class="text-secondary mt-3">Ending Wealth Percentiles (Nominal)</h5>
+                                {% if terminal_life_insurance > 0 %}
+                                    <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
+                                        <i class="fa-solid fa-shield-halved me-2 text-info"></i>
+                                        <span>Includes <strong>${{ terminal_life_insurance|floatformat:"0"|intcomma }}</strong> life insurance death benefit paid to estate/heirs.</span>
+                                    </div>
+                                {% endif %}
                                 <div class="row">
                                     <div class="col-6 mb-2"><strong>Mean Ending Wealth:</strong></div>
                                     <div class="col-6 text-end {% if run_mean >= 0 %}text-success{% else %}text-danger{% endif %}">${{ run_mean|floatformat:"0"|intcomma }}</div>
@@ -1094,6 +1100,12 @@
 
                         <!-- Ending Wealth Percentiles (Nominal) Comparison Table -->
                         <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles (Nominal)</h5>
+                        {% if terminal_life_insurance > 0 %}
+                            <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
+                                <i class="fa-solid fa-shield-halved me-2 text-info"></i>
+                                <span>Includes <strong>${{ terminal_life_insurance|floatformat:"0"|intcomma }}</strong> life insurance death benefit paid to estate/heirs.</span>
+                            </div>
+                        {% endif %}
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" id="stressComparisonTable">
                                 <thead class="table-light">

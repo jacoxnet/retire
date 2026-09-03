@@ -41,6 +41,12 @@ def get_default_data():
         'inflation_rate': 3.5,
         'runs': 10000,
         'target_success_rate': 80.0,
+        'user_life_insurance_amount': 0.0,
+        'user_life_insurance_type': 'permanent',
+        'user_life_insurance_term_age': 70,
+        'spouse_life_insurance_amount': 0.0,
+        'spouse_life_insurance_type': 'permanent',
+        'spouse_life_insurance_term_age': 70,
         'social_security': {
             'user_entitled': True,
             'user_amount': 0.0,
@@ -198,6 +204,27 @@ def load_plan_view(request):
         else:
             data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
             data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+
+        # Auto-create taxable account if life insurance > 0 and no taxable account exists
+        has_taxable = any(acc.get('type') == 'taxable' for acc in data.get('accounts', []))
+        if not has_taxable and (float(data.get('user_life_insurance_amount', 0.0)) > 0 or float(data.get('spouse_life_insurance_amount', 0.0)) > 0):
+            new_acc = {
+                'name': 'Taxable Brokerage (Life Insurance Proceeds)',
+                'type': 'taxable',
+                'owner': 'user',
+                'balance': 0.0,
+                'contrib_amt': 0.0,
+                'contrib_freq': 'annual',
+                'contrib_start_age': data.get('user_age', 60),
+                'contrib_end_type': 'retirement',
+                'contrib_end_spec': data.get('user_retirement_age', 65),
+                'contrib_adjust_inf': True,
+                'ret_mean': 5.0,
+                'ret_std': 8.0,
+            }
+            data.setdefault('accounts', []).append(new_acc)
+            if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+                data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data['accounts'], current_year=data.get('current_year', 2026))
 
         if data.get('accounts') and isinstance(data['accounts'], list):
             agg = aggregate_accounts(
@@ -358,6 +385,19 @@ def enter_view(request):
             'spouse_freq': spouse_ss_freq,
             'spouse_start_age': spouse_ss_start_age,
         }
+
+        # Life Insurance
+        user_life_insurance_amount = get_float(request.POST.get('user_life_insurance_amount'), 0.0)
+        user_life_insurance_type = request.POST.get('user_life_insurance_type', 'permanent')
+        if user_life_insurance_type not in ['permanent', 'term']:
+            user_life_insurance_type = 'permanent'
+        user_life_insurance_term_age = get_int(request.POST.get('user_life_insurance_term_age'), 70)
+
+        spouse_life_insurance_amount = get_float(request.POST.get('spouse_life_insurance_amount'), 0.0) if is_married else 0.0
+        spouse_life_insurance_type = request.POST.get('spouse_life_insurance_type', 'permanent') if is_married else 'permanent'
+        if spouse_life_insurance_type not in ['permanent', 'term']:
+            spouse_life_insurance_type = 'permanent'
+        spouse_life_insurance_term_age = get_int(request.POST.get('spouse_life_insurance_term_age'), 70) if is_married else 70
         
         # Accounts: dynamic account_name[] rows, falling back to the older flat
         # per-category fields (pretax_present_balance, roth_contrib_amount, ...).
@@ -388,6 +428,26 @@ def enter_view(request):
             balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
         else:
             balance_sheet = build_default_balance_sheet(accounts, current_year=current_year)
+
+        # Auto-create taxable account if life insurance > 0 and no taxable account exists
+        has_taxable = any(acc.get('type') == 'taxable' for acc in accounts)
+        if not has_taxable and (user_life_insurance_amount > 0 or spouse_life_insurance_amount > 0):
+            new_acc = {
+                'name': 'Taxable Brokerage (Life Insurance Proceeds)',
+                'type': 'taxable',
+                'owner': 'user',
+                'balance': 0.0,
+                'contrib_amt': 0.0,
+                'contrib_freq': 'annual',
+                'contrib_start_age': user_age,
+                'contrib_end_type': 'retirement',
+                'contrib_end_spec': user_retirement_age,
+                'contrib_adjust_inf': True,
+                'ret_mean': 5.0,
+                'ret_std': 8.0,
+            }
+            accounts.append(new_acc)
+            balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
 
         agg = aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, is_married, spouse_age, spouse_retirement_age, spouse_age_death)
         pretax_assets = agg['pretax_assets']
@@ -453,6 +513,20 @@ def enter_view(request):
             if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
                 validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
 
+        # Life Insurance Validation
+        if user_life_insurance_amount < 0:
+            validation_errors.append("Your Life Insurance Death Benefit must be a non-negative number.")
+        if user_life_insurance_type == 'term':
+            if user_life_insurance_term_age < 18 or user_life_insurance_term_age > 120:
+                validation_errors.append("Your Term Life Policy Expiration Age must be between 18 and 120.")
+
+        if is_married:
+            if spouse_life_insurance_amount < 0:
+                validation_errors.append("Spouse's Life Insurance Death Benefit must be a non-negative number.")
+            if spouse_life_insurance_type == 'term':
+                if spouse_life_insurance_term_age < 18 or spouse_life_insurance_term_age > 120:
+                    validation_errors.append("Spouse's Term Life Policy Expiration Age must be between 18 and 120.")
+
         # Accounts are validated once, whichever path (dynamic or legacy fields)
         # produced them; the derived pretax/roth/taxable/hsa aggregates below are
         # views over the same accounts, so they don't need a second validation pass.
@@ -488,6 +562,12 @@ def enter_view(request):
             'state_ss_exempt': state_ss_exempt,
             'social_security': social_security,
             'accounts': accounts,
+            'user_life_insurance_amount': user_life_insurance_amount,
+            'user_life_insurance_type': user_life_insurance_type,
+            'user_life_insurance_term_age': user_life_insurance_term_age,
+            'spouse_life_insurance_amount': spouse_life_insurance_amount,
+            'spouse_life_insurance_type': spouse_life_insurance_type,
+            'spouse_life_insurance_term_age': spouse_life_insurance_term_age,
             'pretax_assets': pretax_assets,
             'spouse_pretax_assets': spouse_pretax_assets,
             'roth_assets': roth_assets,
@@ -597,6 +677,12 @@ def results_view(request):
     stress_test_data = run_historical_stress_test(sim_input, scenario_key='2000_dotcom')
     results['stress_test'] = stress_test_data
     results['scenarios_list'] = CRISIS_SCENARIOS
+
+    from core.runs import get_life_insurance_routing
+    routing = get_life_insurance_routing(data)
+    results['terminal_life_insurance'] = routing.get('terminal_life_ins_estate', 0.0)
+    results['taxable_deposit_amt'] = routing.get('taxable_deposit_amt', 0.0)
+    results['taxable_deposit_t'] = routing.get('taxable_deposit_t', -1)
 
     request.session['cached_results'] = results
     request.session['cached_version'] = data_ver
