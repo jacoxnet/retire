@@ -1829,32 +1829,97 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         'terminal_life_ins_estate': float(routing['terminal_life_ins_estate']),
     }
 
+def infer_correlation_factor(mean_return):
+    """
+    Infers continuous correlation factor with the market based on expected return.
+    Assumes nominal baseline returns:
+    - Return >= 7.0%: All-stock portfolio -> correlation factor = 1.0
+    - Return == 4.0%: 100% bond portfolio -> correlation factor = 0.26
+    - Return <= 2.5%: All-cash portfolio -> correlation factor = 0.0
+    - Linearly interpolates between 2.5% and 4.0%, and between 4.0% and 7.0%.
+    """
+    mean_val = float(mean_return)
+    if mean_val >= 7.0:
+        return 1.0
+    elif mean_val >= 4.0:
+        return 0.26 + ((mean_val - 4.0) / 3.0) * (1.0 - 0.26)
+    elif mean_val >= 2.5:
+        return ((mean_val - 2.5) / 1.5) * 0.26
+    else:
+        return 0.0
+
+
+def generate_correlated_returns(inputs, runs, years, rng=None):
+    """
+    Generates correlated return arrays for all 6 account types for (runs, years)
+    using a single common market factor and inferred correlation factors.
+    Preserves each account's mean and sigma entered by the user.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    # Single common market factor for all runs and years
+    z_market = rng.standard_normal(size=(runs, years))
+
+    def _sim_acc_return(data, default_m, default_s):
+        m_pct = float(data.get('return_mean', default_m))
+        s_pct = float(data.get('return_std', default_s))
+        m = m_pct / 100.0
+        s = s_pct / 100.0
+        if s == 0.0:
+            return np.full((runs, years), m, dtype=np.float64)
+
+        rho = infer_correlation_factor(m_pct)
+        if rho >= 1.0:
+            z = z_market
+        elif rho <= 0.0:
+            z = rng.standard_normal(size=(runs, years))
+        else:
+            z = rho * z_market + np.sqrt(1.0 - rho * rho) * rng.standard_normal(size=(runs, years))
+
+        return m + s * z
+
+    returns_pre_user = _sim_acc_return(inputs['pretax_data'], 6.0, 10.0)
+
+    if inputs['is_married']:
+        returns_pre_spouse = _sim_acc_return(inputs['spouse_pretax_data'], 6.0, 10.0)
+    else:
+        returns_pre_spouse = _sim_acc_return(inputs['pretax_data'], 6.0, 10.0)
+
+    returns_roth = _sim_acc_return(inputs['roth_data'], 6.0, 10.0)
+    returns_taxable = _sim_acc_return(inputs['taxable_data'], 6.0, 8.0)
+    returns_hsa_user = _sim_acc_return(inputs['hsa_data'], 6.0, 8.0)
+
+    if inputs['is_married']:
+        returns_hsa_spouse = _sim_acc_return(inputs['spouse_hsa_data'], 6.0, 8.0)
+    else:
+        returns_hsa_spouse = _sim_acc_return(inputs['hsa_data'], 6.0, 8.0)
+
+    return (
+        returns_pre_user,
+        returns_pre_spouse,
+        returns_roth,
+        returns_taxable,
+        returns_hsa_user,
+        returns_hsa_spouse
+    )
+
+
 def generate_runs(sim_input, test_spending=None):
     inputs = extract_sim_inputs(sim_input)
     
     rng = np.random.default_rng()
-    pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
-    pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
-    pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
-    pretax_sp_s = inputs['spouse_pretax_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else pretax_s
-    roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
-    roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
-    taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
-    taxable_s = inputs['taxable_data'].get('return_std', 10.0) / 100.0
-    hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
-    hsa_s = inputs['hsa_data'].get('return_std', 10.0) / 100.0
-    hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
-    hsa_sp_s = inputs['spouse_hsa_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else hsa_s
-    
     runs = inputs['runs']
     years = inputs['total_years']
     
-    returns_pre_user = rng.normal(pretax_m, pretax_s, size=(runs, years))
-    returns_pre_spouse = rng.normal(pretax_sp_m, pretax_sp_s, size=(runs, years))
-    returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
-    returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
-    returns_hsa_user = rng.normal(hsa_m, hsa_s, size=(runs, years))
-    returns_hsa_spouse = rng.normal(hsa_sp_m, hsa_sp_s, size=(runs, years))
+    (
+        returns_pre_user,
+        returns_pre_spouse,
+        returns_roth,
+        returns_taxable,
+        returns_hsa_user,
+        returns_hsa_spouse,
+    ) = generate_correlated_returns(inputs, runs, years, rng=rng)
     
     nb_inp = prepare_numba_inputs(inputs, test_spending=test_spending)
     ending_wealths = np.empty(runs, dtype=np.float64)
@@ -1909,27 +1974,23 @@ def binary_search(sim_input):
     
     rng = np.random.default_rng()
     pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
-    pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
     pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
-    pretax_sp_s = inputs['spouse_pretax_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else pretax_s
     roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
-    roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
     taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
-    taxable_s = inputs['taxable_data'].get('return_std', 8.0) / 100.0
     hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
-    hsa_s = inputs['hsa_data'].get('return_std', 8.0) / 100.0
     hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
-    hsa_sp_s = inputs['spouse_hsa_data'].get('return_std', 8.0) / 100.0 if inputs['is_married'] else hsa_s
     
     runs = inputs['runs']
     years = inputs['total_years']
     
-    returns_pre_user = rng.normal(pretax_m, pretax_s, size=(runs, years))
-    returns_pre_spouse = rng.normal(pretax_sp_m, pretax_sp_s, size=(runs, years))
-    returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
-    returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
-    returns_hsa_user = rng.normal(hsa_m, hsa_s, size=(runs, years))
-    returns_hsa_spouse = rng.normal(hsa_sp_m, hsa_sp_s, size=(runs, years))
+    (
+        returns_pre_user,
+        returns_pre_spouse,
+        returns_roth,
+        returns_taxable,
+        returns_hsa_user,
+        returns_hsa_spouse,
+    ) = generate_correlated_returns(inputs, runs, years, rng=rng)
     
     total_wealth = (
         inputs['pretax_data'].get('present_balance', 0.0) +
@@ -2147,25 +2208,14 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
     crisis_end_t = min(years, crisis_start_t + crisis_length)
 
     rng = np.random.default_rng()
-    pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
-    pretax_s = inputs['pretax_data'].get('return_std', 10.0) / 100.0
-    pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
-    pretax_sp_s = inputs['spouse_pretax_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else pretax_s
-    roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
-    roth_s = inputs['roth_data'].get('return_std', 10.0) / 100.0
-    taxable_m = inputs['taxable_data'].get('return_mean', 6.0) / 100.0
-    taxable_s = inputs['taxable_data'].get('return_std', 10.0) / 100.0
-    hsa_m = inputs['hsa_data'].get('return_mean', 6.0) / 100.0
-    hsa_s = inputs['hsa_data'].get('return_std', 10.0) / 100.0
-    hsa_sp_m = inputs['spouse_hsa_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else hsa_m
-    hsa_sp_s = inputs['spouse_hsa_data'].get('return_std', 10.0) / 100.0 if inputs['is_married'] else hsa_s
-
-    returns_pre_user = rng.normal(pretax_m, pretax_s, size=(runs, years))
-    returns_pre_spouse = rng.normal(pretax_sp_m, pretax_sp_s, size=(runs, years))
-    returns_roth = rng.normal(roth_m, roth_s, size=(runs, years))
-    returns_taxable = rng.normal(taxable_m, taxable_s, size=(runs, years))
-    returns_hsa_user = rng.normal(hsa_m, hsa_s, size=(runs, years))
-    returns_hsa_spouse = rng.normal(hsa_sp_m, hsa_sp_s, size=(runs, years))
+    (
+        returns_pre_user,
+        returns_pre_spouse,
+        returns_roth,
+        returns_taxable,
+        returns_hsa_user,
+        returns_hsa_spouse,
+    ) = generate_correlated_returns(inputs, runs, years, rng=rng)
 
     base_inf = float(inputs['inflation_rate'])
     inflation_rates = np.full(years, base_inf, dtype=np.float64)

@@ -3417,6 +3417,136 @@ class AgeDisambiguationTests(TestCase):
         self.assertGreater(success_rate, 60.0)
 
 
+class CorrelatedReturnsTests(TestCase):
+    def test_infer_correlation_factor_benchmarks_and_interpolation(self):
+        """Test the correlation factor inference and continuous interpolation."""
+        from core.runs import infer_correlation_factor
+
+        # >= 7.0%: All-stock portfolio -> 1.0
+        self.assertEqual(infer_correlation_factor(10.0), 1.0)
+        self.assertEqual(infer_correlation_factor(8.0), 1.0)
+        self.assertEqual(infer_correlation_factor(7.0), 1.0)
+
+        # 4.0% to 7.0%: Linear interpolation between 0.26 and 1.0
+        # Formula: 0.26 + ((mean - 4.0) / 3.0) * 0.74
+        # At 6.0%: 0.26 + (2.0 / 3.0) * 0.74 = 0.753333...
+        self.assertAlmostEqual(infer_correlation_factor(6.0), 0.26 + (2.0 / 3.0) * 0.74, places=6)
+        # At 5.5%: 0.26 + (1.5 / 3.0) * 0.74 = 0.63
+        self.assertAlmostEqual(infer_correlation_factor(5.5), 0.63, places=6)
+        # At 4.5%: 0.26 + (0.5 / 3.0) * 0.74 = 0.383333...
+        self.assertAlmostEqual(infer_correlation_factor(4.5), 0.26 + (0.5 / 3.0) * 0.74, places=6)
+
+        # 4.0%: 100% bond portfolio -> 0.26
+        self.assertEqual(infer_correlation_factor(4.0), 0.26)
+
+        # 2.5% to 4.0%: Linear interpolation between 0.0 and 0.26
+        # Formula: ((mean - 2.5) / 1.5) * 0.26
+        # At 3.25%: (0.75 / 1.5) * 0.26 = 0.13
+        self.assertAlmostEqual(infer_correlation_factor(3.25), 0.13, places=6)
+        # At 3.0%: (0.5 / 1.5) * 0.26 = 0.086666...
+        self.assertAlmostEqual(infer_correlation_factor(3.0), (0.5 / 1.5) * 0.26, places=6)
+
+        # <= 2.5%: All-cash portfolio -> 0.0
+        self.assertEqual(infer_correlation_factor(2.5), 0.0)
+        self.assertEqual(infer_correlation_factor(2.0), 0.0)
+        self.assertEqual(infer_correlation_factor(1.0), 0.0)
+        self.assertEqual(infer_correlation_factor(0.0), 0.0)
+        self.assertEqual(infer_correlation_factor(-1.5), 0.0)
+
+    def test_correlated_returns_statistical_properties(self):
+        """Test empirical correlation, mean, and standard deviation across accounts."""
+        import numpy as np
+        from core.runs import generate_correlated_returns
+
+        inputs = {
+            'is_married': True,
+            'pretax_data': {'return_mean': 8.0, 'return_std': 12.0},        # stocks (rho = 1.0)
+            'spouse_pretax_data': {'return_mean': 7.0, 'return_std': 10.0}, # stocks (rho = 1.0)
+            'roth_data': {'return_mean': 6.0, 'return_std': 9.0},           # blended 60/40 (rho ~ 0.7533)
+            'taxable_data': {'return_mean': 4.0, 'return_std': 5.0},        # bonds (rho = 0.26)
+            'hsa_data': {'return_mean': 2.0, 'return_std': 2.0},            # cash (rho = 0.0)
+            'spouse_hsa_data': {'return_mean': 5.0, 'return_std': 0.0},     # zero std edge case
+        }
+
+        runs = 25000
+        years = 1
+        rng = np.random.default_rng(42)
+
+        (
+            r_pre_user,
+            r_pre_sp,
+            r_roth,
+            r_tax,
+            r_hsa_user,
+            r_hsa_sp
+        ) = generate_correlated_returns(inputs, runs, years, rng=rng)
+
+        # Flatten to 1D
+        u_pre = r_pre_user[:, 0]
+        sp_pre = r_pre_sp[:, 0]
+        roth = r_roth[:, 0]
+        tax = r_tax[:, 0]
+        hsa_u = r_hsa_user[:, 0]
+        hsa_sp = r_hsa_sp[:, 0]
+
+        # 1. Check means match user inputs
+        self.assertAlmostEqual(float(np.mean(u_pre)), 0.08, delta=0.005)
+        self.assertAlmostEqual(float(np.mean(sp_pre)), 0.07, delta=0.005)
+        self.assertAlmostEqual(float(np.mean(roth)), 0.06, delta=0.005)
+        self.assertAlmostEqual(float(np.mean(tax)), 0.04, delta=0.005)
+        self.assertAlmostEqual(float(np.mean(hsa_u)), 0.02, delta=0.005)
+        self.assertAlmostEqual(float(np.mean(hsa_sp)), 0.05, delta=0.0001)
+
+        # 2. Check std devs match user inputs
+        self.assertAlmostEqual(float(np.std(u_pre)), 0.12, delta=0.005)
+        self.assertAlmostEqual(float(np.std(sp_pre)), 0.10, delta=0.005)
+        self.assertAlmostEqual(float(np.std(roth)), 0.09, delta=0.005)
+        self.assertAlmostEqual(float(np.std(tax)), 0.05, delta=0.005)
+        self.assertAlmostEqual(float(np.std(hsa_u)), 0.02, delta=0.005)
+        self.assertEqual(float(np.std(hsa_sp)), 0.0)
+
+        # 3. Correlation between two stock accounts (rho_1 = 1.0, rho_2 = 1.0) -> corr = 1.0
+        corr_stocks = np.corrcoef(u_pre, sp_pre)[0, 1]
+        self.assertAlmostEqual(corr_stocks, 1.0, places=4)
+
+        # 4. Correlation between stock account and bond account (rho_1 = 1.0, rho_2 = 0.26) -> corr = 0.26
+        corr_stock_bond = np.corrcoef(u_pre, tax)[0, 1]
+        self.assertAlmostEqual(corr_stock_bond, 0.26, delta=0.02)
+
+        # 5. Correlation between stock account and cash account (rho_1 = 1.0, rho_2 = 0.0) -> corr = 0.0
+        corr_stock_cash = np.corrcoef(u_pre, hsa_u)[0, 1]
+        self.assertAlmostEqual(corr_stock_cash, 0.0, delta=0.02)
+
+        # 6. Correlation between stock account and blended account (rho_1 = 1.0, rho_2 = 0.7533)
+        corr_stock_blend = np.corrcoef(u_pre, roth)[0, 1]
+        self.assertAlmostEqual(corr_stock_blend, 0.7533, delta=0.02)
+
+    def test_correlated_returns_unmarried(self):
+        """Test that unmarried input generates valid, independent return arrays."""
+        from core.runs import generate_correlated_returns
+
+        inputs = {
+            'is_married': False,
+            'pretax_data': {'return_mean': 7.0, 'return_std': 10.0},
+            'spouse_pretax_data': {},
+            'roth_data': {'return_mean': 7.0, 'return_std': 10.0},
+            'taxable_data': {'return_mean': 4.0, 'return_std': 5.0},
+            'hsa_data': {'return_mean': 2.0, 'return_std': 1.0},
+            'spouse_hsa_data': {},
+        }
+
+        runs = 100
+        years = 10
+        returns = generate_correlated_returns(inputs, runs, years)
+        self.assertEqual(len(returns), 6)
+        for r in returns:
+            self.assertEqual(r.shape, (runs, years))
+        # Ensure user and spouse arrays are distinct objects to prevent mutation aliasing
+        self.assertIsNot(returns[0], returns[1])
+        self.assertIsNot(returns[4], returns[5])
+
+
+
 
 
 
