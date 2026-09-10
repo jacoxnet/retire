@@ -91,7 +91,7 @@ Five tabs. You can press **Run Simulation** from any tab.
 
 - Amounts you enter are in today's dollars unless noted; the app inflates them
   internally.
-- Each year, required minimum distributions are taken first. Any remaining
+- Each year, required minimum distributions (RMDs) are calculated strictly in accordance with IRS rules based on the prior year-end balance and the IRS Uniform Lifetime Table (SECURE 2.0), and are taken first. Any remaining
   shortfall is covered in this order: **taxable, then pre-tax, then Roth, then
   HSA**. Pre-tax withdrawals are grossed up for income tax and, before age 59½,
   a 10% early-withdrawal penalty.

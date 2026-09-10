@@ -3830,6 +3830,50 @@ class FiveSelectedFixesTests(TestCase):
         c6 = get_contributions_for_year(6, 60, False, 60, 2026, inputs['pretax_data'])
         self.assertEqual(c6, 0.0)
 
+    def test_rmd_excludes_current_year_contributions_per_irs_rules(self):
+        """IRS Rule Alignment: RMD is strictly based on prior year-end balance and excludes current-year contributions."""
+        from core.runs import simulate_step
+        # Age 75 divisor is 24.6
+        # Prior year-end pretax balance: $246,000.
+        # Current-year pretax contribution: $10,000.
+        # Under IRS rules (IRC § 401(a)(9)), RMD = 246,000 / 24.6 = $10,000.00
+        # The $10,000 current-year contribution must NOT be added to the RMD numerator (which would yield $256,000 / 24.6 = $10,406.50).
+        res = simulate_step(
+            t=0, user_age=75, is_married=False, spouse_age=75,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=75, desired_spending=0, survivor_spending=0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=246000.0, pretax_spouse=0.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=10000.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75
+        )
+        self.assertAlmostEqual(res['withdrawals']['pretax_rmd'], 10000.0)
+        self.assertAlmostEqual(res['withdrawals']['user_pretax_rmd'], 10000.0)
+        # Ending balance should be 246,000 (prior) + 10,000 (contrib) - 10,000 (RMD) = 246,000
+        self.assertAlmostEqual(res['ending_assets']['pretax_user'], 246000.0)
+
+    def test_rmd_with_zero_prior_balance_and_current_year_contribution(self):
+        """IRS Rule Alignment: If prior year-end balance is $0, current-year RMD is $0 even if contributions occur."""
+        from core.runs import simulate_step
+        # Prior balance $0, contribution $8,000 at age 75
+        res = simulate_step(
+            t=0, user_age=75, is_married=False, spouse_age=75,
+            user_age_death=90, spouse_age_death=90, filing_status='single',
+            desired_spending_start_age=75, desired_spending=0, survivor_spending=0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=8000.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75
+        )
+        self.assertEqual(res['withdrawals']['pretax_rmd'], 0.0)
+        self.assertEqual(res['withdrawals']['user_pretax_rmd'], 0.0)
+        # Ending balance should retain the contribution: $8,000
+        self.assertAlmostEqual(res['ending_assets']['pretax_user'], 8000.0)
+
 
 
 

@@ -156,7 +156,7 @@ def njit_spousal_rollover(
 @numba.njit(cache=True)
 def njit_rmd_tax_withdraw(
     user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
-    pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
+    pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
     roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
     user_rmd_start_age, spouse_rmd_start_age,
     filing_status_t_code, inf_factor,
@@ -170,12 +170,12 @@ def njit_rmd_tax_withdraw(
     user_rmd_t = 0.0
     if user_alive and user_age_t >= user_rmd_start_age:
         divisor = RMD_TABLE_ARR[user_age_t] if user_age_t <= 150 else 2.0
-        user_rmd_t = min(pretax_user_before / divisor, pretax_user_mid) if pretax_user_before > 0.0 else 0.0
+        user_rmd_t = min(pretax_user_prior / divisor, pretax_user_mid) if pretax_user_prior > 0.0 else 0.0
 
     spouse_rmd_t = 0.0
     if spouse_alive and spouse_age_t >= spouse_rmd_start_age:
         divisor = RMD_TABLE_ARR[spouse_age_t] if spouse_age_t <= 150 else 2.0
-        spouse_rmd_t = min(pretax_spouse_before / divisor, pretax_spouse_mid) if pretax_spouse_before > 0.0 else 0.0
+        spouse_rmd_t = min(pretax_spouse_prior / divisor, pretax_spouse_mid) if pretax_spouse_prior > 0.0 else 0.0
 
     rmd_t = user_rmd_t + spouse_rmd_t
 
@@ -669,6 +669,9 @@ def simulate_step(
         contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse,
     )
 
+    pretax_user_prior = max(0.0, pretax_user)
+    pretax_spouse_prior = max(0.0, pretax_spouse) if is_married else 0.0
+
     # 2. Add Contributions and any Life Insurance Payout
     pretax_user_before = max(0.0, pretax_user + contrib_pretax_user)
     pretax_spouse_before = max(0.0, pretax_spouse + contrib_pretax_spouse) if is_married else 0.0
@@ -897,7 +900,7 @@ def simulate_step(
      final_fed_tax, final_state_tax, final_penalty,
      hsa_penalty_user, hsa_penalty_spouse) = njit_rmd_tax_withdraw(
         user_age_t, spouse_age_t if is_married else user_age_t, user_alive, spouse_alive, is_married,
-        pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
+        pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
         roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
         user_rmd_start_age, spouse_rmd_start_age,
         filing_status_t_code, inf_factor,
@@ -1474,6 +1477,9 @@ def njit_simulate_path(
         if t == taxable_deposit_t and taxable_deposit_amt > 0.0:
             taxable += taxable_deposit_amt
 
+        pretax_user_prior = max(0.0, pretax_user)
+        pretax_spouse_prior = max(0.0, pretax_spouse) if is_married else 0.0
+
         pretax_user_before = max(0.0, pretax_user + c_pre_user_t)
         pretax_spouse_before = max(0.0, pretax_spouse + c_pre_spouse_t) if is_married else 0.0
         roth_before = max(0.0, roth + c_roth[t])
@@ -1523,7 +1529,7 @@ def njit_simulate_path(
          final_fed_tax, final_state_tax, final_penalty,
          hsa_penalty_user, hsa_penalty_spouse) = njit_rmd_tax_withdraw(
             user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
-            pretax_user_before, pretax_spouse_before, pretax_user_mid, pretax_spouse_mid,
+            pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
             roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
             user_rmd_start_age, spouse_rmd_start_age,
             filing_status_t, inf_factor,
