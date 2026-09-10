@@ -1,5 +1,7 @@
 # How to Use the Retirement Calculator
 
+> **Disclaimer:** This tool is made available for educational, informational, and entertainment purposes only. It is not intended to provide, and must not be relied upon for, investment, financial, tax, or legal advice. All projections, simulations, and calculations are hypothetical in nature, reflect simplified mathematical models, and are not guarantees of future performance. Actual outcomes will vary, potentially significantly. Always consult with a qualified financial advisor, Certified Financial Planner (CFP®), CPA, and legal professional before making any financial decisions. This tool is made available "as is," without any warranty of any kind, express or implied, regarding accuracy, completeness, fitness for a particular purpose, or anything else.
+
 ## What this app does
 
 - It projects whether your savings can support your retirement spending, using a

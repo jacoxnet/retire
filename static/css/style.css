@@ -514,6 +514,21 @@ tbody tr:hover {
   word-wrap: break-word;
 }
 
+.markdown-body blockquote {
+  border-left: 4px solid var(--accent-primary);
+  background-color: rgba(59, 130, 246, 0.08);
+  padding: 0.85rem 1.15rem;
+  margin: 1rem 0 1.25rem 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.markdown-body blockquote p {
+  margin-bottom: 0;
+}
+
 /* Help icon button */
 .help-icon {
   display: inline-flex;
