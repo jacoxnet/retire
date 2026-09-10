@@ -53,14 +53,25 @@
     </main>
 
     <footer class="footer">
-        <a href="#" id="howToLink" class="how-to-link">How to Use this App</a>
+        <a href="#" id="howToLink" class="how-to-link" data-md-url="{% static 'how-to.md' %}?v=20260909-1">How to Use this App</a>
         <br>
         <a href="#" id="feedbackLink" class="feedback-link">Leave Feedback</a>
     </footer>
 
+    <!-- How-to-use modal (populated from static/how-to.md) -->
+    <div class="modal" id="howToModal" role="dialog" aria-modal="true" aria-labelledby="howToModalTitle" aria-hidden="true">
+        <div class="modal-content">
+            <span class="close-modal" id="howToClose" role="button" tabindex="0" aria-label="Close">&times;</span>
+            <div class="markdown-body" id="howToBody">
+                <p id="howToModalTitle">Loading&hellip;</p>
+            </div>
+        </div>
+    </div>
+
     {% block extra_js %}
     {% endblock %}
 
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
     <script src="{% static 'js/nav.js' %}"></script>
 </body>
 

@@ -1,67 +1,113 @@
-# How to Use this App:
+# How to Use the Retirement Calculator
 
-## General instructions and overview:  
+## What this app does
 
-### Entering Data
+- It projects whether your savings can support your retirement spending, using a
+  **Monte Carlo** engine (thousands of randomized market paths), a **deterministic**
+  year-by-year projection, and a **historical stress test**.
+- Two modes:
+  - **Regular Simulation** – you set a spending level; the app reports the
+    **success rate** (share of runs that never run out of money).
+  - **Maximum Spending Simulation** – you set a target success rate; the app
+    solves for the **highest sustainable spending**.
+- Your inputs live only in the current browser session. Use the
+  **Save / Load / Clear Data** page to keep a plan for later.
 
-- Enter your existing TIPS holdings. You can do this by:
+## 1. Enter Data page
 
-    - manually entering them on the Build Your Ladder page;
+Five tabs. You can press **Run Simulation** from any tab.
 
-    - on the Save/Load Data page, you can upload a csv file of your TIPS holdings from [TIPSLadder](https://tipsladder.com), from [Treasury Investors Portal](https://aerokam.github.io/Treasuries), or from another source that can produce a Cusip-Quantity csv file with those fields in the first two columns;
+### Demographics & Plan Details
 
-    - if you uploaded a csv file from another source, you will need to add the types of account (taxable, pretax, or Roth) in which the TIPS are held. Otherwise, the app assumes uploaded TIPS are in a pretax account.
+- Present age, retirement age, and age at death for you (and spouse, if married).
+- Filing status, current year, and when regular spending begins.
+- **Spending:** desired annual amount in today's dollars, survivor spending after
+  the first death, whether spending grows with inflation, and the inflation rate.
+- **Simulation settings:** number of runs, and target success rate (Maximum
+  Spending mode).
+- **Life insurance:** death benefit, term vs. permanent, and term expiration age,
+  for each spouse.
+- **Social Security:** whether entitled, amount and frequency, and claiming age
+  (62–70) for each spouse.
+- **State tax:** flat state income-tax rate and whether Social Security is exempt.
 
-    - you can upload a csv file saved with an earlier version of this app, which will include both saved ladder parameters and owned TIPS.
+### Accounts for Retirement
 
-- Enter the additional information on the Ladder Parameters page that the app needs to produce its analysis, including:
+- Add one row per account. Choose a **type**: Pretax (IRA/401k), Roth, Taxable,
+  or HSA, and an **owner** (you or spouse).
+- Enter the current balance, contribution amount and frequency, contribution
+  start age, end age (or "at retirement"), and an inflation-adjust toggle.
+- Set an expected annual **return (mean)** and **volatility (std. dev.)** per
+  account.
+- Every account name must be unique.
 
-    - the assumed tax rate;
+### Additional Spending
 
-    - the desired real after-tax annual cash flow;
+- One-time or recurring expenses on top of regular spending (a car, college,
+  travel, a mortgage payoff).
+- Set the amount, the start and end ages, and how the amount changes over time.
 
-    - the month and year in which such real cash flow is first determined (the "as-of date"); and
+### Social Security & Income Streams
 
-    - the parameters for any years for which there should be a different amount of real after-tax cash flow (specified using dollars from the as-of date).
+- Other income such as pensions, annuities, rental income, or part-time work,
+  each with a start/end, an adjustment rule, and an optional survivor-benefit
+  percentage.
+- **Other Taxes** captures recurring tax items the engine does not model
+  automatically.
 
-- When you're finished entering data on the Ladder Parameters page, click on the Confirm Parameters button. When you're finished entering your owned TIPS, click on the Confirm Ladder button. 
+### Balance Sheet (optional)
 
-### Saving and Restoring Your Data
+- A spreadsheet-style view of assets across future dates; add columns for the
+  dates you care about.
+- It stays in sync with the Accounts tab automatically.
 
-- The app starts fresh with no data every time you start a new web session. But you can use the Save/Load Data page to save and load data to and from a local JSON file on your own computer. This file will include all data maintained by this app (ladder parameters and owned TIPS).
+## 2. Simulation Results page
 
-### Viewing Results
+- **Monte Carlo Simulation** – success rate (or the solved spending), ending-wealth
+  percentiles, and a summary of the inputs used. You can adjust key inputs here
+  and re-run without returning to the Enter Data page.
+- **Deterministic Projection** – year-by-year account balances using the average
+  return for each account.
+- **Deterministic Cash Flow** – year-by-year income, spending, taxes, and
+  withdrawals.
+- **Charts** – a spaghetti plot of the runs, wealth-trajectory bands, and more;
+  click a chart to enlarge it.
+- **Stress Test** – re-runs the plan with a historical crisis (2000 dot-com,
+  2008, and others) inserted into the timeline and compares the result with the
+  baseline.
+- Use the **Simulation Mode** selector on this page to switch between Regular and
+  Maximum Spending, then re-run.
 
-- As you enter owned TIPS on the Build Your Ladder page, the app dynamically calculates the per-year after-tax surplus or shortfall in comparison to the desired after-tax cash flow.
+## 3. Save / Load / Clear Data page
 
-- The Display Results page shows more detailed calculations for each ladder year, together with an overall surplus or shortfall.
+- **Save Plan (.json)** – downloads every input to a local file.
+- **Load Plan (.json)** – restores a saved file; older files are migrated
+  automatically.
+- **Clear Data** – resets every input to the sample defaults.
 
-- You can modify your earlier entries by returning to the Ladder Parameters and Build Your Ladder pages. 
+## Key assumptions
 
-### What-If Calculations
+- Amounts you enter are in today's dollars unless noted; the app inflates them
+  internally.
+- Each year, required minimum distributions are taken first. Any remaining
+  shortfall is covered in this order: **taxable, then pre-tax, then Roth, then
+  HSA**. Pre-tax withdrawals are grossed up for income tax and, before age 59½,
+  a 10% early-withdrawal penalty.
+- Pre-tax withdrawals are taxed as ordinary income; Roth withdrawals are
+  tax-free; taxable-account income and gains are taxed as they occur.
+- Surplus cash in a year is reinvested into your taxable account.
+- Federal brackets, the standard deduction, and Social Security taxation are
+  modeled; state tax is the flat rate you supply.
+- A run "succeeds" if the portfolio never falls below zero before the last
+  modeled year (life-insurance proceeds left as an estate do not count toward
+  success).
 
-- Once you've entered a ladder, you might want to explore what would happen to the after-tax cash flows if you made changes to your owned TIPS portfolio. You can do this by clicking on the change or delete icons next to each existing TIPS and the add-TIPS icon at the bottom. The app dynamically adjusts the calculated after-tax cash flow using the new ladder entries, but it keeps track of each change and can display and save the change list using the Change List button. 
+## Tips
 
-- You can clear the change list by clicking on the Confirm Ladder page, which confirms and incorporates all changes.
-
-## Calculation Assumptions:
-
-- The basic after-tax proceeds are determined as follows:
-
-    - for TIPS held in a taxable brokerage account, all interest received each year is reduced using the specified tax rate.
-
-    - for TIPS held in a pretax account (such as a traditional IRA or 401(k)), both the interest received and the principal received in any year are reduced using the specified tax rate.
-
-    - for TIPS held in a Roth account, neither the interest nor the principal received is reduced.
-
-- There is an optional tax adjustment for the taxes on the phantom (or real) income on the annual principal adjustments to all TIPS held in a taxable brokerage account.  
-
-    - This adjustment is made for only TIPS held in a taxable brokerage account, because there are no taxes on principal adjustments for TIPS held in a Roth account and the taxes on principal adjustments for TIPS held in a pretax account only occur in the year the TIPS matures and the proceeds are removed from the pretax account (which taxes are already included in the basic adjustments described above).
-
-- This app does not take into account taxes, if any, on Original Issue Discount (OID).
-
-- This app assumes that cash flow from TIPS  (i.e., coupon payments and maturing principal) is withdrawn from tax advantaged accounts (e.g., an IRA, a 401(k) or a Roth account) in the year received.  
-
-    - thus, coupon payments on TIPS held in pretax accounts and principal payments on TIPS held in pretax accounts are reduced in the year received by taxes thereon at the specified tax rate.  However, this app does not include any early withdrawal penalties that could be owed on money withdrawn from a tax-advantaged account.
-
-- The formula for tax-effecting increases in principal based on a specified assumed inflation rate does not presently adjust for partial years.  This feature may be added in a subsequent update.
+- Start in Regular mode with your best-guess spending. If the success rate is far
+  from your comfort level, switch to Maximum Spending to see what is sustainable.
+- Use 10,000 or more runs for stable numbers; drop the count for quick
+  experiments.
+- Save your plan before you Clear data or make large edits — session data is lost
+  when the browser session ends.
+- Check the Stress Test tab before trusting a high success rate.
