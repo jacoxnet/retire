@@ -3923,6 +3923,84 @@ class FiveSelectedFixesTests(TestCase):
         self.assertEqual(new_roth['values']['2023-12-31'], 0.0)
         self.assertEqual(new_roth['values']['2024-12-31'], 0.0)
 
+    def test_filing_status_resolution_and_aliases(self):
+        """Verify that 'hoh'/'head_of_household' and 'joint'/'married_filing_jointly' resolve consistently and yield identical taxes."""
+        from core.runs import simulate_step, prepare_numba_inputs, FILING_STATUS_MAP
+
+        # 1. Map lookups
+        self.assertEqual(FILING_STATUS_MAP['single'], 0)
+        self.assertEqual(FILING_STATUS_MAP['joint'], 1)
+        self.assertEqual(FILING_STATUS_MAP['married_filing_jointly'], 1)
+        self.assertEqual(FILING_STATUS_MAP['hoh'], 2)
+        self.assertEqual(FILING_STATUS_MAP['head_of_household'], 2)
+
+        # 2. prepare_numba_inputs
+        from core.runs import extract_sim_inputs
+        sim_input = {
+            'user_name': 'Test User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'spouse_age': 60,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 90,
+            'current_year': 2026,
+            'begin_spending_age_type': 'retirement',
+            'desired_spending': 80000.0,
+            'survivor_spending': 60000.0,
+            'adjust_spending_inflation': True,
+            'inflation_rate': 2.5,
+            'runs': 1,
+            'target_success_rate': 80.0,
+            'pretax_assets': {'present_balance': 500000.0, 'contrib_amount': 0.0},
+            'roth_assets': {'present_balance': 0.0, 'contrib_amount': 0.0},
+            'taxable_assets': {'present_balance': 0.0, 'contrib_amount': 0.0},
+            'hsa_assets': {'present_balance': 0.0, 'contrib_amount': 0.0},
+            'additional_spending': [],
+            'income_sources': []
+        }
+        inp_hoh = extract_sim_inputs({**sim_input, 'filing_status': 'hoh'})
+        inp_head = extract_sim_inputs({**sim_input, 'filing_status': 'head_of_household'})
+        inp_joint = extract_sim_inputs({**sim_input, 'filing_status': 'joint'})
+        inp_mfj = extract_sim_inputs({**sim_input, 'filing_status': 'married_filing_jointly'})
+        inp_single = extract_sim_inputs({**sim_input, 'filing_status': 'single'})
+
+        self.assertEqual(prepare_numba_inputs(inp_hoh)['filing_status_code'], 2)
+        self.assertEqual(prepare_numba_inputs(inp_head)['filing_status_code'], 2)
+        self.assertEqual(prepare_numba_inputs(inp_joint)['filing_status_code'], 1)
+        self.assertEqual(prepare_numba_inputs(inp_mfj)['filing_status_code'], 1)
+        self.assertEqual(prepare_numba_inputs(inp_single)['filing_status_code'], 0)
+
+        # 3. Tax computation parity between canonical and aliases in simulate_step
+        kwargs_common = dict(
+            t=0, user_age=60, is_married=False, spouse_age=60,
+            user_age_death=90, spouse_age_death=90,
+            desired_spending_start_age=60, desired_spending=50000, survivor_spending=50000,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=500000.0, pretax_spouse=0.0, roth=0.0, taxable=0.0, hsa=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75, spouse_rmd_start_age=75,
+        )
+
+        res_hoh = simulate_step(**kwargs_common, filing_status='hoh')
+        res_head = simulate_step(**kwargs_common, filing_status='head_of_household')
+        res_single = simulate_step(**kwargs_common, filing_status='single')
+
+        # HOH and Head of Household produce identical federal taxes
+        self.assertAlmostEqual(res_hoh['tax_breakdown']['fed_tax'], res_head['tax_breakdown']['fed_tax'])
+        # HOH has a larger standard deduction than single, so fed tax must be strictly less than single
+        self.assertLess(res_hoh['tax_breakdown']['fed_tax'], res_single['tax_breakdown']['fed_tax'])
+
+        # Joint and Married Filing Jointly produce identical taxes
+        kwargs_married = {**kwargs_common, 'is_married': True, 'spouse_age': 60}
+        res_joint = simulate_step(**kwargs_married, filing_status='joint')
+        res_mfj = simulate_step(**kwargs_married, filing_status='married_filing_jointly')
+        self.assertAlmostEqual(res_joint['tax_breakdown']['fed_tax'], res_mfj['tax_breakdown']['fed_tax'])
+
+
 
 
 

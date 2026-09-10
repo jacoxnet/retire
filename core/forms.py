@@ -556,7 +556,7 @@ def calculate_taxable_ss_forms(agi_ex_ss, ss_benefits, filing_status):
     """Estimate taxable portion of Social Security benefits based on IRS provisional income thresholds."""
     if ss_benefits <= 0:
         return 0.0
-    if filing_status == 'joint':
+    if filing_status in ('joint', 'married_filing_jointly'):
         base_limit = 32000
         step_limit = 12000
     else:  # single or hoh
@@ -607,6 +607,7 @@ def calculate_marginal_tax_rate(data):
     # 2. Filing status
     is_married = get_bool(data.get('is_married'))
     filing_status = data.get('filing_status', 'joint' if is_married else 'single')
+    filing_status = {'married_filing_jointly': 'joint', 'head_of_household': 'hoh'}.get(filing_status, filing_status)
     if filing_status not in FEDERAL_TAX_THRESHOLDS_2026:
         filing_status = 'joint' if is_married else 'single'
 

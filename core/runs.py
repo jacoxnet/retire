@@ -34,6 +34,15 @@ for _age, _div in RMD_TABLE.items():
     RMD_TABLE_ARR[_age] = _div
 
 
+FILING_STATUS_MAP = {
+    'single': 0,
+    'joint': 1,
+    'married_filing_jointly': 1,
+    'hoh': 2,
+    'head_of_household': 2,
+}
+
+
 def get_rmd_start_age(birth_year):
     if birth_year <= 1950:
         return 72
@@ -45,7 +54,7 @@ def get_rmd_start_age(birth_year):
 def calculate_taxable_ss(agi_ex_ss, ss_benefits, filing_status):
     if ss_benefits <= 0:
         return 0.0
-    if filing_status == 'joint':
+    if filing_status in ('joint', 'married_filing_jointly'):
         base_limit = 32000
         step_limit = 12000
     else:  # single or hoh
@@ -647,21 +656,13 @@ def simulate_step(
             'life_insurance_payout': 0.0,
         }
     
-    # Filing Status
-    if is_married:
-        if user_alive and spouse_alive:
-            filing_status_t = 'joint'
-        else:
-            filing_status_t = 'single'
-    else:
-        filing_status_t = filing_status if filing_status in ['single', 'married_filing_jointly', 'head_of_household'] else 'single'
-        if filing_status_t == 'married_filing_jointly':
-            filing_status_t = 'joint'
+    # Filing Status code: 0 = single, 1 = joint, 2 = hoh
+    default_status = 'joint' if is_married else 'single'
+    filing_status_code = FILING_STATUS_MAP.get(filing_status, FILING_STATUS_MAP.get(default_status, 0))
     
     t_first_death = min(user_age_death - user_age, spouse_age_death - spouse_age) if is_married else user_age_death - user_age
 
     # Spousal Rollover upon first death (shared kernel; also downgrades filing status)
-    filing_status_code = {'joint': 1, 'hoh': 2}.get(filing_status, 0)
     (filing_status_t_code, pretax_user, pretax_spouse, hsa_user, hsa_spouse,
      contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse) = njit_spousal_rollover(
         t, t_first_death, is_married, user_alive, spouse_alive, filing_status_code,
@@ -1618,8 +1619,7 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         ratio = test_spending / inputs['desired_spending']
         survivor_spending = inputs['survivor_spending'] * ratio
         
-    filing_status_map = {'single': 0, 'joint': 1, 'hoh': 2}
-    filing_status_code = filing_status_map.get(inputs['filing_status'], 0)
+    filing_status_code = FILING_STATUS_MAP.get(inputs.get('filing_status'), 0)
     
     total_years = inputs['total_years']
     inflation_rate = float(inputs['inflation_rate'])
