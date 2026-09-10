@@ -396,6 +396,7 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
             base['contrib_adjust_inflation'] = primary.get('contrib_adjust_inflation', True)
             if 'hsa_for_medical' in base:
                 base['hsa_for_medical'] = any(a.get('hsa_for_medical', True) for a in acc_list)
+            base['accounts'] = acc_list
         result[f'{key}_assets'] = base
     return result
 

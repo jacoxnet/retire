@@ -3546,6 +3546,292 @@ class CorrelatedReturnsTests(TestCase):
         self.assertIsNot(returns[4], returns[5])
 
 
+class FiveSelectedFixesTests(TestCase):
+    def test_auto_created_taxable_account_canonical_keys(self):
+        """Fix 1: Auto-created taxable account must use canonical schema keys so return_mean (5.0) and return_std (8.0) are preserved."""
+        from core.forms import aggregate_accounts, sync_accounts_to_balance_sheet, build_default_balance_sheet
+
+        # Simulate plan loaded with life insurance and no taxable accounts
+        post_data = {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': False,
+            'filing_status': 'single',
+            'current_year': '2026',
+            'runs': '1000',
+            'target_success_rate': '80.0',
+            'user_life_insurance_amount': '500000',
+            'user_life_insurance_type': 'term',
+            'user_life_insurance_term_age': '70',
+            'account_name[]': ['My Pretax 401k'],
+            'account_id[]': ['acc_1'],
+            'account_type[]': ['pretax'],
+            'account_owner[]': ['user'],
+            'account_balance[]': ['100000'],
+            'account_contrib_amount[]': ['5000'],
+            'account_contrib_freq[]': ['annual'],
+            'account_contrib_start_age[]': ['60'],
+            'account_contrib_end_age_type[]': ['retirement'],
+            'account_contrib_end_age_specified[]': ['65'],
+            'account_contrib_adjust_inflation[]': ['true'],
+            'account_return_mean[]': ['7.0'],
+            'account_return_std[]': ['12.0'],
+            'account_hsa_for_medical[]': ['true'],
+        }
+        response = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(response.status_code, 302)
+
+        session_data = self.client.session.get('simulation_data')
+        self.assertIsNotNone(session_data)
+        accounts = session_data.get('accounts', [])
+        taxable_accs = [a for a in accounts if a.get('type') == 'taxable']
+        self.assertEqual(len(taxable_accs), 1)
+        taxable_acc = taxable_accs[0]
+
+        # Verify canonical keys are present and correct
+        self.assertEqual(taxable_acc.get('return_mean'), 5.0)
+        self.assertEqual(taxable_acc.get('return_std'), 8.0)
+        self.assertEqual(taxable_acc.get('contrib_amount'), 0.0)
+        self.assertIn('contrib_end_age_type', taxable_acc)
+        self.assertNotIn('ret_mean', taxable_acc)
+        self.assertNotIn('contrib_amt', taxable_acc)
+
+        # Verify aggregate_accounts reads 5.0% return mean and 8.0% std
+        taxable_assets = session_data.get('taxable_assets', {})
+        self.assertEqual(taxable_assets.get('return_mean'), 5.0)
+        self.assertEqual(taxable_assets.get('return_std'), 8.0)
+
+    def test_sidebar_return_edits_preserved_across_navigation(self):
+        """Fix 2: Editing returns on Results page sidebar must propagate to accounts list and balance sheet."""
+        # Setup session with plan containing pretax account
+        initial_plan = {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'is_married': False,
+            'filing_status': 'single',
+            'current_year': '2026',
+            'desired_spending': '40000',
+            'runs': '1000',
+            'account_name[]': ['Traditional 401k'],
+            'account_id[]': ['acc_pre_1'],
+            'account_type[]': ['pretax'],
+            'account_owner[]': ['user'],
+            'account_balance[]': ['250000'],
+            'account_contrib_amount[]': ['5000'],
+            'account_contrib_freq[]': ['annual'],
+            'account_contrib_start_age[]': ['60'],
+            'account_contrib_end_age_type[]': ['retirement'],
+            'account_contrib_end_age_specified[]': ['65'],
+            'account_contrib_adjust_inflation[]': ['true'],
+            'account_return_mean[]': ['6.0'],
+            'account_return_std[]': ['10.0'],
+        }
+        res_init = self.client.post(reverse('enter'), initial_plan)
+        self.assertEqual(res_init.status_code, 302)
+
+        # Submit change_mode_view with pretax_return_mean = 8.5
+        post_data = {
+            'simulation_type': 'regular',
+            'pretax_return_mean': '8.5',
+            'desired_spending': '45000',
+            'inflation_rate': '2.5',
+            'runs': '1000',
+        }
+        res = self.client.post(reverse('change_mode'), post_data)
+        self.assertEqual(res.status_code, 302)
+
+        session_data = self.client.session.get('simulation_data')
+        self.assertEqual(session_data['pretax_assets']['return_mean'], 8.5)
+
+        # Accounts list must be updated
+        pretax_accs = [a for a in session_data.get('accounts', []) if a.get('type') == 'pretax']
+        self.assertTrue(len(pretax_accs) > 0)
+        for a in pretax_accs:
+            self.assertEqual(a.get('return_mean'), 8.5)
+
+        # Balance sheet must also reflect 8.5
+        bs = session_data.get('balance_sheet', {})
+        bs_pretax = bs.get('categories', {}).get('pretax', {}).get('accounts', [])
+        self.assertTrue(len(bs_pretax) > 0)
+        for a in bs_pretax:
+            self.assertEqual(a.get('return_mean'), 8.5)
+
+        # Navigating to enter page should preserve 8.5 in rendered accounts
+        enter_res = self.client.get(reverse('enter'))
+        self.assertEqual(enter_res.status_code, 200)
+        self.assertContains(enter_res, '8.5')
+
+    def test_load_plan_recalculates_marginal_tax_rate(self):
+        """Fix 3: load_plan_view must recalculate and attach marginal_tax_rate to data and balance sheet."""
+        plan_dict = {
+            'user_name': 'Tax Test User',
+            'user_age': 62,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'filing_status': 'single',
+            'current_year': 2026,
+            'desired_spending': 60000.0,
+            'state_tax_rate': 5.0,
+            'income_sources': [
+                {'name': 'Pension', 'amount': 3000.0, 'frequency': 'monthly', 'subject_to_tax': True}
+            ],
+            'accounts': [
+                {
+                    'id': 'acc_1',
+                    'name': 'Pretax IRA',
+                    'type': 'pretax',
+                    'owner': 'user',
+                    'balance': 300000.0,
+                    'contrib_amount': 0.0,
+                    'return_mean': 6.0,
+                    'return_std': 10.0,
+                }
+            ],
+            # Stale or missing marginal tax rate
+            'marginal_tax_rate': 0.0,
+        }
+        res = self.client.post(reverse('load_plan'), {'json_data': json.dumps(plan_dict)})
+        self.assertEqual(res.status_code, 302)
+
+        session_data = self.client.session.get('simulation_data')
+        self.assertIsNotNone(session_data)
+        # Marginal tax rate must be recalculated (> 0.0)
+        self.assertGreater(session_data['marginal_tax_rate'], 0.0)
+        self.assertIn('marginal_tax_rate', session_data['balance_sheet'])
+        self.assertEqual(session_data['balance_sheet']['marginal_tax_rate'], session_data['marginal_tax_rate'])
+
+    def test_income_growth_factor_under_crisis_inflation(self):
+        """Fix 4: calculate_income_growth_factor must compound dynamic annual rates when custom_inflation_rates is supplied."""
+        from core.runs import calculate_income_growth_factor
+
+        item = {
+            'name': 'Inflation-Protected Pension',
+            'amount': 2000.0,
+            'frequency': 'monthly',
+            'start_age_type': 'current_age',
+            'end_age_type': 'death',
+            'adjust_type': 'inflation',
+            'adjust_start_age_type': 'current_age',
+        }
+        # Under static 2.5% inflation:
+        static_factor = calculate_income_growth_factor(
+            item, 3, 60, 65, False, 60, 65, 90, 90, 2.5
+        )
+        self.assertAlmostEqual(static_factor, 1.025 ** 3, places=5)
+
+        # Under historical crisis inflation: 10%, 12%, 15%
+        crisis_rates = [10.0, 12.0, 15.0, 8.0]
+        dynamic_factor = calculate_income_growth_factor(
+            item, 3, 60, 65, False, 60, 65, 90, 90, 2.5,
+            custom_inflation_rates=crisis_rates
+        )
+        expected_crisis = 1.10 * 1.12 * 1.15  # 1.4168
+        self.assertAlmostEqual(dynamic_factor, expected_crisis, places=5)
+
+        # Multi-period adjustment under crisis inflation
+        item_multi = {
+            'name': 'Adjusted Annuity',
+            'amount': 1000.0,
+            'frequency': 'monthly',
+            'adjustments': [
+                {
+                    'start_type': 'current_age',
+                    'end_type': 'death',
+                    'adjust_type': 'inflation_less_pct',
+                    'adjust_val': 2.0,
+                }
+            ]
+        }
+        dynamic_multi = calculate_income_growth_factor(
+            item_multi, 3, 60, 65, False, 60, 65, 90, 90, 2.5,
+            custom_inflation_rates=crisis_rates
+        )
+        expected_multi = (1.0 + (10.0 - 2.0) / 100.0) * (1.0 + (12.0 - 2.0) / 100.0) * (1.0 + (15.0 - 2.0) / 100.0)
+        self.assertAlmostEqual(dynamic_multi, expected_multi, places=5)
+
+    def test_multi_account_independent_contribution_schedules(self):
+        """Fix 5: Multiple accounts in same category must not have contribution schedules collapsed to acc_list[0]."""
+        from core.forms import aggregate_accounts
+        from core.runs import extract_sim_inputs, get_contributions_for_year
+
+        # Account 1: Contributes $10,000 ages 60-62
+        # Account 2: Contributes $5,000 ages 63-65
+        accounts = [
+            {
+                'id': 'acc_1',
+                'name': 'Job A 401(k)',
+                'type': 'pretax',
+                'owner': 'user',
+                'balance': 100000.0,
+                'contrib_amount': 10000.0,
+                'contrib_freq': 'annual',
+                'contrib_start_age': 60,
+                'contrib_end_age_type': 'specified',
+                'contrib_end_age_specified': 62,
+                'contrib_adjust_inflation': False,
+                'return_mean': 7.0,
+                'return_std': 10.0,
+            },
+            {
+                'id': 'acc_2',
+                'name': 'Consulting SEP-IRA',
+                'type': 'pretax',
+                'owner': 'user',
+                'balance': 50000.0,
+                'contrib_amount': 5000.0,
+                'contrib_freq': 'annual',
+                'contrib_start_age': 63,
+                'contrib_end_age_type': 'specified',
+                'contrib_end_age_specified': 65,
+                'contrib_adjust_inflation': False,
+                'return_mean': 7.0,
+                'return_std': 10.0,
+            }
+        ]
+
+        agg = aggregate_accounts(accounts, 60, 65, 90, False, 60, 65, 90)
+        pretax_assets = agg['pretax_assets']
+        self.assertIn('accounts', pretax_assets)
+        self.assertEqual(len(pretax_assets['accounts']), 2)
+
+        raw_sim = {
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'current_year': 2026,
+            'inflation_rate': 2.5,
+            'pretax_assets': pretax_assets,
+        }
+        inputs = extract_sim_inputs(raw_sim)
+
+        # Year 0 (age 60): only Account 1 is active -> $10,000
+        c0 = get_contributions_for_year(0, 60, False, 60, 2026, inputs['pretax_data'])
+        self.assertEqual(c0, 10000.0)
+
+        # Year 2 (age 62): only Account 1 is active -> $10,000
+        c2 = get_contributions_for_year(2, 60, False, 60, 2026, inputs['pretax_data'])
+        self.assertEqual(c2, 10000.0)
+
+        # Year 3 (age 63): Account 1 has ended, Account 2 is now active -> $5,000
+        c3 = get_contributions_for_year(3, 60, False, 60, 2026, inputs['pretax_data'])
+        self.assertEqual(c3, 5000.0)
+
+        # Year 5 (age 65): Account 2 is active -> $5,000
+        c5 = get_contributions_for_year(5, 60, False, 60, 2026, inputs['pretax_data'])
+        self.assertEqual(c5, 5000.0)
+
+        # Year 6 (age 66): both have ended -> $0.0
+        c6 = get_contributions_for_year(6, 60, False, 60, 2026, inputs['pretax_data'])
+        self.assertEqual(c6, 0.0)
+
+
+
 
 
 

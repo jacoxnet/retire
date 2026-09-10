@@ -420,7 +420,8 @@ def njit_rmd_tax_withdraw(
 
 def calculate_income_growth_factor(
     item, t, user_age, user_ret_age, is_married, spouse_age, spouse_ret_age,
-    user_age_death, spouse_age_death, inflation_rate, start_age=None
+    user_age_death, spouse_age_death, inflation_rate, start_age=None,
+    custom_inflation_rates=None
 ):
     """
     Calculates the cumulative compounding growth factor for an income stream at projection step t.
@@ -428,6 +429,7 @@ def calculate_income_growth_factor(
     Supports either:
     1. 'adjustments' list of dicts (multi-period adjustment schedule).
     2. Legacy flat fields: adjust_type, adjust_val, adjust_start_age_type, adjust_start_age_specified.
+    If custom_inflation_rates (array/list of historical annual rates) is provided, uses dynamic rates per year.
     """
     if start_age is None:
         start_age = resolve_age(
@@ -467,15 +469,31 @@ def calculate_income_growth_factor(
 
         user_age_t = user_age + t
         years_since_adj = max(0, user_age_t - adj_start_age)
-        if adj_type == 'inflation':
-            return (1.0 + inflation_rate / 100.0) ** years_since_adj
-        elif adj_type == 'fixed_pct':
-            return (1.0 + adj_val / 100.0) ** years_since_adj
-        elif adj_type == 'inflation_less_pct':
-            rate = max(0.0, inflation_rate - adj_val)
-            return (1.0 + rate / 100.0) ** years_since_adj
+        start_t = max(0, adj_start_age - user_age)
+
+        if custom_inflation_rates is not None:
+            factor = 1.0
+            for k in range(start_t, t):
+                inf_k = float(custom_inflation_rates[k]) if k < len(custom_inflation_rates) else inflation_rate
+                if adj_type == 'inflation':
+                    factor *= (1.0 + inf_k / 100.0)
+                elif adj_type == 'fixed_pct':
+                    factor *= (1.0 + adj_val / 100.0)
+                elif adj_type == 'inflation_less_pct':
+                    factor *= (1.0 + max(0.0, inf_k - adj_val) / 100.0)
+                else:
+                    pass
+            return factor
         else:
-            return 1.0
+            if adj_type == 'inflation':
+                return (1.0 + inflation_rate / 100.0) ** years_since_adj
+            elif adj_type == 'fixed_pct':
+                return (1.0 + adj_val / 100.0) ** years_since_adj
+            elif adj_type == 'inflation_less_pct':
+                rate = max(0.0, inflation_rate - adj_val)
+                return (1.0 + rate / 100.0) ** years_since_adj
+            else:
+                return 1.0
 
     # Multi-period resolution
     periods = []
@@ -522,12 +540,13 @@ def calculate_income_growth_factor(
         if matched_period:
             p_adj = matched_period['adjust_type']
             p_val = matched_period['adjust_val']
+            inf_k = float(custom_inflation_rates[k]) if (custom_inflation_rates is not None and k < len(custom_inflation_rates)) else inflation_rate
             if p_adj == 'inflation':
-                rate = inflation_rate / 100.0
+                rate = inf_k / 100.0
             elif p_adj == 'fixed_pct':
                 rate = p_val / 100.0
             elif p_adj == 'inflation_less_pct':
-                rate = max(0.0, (inflation_rate - p_val) / 100.0)
+                rate = max(0.0, (inf_k - p_val) / 100.0)
             else:
                 rate = 0.0
             factor *= (1.0 + rate)
@@ -978,18 +997,18 @@ def simulate_step(
         'life_insurance_payout': life_insurance_payout
     }
 
-def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data):
+def _get_single_account_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data):
     user_age_t = user_age + t
-    is_spouse = bool(asset_data.get('is_spouse', False)) and is_married
+    is_spouse = bool(asset_data.get('is_spouse', False) or (asset_data.get('owner') == 'spouse')) and is_married
     
-    amount = asset_data.get('contrib_amount', 0.0)
+    amount = float(asset_data.get('contrib_amount', 0.0))
     freq = asset_data.get('contrib_freq', 'annual')
-    start_age = asset_data.get('contrib_start_age', 0)
-    adjust_inf = asset_data.get('contrib_adjust_inflation', True)
+    start_age = int(asset_data.get('contrib_start_age', 0))
+    adjust_inf = bool(asset_data.get('contrib_adjust_inflation', True))
     
     # Resolve end age
     end_age_type = asset_data.get('contrib_end_age_type', 'spouse_retirement' if is_spouse else 'retirement')
-    end_age_spec = asset_data.get('contrib_end_age_specified', 0)
+    end_age_spec = int(asset_data.get('contrib_end_age_specified', 0))
     
     ret_age = asset_data.get('user_ret_age', 65) # fallback if not set
     spouse_ret_age = asset_data.get('spouse_ret_age', 65)
@@ -1026,6 +1045,18 @@ def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year
         inflation_rate = asset_data.get('inflation_rate', 2.5)
         return base_val * (1.0 + inflation_rate / 100.0) ** t
     return base_val
+
+
+def get_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data):
+    if not isinstance(asset_data, dict):
+        return 0.0
+    sub_accounts = asset_data.get('accounts')
+    if sub_accounts and isinstance(sub_accounts, list) and len(sub_accounts) > 0:
+        return sum(
+            _get_single_account_contributions_for_year(t, user_age, is_married, spouse_age, current_year, acc)
+            for acc in sub_accounts
+        )
+    return _get_single_account_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data)
 
 def get_life_insurance_routing(inputs):
     """
@@ -1169,6 +1200,16 @@ def extract_sim_inputs(sim_input):
             asset['user_age_death'] = user_age_death
             asset['spouse_age_death'] = spouse_age_death
             asset['inflation_rate'] = inflation_rate
+            if 'accounts' in asset and isinstance(asset['accounts'], list):
+                for sub_acc in asset['accounts']:
+                    if isinstance(sub_acc, dict):
+                        sub_acc['user_ret_age'] = user_ret_age
+                        sub_acc['spouse_ret_age'] = spouse_ret_age
+                        sub_acc['user_age_death'] = user_age_death
+                        sub_acc['spouse_age_death'] = spouse_age_death
+                        sub_acc['inflation_rate'] = inflation_rate
+                        if 'is_spouse' not in sub_acc:
+                            sub_acc['is_spouse'] = asset.get('is_spouse', False)
         
     hsa_for_medical = bool(hsa_data.get('hsa_for_medical', True))
     spouse_hsa_for_medical = bool(spouse_hsa_data.get('hsa_for_medical', True)) if is_married else True
@@ -1693,8 +1734,14 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
                 elif adj_type == 'fixed_pct':
                     factor = (1.0 + adj_val / 100.0) ** years_since_adj
                 elif adj_type == 'inflation_less_pct':
-                    rate = max(0.0, inflation_rate - adj_val)
-                    factor = (1.0 + rate / 100.0) ** years_since_adj
+                    if custom_inflation_rates is not None:
+                        factor = 1.0
+                        for k in range(start_t, t):
+                            inf_k = float(custom_inflation_rates[k]) if k < len(custom_inflation_rates) else inflation_rate
+                            factor *= (1.0 + max(0.0, inf_k - adj_val) / 100.0)
+                    else:
+                        rate = max(0.0, inflation_rate - adj_val)
+                        factor = (1.0 + rate / 100.0) ** years_since_adj
                 else:
                     factor = 1.0
 
@@ -1770,7 +1817,8 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
 
                 factor = calculate_income_growth_factor(
                     inc, t, user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'],
-                    user_age_death, spouse_age_death, inflation_rate, start_age=start_age
+                    user_age_death, spouse_age_death, inflation_rate, start_age=start_age,
+                    custom_inflation_rates=custom_inflation_rates
                 )
                 inc_amt_t = amt * factor * multiplier
                 if inc.get('is_social_security', False):

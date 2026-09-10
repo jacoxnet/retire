@@ -213,14 +213,14 @@ def load_plan_view(request):
                 'type': 'taxable',
                 'owner': 'user',
                 'balance': 0.0,
-                'contrib_amt': 0.0,
+                'contrib_amount': 0.0,
                 'contrib_freq': 'annual',
                 'contrib_start_age': data.get('user_age', 60),
-                'contrib_end_type': 'retirement',
-                'contrib_end_spec': data.get('user_retirement_age', 65),
-                'contrib_adjust_inf': True,
-                'ret_mean': 5.0,
-                'ret_std': 8.0,
+                'contrib_end_age_type': 'retirement',
+                'contrib_end_age_specified': data.get('user_retirement_age', 65),
+                'contrib_adjust_inflation': True,
+                'return_mean': 5.0,
+                'return_std': 8.0,
             }
             data.setdefault('accounts', []).append(new_acc)
             if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
@@ -256,6 +256,12 @@ def load_plan_view(request):
                         }]
                     inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
                     inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
+
+        # Calculate marginal tax rate and attach balance sheet
+        calc_tax_rate = calculate_marginal_tax_rate(data)
+        if isinstance(data.get('balance_sheet'), dict):
+            data['balance_sheet']['marginal_tax_rate'] = calc_tax_rate
+        data['marginal_tax_rate'] = calc_tax_rate
 
         request.session['simulation_data'] = data
         request.session['data_version'] = request.session.get('data_version', 0) + 1
@@ -305,12 +311,47 @@ def change_mode_view(request):
         data['spouse_age_death'] = get_int(request.POST.get('spouse_age_death'), data.get('spouse_age_death', 90))
 
     # Asset return updates
+    updated_returns = False
     for prefix in ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa']:
         key = f'{prefix}_return_mean'
         if key in request.POST:
+            val = get_float(request.POST.get(key), data.get(prefix + '_assets', {}).get('return_mean', 5.0))
             if prefix + '_assets' not in data or not isinstance(data[prefix + '_assets'], dict):
                 data[prefix + '_assets'] = {}
-            data[prefix + '_assets']['return_mean'] = get_float(request.POST.get(key), data[prefix + '_assets'].get('return_mean', 5.0))
+            data[prefix + '_assets']['return_mean'] = val
+
+            # Update accounts matching this category
+            target_type = prefix
+            target_owner = 'user'
+            if prefix == 'spouse_pretax':
+                target_type = 'pretax'
+                target_owner = 'spouse'
+            elif prefix == 'spouse_hsa':
+                target_type = 'hsa'
+                target_owner = 'spouse'
+
+            if 'accounts' in data and isinstance(data['accounts'], list):
+                for acc in data['accounts']:
+                    a_type = acc.get('type', 'pretax')
+                    a_owner = acc.get('owner', 'user')
+                    if not data.get('is_married'):
+                        a_owner = 'user'
+                    if a_type == target_type and (target_type in ['roth', 'taxable'] or a_owner == target_owner):
+                        acc['return_mean'] = val
+                        updated_returns = True
+
+            if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+                cat_key = target_type if target_type in ['pretax', 'roth', 'taxable', 'hsa'] else 'taxable'
+                cat_data = data['balance_sheet'].get('categories', {}).get(cat_key, {})
+                for b_acc in cat_data.get('accounts', []):
+                    b_owner = b_acc.get('owner', 'user')
+                    if not data.get('is_married'):
+                        b_owner = 'user'
+                    if target_type in ['roth', 'taxable'] or b_owner == target_owner:
+                        b_acc['return_mean'] = val
+
+    if updated_returns and 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+        data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data.get('accounts', []), current_year=data.get('current_year', 2026))
 
     request.session['simulation_data'] = data
     request.session['data_version'] = request.session.get('data_version', 0) + 1
@@ -437,14 +478,14 @@ def enter_view(request):
                 'type': 'taxable',
                 'owner': 'user',
                 'balance': 0.0,
-                'contrib_amt': 0.0,
+                'contrib_amount': 0.0,
                 'contrib_freq': 'annual',
                 'contrib_start_age': user_age,
-                'contrib_end_type': 'retirement',
-                'contrib_end_spec': user_retirement_age,
-                'contrib_adjust_inf': True,
-                'ret_mean': 5.0,
-                'ret_std': 8.0,
+                'contrib_end_age_type': 'retirement',
+                'contrib_end_age_specified': user_retirement_age,
+                'contrib_adjust_inflation': True,
+                'return_mean': 5.0,
+                'return_std': 8.0,
             }
             accounts.append(new_acc)
             balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
