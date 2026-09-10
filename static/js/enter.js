@@ -2334,7 +2334,7 @@
                         if (idInput) idInput.value = newAccId;
 
                         var vals = {};
-                        (bsState.periods || []).forEach(function(p) { vals[p] = bal; });
+                        (bsState.periods || []).forEach(function(p) { vals[p] = 0.0; });
                         vals[currPeriod] = bal;
 
                         var newAcc = {

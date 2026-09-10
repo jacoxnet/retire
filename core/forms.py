@@ -1200,9 +1200,7 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
                 matched['values'] = {}
             matched['values'][curr_period] = bal
         else:
-            vals = {}
-            for p in periods:
-                vals[p] = bal
+            vals = {p: 0.0 for p in periods}
             vals[curr_period] = bal
             cat_accs.append({
                 'id': acc.get('id') or f"acc_{cat_key}_{len(cat_accs)+1}",

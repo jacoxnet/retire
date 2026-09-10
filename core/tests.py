@@ -3874,6 +3874,55 @@ class FiveSelectedFixesTests(TestCase):
         # Ending balance should retain the contribution: $8,000
         self.assertAlmostEqual(res['ending_assets']['pretax_user'], 8000.0)
 
+    def test_sync_new_account_to_balance_sheet_does_not_corrupt_past_periods(self):
+        """Verify that a brand-new account synced into a multi-period balance sheet initializes past periods to 0.0, not current balance."""
+        from core.forms import build_default_balance_sheet, sync_accounts_to_balance_sheet
+
+        bs = build_default_balance_sheet()
+        # Set up 3 periods: two historical and one current
+        bs['periods'] = ['2023-12-31', '2024-12-31', '2025-12-31']
+        bs['current_period'] = '2025-12-31'
+
+        # Existing pretax account has historical balances
+        bs_pretax = bs['categories']['pretax']['accounts'][0]
+        bs_pretax['values'] = {
+            '2023-12-31': 80000.0,
+            '2024-12-31': 90000.0,
+            '2025-12-31': 100000.0,
+        }
+
+        # User adds a brand new Roth account on the Accounts tab
+        accounts = [
+            {
+                'id': bs_pretax['id'],
+                'name': bs_pretax['name'],
+                'type': 'pretax',
+                'owner': 'user',
+                'balance': 105000.0,
+            },
+            {
+                'id': 'acc_roth_new_99',
+                'name': 'New Roth IRA',
+                'type': 'roth',
+                'owner': 'user',
+                'balance': 25000.0,
+            }
+        ]
+
+        synced_bs = sync_accounts_to_balance_sheet(bs, accounts)
+
+        # 1. Existing account should have updated current period only, preserving history
+        updated_pretax = next(a for a in synced_bs['categories']['pretax']['accounts'] if a['id'] == bs_pretax['id'])
+        self.assertEqual(updated_pretax['values']['2023-12-31'], 80000.0)
+        self.assertEqual(updated_pretax['values']['2024-12-31'], 90000.0)
+        self.assertEqual(updated_pretax['values']['2025-12-31'], 105000.0)
+
+        # 2. Brand new account should have $25k in 2025-12-31, and $0.0 in 2023-12-31 and 2024-12-31
+        new_roth = next(a for a in synced_bs['categories']['roth']['accounts'] if a['id'] == 'acc_roth_new_99')
+        self.assertEqual(new_roth['values']['2025-12-31'], 25000.0)
+        self.assertEqual(new_roth['values']['2023-12-31'], 0.0)
+        self.assertEqual(new_roth['values']['2024-12-31'], 0.0)
+
 
 
 
