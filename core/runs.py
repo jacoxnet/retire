@@ -29,6 +29,15 @@ THRESHOLDS_JOINT_ARR = np.array([24800.0, 100800.0, 211400.0, 403550.0, 512450.0
 THRESHOLDS_HOH_ARR = np.array([17700.0, 67450.0, 105700.0, 201775.0, 256225.0, 640600.0], dtype=np.float64)
 TAX_RATES_ARR = np.array([0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37], dtype=np.float64)
 
+# Literature-typical planning assumptions for cross-asset-class correlation, used to jointly
+# draw stock/bond/cash factors for the Monte Carlo engine (order: stocks, bonds, cash).
+ASSET_CLASS_CORRELATION = np.array([
+    [1.00, -0.10, 0.00],
+    [-0.10, 1.00, 0.20],
+    [0.00, 0.20, 1.00],
+])
+_ASSET_CLASS_CHOLESKY = np.linalg.cholesky(ASSET_CLASS_CORRELATION)
+
 RMD_TABLE_ARR = np.full(151, 2.0, dtype=np.float64)
 for _age, _div in RMD_TABLE.items():
     RMD_TABLE_ARR[_age] = _div
@@ -1883,37 +1892,28 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         'terminal_life_ins_estate': float(routing['terminal_life_ins_estate']),
     }
 
-def infer_correlation_factor(mean_return):
-    """
-    Infers continuous correlation factor with the market based on expected return.
-    Assumes nominal baseline returns:
-    - Return >= 7.0%: All-stock portfolio -> correlation factor = 1.0
-    - Return == 4.0%: 100% bond portfolio -> correlation factor = 0.26
-    - Return <= 2.5%: All-cash portfolio -> correlation factor = 0.0
-    - Linearly interpolates between 2.5% and 4.0%, and between 4.0% and 7.0%.
-    """
-    mean_val = float(mean_return)
-    if mean_val >= 7.0:
-        return 1.0
-    elif mean_val >= 4.0:
-        return 0.26 + ((mean_val - 4.0) / 3.0) * (1.0 - 0.26)
-    elif mean_val >= 2.5:
-        return ((mean_val - 2.5) / 1.5) * 0.26
-    else:
-        return 0.0
-
-
 def generate_correlated_returns(inputs, runs, years, rng=None):
     """
-    Generates correlated return arrays for all 6 account types for (runs, years)
-    using a single common market factor and inferred correlation factors.
-    Preserves each account's mean and sigma entered by the user.
+    Generates correlated return arrays for all 6 account types for (runs, years).
+
+    Each bucket's stock/bond/cash allocation is inferred from its mean return via
+    infer_asset_allocation(), and all buckets draw from the same three jointly-correlated
+    asset-class factors (ASSET_CLASS_CORRELATION), weighted by that allocation. This makes
+    cross-bucket correlation reflect actual asset-class overlap rather than an arbitrary
+    scalar tied only to each bucket's own mean return. Preserves each account's mean and
+    sigma entered by the user.
     """
     if rng is None:
         rng = np.random.default_rng()
 
-    # Single common market factor for all runs and years
-    z_market = rng.standard_normal(size=(runs, years))
+    # Three independent standard-normal draws, combined via the Cholesky factor of
+    # ASSET_CLASS_CORRELATION into jointly-correlated stock/bond/cash factors, shared
+    # across all buckets so overlapping allocations produce correlated returns.
+    indep = rng.standard_normal(size=(3, runs, years))
+    L = _ASSET_CLASS_CHOLESKY
+    z_stock = L[0, 0] * indep[0]
+    z_bond = L[1, 0] * indep[0] + L[1, 1] * indep[1]
+    z_cash = L[2, 0] * indep[0] + L[2, 1] * indep[1] + L[2, 2] * indep[2]
 
     def _sim_acc_return(data, default_m, default_s):
         m_pct = float(data.get('return_mean', default_m))
@@ -1923,13 +1923,12 @@ def generate_correlated_returns(inputs, runs, years, rng=None):
         if s == 0.0:
             return np.full((runs, years), m, dtype=np.float64)
 
-        rho = infer_correlation_factor(m_pct)
-        if rho >= 1.0:
-            z = z_market
-        elif rho <= 0.0:
-            z = rng.standard_normal(size=(runs, years))
-        else:
-            z = rho * z_market + np.sqrt(1.0 - rho * rho) * rng.standard_normal(size=(runs, years))
+        stock_pct, bond_pct, cash_pct = infer_asset_allocation(m_pct)
+        w = np.array([stock_pct, bond_pct, cash_pct]) / 100.0
+
+        raw_z = w[0] * z_stock + w[1] * z_bond + w[2] * z_cash
+        var_w = float(w @ ASSET_CLASS_CORRELATION @ w)
+        z = raw_z / np.sqrt(var_w)
 
         return m + s * z
 
