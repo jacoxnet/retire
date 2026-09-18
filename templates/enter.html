@@ -33,38 +33,67 @@
         {% csrf_token %}
         <input type="hidden" name="next" id="enterFormNext" value="results">
 
-        <!-- Tab Navigation -->
-        <ul class="nav nav-tabs mb-4 justify-content-center" id="dataEntryTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="demographics-tab" data-bs-toggle="tab"
-                    data-bs-target="#demographics" type="button" role="tab" aria-controls="demographics"
-                    aria-selected="true">Demographics & Plan Details</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="assets-tab" data-bs-toggle="tab" data-bs-target="#assets" type="button"
-                    role="tab" aria-controls="assets" aria-selected="false">Accounts for Retirement</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="spending-tab" data-bs-toggle="tab" data-bs-target="#spending"
-                    type="button" role="tab" aria-controls="spending" aria-selected="false">Additional Spending</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button"
-                    role="tab" aria-controls="income" aria-selected="false">Social Security & Income Streams</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="balance-sheet-tab" data-bs-toggle="tab" data-bs-target="#balance-sheet"
-                    type="button" role="tab" aria-controls="balance-sheet" aria-selected="false">
-                    Balance Sheet<span class="d-block" style="font-size: 0.75rem; font-weight: normal; line-height: 1.1; opacity: 0.85;">(optional)</span>
+        <!-- Submenu Tab Navigation -->
+        <div class="subnav-container mb-4" id="dataEntrySubNav">
+            <!-- Mobile/narrow screen bar (< 1200px) with active section label and hamburger button -->
+            <div class="subnav-mobile-bar d-flex justify-content-between align-items-center">
+                <div class="subnav-active-info d-flex align-items-center me-2" style="min-width: 0;">
+                    <span class="subnav-icon me-2 text-primary flex-shrink-0"><i class="fa-solid fa-layer-group"></i></span>
+                    <span class="subnav-title-label text-secondary me-1 small flex-shrink-0">Section:</span>
+                    <span id="currentSubmenuText" class="subnav-active-name fw-bold text-dark text-truncate">Demographics &amp; Plan Details</span>
+                </div>
+                <button class="navbar-toggler subnav-toggler flex-shrink-0" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#dataEntryTabsCollapse" aria-controls="dataEntryTabsCollapse" aria-expanded="false"
+                    aria-label="Toggle submenu navigation">
+                    <span class="fa fa-bars"></span>
                 </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="rebalance-tab" data-bs-toggle="tab" data-bs-target="#rebalance"
-                    type="button" role="tab" aria-controls="rebalance" aria-selected="false">
-                    Rebalance<span class="d-block" style="font-size: 0.75rem; font-weight: normal; line-height: 1.1; opacity: 0.85;">(optional)</span>
-                </button>
-            </li>
-        </ul>
+            </div>
+
+            <!-- Collapsible container for subtabs -->
+            <div class="collapse subnav-collapse" id="dataEntryTabsCollapse">
+                <ul class="nav nav-tabs justify-content-center" id="dataEntryTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="demographics-tab" data-bs-toggle="tab"
+                            data-bs-target="#demographics" type="button" role="tab" aria-controls="demographics"
+                            aria-selected="true" data-tab-name="Demographics & Plan Details">
+                            <span class="tab-label-main">Demographics & Plan Details</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="assets-tab" data-bs-toggle="tab" data-bs-target="#assets" type="button"
+                            role="tab" aria-controls="assets" aria-selected="false" data-tab-name="Accounts for Retirement">
+                            <span class="tab-label-main">Accounts for Retirement</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="spending-tab" data-bs-toggle="tab" data-bs-target="#spending"
+                            type="button" role="tab" aria-controls="spending" aria-selected="false" data-tab-name="Additional Spending">
+                            <span class="tab-label-main">Additional Spending</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button"
+                            role="tab" aria-controls="income" aria-selected="false" data-tab-name="Social Security & Income Streams">
+                            <span class="tab-label-main">Social Security & Income Streams</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="balance-sheet-tab" data-bs-toggle="tab" data-bs-target="#balance-sheet"
+                            type="button" role="tab" aria-controls="balance-sheet" aria-selected="false" data-tab-name="Balance Sheet (optional)">
+                            <span class="tab-label-main">Balance Sheet</span>
+                            <span class="tab-label-sub">(optional)</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="rebalance-tab" data-bs-toggle="tab" data-bs-target="#rebalance"
+                            type="button" role="tab" aria-controls="rebalance" aria-selected="false" data-tab-name="Rebalance (optional)">
+                            <span class="tab-label-main">Rebalance</span>
+                            <span class="tab-label-sub">(optional)</span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
 
         <!-- Tab Content Panes -->
         <div class="tab-content" id="dataEntryTabsContent">
@@ -1074,5 +1103,5 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{% static 'js/enter.js' %}?v=20260918-7"></script>
+<script src="{% static 'js/enter.js' %}?v=20260918-8"></script>
 {% endblock %}

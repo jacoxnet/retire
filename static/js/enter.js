@@ -146,6 +146,23 @@
         });
     }
 
+    // Submenu Active Display & Collapse Helper
+    function updateSubmenuActiveDisplay(tabEl) {
+        if (!tabEl) return;
+        var tabTitle = tabEl.getAttribute('data-tab-name') || tabEl.innerText.trim();
+        var currentTextEl = document.getElementById('currentSubmenuText');
+        if (currentTextEl && tabTitle) {
+            currentTextEl.textContent = tabTitle;
+        }
+        var collapseEl = document.getElementById('dataEntryTabsCollapse');
+        if (collapseEl && collapseEl.classList.contains('show')) {
+            var bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
+            if (bsCollapse) {
+                bsCollapse.hide();
+            }
+        }
+    }
+
     // Tab Switching Helper
     function switchTab(tabId) {
         if (typeof window.syncAllTabs === 'function') {
@@ -160,6 +177,7 @@
         var nextTab = document.getElementById(tabId);
         if (nextTab) {
             bootstrap.Tab.getOrCreateInstance(nextTab).show();
+            updateSubmenuActiveDisplay(nextTab);
             window.scrollTo(0, 0);
         }
     }
@@ -184,8 +202,18 @@
                     syncRebalanceFromBalanceSheet();
                 }
                 tabTrigger.show();
+                updateSubmenuActiveDisplay(triggerEl);
+            });
+            triggerEl.addEventListener('shown.bs.tab', function () {
+                updateSubmenuActiveDisplay(triggerEl);
             });
         });
+
+        // Initialize active submenu display label
+        var initialActiveTab = document.querySelector('#dataEntryTabs button.active');
+        if (initialActiveTab) {
+            updateSubmenuActiveDisplay(initialActiveTab);
+        }
 
         // Balance Sheet: pinned duplicate horizontal scrollbar above the table.
         (function initBsScrollProxy() {

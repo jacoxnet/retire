@@ -812,33 +812,186 @@ tbody tr:hover {
   border-color: var(--border-color) var(--border-color) transparent;
 }
 
-#dataEntryTabs {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
+/* Submenu Tab Navigation & Responsive Collapse */
+.subnav-container {
+  width: 100%;
 }
 
-#dataEntryTabs .nav-item {
-  flex: 0 0 auto;
-  display: flex;
+/* Mobile / Narrow Screen View (< 1200px) */
+@media (max-width: 1199.98px) {
+  .subnav-mobile-bar {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f8fafc;
+    border: 1px solid #bae6fd;
+    border-radius: var(--radius-lg);
+    padding: 0.6rem 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .subnav-active-info {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .subnav-active-name {
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .subnav-toggler {
+    padding: 0.35rem 0.7rem;
+    font-size: 1.15rem;
+    color: var(--accent-primary);
+    border: 1px solid #bae6fd;
+    border-radius: var(--radius-md);
+    background-color: #ffffff;
+    cursor: pointer;
+    line-height: 1;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .subnav-toggler:hover,
+  .subnav-toggler:focus {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border-color: #7dd3fc;
+    box-shadow: 0 0 0 0.2rem rgba(2, 132, 199, 0.2);
+  }
+
+  #dataEntryTabsCollapse {
+    margin-top: 0.5rem;
+  }
+
+  #dataEntryTabsCollapse.collapse:not(.show) {
+    display: none;
+  }
+
+  #dataEntryTabsCollapse #dataEntryTabs {
+    background-color: #ffffff;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 0.5rem !important;
+    flex-direction: column !important;
+    gap: 0.25rem;
+    overflow: visible !important;
+  }
+
+  #dataEntryTabs .nav-item {
+    width: 100% !important;
+    display: block !important;
+  }
+
+  #dataEntryTabs .nav-link {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    text-align: left !important;
+    padding: 0.65rem 1rem !important;
+    border-radius: var(--radius-md) !important;
+    border: 1px solid transparent !important;
+    font-size: 0.92rem !important;
+    color: var(--text-primary) !important;
+    background-color: transparent;
+    transition: all var(--transition-fast);
+  }
+
+  #dataEntryTabs .nav-link:hover {
+    background-color: #f0f9ff !important;
+    color: var(--accent-primary) !important;
+  }
+
+  #dataEntryTabs .nav-link.active {
+    background-color: var(--accent-primary) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);
+  }
+
+  #dataEntryTabs .tab-label-sub {
+    font-size: 0.8rem;
+    font-weight: normal;
+    opacity: 0.75;
+    margin-left: 0.5rem;
+  }
+
+  #dataEntryTabs .nav-link.active .tab-label-sub {
+    color: #e0f2fe !important;
+    opacity: 0.9;
+  }
 }
 
-#dataEntryTabs .nav-link {
-  white-space: nowrap;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.92rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  height: 100%;
-}
+/* Desktop Screen View (>= 1200px) */
+@media (min-width: 1200px) {
+  .subnav-mobile-bar {
+    display: none !important;
+  }
 
-@media (max-width: 991.98px) {
+  #dataEntryTabsCollapse.collapse {
+    display: block !important;
+    height: auto !important;
+    visibility: visible !important;
+  }
+
   #dataEntryTabs {
-    justify-content: flex-start !important;
-    padding-bottom: 4px;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: center !important;
+    flex-wrap: nowrap !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    overflow: visible !important;
+  }
+
+  #dataEntryTabs .nav-item {
+    flex: 0 0 auto;
+    display: flex;
+  }
+
+  #dataEntryTabs .nav-link {
+    white-space: nowrap;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.92rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 100%;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    border-top-left-radius: var(--radius-md);
+    border-top-right-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  #dataEntryTabs .nav-link:hover {
+    color: var(--accent-primary);
+    border-color: #e2e8f0 #e2e8f0 transparent;
+  }
+
+  #dataEntryTabs .nav-link.active {
+    color: var(--accent-primary) !important;
+    background-color: var(--bg-secondary) !important;
+    border-color: var(--border-color) var(--border-color) transparent !important;
+    font-weight: 600;
+  }
+
+  #dataEntryTabs .tab-label-sub {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: normal;
+    line-height: 1.1;
+    opacity: 0.85;
   }
 }
 
