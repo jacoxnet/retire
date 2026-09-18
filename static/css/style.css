@@ -1325,3 +1325,23 @@ tbody tr:hover {
   border-left-color: #94a3b8;
   background-color: #f8fafc;
 }
+
+.reb-pct-input {
+  width: 80px;
+  min-width: 72px;
+  padding-left: 8px !important;
+  padding-right: 6px !important;
+  text-align: right !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+}
+
+.reb-pct-input::-webkit-outer-spin-button,
+.reb-pct-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.reb-pct-input[type=number] {
+  -moz-appearance: textfield;
+}

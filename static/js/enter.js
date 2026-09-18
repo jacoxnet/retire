@@ -4820,7 +4820,7 @@
                 else if (acc.category === 'taxable') badgeClass = 'bg-info text-dark';
                 else if (acc.category === 'hsa') badgeClass = 'bg-warning text-dark';
 
-                html += '<div class="reb-acc-card p-3 mb-3 ' + (is100 ? 'is-complete' : 'is-incomplete') + '">';
+                html += '<div class="reb-acc-card p-3 mb-3 ' + (is100 ? 'is-complete' : 'is-incomplete') + '" id="rebAccCard_' + acc.id + '">';
                 html += '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">';
                 html += '<div>';
                 html += '<div class="d-flex align-items-center gap-2">';
@@ -4858,30 +4858,33 @@
                     var pct = parseFloat(alloc[ac.id]) || 0;
                     var dol = acc.balance * (pct / 100);
 
-                    html += '<div class="col-12 col-md-6 col-lg-3">';
+                    html += '<div class="col-12 col-md-6 col-lg-4">';
                     html += '<div class="p-2 rounded bg-light border d-flex align-items-center justify-content-between gap-2">';
-                    html += '<div class="d-flex align-items-center gap-2 text-truncate" style="max-width: 140px;">';
+                    html += '<div class="d-flex align-items-center gap-2 text-truncate me-1">';
                     html += '<span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span>';
                     html += '<span class="small fw-semibold text-truncate" title="' + ac.name + '">' + ac.name + '</span>';
                     html += '</div>';
-                    html += '<div class="d-flex align-items-center gap-1">';
-                    html += '<input type="number" min="0" max="100" step="0.5" class="form-control form-control-sm text-end fw-bold" style="width: 65px;" value="' + (pct > 0 ? pct : 0) + '" oninput="onAccountAssetPercentInput(\'' + acc.id + '\', \'' + ac.id + '\', this.value)">';
-                    html += '<span class="small text-muted">%</span>';
+                    html += '<div class="d-flex align-items-center flex-shrink-0">';
+                    html += '<div class="input-group input-group-sm" style="width: 115px;">';
+                    html += '<input type="text" inputmode="decimal" class="form-control form-control-sm text-end fw-bold reb-pct-input" value="' + (pct > 0 ? pct : 0) + '" oninput="onAccountAssetPercentInput(\'' + acc.id + '\', \'' + ac.id + '\', this.value)" onblur="onAccountAssetPercentBlur(\'' + acc.id + '\', \'' + ac.id + '\', this)">';
+                    html += '<span class="input-group-text px-2 bg-white text-muted small fw-semibold">%</span>';
                     html += '</div>';
                     html += '</div>';
-                    html += '<div class="text-end text-muted small pe-1 mt-1" style="font-size: 0.75rem;">' + formatMoney(dol) + '</div>';
+                    html += '</div>';
+                    html += '<div class="text-end text-muted small pe-1 mt-1" style="font-size: 0.75rem;" id="rebDolDisplay_' + acc.id + '_' + ac.id + '">' + formatMoney(dol) + '</div>';
                     html += '</div>';
                 });
                 html += '</div>';
 
                 // Account Allocation Summary Footer
-                html += '<div class="d-flex flex-wrap justify-content-between align-items-center pt-2 border-top small">';
+                html += '<div class="d-flex flex-wrap justify-content-between align-items-center pt-2 border-top small" id="rebCardFooter_' + acc.id + '">';
                 if (is100) {
                     html += '<div class="text-success fw-bold"><i class="fa fa-check-circle me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (100.0%)</div>';
                 } else if (totalAllocPct < 100) {
-                    var remainPct = 100 - totalAllocPct;
+                    var remainPct = Math.round((100 - totalAllocPct) * 10) / 10;
+                    var firstClsName = rebState.asset_classes[0] ? rebState.asset_classes[0].name : 'First Class';
                     html += '<div class="text-warning fw-bold"><i class="fa fa-triangle-exclamation me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-secondary">Remaining: ' + remainPct.toFixed(1) + '%</span></div>';
-                    html += '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="autoBalanceAccountRemaining(\'' + acc.id + '\', ' + remainPct + ')">Assign Remaining ' + remainPct.toFixed(1) + '% to ' + (rebState.asset_classes[0] ? rebState.asset_classes[0].name : 'First Class') + '</button>';
+                    html += '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="autoBalanceAccountRemaining(\'' + acc.id + '\', ' + remainPct + ')">Assign Remaining ' + remainPct.toFixed(1) + '% to ' + firstClsName + '</button>';
                 } else {
                     html += '<div class="text-danger fw-bold"><i class="fa fa-circle-xmark me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-danger">Exceeds 100% by ' + (totalAllocPct - 100).toFixed(1) + '%</span></div>';
                 }
@@ -4891,6 +4894,50 @@
             });
 
             container.innerHTML = html;
+        }
+
+        function updateAccountCardUI(accId) {
+            var data = getLatestBsAccounts();
+            var acc = data.accounts.find(function(a) { return a.id === accId; });
+            if (!acc) return;
+
+            var alloc = rebState.account_allocations[accId] || {};
+            var totalAllocPct = 0;
+            rebState.asset_classes.forEach(function(ac) {
+                var pct = parseFloat(alloc[ac.id]) || 0;
+                totalAllocPct += pct;
+                var dol = acc.balance * (pct / 100);
+                var dolEl = document.getElementById('rebDolDisplay_' + accId + '_' + ac.id);
+                if (dolEl) dolEl.textContent = formatMoney(dol);
+            });
+
+            var is100 = Math.abs(totalAllocPct - 100) < 0.1;
+            var allocatedDol = acc.balance * (totalAllocPct / 100);
+
+            var cardEl = document.getElementById('rebAccCard_' + accId);
+            if (cardEl) {
+                if (is100) {
+                    cardEl.classList.remove('is-incomplete');
+                    cardEl.classList.add('is-complete');
+                } else {
+                    cardEl.classList.remove('is-complete');
+                    cardEl.classList.add('is-incomplete');
+                }
+            }
+
+            var footerEl = document.getElementById('rebCardFooter_' + accId);
+            if (footerEl) {
+                if (is100) {
+                    footerEl.innerHTML = '<div class="text-success fw-bold"><i class="fa fa-check-circle me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (100.0%)</div>';
+                } else if (totalAllocPct < 100) {
+                    var remainPct = Math.round((100 - totalAllocPct) * 10) / 10;
+                    var firstClsName = rebState.asset_classes[0] ? rebState.asset_classes[0].name : 'First Class';
+                    footerEl.innerHTML = '<div class="text-warning fw-bold"><i class="fa fa-triangle-exclamation me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-secondary">Remaining: ' + remainPct.toFixed(1) + '%</span></div>' +
+                        '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="autoBalanceAccountRemaining(\'' + accId + '\', ' + remainPct + ')">Assign Remaining ' + remainPct.toFixed(1) + '% to ' + firstClsName + '</button>';
+                } else {
+                    footerEl.innerHTML = '<div class="text-danger fw-bold"><i class="fa fa-circle-xmark me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-danger">Exceeds 100% by ' + (totalAllocPct - 100).toFixed(1) + '%</span></div>';
+                }
+            }
         }
 
         function applySingleAssetPreset(accId, classId) {
@@ -4907,14 +4954,30 @@
         window.applySingleAssetPreset = applySingleAssetPreset;
 
         function onAccountAssetPercentInput(accId, classId, val) {
-            var num = parseFloat(val);
+            var cleaned = val.toString().replace(/[^0-9.]/g, '');
+            var num = parseFloat(cleaned);
             if (!rebState.account_allocations[accId]) rebState.account_allocations[accId] = {};
             rebState.account_allocations[accId][classId] = isNaN(num) ? 0 : Math.max(0, num);
-            renderRebAccountBreakdowns();
+            updateAccountCardUI(accId);
             calculateAndRenderRebalanceResults();
             serializeRebalancing();
         }
         window.onAccountAssetPercentInput = onAccountAssetPercentInput;
+
+        function onAccountAssetPercentBlur(accId, classId, el) {
+            var raw = (el.value || '').trim();
+            if (raw === '' || isNaN(parseFloat(raw))) {
+                el.value = '0';
+                onAccountAssetPercentInput(accId, classId, '0');
+            } else {
+                var num = Math.max(0, parseFloat(raw));
+                if (raw.endsWith('.')) {
+                    el.value = num.toString();
+                }
+            }
+            updateAccountCardUI(accId);
+        }
+        window.onAccountAssetPercentBlur = onAccountAssetPercentBlur;
 
         function autoBalanceAccountRemaining(accId, remainPct) {
             if (!rebState.account_allocations[accId]) rebState.account_allocations[accId] = {};
