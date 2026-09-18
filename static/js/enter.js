@@ -4580,10 +4580,7 @@
         }
         window.setRebAccountSelection = setRebAccountSelection;
 
-        function renderRebAssetClassesTable() {
-            var tbody = document.getElementById('rebAssetClassesTableBody');
-            if (!tbody) return;
-
+        function updateRebTargetSummaryUI() {
             var data = getLatestBsAccounts();
             var totalSelected = 0;
             data.accounts.forEach(function(acc) {
@@ -4592,53 +4589,33 @@
                 }
             });
             var targetPortfolioTotal = Math.max(0, totalSelected + (rebState.cash_flow || 0));
+            var tolPct = parseFloat(rebState.tolerance_percent) || 10.0;
 
             var totalTarget = 0;
-            var html = '';
-
             rebState.asset_classes.forEach(function(ac) {
                 var targetPct = parseFloat(ac.target_percent) || 0;
                 totalTarget += targetPct;
                 var targetDol = targetPortfolioTotal * (targetPct / 100);
-
-                var tolPct = parseFloat(rebState.tolerance_percent) || 10.0;
                 var minPct = targetPct * (1 - tolPct / 100);
                 var maxPct = targetPct * (1 + tolPct / 100);
                 var minDol = targetPortfolioTotal * (minPct / 100);
                 var maxDol = targetPortfolioTotal * (maxPct / 100);
 
-                html += '<tr>';
-                html += '<td class="text-center"><span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span></td>';
-                html += '<td><input type="text" class="form-control form-control-sm fw-semibold" value="' + (ac.name || '') + '" onchange="onRebAssetClassNameChange(\'' + ac.id + '\', this.value)"></td>';
-                html += '<td class="text-end">';
-                html += '<div class="input-group input-group-sm justify-content-end" style="max-width: 130px; margin-left: auto;">';
-                html += '<input type="number" class="form-control text-end fw-bold" step="0.5" min="0" max="100" value="' + targetPct.toFixed(1) + '" oninput="onRebAssetClassTargetChange(\'' + ac.id + '\', this.value)">';
-                html += '<span class="input-group-text">%</span>';
-                html += '</div>';
-                html += '</td>';
-                html += '<td class="text-end fw-semibold text-primary">' + formatMoney(targetDol) + '</td>';
-                html += '<td class="text-center">';
-                html += '<span class="badge bg-light text-dark border px-2 py-1 small">' + minPct.toFixed(1) + '% – ' + maxPct.toFixed(1) + '% <span class="text-secondary fw-normal">(' + formatMoney(minDol) + ' – ' + formatMoney(maxDol) + ')</span></span>';
-                html += '</td>';
-                html += '<td class="text-center">';
-                if (rebState.asset_classes.length > 1) {
-                    html += '<button type="button" class="btn btn-link text-danger p-0 text-decoration-none" title="Delete asset class" onclick="deleteRebAssetClass(\'' + ac.id + '\')"><i class="fa fa-trash-can"></i></button>';
-                } else {
-                    html += '<span class="text-muted small">—</span>';
+                var dolEl = document.getElementById('rebTargetDol_' + ac.id);
+                if (dolEl) dolEl.textContent = formatMoney(targetDol);
+
+                var corrEl = document.getElementById('rebTargetCorridor_' + ac.id);
+                if (corrEl) {
+                    corrEl.innerHTML = minPct.toFixed(1) + '% – ' + maxPct.toFixed(1) + '% <span class="text-secondary fw-normal">(' + formatMoney(minDol) + ' – ' + formatMoney(maxDol) + ')</span>';
                 }
-                html += '</td>';
-                html += '</tr>';
             });
 
-            tbody.innerHTML = html;
-
-            // Progress bar and validation badge
             var pBar = document.getElementById('rebTargetProgressBar');
             var valBadge = document.getElementById('rebTargetValidationBadge');
             var diff = Math.round((totalTarget - 100) * 10) / 10;
 
             if (pBar) {
-                pBar.style.width = Math.min(100, totalTarget) + '%';
+                pBar.style.width = Math.min(100, Math.max(0, totalTarget)) + '%';
                 if (Math.abs(diff) < 0.01) {
                     pBar.className = 'progress-bar bg-success';
                 } else if (totalTarget < 100) {
@@ -4657,6 +4634,57 @@
                     valBadge.innerHTML = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fs-6"><i class="fa fa-circle-xmark me-1"></i> Total: ' + totalTarget.toFixed(1) + '% (Over by ' + (totalTarget - 100).toFixed(1) + '%)</span>';
                 }
             }
+        }
+
+        function renderRebAssetClassesTable() {
+            var tbody = document.getElementById('rebAssetClassesTableBody');
+            if (!tbody) return;
+
+            var data = getLatestBsAccounts();
+            var totalSelected = 0;
+            data.accounts.forEach(function(acc) {
+                if (rebState.included_account_ids.indexOf(acc.id) !== -1) {
+                    totalSelected += acc.balance;
+                }
+            });
+            var targetPortfolioTotal = Math.max(0, totalSelected + (rebState.cash_flow || 0));
+            var tolPct = parseFloat(rebState.tolerance_percent) || 10.0;
+            var html = '';
+
+            rebState.asset_classes.forEach(function(ac) {
+                var targetPct = parseFloat(ac.target_percent) || 0;
+                var targetDol = targetPortfolioTotal * (targetPct / 100);
+                var minPct = targetPct * (1 - tolPct / 100);
+                var maxPct = targetPct * (1 + tolPct / 100);
+                var minDol = targetPortfolioTotal * (minPct / 100);
+                var maxDol = targetPortfolioTotal * (maxPct / 100);
+
+                html += '<tr>';
+                html += '<td class="text-center"><span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span></td>';
+                html += '<td><input type="text" class="form-control form-control-sm fw-semibold" value="' + (ac.name || '') + '" onchange="onRebAssetClassNameChange(\'' + ac.id + '\', this.value)"></td>';
+                html += '<td class="text-end">';
+                html += '<div class="input-group input-group-sm justify-content-end" style="max-width: 130px; margin-left: auto;">';
+                html += '<input type="text" inputmode="decimal" class="form-control text-end fw-bold reb-pct-input" value="' + (targetPct > 0 ? targetPct : 0) + '" id="rebTargetInput_' + ac.id + '" oninput="onRebAssetClassTargetInput(\'' + ac.id + '\', this.value)" onblur="onRebAssetClassTargetBlur(\'' + ac.id + '\', this)">';
+                html += '<span class="input-group-text px-2 bg-white text-muted small fw-semibold">%</span>';
+                html += '</div>';
+                html += '</td>';
+                html += '<td class="text-end fw-semibold text-primary" id="rebTargetDol_' + ac.id + '">' + formatMoney(targetDol) + '</td>';
+                html += '<td class="text-center">';
+                html += '<span class="badge bg-light text-dark border px-2 py-1 small" id="rebTargetCorridor_' + ac.id + '">' + minPct.toFixed(1) + '% – ' + maxPct.toFixed(1) + '% <span class="text-secondary fw-normal">(' + formatMoney(minDol) + ' – ' + formatMoney(maxDol) + ')</span></span>';
+                html += '</td>';
+                html += '<td class="text-center">';
+                if (rebState.asset_classes.length > 1) {
+                    html += '<button type="button" class="btn btn-link text-danger p-0 text-decoration-none" title="Delete asset class" onclick="deleteRebAssetClass(\'' + ac.id + '\')"><i class="fa fa-trash-can"></i></button>';
+                } else {
+                    html += '<span class="text-muted small">—</span>';
+                }
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            tbody.innerHTML = html;
+
+            updateRebTargetSummaryUI();
 
             var tolBadge = document.getElementById('rebKpiTolerance');
             if (tolBadge) tolBadge.textContent = '±' + (parseFloat(rebState.tolerance_percent) || 10).toFixed(1) + '%';
@@ -4675,7 +4703,9 @@
             var num = parseFloat(val);
             if (!isNaN(num) && num > 0) {
                 rebState.tolerance_percent = num;
-                renderRebAssetClassesTable();
+                updateRebTargetSummaryUI();
+                var tolBadge = document.getElementById('rebKpiTolerance');
+                if (tolBadge) tolBadge.textContent = '±' + num.toFixed(1) + '%';
                 calculateAndRenderRebalanceResults();
                 serializeRebalancing();
             }
@@ -4693,23 +4723,46 @@
         function onRebCashFlowInput(el) {
             var val = parseMoney(el.value);
             rebState.cash_flow = val;
-            renderRebAssetClassesTable();
+            updateRebTargetSummaryUI();
             calculateAndRenderRebalanceResults();
             serializeRebalancing();
         }
         window.onRebCashFlowInput = onRebCashFlowInput;
 
-        function onRebAssetClassTargetChange(classId, val) {
-            var num = parseFloat(val);
+        function onRebAssetClassTargetInput(classId, val) {
+            var cleaned = val.toString().replace(/[^0-9.]/g, '');
+            var num = parseFloat(cleaned);
             var ac = rebState.asset_classes.find(function(c) { return c.id === classId; });
             if (ac) {
-                ac.target_percent = isNaN(num) ? 0 : num;
-                renderRebAssetClassesTable();
+                ac.target_percent = isNaN(num) ? 0 : Math.max(0, num);
+                updateRebTargetSummaryUI();
                 calculateAndRenderRebalanceResults();
                 serializeRebalancing();
             }
         }
-        window.onRebAssetClassTargetChange = onRebAssetClassTargetChange;
+        window.onRebAssetClassTargetInput = onRebAssetClassTargetInput;
+        window.onRebAssetClassTargetChange = onRebAssetClassTargetInput;
+
+        function onRebAssetClassTargetBlur(classId, el) {
+            var raw = (el.value || '').trim();
+            var ac = rebState.asset_classes.find(function(c) { return c.id === classId; });
+            if (!ac) return;
+
+            if (raw === '' || isNaN(parseFloat(raw))) {
+                ac.target_percent = 0;
+                el.value = '0';
+            } else {
+                var num = Math.max(0, parseFloat(raw));
+                ac.target_percent = num;
+                if (raw.endsWith('.')) {
+                    el.value = num.toString();
+                }
+            }
+            updateRebTargetSummaryUI();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.onRebAssetClassTargetBlur = onRebAssetClassTargetBlur;
 
         function onRebAssetClassNameChange(classId, val) {
             var ac = rebState.asset_classes.find(function(c) { return c.id === classId; });
