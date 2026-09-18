@@ -279,19 +279,12 @@
                                 </div>
 
                                 <div class="row">
-                                    <div class="col-7 mb-3"><strong>Achieved Spending (Year 1 Net Cash Flow):</strong></div>
-                                    <div class="col-5 text-end font-weight-bold">${{ achieved_spending_y1|floatformat:"0"|intcomma }}</div>
-                                    
                                     <div class="col-7 mb-3"><strong>Target Success Rate:</strong></div>
                                     <div class="col-5 text-end">{{ target_success_rate|floatformat:1 }}%</div>
 
                                     <div class="col-7 mb-3"><strong>Achieved Success Rate:</strong></div>
                                     <div class="col-5 text-end text-success font-weight-bold">{{ achieved_success_rate|floatformat:1 }}%</div>
                                 </div>
-                                <hr>
-                                <p class="text-secondary small">
-                                    <strong>Definition:</strong> The <em>Achieved Spending (Year 1 Net Cash Flow)</em> represents the sum of the solved portfolio withdrawal and non-portfolio income sources, minus estimated income taxes and penalties in the first year. It equals the achieved Desired Recurring Spending plus any Additional Spending occurring in Year 1.
-                                </p>
                             </div>
                         {% endif %}
 
