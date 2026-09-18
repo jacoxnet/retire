@@ -3966,6 +3966,124 @@ class FiveSelectedFixesTests(TestCase):
         self.assertAlmostEqual(res_joint['tax_breakdown']['fed_tax'], res_mfj['tax_breakdown']['fed_tax'])
 
 
+class PortfolioRebalancingTests(TestCase):
+    """Tests for the Portfolio Rebalancing tool backend parsing, defaults, and persistence."""
+
+    def test_build_default_rebalancing(self):
+        from core.forms import build_default_rebalancing
+        reb = build_default_rebalancing()
+        self.assertIn('asset_classes', reb)
+        self.assertEqual(reb['tolerance_percent'], 10.0)
+        self.assertEqual(reb['rebalance_mode'], 'target')
+        self.assertEqual(reb['cash_flow'], 0.0)
+        # Check standard default asset classes
+        class_names = [ac['name'] for ac in reb['asset_classes']]
+        self.assertIn('US Stocks', class_names)
+        self.assertIn('International Stocks', class_names)
+        self.assertIn('Bonds', class_names)
+        self.assertIn('Cash / Short-Term', class_names)
+        # Check target sum is 100%
+        total_target = sum(ac['target_percent'] for ac in reb['asset_classes'])
+        self.assertEqual(total_target, 100.0)
+
+    def test_parse_rebalancing_custom_classes(self):
+        from core.forms import parse_rebalancing
+        custom_reb = {
+            'tolerance_percent': 15.0,
+            'rebalance_mode': 'minimal',
+            'cash_flow': 5000.0,
+            'asset_classes': [
+                {'id': 'ac_1', 'name': 'Small Cap Value', 'target_percent': 30.0, 'color': '#10b981'},
+                {'id': 'ac_2', 'name': 'Crypto', 'target_percent': 20.0, 'color': '#f59e0b'},
+                {'id': 'ac_3', 'name': 'Beanie Babies', 'target_percent': 10.0, 'color': '#ec4899'},
+                {'id': 'ac_4', 'name': 'Global Bonds', 'target_percent': 40.0, 'color': '#3b82f6'},
+            ],
+            'included_account_ids': ['acc_pretax_1', 'acc_taxable_1'],
+            'account_allocations': {
+                'acc_pretax_1': {'ac_1': 50.0, 'ac_4': 50.0},
+                'acc_taxable_1': {'ac_2': 50.0, 'ac_3': 50.0},
+            }
+        }
+        # Parse from dict
+        parsed = parse_rebalancing(custom_reb)
+        self.assertEqual(parsed['tolerance_percent'], 15.0)
+        self.assertEqual(parsed['rebalance_mode'], 'minimal')
+        self.assertEqual(len(parsed['asset_classes']), 4)
+        self.assertEqual(parsed['asset_classes'][2]['name'], 'Beanie Babies')
+
+        # Parse from JSON string
+        raw_json = json.dumps(custom_reb)
+        parsed_from_json = parse_rebalancing(raw_json)
+        self.assertEqual(parsed_from_json['asset_classes'][2]['name'], 'Beanie Babies')
+
+    def test_parse_rebalancing_fallback(self):
+        from core.forms import parse_rebalancing
+        # Invalid inputs fall back gracefully to default structure
+        self.assertEqual(parse_rebalancing("invalid json")['tolerance_percent'], 10.0)
+        self.assertEqual(parse_rebalancing(None)['tolerance_percent'], 10.0)
+        self.assertEqual(parse_rebalancing({})['tolerance_percent'], 10.0)
+
+    def test_enter_view_persists_rebalancing(self):
+        from core.views import get_default_data
+        data = get_default_data()
+        self.assertIn('rebalancing', data)
+        self.assertEqual(data['rebalancing']['tolerance_percent'], 10.0)
+
+        # Post custom rebalancing data to enter view
+        custom_reb = {
+            'tolerance_percent': 12.5,
+            'rebalance_mode': 'target',
+            'cash_flow': 10000.0,
+            'asset_classes': [
+                {'id': 'ac_custom_1', 'name': 'Domestic Stocks', 'target_percent': 50.0, 'color': '#3b82f6'},
+                {'id': 'ac_custom_2', 'name': 'Commodities', 'target_percent': 50.0, 'color': '#f59e0b'},
+            ],
+            'included_account_ids': ['acc_pretax_1'],
+            'account_allocations': {'acc_pretax_1': {'ac_custom_1': 100.0}}
+        }
+
+        post_data = {
+            'user_name': 'Test User',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'filing_status': 'single',
+            'current_year': '2026',
+            'desired_spending': '60000',
+            'inflation_rate': '3.0',
+            'runs': '100',
+            'rebalancing_json': json.dumps(custom_reb),
+        }
+        response = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(response.status_code, 302)
+
+        session_sim = self.client.session.get('simulation_data')
+        self.assertIsNotNone(session_sim)
+        self.assertIn('rebalancing', session_sim)
+        self.assertEqual(session_sim['rebalancing']['tolerance_percent'], 12.5)
+        self.assertEqual(session_sim['rebalancing']['asset_classes'][1]['name'], 'Commodities')
+
+    def test_load_plan_preserves_rebalancing(self):
+        from core.views import get_default_data
+        plan = get_default_data()
+        plan['rebalancing'] = {
+            'tolerance_percent': 20.0,
+            'rebalance_mode': 'minimal',
+            'cash_flow': -2000.0,
+            'asset_classes': [
+                {'id': 'ac_spec', 'name': 'Alternative Art & Collectibles', 'target_percent': 100.0, 'color': '#8b5cf6'}
+            ],
+            'included_account_ids': [],
+            'account_allocations': {}
+        }
+        resp = self.client.post(reverse('load_plan'), {'json_data': json.dumps(plan)})
+        self.assertEqual(resp.status_code, 302)
+        loaded = self.client.session.get('simulation_data')
+        self.assertIn('rebalancing', loaded)
+        self.assertEqual(loaded['rebalancing']['tolerance_percent'], 20.0)
+        self.assertEqual(loaded['rebalancing']['asset_classes'][0]['name'], 'Alternative Art & Collectibles')
+
+
 
 
 

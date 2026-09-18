@@ -58,6 +58,12 @@
                     Balance Sheet (optional)
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="rebalance-tab" data-bs-toggle="tab" data-bs-target="#rebalance"
+                    type="button" role="tab" aria-controls="rebalance" aria-selected="false">
+                    <i class="fa-solid fa-scale-balanced me-1"></i> Rebalance (optional)
+                </button>
+            </li>
         </ul>
 
         <!-- Tab Content Panes -->
@@ -558,6 +564,9 @@
                             <button type="button" class="btn btn-primary btn-sm px-3" id="btnAddPeriodSnapshot" onclick="promptAddPeriodSnapshot()">
                                 <i class="fa fa-calendar-plus me-1"></i> Add Balance Sheet Column
                             </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm px-3 shadow-sm" id="btnBsRebalanceLink" onclick="navigateToRebalance()" title="Open Portfolio Rebalancing Tool">
+                                <i class="fa-solid fa-scale-balanced me-1"></i> Rebalance?
+                            </button>
                         </div>
                     </div>
 
@@ -680,7 +689,284 @@
                 <!-- Navigation Action Buttons -->
                 <div class="text-center mt-4 mb-3">
                     <button type="button" class="btn btn-secondary me-2" onclick="switchTab('income-tab')">Back: Social Security & Income Streams</button>
+                    <button type="button" class="btn btn-secondary me-2" onclick="navigateToRebalance()">Next: Rebalance (optional)</button>
                     <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab5">
+                        <i class="fa fa-play me-2"></i> Run Simulation
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB 6: PORTFOLIO REBALANCING TOOL -->
+            <div class="tab-pane fade" id="rebalance" role="tabpanel" aria-labelledby="rebalance-tab">
+                <input type="hidden" name="rebalancing_json" id="rebalancingJsonInput">
+
+                <!-- Header card with Title and Status Badges -->
+                <div class="card p-4 mb-4 shadow-sm">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1"><i class="fa-solid fa-scale-balanced me-1"></i> Portfolio Tool</span>
+                                <h3 class="mb-0 text-primary fw-bold">Portfolio Rebalancing</h3>
+                            </div>
+                            <p class="text-secondary small mb-0">
+                                Compare your actual portfolio investments against your target asset allocation. Based on balances from your latest balance sheet date: <strong id="rebLatestPeriodDate" class="text-dark">Current</strong>.
+                            </p>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="syncRebalanceFromBalanceSheet(true)" title="Reload accounts and balances from the latest balance sheet column">
+                                <i class="fa-solid fa-arrows-rotate me-1"></i> Refresh from Balance Sheet
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 4 KPI Summary Chips -->
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <div class="reb-kpi-card p-3 rounded-3 border bg-light h-100">
+                                <div class="small text-secondary fw-semibold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">Portfolio for Rebalancing</div>
+                                <div class="fs-4 fw-bold text-dark mt-1" id="rebKpiTotalVal">$0</div>
+                                <div class="small text-muted" id="rebKpiAccSummary">0 accounts included</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="reb-kpi-card p-3 rounded-3 border bg-light h-100">
+                                <div class="small text-secondary fw-semibold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">Rebalancing Status</div>
+                                <div class="mt-1" id="rebKpiStatusBadge"><span class="badge bg-success-subtle text-success border border-success-subtle fs-6 py-1 px-2">Balanced</span></div>
+                                <div class="small text-muted mt-1" id="rebKpiDriftSummary">All classes in range</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="reb-kpi-card p-3 rounded-3 border bg-light h-100">
+                                <div class="small text-secondary fw-semibold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">Relative Tolerance Band</div>
+                                <div class="fs-4 fw-bold text-primary mt-1" id="rebKpiTolerance">±10.0%</div>
+                                <div class="small text-muted" id="rebKpiToleranceSub">Rebalance corridor</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="reb-kpi-card p-3 rounded-3 border bg-light h-100">
+                                <div class="small text-secondary fw-semibold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">Trading Strategy Mode</div>
+                                <div class="fs-5 fw-bold text-dark mt-1" id="rebKpiMode">Return to Target</div>
+                                <div class="small text-muted" id="rebKpiModeSub">100% Target Alignment</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 1: Select Accounts to Include -->
+                <div class="card p-4 mb-4 shadow-sm border">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h4 class="mb-1 text-dark fw-bold">
+                                <span class="badge bg-primary rounded-circle me-2" style="font-size: 0.85rem; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;">1</span>
+                                Choose Accounts to Include in Rebalancing
+                            </h4>
+                            <p class="text-secondary small mb-0">Select which balance sheet accounts to include in your rebalancing plan. Debts and real estate equity are excluded automatically.</p>
+                        </div>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="setRebAccountSelection('investment')">Investment Only</button>
+                            <button type="button" class="btn btn-outline-primary" onclick="setRebAccountSelection('all')">Select All</button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="setRebAccountSelection('none')">Deselect All</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mb-2">
+                        <table class="table table-hover align-middle mb-0" id="rebAccountsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 48px;" class="text-center">Include?</th>
+                                    <th>Account Name</th>
+                                    <th>Account Type</th>
+                                    <th>Institution / Notes</th>
+                                    <th class="text-end">Balance (Latest Snapshot)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rebAccountsTableBody">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                            <tfoot class="table-group-divider fw-bold">
+                                <tr class="table-light">
+                                    <td colspan="4" class="text-end">Total Capital Selected for Rebalancing:</td>
+                                    <td class="text-end text-primary fs-5" id="rebAccountsTableTotal">$0</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Define Target Asset Allocation & Tolerance -->
+                <div class="card p-4 mb-4 shadow-sm border">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h4 class="mb-1 text-dark fw-bold">
+                                <span class="badge bg-primary rounded-circle me-2" style="font-size: 0.85rem; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;">2</span>
+                                Set Your Target Asset Allocation &amp; Tolerance
+                            </h4>
+                            <p class="text-secondary small mb-0">Customize your desired asset classes and specify your rebalancing tolerance band.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="promptAddAssetClass()">
+                            <i class="fa fa-plus me-1"></i> Add Custom Asset Class
+                        </button>
+                    </div>
+
+                    <!-- Settings Bar: Tolerance Band, Trading Mode, and Cash Flow -->
+                    <div class="p-3 mb-4 rounded bg-light border">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-4">
+                                <label for="rebToleranceInput" class="form-label fw-semibold small mb-1">
+                                    Relative Tolerance Band %
+                                    <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-title="Relative Tolerance Band" data-bs-content="A rebalancing trade is suggested when an asset class deviates from its target by more than this percentage of its target. For example, with a 10% tolerance, an asset class with a 30% target allows an actual share between 27.0% and 33.0% (30% ± 3%)."></i>
+                                </label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">±</span>
+                                    <input type="number" class="form-control text-center fw-bold" id="rebToleranceInput" min="1" max="100" step="0.5" value="10.0" oninput="onRebToleranceChange(this.value)">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="rebModeSelect" class="form-label fw-semibold small mb-1">
+                                    Rebalance Strategy Mode
+                                    <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-title="Rebalance Strategy Mode" data-bs-content="&lt;b&gt;Return to Target:&lt;/b&gt; Trades are calculated to bring every asset class back to its exact 100% target percentage.&lt;br&gt;&lt;br&gt;&lt;b&gt;Return to Boundary:&lt;/b&gt; Trades only the minimum necessary to pull out-of-range asset classes just back within acceptable tolerance bounds."></i>
+                                </label>
+                                <select class="form-select form-select-sm" id="rebModeSelect" onchange="onRebModeChange(this.value)">
+                                    <option value="target">Full Rebalance (Return to 100% Target)</option>
+                                    <option value="minimal">Minimal-Trade (Return to Boundary)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="rebCashFlowInput" class="form-label fw-semibold small mb-1">
+                                    Smart Cash Flow Adjustment (Optional)
+                                    <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-title="Cash Flow Rebalancing" data-bs-content="Enter an amount of new cash to deposit (+) or withdraw (-). The tool will prioritize deploying new cash to underweight asset classes first, helping you rebalance without selling existing assets."></i>
+                                </label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">$</span>
+                                    <input type="text" class="form-control currency-input text-end" id="rebCashFlowInput" value="$0" placeholder="0" oninput="onRebCashFlowInput(this)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Target Allocation Table -->
+                    <div class="table-responsive mb-3">
+                        <table class="table align-middle mb-0" id="rebAssetClassesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 32px;"></th>
+                                    <th>Asset Class Name</th>
+                                    <th style="width: 160px;" class="text-end">Target %</th>
+                                    <th style="width: 180px;" class="text-end">Target Amount ($)</th>
+                                    <th style="width: 220px;" class="text-center">Allowed Corridor (Tolerance)</th>
+                                    <th style="width: 80px;" class="text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rebAssetClassesTableBody">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Allocation Progress Bar & Live Status -->
+                    <div class="p-3 rounded bg-light border d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div class="d-flex align-items-center gap-2 flex-grow-1" style="max-width: 600px;">
+                            <span class="small fw-bold text-secondary text-nowrap">Total Target Allocation:</span>
+                            <div class="progress flex-grow-1" style="height: 14px;" id="rebTargetProgressBarContainer">
+                                <div class="progress-bar bg-success" role="progressbar" id="rebTargetProgressBar" style="width: 100%;"></div>
+                            </div>
+                        </div>
+                        <div id="rebTargetValidationBadge">
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fs-6">
+                                <i class="fa fa-check-circle me-1"></i> Total: 100.0% (Balanced)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Current Asset Breakdown for Each Included Account -->
+                <div class="card p-4 mb-4 shadow-sm border">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h4 class="mb-1 text-dark fw-bold">
+                                <span class="badge bg-primary rounded-circle me-2" style="font-size: 0.85rem; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;">3</span>
+                                Enter What You Currently Own in Each Included Account
+                            </h4>
+                            <p class="text-secondary small mb-0">Specify how the balance of each account is divided across your asset classes. For single-fund accounts, use the convenient 1-click preset.</p>
+                        </div>
+                    </div>
+
+                    <div id="rebAccountBreakdownsContainer">
+                        <!-- Populated dynamically by JS cards -->
+                    </div>
+                </div>
+
+                <!-- STEP 4: Rebalancing Diagnosis & Action Plan -->
+                <div class="card p-4 mb-4 shadow-sm border" id="rebResultsSection">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h4 class="mb-1 text-dark fw-bold">
+                                <span class="badge bg-primary rounded-circle me-2" style="font-size: 0.85rem; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;">4</span>
+                                Rebalancing Diagnosis &amp; Recommended Actions
+                            </h4>
+                            <p class="text-secondary small mb-0">Review your portfolio drift, comparison charts, and plain-English trading recommendations.</p>
+                        </div>
+                    </div>
+
+                    <!-- Diagnosis Alert Banner -->
+                    <div id="rebDiagnosisAlert" class="alert alert-success d-flex align-items-center mb-4 shadow-sm" role="alert">
+                        <i class="fa-solid fa-circle-check fs-3 me-3 text-success" id="rebDiagnosisIcon"></i>
+                        <div>
+                            <h5 class="alert-heading fw-bold mb-1" id="rebDiagnosisHeading">Your Portfolio is in Balance!</h5>
+                            <p class="mb-0 small" id="rebDiagnosisDesc">All asset classes are within your acceptable tolerance range. No rebalancing trades are necessary.</p>
+                        </div>
+                    </div>
+
+                    <!-- Chart Card: Side-by-Side Target vs Actual -->
+                    <div class="card bg-light border-0 p-3 mb-4 rounded-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold text-dark mb-0"><i class="fa-solid fa-chart-column me-2 text-primary"></i>Actual Allocation vs. Target Allocation</h6>
+                            <span class="small text-muted">Dashed lines indicate allowed tolerance corridor</span>
+                        </div>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="rebComparisonChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Portfolio Drift Breakdown Table -->
+                    <div class="table-responsive mb-4">
+                        <table class="table table-hover align-middle mb-0" id="rebDriftTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Asset Class</th>
+                                    <th class="text-end">Current Amount ($)</th>
+                                    <th class="text-end">Current %</th>
+                                    <th class="text-end">Target %</th>
+                                    <th class="text-center">Allowed Corridor</th>
+                                    <th class="text-end">Drift ($ / %)</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rebDriftTableBody">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Recommended Trading Action Plan (Checklist) -->
+                    <div class="card border rounded-3 p-3 bg-light mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold text-dark mb-0">
+                                <i class="fa-solid fa-list-check me-2 text-primary"></i>Step-by-Step Action Plan (Recommended Trades)
+                            </h5>
+                            <span class="badge bg-secondary-subtle text-secondary border">Tax-Smart Order</span>
+                        </div>
+                        <div id="rebActionPlanContainer">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Navigation Buttons -->
+                <div class="text-center mt-4 mb-3">
+                    <button type="button" class="btn btn-secondary me-2" onclick="switchTab('balance-sheet-tab')">Back: Balance Sheet</button>
+                    <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab6">
                         <i class="fa fa-play me-2"></i> Run Simulation
                     </button>
                 </div>
@@ -737,6 +1023,44 @@
     </div>
 </div>
 
+<!-- Modal for Adding Custom Asset Class -->
+<div class="modal fade" id="addAssetClassModal" tabindex="-1" aria-labelledby="addAssetClassModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0 rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-primary" id="addAssetClassModalLabel">
+                    <i class="fa-solid fa-plus-circle me-2"></i>Add Custom Asset Class
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-3">
+                <div class="mb-3">
+                    <label for="newAssetClassName" class="form-label fw-semibold">Asset Class Name</label>
+                    <input type="text" class="form-control" id="newAssetClassName" placeholder="e.g. Small Cap Value, Commodities, Crypto, Beanie Babies...">
+                </div>
+                <div class="mb-3">
+                    <label for="newAssetClassTarget" class="form-label fw-semibold">Target Allocation %</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="newAssetClassTarget" min="0" max="100" step="0.5" placeholder="10.0">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="newAssetClassColor" class="form-label fw-semibold">Color Tag</label>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="color" class="form-control form-control-color" id="newAssetClassColor" value="#3b82f6" title="Choose a color">
+                        <span class="small text-muted">Used for charts and indicators</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm px-3" onclick="confirmAddAssetClass()">Add Class</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Raw data script tags for initial lists from database -->
 {{ accounts|json_script:"initial-accounts" }}
 {{ additional_spending|json_script:"initial-additional-spending" }}
@@ -744,10 +1068,11 @@
 {{ other_taxes|json_script:"initial-other-taxes" }}
 {{ balance_sheet|json_script:"initial-balance-sheet" }}
 {{ marginal_tax_rate|default:"24.0"|json_script:"initial-marginal-tax-rate" }}
+{{ rebalancing|json_script:"initial-rebalancing" }}
 
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{% static 'js/enter.js' %}?v=20260918-2"></script>
+<script src="{% static 'js/enter.js' %}?v=20260918-3"></script>
 {% endblock %}

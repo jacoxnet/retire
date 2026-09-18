@@ -1224,3 +1224,42 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
 
     return balance_sheet
 
+
+def build_default_rebalancing():
+    """Build a default portfolio rebalancing configuration structure."""
+    return {
+        'included_account_ids': [],
+        'tolerance_percent': 10.0,
+        'rebalance_mode': 'target',
+        'cash_flow': 0.0,
+        'asset_classes': [
+            {'id': 'ac_us_stocks', 'name': 'US Stocks', 'target_percent': 40.0, 'color': '#3b82f6'},
+            {'id': 'ac_intl_stocks', 'name': 'International Stocks', 'target_percent': 20.0, 'color': '#10b981'},
+            {'id': 'ac_bonds', 'name': 'Bonds', 'target_percent': 30.0, 'color': '#8b5cf6'},
+            {'id': 'ac_cash', 'name': 'Cash / Short-Term', 'target_percent': 10.0, 'color': '#f59e0b'},
+        ],
+        'account_allocations': {},
+    }
+
+
+def parse_rebalancing(raw_json_or_dict):
+    """Parse and normalize rebalancing data from POST JSON or dictionary."""
+    if isinstance(raw_json_or_dict, str):
+        try:
+            reb = json.loads(raw_json_or_dict)
+            if isinstance(reb, dict) and 'asset_classes' in reb:
+                return reb
+        except Exception:
+            pass
+    elif isinstance(raw_json_or_dict, dict):
+        if 'asset_classes' in raw_json_or_dict:
+            return raw_json_or_dict
+        if 'rebalancing_json' in raw_json_or_dict:
+            try:
+                reb = json.loads(raw_json_or_dict['rebalancing_json'])
+                if isinstance(reb, dict) and 'asset_classes' in reb:
+                    return reb
+            except Exception:
+                pass
+    return build_default_rebalancing()
+

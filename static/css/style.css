@@ -1263,3 +1263,65 @@ tbody tr:hover {
   color: #ffffff !important;
   border-color: #0284c7 !important;
 }
+
+/* ==========================================================================
+   Portfolio Rebalancing Tool Styles
+   ========================================================================== */
+.reb-kpi-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border-left: 4px solid #3b82f6 !important;
+}
+
+.reb-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.reb-color-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.reb-acc-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  transition: box-shadow 0.15s ease;
+}
+
+.reb-acc-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.reb-acc-card.is-incomplete {
+  border-left: 4px solid #f59e0b;
+}
+
+.reb-acc-card.is-complete {
+  border-left: 4px solid #10b981;
+}
+
+.reb-trade-item {
+  border-left: 3px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.reb-trade-sell {
+  border-left-color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.reb-trade-buy {
+  border-left-color: #10b981;
+  background-color: #f0fdf4;
+}
+
+.reb-trade-hold {
+  border-left-color: #94a3b8;
+  background-color: #f8fafc;
+}

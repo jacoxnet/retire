@@ -11,6 +11,7 @@ from core.forms import (
     calculate_marginal_tax_rate, build_default_balance_sheet,
     parse_balance_sheet, sync_balance_sheet_to_accounts,
     sync_accounts_to_balance_sheet,
+    build_default_rebalancing, parse_rebalancing,
 )
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
@@ -133,6 +134,7 @@ def get_default_data():
         'state_ss_exempt': True
     }
     default_dict['balance_sheet'] = build_default_balance_sheet(data=default_dict)
+    default_dict['rebalancing'] = build_default_rebalancing()
     return default_dict
 
 def get_session_sim_data(request):
@@ -145,6 +147,9 @@ def get_session_sim_data(request):
         sim_data = request.session['simulation_data']
         if 'balance_sheet' not in sim_data:
             sim_data['balance_sheet'] = build_default_balance_sheet(sim_data.get('accounts', []), data=sim_data)
+            request.session['simulation_data'] = sim_data
+        if 'rebalancing' not in sim_data:
+            sim_data['rebalancing'] = build_default_rebalancing()
             request.session['simulation_data'] = sim_data
     return request.session['simulation_data']
 
@@ -204,6 +209,12 @@ def load_plan_view(request):
         else:
             data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
             data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+
+        # Load or initialize rebalancing
+        if 'rebalancing' in data and isinstance(data['rebalancing'], dict):
+            data['rebalancing'] = parse_rebalancing(data['rebalancing'])
+        else:
+            data['rebalancing'] = build_default_rebalancing()
 
         # Auto-create taxable account if life insurance > 0 and no taxable account exists
         has_taxable = any(acc.get('type') == 'taxable' for acc in data.get('accounts', []))
@@ -470,6 +481,15 @@ def enter_view(request):
         else:
             balance_sheet = build_default_balance_sheet(accounts, current_year=current_year)
 
+        # Rebalancing Parsing
+        raw_reb_json = request.POST.get('rebalancing_json')
+        if raw_reb_json:
+            rebalancing = parse_rebalancing(raw_reb_json)
+        elif isinstance(session_data, dict) and 'rebalancing' in session_data:
+            rebalancing = session_data['rebalancing']
+        else:
+            rebalancing = build_default_rebalancing()
+
         # Auto-create taxable account if life insurance > 0 and no taxable account exists
         has_taxable = any(acc.get('type') == 'taxable' for acc in accounts)
         if not has_taxable and (user_life_insurance_amount > 0 or spouse_life_insurance_amount > 0):
@@ -626,6 +646,7 @@ def enter_view(request):
             balance_sheet['marginal_tax_rate'] = calc_tax_rate
         data_block['balance_sheet'] = balance_sheet
         data_block['marginal_tax_rate'] = calc_tax_rate
+        data_block['rebalancing'] = rebalancing
         
         if validation_errors:
             for err in validation_errors:

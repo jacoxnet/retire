@@ -154,6 +154,9 @@
         if (tabId === 'assets-tab' && typeof ensureTaxableAccountForLifeInsurance === 'function') {
             ensureTaxableAccountForLifeInsurance();
         }
+        if (tabId === 'rebalance-tab' && typeof syncRebalanceFromBalanceSheet === 'function') {
+            syncRebalanceFromBalanceSheet();
+        }
         var nextTab = document.getElementById(tabId);
         if (nextTab) {
             bootstrap.Tab.getOrCreateInstance(nextTab).show();
@@ -176,6 +179,9 @@
                 }
                 if (triggerEl.id === 'assets-tab' && typeof ensureTaxableAccountForLifeInsurance === 'function') {
                     ensureTaxableAccountForLifeInsurance();
+                }
+                if (triggerEl.id === 'rebalance-tab' && typeof syncRebalanceFromBalanceSheet === 'function') {
+                    syncRebalanceFromBalanceSheet();
                 }
                 tabTrigger.show();
             });
@@ -4310,6 +4316,942 @@
         renderBsHistoricalChart(bsState.chart_metric);
         serializeBalanceSheet();
 
+        // =========================================================================
+        // PORTFOLIO REBALANCING TOOL ENGINE
+        // =========================================================================
+        var rebState = {
+            included_account_ids: [],
+            tolerance_percent: 10.0,
+            rebalance_mode: 'target',
+            cash_flow: 0.0,
+            asset_classes: [
+                { id: 'ac_us_stocks', name: 'US Stocks', target_percent: 40.0, color: '#3b82f6' },
+                { id: 'ac_intl_stocks', name: 'International Stocks', target_percent: 20.0, color: '#10b981' },
+                { id: 'ac_bonds', name: 'Bonds', target_percent: 30.0, color: '#8b5cf6' },
+                { id: 'ac_cash', name: 'Cash / Short-Term', target_percent: 10.0, color: '#f59e0b' }
+            ],
+            account_allocations: {}
+        };
+        var rebComparisonChartInstance = null;
+
+        // Load initial rebalancing state from JSON script tag if available
+        try {
+            var rawRebEl = document.getElementById('initial-rebalancing');
+            if (rawRebEl && rawRebEl.textContent.trim()) {
+                var rawReb = JSON.parse(rawRebEl.textContent);
+                if (rawReb && typeof rawReb === 'object') {
+                    if (rawReb.asset_classes && Array.isArray(rawReb.asset_classes) && rawReb.asset_classes.length > 0) {
+                        rebState.asset_classes = rawReb.asset_classes;
+                    }
+                    if (rawReb.tolerance_percent !== undefined) {
+                        rebState.tolerance_percent = parseFloat(rawReb.tolerance_percent) || 10.0;
+                    }
+                    if (rawReb.rebalance_mode) {
+                        rebState.rebalance_mode = rawReb.rebalance_mode;
+                    }
+                    if (rawReb.cash_flow !== undefined) {
+                        rebState.cash_flow = parseFloat(rawReb.cash_flow) || 0.0;
+                    }
+                    if (Array.isArray(rawReb.included_account_ids)) {
+                        rebState.included_account_ids = rawReb.included_account_ids;
+                    }
+                    if (rawReb.account_allocations && typeof rawReb.account_allocations === 'object') {
+                        rebState.account_allocations = rawReb.account_allocations;
+                    }
+                }
+            }
+        } catch (e) {
+            console.log("No initial rebalancing data found, using defaults.");
+        }
+
+        // Helper: Harvest all active accounts and their most recent balance sheet balance
+        function getLatestBsAccounts() {
+            var latestPeriod = (bsState.periods && bsState.periods.length > 0) ? bsState.periods[bsState.periods.length - 1] : null;
+            if (!latestPeriod) {
+                latestPeriod = new Date().toISOString().split('T')[0];
+            }
+
+            var accounts = [];
+
+            function addCatAccounts(catKey, catTitle, isInvestment) {
+                var cat = bsState.categories ? bsState.categories[catKey] : null;
+                if (!cat) return;
+
+                if (catKey === 'goals') {
+                    (cat.goal_groups || []).forEach(function(g, gIdx) {
+                        (g.accounts || []).forEach(function(acc, aIdx) {
+                            var val = (acc.values && acc.values[latestPeriod] !== undefined) ? parseMoney(acc.values[latestPeriod]) : 0;
+                            accounts.push({
+                                id: acc.id || ('acc_goal_' + (gIdx+1) + '_' + (aIdx+1)),
+                                name: acc.name || (g.name ? (g.name + ' Fund') : 'Goal Account'),
+                                institution: acc.institution || '',
+                                category: catKey,
+                                category_title: g.name || 'Goal Savings',
+                                is_investment: false,
+                                balance: val
+                            });
+                        });
+                    });
+                    return;
+                }
+
+                (cat.accounts || []).forEach(function(acc, idx) {
+                    var val = (acc.values && acc.values[latestPeriod] !== undefined) ? parseMoney(acc.values[latestPeriod]) : 0;
+                    accounts.push({
+                        id: acc.id || ('acc_' + catKey + '_' + (idx+1)),
+                        name: acc.name || (catTitle + ' Account'),
+                        institution: acc.institution || '',
+                        category: catKey,
+                        category_title: cat.title || catTitle,
+                        is_investment: isInvestment,
+                        balance: val
+                    });
+                });
+            }
+
+            addCatAccounts('pretax', 'Pretax Retirement', true);
+            addCatAccounts('roth', 'Roth Retirement', true);
+            addCatAccounts('taxable', 'Taxable Brokerage', true);
+            addCatAccounts('hsa', 'Health Savings (HSA)', true);
+            addCatAccounts('emergency', 'Emergency Fund', false);
+            addCatAccounts('goals', 'Goal Sinking Fund', false);
+            addCatAccounts('daily', 'Daily Spending', false);
+
+            return {
+                latestPeriod: latestPeriod,
+                accounts: accounts
+            };
+        }
+
+        // Synchronize rebalance state with the active balance sheet
+        function syncRebalanceFromBalanceSheet(forceRefresh) {
+            var data = getLatestBsAccounts();
+            var accounts = data.accounts;
+
+            // Update as-of date badge
+            var dateEl = document.getElementById('rebLatestPeriodDate');
+            if (dateEl) {
+                dateEl.textContent = formatPeriodDateForDisplay(data.latestPeriod);
+            }
+
+            // If included_account_ids is empty or forceRefresh, select all investment accounts
+            if (forceRefresh || !rebState.included_account_ids || rebState.included_account_ids.length === 0) {
+                rebState.included_account_ids = accounts
+                    .filter(function(a) { return a.is_investment && a.balance > 0; })
+                    .map(function(a) { return a.id; });
+                if (rebState.included_account_ids.length === 0 && accounts.length > 0) {
+                    rebState.included_account_ids = accounts.slice(0, 3).map(function(a) { return a.id; });
+                }
+            }
+
+            // Ensure every account has a valid allocation record
+            if (!rebState.account_allocations) rebState.account_allocations = {};
+            accounts.forEach(function(acc) {
+                if (!rebState.account_allocations[acc.id] || Object.keys(rebState.account_allocations[acc.id]).length === 0) {
+                    var defaultAlloc = {};
+                    if (acc.category === 'emergency' || acc.category === 'daily') {
+                        var cashCls = rebState.asset_classes.find(function(c) { return c.id === 'ac_cash' || c.name.toLowerCase().includes('cash'); });
+                        var pickId = cashCls ? cashCls.id : rebState.asset_classes[0].id;
+                        defaultAlloc[pickId] = 100;
+                    } else if (acc.category === 'roth') {
+                        var intlCls = rebState.asset_classes.find(function(c) { return c.id === 'ac_intl_stocks' || c.name.toLowerCase().includes('intl') || c.name.toLowerCase().includes('international'); });
+                        var pickId = intlCls ? intlCls.id : rebState.asset_classes[0].id;
+                        defaultAlloc[pickId] = 100;
+                    } else {
+                        defaultAlloc[rebState.asset_classes[0].id] = 100;
+                    }
+                    rebState.account_allocations[acc.id] = defaultAlloc;
+                }
+            });
+
+            // Update UI inputs
+            var tolInput = document.getElementById('rebToleranceInput');
+            if (tolInput) tolInput.value = rebState.tolerance_percent;
+
+            var modeSelect = document.getElementById('rebModeSelect');
+            if (modeSelect) modeSelect.value = rebState.rebalance_mode || 'target';
+
+            var cashInput = document.getElementById('rebCashFlowInput');
+            if (cashInput) cashInput.value = formatMoney(rebState.cash_flow || 0);
+
+            // Render all cards
+            renderRebAccountsTable();
+            renderRebAssetClassesTable();
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+
+        function formatPeriodDateForDisplay(p) {
+            if (!p) return 'Current';
+            var parts = p.split('-');
+            if (parts.length === 3) {
+                var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                var mIdx = parseInt(parts[1], 10) - 1;
+                return (months[mIdx] || parts[1]) + ' ' + parseInt(parts[2], 10) + ', ' + parts[0];
+            }
+            return p;
+        }
+
+        function navigateToRebalance() {
+            syncRebalanceFromBalanceSheet();
+            switchTab('rebalance-tab');
+        }
+        window.navigateToRebalance = navigateToRebalance;
+        window.syncRebalanceFromBalanceSheet = syncRebalanceFromBalanceSheet;
+
+        function renderRebAccountsTable() {
+            var tbody = document.getElementById('rebAccountsTableBody');
+            if (!tbody) return;
+
+            var data = getLatestBsAccounts();
+            var accounts = data.accounts;
+            var totalSelected = 0;
+            var includedCount = 0;
+
+            var html = '';
+            accounts.forEach(function(acc) {
+                var isIncluded = rebState.included_account_ids.indexOf(acc.id) !== -1;
+                if (isIncluded) {
+                    totalSelected += acc.balance;
+                    includedCount++;
+                }
+
+                var badgeClass = 'bg-secondary';
+                if (acc.category === 'pretax') badgeClass = 'bg-primary';
+                else if (acc.category === 'roth') badgeClass = 'bg-success';
+                else if (acc.category === 'taxable') badgeClass = 'bg-info text-dark';
+                else if (acc.category === 'hsa') badgeClass = 'bg-warning text-dark';
+
+                html += '<tr class="' + (isIncluded ? 'table-active-subtle' : 'opacity-75') + '">';
+                html += '<td class="text-center">';
+                html += '<input type="checkbox" class="form-check-input" style="cursor: pointer;" ' + (isIncluded ? 'checked' : '') + ' onchange="onRebAccountToggle(\'' + acc.id + '\', this.checked)">';
+                html += '</td>';
+                html += '<td><strong class="text-dark">' + (acc.name || 'Account') + '</strong></td>';
+                html += '<td><span class="badge ' + badgeClass + '">' + acc.category_title + '</span></td>';
+                html += '<td class="text-secondary small">' + (acc.institution || '—') + '</td>';
+                html += '<td class="text-end fw-semibold">' + formatMoney(acc.balance) + '</td>';
+                html += '</tr>';
+            });
+
+            if (accounts.length === 0) {
+                html = '<tr><td colspan="5" class="text-center text-muted py-3">No accounts found in the latest balance sheet column. Please add accounts on the Balance Sheet tab.</td></tr>';
+            }
+
+            tbody.innerHTML = html;
+
+            var totEl = document.getElementById('rebAccountsTableTotal');
+            if (totEl) totEl.textContent = formatMoney(totalSelected);
+
+            var kpiTot = document.getElementById('rebKpiTotalVal');
+            if (kpiTot) kpiTot.textContent = formatMoney(totalSelected);
+
+            var kpiAcc = document.getElementById('rebKpiAccSummary');
+            if (kpiAcc) kpiAcc.textContent = includedCount + ' of ' + accounts.length + ' accounts included';
+        }
+
+        function onRebAccountToggle(accId, isChecked) {
+            var idx = rebState.included_account_ids.indexOf(accId);
+            if (isChecked && idx === -1) {
+                rebState.included_account_ids.push(accId);
+            } else if (!isChecked && idx !== -1) {
+                rebState.included_account_ids.splice(idx, 1);
+            }
+            renderRebAccountsTable();
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.onRebAccountToggle = onRebAccountToggle;
+
+        function setRebAccountSelection(mode) {
+            var data = getLatestBsAccounts();
+            if (mode === 'all') {
+                rebState.included_account_ids = data.accounts.map(function(a) { return a.id; });
+            } else if (mode === 'investment') {
+                rebState.included_account_ids = data.accounts.filter(function(a) { return a.is_investment; }).map(function(a) { return a.id; });
+            } else {
+                rebState.included_account_ids = [];
+            }
+            renderRebAccountsTable();
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.setRebAccountSelection = setRebAccountSelection;
+
+        function renderRebAssetClassesTable() {
+            var tbody = document.getElementById('rebAssetClassesTableBody');
+            if (!tbody) return;
+
+            var data = getLatestBsAccounts();
+            var totalSelected = 0;
+            data.accounts.forEach(function(acc) {
+                if (rebState.included_account_ids.indexOf(acc.id) !== -1) {
+                    totalSelected += acc.balance;
+                }
+            });
+            var targetPortfolioTotal = Math.max(0, totalSelected + (rebState.cash_flow || 0));
+
+            var totalTarget = 0;
+            var html = '';
+
+            rebState.asset_classes.forEach(function(ac) {
+                var targetPct = parseFloat(ac.target_percent) || 0;
+                totalTarget += targetPct;
+                var targetDol = targetPortfolioTotal * (targetPct / 100);
+
+                var tolPct = parseFloat(rebState.tolerance_percent) || 10.0;
+                var minPct = targetPct * (1 - tolPct / 100);
+                var maxPct = targetPct * (1 + tolPct / 100);
+                var minDol = targetPortfolioTotal * (minPct / 100);
+                var maxDol = targetPortfolioTotal * (maxPct / 100);
+
+                html += '<tr>';
+                html += '<td class="text-center"><span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span></td>';
+                html += '<td><input type="text" class="form-control form-control-sm fw-semibold" value="' + (ac.name || '') + '" onchange="onRebAssetClassNameChange(\'' + ac.id + '\', this.value)"></td>';
+                html += '<td class="text-end">';
+                html += '<div class="input-group input-group-sm justify-content-end" style="max-width: 130px; margin-left: auto;">';
+                html += '<input type="number" class="form-control text-end fw-bold" step="0.5" min="0" max="100" value="' + targetPct.toFixed(1) + '" oninput="onRebAssetClassTargetChange(\'' + ac.id + '\', this.value)">';
+                html += '<span class="input-group-text">%</span>';
+                html += '</div>';
+                html += '</td>';
+                html += '<td class="text-end fw-semibold text-primary">' + formatMoney(targetDol) + '</td>';
+                html += '<td class="text-center">';
+                html += '<span class="badge bg-light text-dark border px-2 py-1 small">' + minPct.toFixed(1) + '% – ' + maxPct.toFixed(1) + '% <span class="text-secondary fw-normal">(' + formatMoney(minDol) + ' – ' + formatMoney(maxDol) + ')</span></span>';
+                html += '</td>';
+                html += '<td class="text-center">';
+                if (rebState.asset_classes.length > 1) {
+                    html += '<button type="button" class="btn btn-link text-danger p-0 text-decoration-none" title="Delete asset class" onclick="deleteRebAssetClass(\'' + ac.id + '\')"><i class="fa fa-trash-can"></i></button>';
+                } else {
+                    html += '<span class="text-muted small">—</span>';
+                }
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            tbody.innerHTML = html;
+
+            // Progress bar and validation badge
+            var pBar = document.getElementById('rebTargetProgressBar');
+            var valBadge = document.getElementById('rebTargetValidationBadge');
+            var diff = Math.round((totalTarget - 100) * 10) / 10;
+
+            if (pBar) {
+                pBar.style.width = Math.min(100, totalTarget) + '%';
+                if (Math.abs(diff) < 0.01) {
+                    pBar.className = 'progress-bar bg-success';
+                } else if (totalTarget < 100) {
+                    pBar.className = 'progress-bar bg-warning';
+                } else {
+                    pBar.className = 'progress-bar bg-danger';
+                }
+            }
+
+            if (valBadge) {
+                if (Math.abs(diff) < 0.01) {
+                    valBadge.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fs-6"><i class="fa fa-check-circle me-1"></i> Total: 100.0% (Balanced)</span>';
+                } else if (totalTarget < 100) {
+                    valBadge.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2 fs-6"><i class="fa fa-triangle-exclamation me-1"></i> Total: ' + totalTarget.toFixed(1) + '% (Remaining: ' + (100 - totalTarget).toFixed(1) + '%)</span>';
+                } else {
+                    valBadge.innerHTML = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fs-6"><i class="fa fa-circle-xmark me-1"></i> Total: ' + totalTarget.toFixed(1) + '% (Over by ' + (totalTarget - 100).toFixed(1) + '%)</span>';
+                }
+            }
+
+            var tolBadge = document.getElementById('rebKpiTolerance');
+            if (tolBadge) tolBadge.textContent = '±' + (parseFloat(rebState.tolerance_percent) || 10).toFixed(1) + '%';
+
+            var modeKpi = document.getElementById('rebKpiMode');
+            var modeKpiSub = document.getElementById('rebKpiModeSub');
+            if (modeKpi) {
+                modeKpi.textContent = (rebState.rebalance_mode === 'minimal') ? 'Minimal Trading' : 'Return to Target';
+            }
+            if (modeKpiSub) {
+                modeKpiSub.textContent = (rebState.rebalance_mode === 'minimal') ? 'Return to Corridor Boundary' : '100% Target Alignment';
+            }
+        }
+
+        function onRebToleranceChange(val) {
+            var num = parseFloat(val);
+            if (!isNaN(num) && num > 0) {
+                rebState.tolerance_percent = num;
+                renderRebAssetClassesTable();
+                calculateAndRenderRebalanceResults();
+                serializeRebalancing();
+            }
+        }
+        window.onRebToleranceChange = onRebToleranceChange;
+
+        function onRebModeChange(val) {
+            rebState.rebalance_mode = val;
+            renderRebAssetClassesTable();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.onRebModeChange = onRebModeChange;
+
+        function onRebCashFlowInput(el) {
+            var val = parseMoney(el.value);
+            rebState.cash_flow = val;
+            renderRebAssetClassesTable();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.onRebCashFlowInput = onRebCashFlowInput;
+
+        function onRebAssetClassTargetChange(classId, val) {
+            var num = parseFloat(val);
+            var ac = rebState.asset_classes.find(function(c) { return c.id === classId; });
+            if (ac) {
+                ac.target_percent = isNaN(num) ? 0 : num;
+                renderRebAssetClassesTable();
+                calculateAndRenderRebalanceResults();
+                serializeRebalancing();
+            }
+        }
+        window.onRebAssetClassTargetChange = onRebAssetClassTargetChange;
+
+        function onRebAssetClassNameChange(classId, val) {
+            var ac = rebState.asset_classes.find(function(c) { return c.id === classId; });
+            if (ac) {
+                ac.name = val.trim() || 'Asset Class';
+                renderRebAccountBreakdowns();
+                calculateAndRenderRebalanceResults();
+                serializeRebalancing();
+            }
+        }
+        window.onRebAssetClassNameChange = onRebAssetClassNameChange;
+
+        function deleteRebAssetClass(classId) {
+            if (rebState.asset_classes.length <= 1) {
+                alert('You must keep at least one asset class.');
+                return;
+            }
+            rebState.asset_classes = rebState.asset_classes.filter(function(c) { return c.id !== classId; });
+            Object.keys(rebState.account_allocations || {}).forEach(function(accId) {
+                delete rebState.account_allocations[accId][classId];
+            });
+            renderRebAssetClassesTable();
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.deleteRebAssetClass = deleteRebAssetClass;
+
+        var colorPalette = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6'];
+        function promptAddAssetClass() {
+            var modalEl = document.getElementById('addAssetClassModal');
+            if (!modalEl) return;
+            var nameInput = document.getElementById('newAssetClassName');
+            var targetInput = document.getElementById('newAssetClassTarget');
+            var colorInput = document.getElementById('newAssetClassColor');
+            if (nameInput) nameInput.value = '';
+            if (targetInput) targetInput.value = '10.0';
+            if (colorInput) {
+                var nextColor = colorPalette[rebState.asset_classes.length % colorPalette.length];
+                colorInput.value = nextColor;
+            }
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+        window.promptAddAssetClass = promptAddAssetClass;
+
+        function confirmAddAssetClass() {
+            var nameInput = document.getElementById('newAssetClassName');
+            var targetInput = document.getElementById('newAssetClassTarget');
+            var colorInput = document.getElementById('newAssetClassColor');
+            var name = nameInput ? nameInput.value.trim() : '';
+            if (!name) {
+                alert('Please enter a name for the asset class.');
+                return;
+            }
+            var target = targetInput ? parseFloat(targetInput.value) : 10.0;
+            if (isNaN(target) || target < 0) target = 0;
+            var color = colorInput ? colorInput.value : '#3b82f6';
+
+            var newId = 'ac_' + Date.now();
+            rebState.asset_classes.push({
+                id: newId,
+                name: name,
+                target_percent: target,
+                color: color
+            });
+
+            var modalEl = document.getElementById('addAssetClassModal');
+            if (modalEl) {
+                var modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+
+            renderRebAssetClassesTable();
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.confirmAddAssetClass = confirmAddAssetClass;
+
+        function renderRebAccountBreakdowns() {
+            var container = document.getElementById('rebAccountBreakdownsContainer');
+            if (!container) return;
+
+            var data = getLatestBsAccounts();
+            var includedAccounts = data.accounts.filter(function(a) {
+                return rebState.included_account_ids.indexOf(a.id) !== -1;
+            });
+
+            if (includedAccounts.length === 0) {
+                container.innerHTML = '<div class="alert alert-info text-center py-4"><i class="fa fa-info-circle me-2 fs-5"></i>No accounts are currently selected for rebalancing. Please select at least one account in Step 1 above.</div>';
+                return;
+            }
+
+            var html = '';
+            includedAccounts.forEach(function(acc) {
+                var alloc = rebState.account_allocations[acc.id] || {};
+                var totalAllocPct = 0;
+                rebState.asset_classes.forEach(function(ac) {
+                    totalAllocPct += (parseFloat(alloc[ac.id]) || 0);
+                });
+                var is100 = Math.abs(totalAllocPct - 100) < 0.1;
+                var allocatedDol = acc.balance * (totalAllocPct / 100);
+
+                var badgeClass = 'bg-secondary';
+                if (acc.category === 'pretax') badgeClass = 'bg-primary';
+                else if (acc.category === 'roth') badgeClass = 'bg-success';
+                else if (acc.category === 'taxable') badgeClass = 'bg-info text-dark';
+                else if (acc.category === 'hsa') badgeClass = 'bg-warning text-dark';
+
+                html += '<div class="reb-acc-card p-3 mb-3 ' + (is100 ? 'is-complete' : 'is-incomplete') + '">';
+                html += '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">';
+                html += '<div>';
+                html += '<div class="d-flex align-items-center gap-2">';
+                html += '<h5 class="mb-0 fw-bold text-dark">' + (acc.name || 'Account') + '</h5>';
+                html += '<span class="badge ' + badgeClass + '">' + acc.category_title + '</span>';
+                if (acc.institution) {
+                    html += '<span class="small text-secondary fw-semibold">(' + acc.institution + ')</span>';
+                }
+                html += '</div>';
+                html += '</div>';
+
+                // Right header: Balance and Quick Preset Dropdown
+                html += '<div class="d-flex flex-wrap align-items-center gap-3">';
+                html += '<div class="text-end">';
+                html += '<div class="small text-secondary fw-semibold">Total Account Balance</div>';
+                html += '<div class="fw-bold text-dark fs-5">' + formatMoney(acc.balance) + '</div>';
+                html += '</div>';
+
+                // Quick Preset Dropdown
+                html += '<div style="min-width: 220px;">';
+                html += '<select class="form-select form-select-sm" onchange="applySingleAssetPreset(\'' + acc.id + '\', this.value)">';
+                html += '<option value="">⚡ 1-Click Single Asset Preset...</option>';
+                rebState.asset_classes.forEach(function(ac) {
+                    var isSole = (alloc[ac.id] === 100 || alloc[ac.id] === '100');
+                    html += '<option value="' + ac.id + '" ' + (isSole ? 'selected' : '') + '>100% ' + ac.name + '</option>';
+                });
+                html += '</select>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+
+                // Allocation rows for each asset class
+                html += '<div class="row g-2 align-items-center mb-2">';
+                rebState.asset_classes.forEach(function(ac) {
+                    var pct = parseFloat(alloc[ac.id]) || 0;
+                    var dol = acc.balance * (pct / 100);
+
+                    html += '<div class="col-12 col-md-6 col-lg-3">';
+                    html += '<div class="p-2 rounded bg-light border d-flex align-items-center justify-content-between gap-2">';
+                    html += '<div class="d-flex align-items-center gap-2 text-truncate" style="max-width: 140px;">';
+                    html += '<span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span>';
+                    html += '<span class="small fw-semibold text-truncate" title="' + ac.name + '">' + ac.name + '</span>';
+                    html += '</div>';
+                    html += '<div class="d-flex align-items-center gap-1">';
+                    html += '<input type="number" min="0" max="100" step="0.5" class="form-control form-control-sm text-end fw-bold" style="width: 65px;" value="' + (pct > 0 ? pct : 0) + '" oninput="onAccountAssetPercentInput(\'' + acc.id + '\', \'' + ac.id + '\', this.value)">';
+                    html += '<span class="small text-muted">%</span>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '<div class="text-end text-muted small pe-1 mt-1" style="font-size: 0.75rem;">' + formatMoney(dol) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+
+                // Account Allocation Summary Footer
+                html += '<div class="d-flex flex-wrap justify-content-between align-items-center pt-2 border-top small">';
+                if (is100) {
+                    html += '<div class="text-success fw-bold"><i class="fa fa-check-circle me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (100.0%)</div>';
+                } else if (totalAllocPct < 100) {
+                    var remainPct = 100 - totalAllocPct;
+                    html += '<div class="text-warning fw-bold"><i class="fa fa-triangle-exclamation me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-secondary">Remaining: ' + remainPct.toFixed(1) + '%</span></div>';
+                    html += '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="autoBalanceAccountRemaining(\'' + acc.id + '\', ' + remainPct + ')">Assign Remaining ' + remainPct.toFixed(1) + '% to ' + (rebState.asset_classes[0] ? rebState.asset_classes[0].name : 'First Class') + '</button>';
+                } else {
+                    html += '<div class="text-danger fw-bold"><i class="fa fa-circle-xmark me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-danger">Exceeds 100% by ' + (totalAllocPct - 100).toFixed(1) + '%</span></div>';
+                }
+                html += '</div>';
+
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+        }
+
+        function applySingleAssetPreset(accId, classId) {
+            if (!classId) return;
+            var alloc = {};
+            rebState.asset_classes.forEach(function(ac) {
+                alloc[ac.id] = (ac.id === classId) ? 100 : 0;
+            });
+            rebState.account_allocations[accId] = alloc;
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.applySingleAssetPreset = applySingleAssetPreset;
+
+        function onAccountAssetPercentInput(accId, classId, val) {
+            var num = parseFloat(val);
+            if (!rebState.account_allocations[accId]) rebState.account_allocations[accId] = {};
+            rebState.account_allocations[accId][classId] = isNaN(num) ? 0 : Math.max(0, num);
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.onAccountAssetPercentInput = onAccountAssetPercentInput;
+
+        function autoBalanceAccountRemaining(accId, remainPct) {
+            if (!rebState.account_allocations[accId]) rebState.account_allocations[accId] = {};
+            var firstCls = rebState.asset_classes[0].id;
+            var cur = parseFloat(rebState.account_allocations[accId][firstCls]) || 0;
+            rebState.account_allocations[accId][firstCls] = cur + remainPct;
+            renderRebAccountBreakdowns();
+            calculateAndRenderRebalanceResults();
+            serializeRebalancing();
+        }
+        window.autoBalanceAccountRemaining = autoBalanceAccountRemaining;
+
+        function calculateAndRenderRebalanceResults() {
+            var data = getLatestBsAccounts();
+            var includedAccounts = data.accounts.filter(function(a) {
+                return rebState.included_account_ids.indexOf(a.id) !== -1;
+            });
+
+            var portfolioTotal = 0;
+            includedAccounts.forEach(function(a) { portfolioTotal += a.balance; });
+
+            var cashFlow = parseFloat(rebState.cash_flow) || 0;
+            var targetPortfolioTotal = Math.max(0, portfolioTotal + cashFlow);
+            var tolPct = parseFloat(rebState.tolerance_percent) || 10.0;
+            var mode = rebState.rebalance_mode || 'target';
+
+            // Calculate actual totals per asset class
+            var classResults = [];
+            var anyOutOfTolerance = false;
+            var outOfToleranceCount = 0;
+
+            rebState.asset_classes.forEach(function(ac) {
+                var actualDol = 0;
+                includedAccounts.forEach(function(a) {
+                    var alloc = rebState.account_allocations[a.id] || {};
+                    var pct = parseFloat(alloc[ac.id]) || 0;
+                    actualDol += a.balance * (pct / 100);
+                });
+
+                var actualPct = portfolioTotal > 0 ? (actualDol / portfolioTotal) * 100 : 0;
+                var targetPct = parseFloat(ac.target_percent) || 0;
+                var targetDol = targetPortfolioTotal * (targetPct / 100);
+
+                var minPct = targetPct * (1 - tolPct / 100);
+                var maxPct = targetPct * (1 + tolPct / 100);
+                var minDol = targetPortfolioTotal * (minPct / 100);
+                var maxDol = targetPortfolioTotal * (maxPct / 100);
+
+                var driftDol = actualDol - targetDol;
+                var driftPct = actualPct - targetPct;
+
+                var status = 'in_range';
+                if (actualPct > maxPct + 0.05) {
+                    status = 'over';
+                    anyOutOfTolerance = true;
+                    outOfToleranceCount++;
+                } else if (actualPct < minPct - 0.05) {
+                    status = 'under';
+                    anyOutOfTolerance = true;
+                    outOfToleranceCount++;
+                }
+
+                classResults.push({
+                    classId: ac.id,
+                    name: ac.name,
+                    color: ac.color || '#3b82f6',
+                    actualDol: actualDol,
+                    actualPct: actualPct,
+                    targetPct: targetPct,
+                    targetDol: targetDol,
+                    minPct: minPct,
+                    maxPct: maxPct,
+                    minDol: minDol,
+                    maxDol: maxDol,
+                    driftDol: driftDol,
+                    driftPct: driftPct,
+                    status: status
+                });
+            });
+
+            // Update KPI Status Badges
+            var kpiBadge = document.getElementById('rebKpiStatusBadge');
+            var kpiDrift = document.getElementById('rebKpiDriftSummary');
+            if (kpiBadge) {
+                if (!anyOutOfTolerance) {
+                    kpiBadge.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle fs-6 py-1 px-2"><i class="fa fa-check-circle me-1"></i> Balanced</span>';
+                } else {
+                    kpiBadge.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fs-6 py-1 px-2"><i class="fa fa-triangle-exclamation me-1"></i> Rebalance Needed</span>';
+                }
+            }
+            if (kpiDrift) {
+                kpiDrift.textContent = anyOutOfTolerance ? (outOfToleranceCount + ' of ' + classResults.length + ' classes out of range') : 'All classes in range';
+            }
+
+            // Update Step 4 Diagnosis Alert Banner
+            var diagAlert = document.getElementById('rebDiagnosisAlert');
+            var diagIcon = document.getElementById('rebDiagnosisIcon');
+            var diagHeading = document.getElementById('rebDiagnosisHeading');
+            var diagDesc = document.getElementById('rebDiagnosisDesc');
+
+            if (diagAlert && diagHeading && diagDesc) {
+                if (!anyOutOfTolerance) {
+                    diagAlert.className = 'alert alert-success d-flex align-items-center mb-4 shadow-sm';
+                    if (diagIcon) diagIcon.className = 'fa-solid fa-circle-check fs-3 me-3 text-success';
+                    diagHeading.textContent = 'Your Portfolio is in Balance!';
+                    diagDesc.textContent = 'All asset classes are currently within your acceptable ±' + tolPct.toFixed(1) + '% tolerance corridor. No rebalancing trades are necessary at this time.';
+                } else {
+                    diagAlert.className = 'alert alert-warning d-flex align-items-center mb-4 shadow-sm';
+                    if (diagIcon) diagIcon.className = 'fa-solid fa-triangle-exclamation fs-3 me-3 text-warning';
+                    diagHeading.textContent = 'Rebalancing Recommended';
+                    diagDesc.textContent = outOfToleranceCount + ' of your ' + classResults.length + ' asset classes have drifted outside your ±' + tolPct.toFixed(1) + '% acceptable tolerance band. Review the recommended trade checklist below to bring your portfolio back into alignment.';
+                }
+            }
+
+            // Render Drift Table
+            var driftTbody = document.getElementById('rebDriftTableBody');
+            if (driftTbody) {
+                var dHtml = '';
+                classResults.forEach(function(res) {
+                    var statusBadge = '';
+                    if (res.status === 'in_range') {
+                        statusBadge = '<span class="badge bg-success-subtle text-success border border-success-subtle">Within Tolerance</span>';
+                    } else if (res.status === 'over') {
+                        statusBadge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Overweight (Sell)</span>';
+                    } else {
+                        statusBadge = '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Underweight (Buy)</span>';
+                    }
+
+                    var driftClass = (res.driftDol > 0) ? 'text-danger fw-semibold' : ((res.driftDol < 0) ? 'text-primary fw-semibold' : 'text-muted');
+                    var driftSign = (res.driftDol > 0) ? '+' : '';
+
+                    dHtml += '<tr>';
+                    dHtml += '<td>';
+                    dHtml += '<div class="d-flex align-items-center gap-2">';
+                    dHtml += '<span class="reb-color-dot" style="background-color: ' + res.color + ';"></span>';
+                    dHtml += '<strong class="text-dark">' + res.name + '</strong>';
+                    dHtml += '</div>';
+                    dHtml += '</td>';
+                    dHtml += '<td class="text-end fw-semibold">' + formatMoney(res.actualDol) + '</td>';
+                    dHtml += '<td class="text-end fw-bold">' + res.actualPct.toFixed(1) + '%</td>';
+                    dHtml += '<td class="text-end text-secondary">' + res.targetPct.toFixed(1) + '% <span class="small">(' + formatMoney(res.targetDol) + ')</span></td>';
+                    dHtml += '<td class="text-center small"><span class="badge bg-light text-dark border">' + res.minPct.toFixed(1) + '% – ' + res.maxPct.toFixed(1) + '%</span></td>';
+                    dHtml += '<td class="text-end ' + driftClass + '">' + driftSign + formatMoney(res.driftDol) + ' <span class="small">(' + driftSign + res.driftPct.toFixed(1) + '%)</span></td>';
+                    dHtml += '<td class="text-center">' + statusBadge + '</td>';
+                    dHtml += '</tr>';
+                });
+                driftTbody.innerHTML = dHtml;
+            }
+
+            // Render Comparison Chart
+            renderRebComparisonChart(classResults);
+
+            // Render Recommended Action Plan Checklist
+            renderRebActionPlan(classResults, includedAccounts, anyOutOfTolerance, mode);
+        }
+
+        function renderRebComparisonChart(classResults) {
+            var canvas = document.getElementById('rebComparisonChart');
+            if (!canvas) return;
+
+            var ctx = canvas.getContext('2d');
+            if (rebComparisonChartInstance) {
+                rebComparisonChartInstance.destroy();
+            }
+
+            var labels = classResults.map(function(r) { return r.name; });
+            var actualPcts = classResults.map(function(r) { return parseFloat(r.actualPct.toFixed(1)); });
+            var targetPcts = classResults.map(function(r) { return parseFloat(r.targetPct.toFixed(1)); });
+            var colors = classResults.map(function(r) { return r.color; });
+
+            rebComparisonChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Actual Allocation %',
+                            data: actualPcts,
+                            backgroundColor: colors.map(function(c) { return c + 'cc'; }),
+                            borderColor: colors,
+                            borderWidth: 1.5,
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Target Allocation %',
+                            data: targetPcts,
+                            backgroundColor: '#94a3b8',
+                            borderColor: '#64748b',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: { size: 12, weight: 'bold' }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    var r = classResults[context.dataIndex];
+                                    if (context.datasetIndex === 0) {
+                                        return 'Actual: ' + r.actualPct.toFixed(1) + '% (' + formatMoney(r.actualDol) + ')';
+                                    } else {
+                                        return 'Target: ' + r.targetPct.toFixed(1) + '% (' + formatMoney(r.targetDol) + ') [Allowed: ' + r.minPct.toFixed(1) + '%–' + r.maxPct.toFixed(1) + '%]';
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(val) { return val + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Action Plan Checklist
+        function renderRebActionPlan(classResults, includedAccounts, anyOutOfTolerance, mode) {
+            var container = document.getElementById('rebActionPlanContainer');
+            if (!container) return;
+
+            if (!anyOutOfTolerance) {
+                container.innerHTML = '<div class="alert alert-success d-flex align-items-center mb-0"><i class="fa fa-check-circle fs-4 me-3"></i><div><strong>No trades needed!</strong> Your portfolio is currently within your acceptable tolerance corridor. Keep up the good work!</div></div>';
+                return;
+            }
+
+            // Calculate required dollar changes per asset class
+            var sellsNeeded = [];
+            var buysNeeded = [];
+
+            classResults.forEach(function(r) {
+                var tradeDol = 0;
+                if (mode === 'minimal') {
+                    if (r.status === 'over') {
+                        tradeDol = r.actualDol - r.maxDol;
+                        if (tradeDol > 50) sellsNeeded.push({ classId: r.classId, name: r.name, amount: tradeDol, color: r.color });
+                    } else if (r.status === 'under') {
+                        tradeDol = r.minDol - r.actualDol;
+                        if (tradeDol > 50) buysNeeded.push({ classId: r.classId, name: r.name, amount: tradeDol, color: r.color });
+                    }
+                } else {
+                    tradeDol = r.actualDol - r.targetDol;
+                    if (tradeDol > 50) {
+                        sellsNeeded.push({ classId: r.classId, name: r.name, amount: tradeDol, color: r.color });
+                    } else if (tradeDol < -50) {
+                        buysNeeded.push({ classId: r.classId, name: r.name, amount: Math.abs(tradeDol), color: r.color });
+                    }
+                }
+            });
+
+            var orderedAccounts = includedAccounts.slice().sort(function(a, b) {
+                var order = { pretax: 1, roth: 2, hsa: 3, taxable: 4, emergency: 5, goals: 6, daily: 7 };
+                return (order[a.category] || 99) - (order[b.category] || 99);
+            });
+
+            var html = '';
+
+            html += '<div class="alert alert-light border d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">';
+            html += '<div>';
+            html += '<div class="fw-bold text-dark">Trading Strategy: ' + (mode === 'minimal' ? 'Minimal-Trade (Return to Boundary)' : 'Full Rebalance (Return to 100% Target)') + '</div>';
+            html += '<div class="small text-secondary">Execute the suggested trades below to bring your asset classes into alignment.</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="row g-3 mb-3">';
+            html += '<div class="col-md-6">';
+            html += '<div class="card p-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100">';
+            html += '<h6 class="fw-bold text-danger mb-2"><i class="fa-solid fa-circle-arrow-down me-1"></i> Assets to Sell (Overweight)</h6>';
+            if (sellsNeeded.length === 0) {
+                html += '<div class="small text-muted">No sales required.</div>';
+            } else {
+                sellsNeeded.forEach(function(s) {
+                    html += '<div class="d-flex justify-content-between align-items-center py-2 border-bottom border-danger-subtle">';
+                    html += '<div class="d-flex align-items-center gap-2">';
+                    html += '<span class="reb-color-dot" style="background-color: ' + s.color + ';"></span>';
+                    html += '<span class="fw-bold text-dark">' + s.name + '</span>';
+                    html += '</div>';
+                    html += '<span class="badge bg-danger fs-6">' + formatMoney(s.amount) + '</span>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="col-md-6">';
+            html += '<div class="card p-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100">';
+            html += '<h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-circle-arrow-up me-1"></i> Assets to Buy (Underweight)</h6>';
+            if (buysNeeded.length === 0) {
+                html += '<div class="small text-muted">No purchases required.</div>';
+            } else {
+                buysNeeded.forEach(function(b) {
+                    html += '<div class="d-flex justify-content-between align-items-center py-2 border-bottom border-success-subtle">';
+                    html += '<div class="d-flex align-items-center gap-2">';
+                    html += '<span class="reb-color-dot" style="background-color: ' + b.color + ';"></span>';
+                    html += '<span class="fw-bold text-dark">' + b.name + '</span>';
+                    html += '</div>';
+                    html += '<span class="badge bg-success fs-6">' + formatMoney(b.amount) + '</span>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            var hasTaxable = orderedAccounts.some(function(a) { return a.category === 'taxable'; });
+            if (hasTaxable) {
+                html += '<div class="alert alert-info py-2 px-3 small mb-2">';
+                html += '<i class="fa-solid fa-lightbulb text-warning me-1"></i> <strong>Tax Efficiency Tip:</strong> When possible, execute your <strong>SELL</strong> orders inside tax-deferred (401k/Traditional IRA) or tax-free (Roth IRA) accounts first. Selling in taxable brokerage accounts can generate taxable capital gains.';
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        function serializeRebalancing() {
+            var input = document.getElementById('rebalancingJsonInput');
+            if (input) {
+                input.value = JSON.stringify(rebState);
+            }
+        }
+        window.serializeRebalancing = serializeRebalancing;
+
+        // Initialize Rebalancing on initial load
+        syncRebalanceFromBalanceSheet();
+
         document.getElementById('balanceSheetTable')?.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
                 e.preventDefault();
@@ -5134,6 +6076,7 @@
                 if (typeof window.syncAllTabs === 'function') window.syncAllTabs();
                 serializeAllIncomeCards();
                 serializeBalanceSheet();
+                if (typeof serializeRebalancing === 'function') serializeRebalancing();
                 if (!handleCustomValidation(enterDataForm)) {
                     e.preventDefault();
                 }
@@ -5148,6 +6091,7 @@
                 if (typeof window.syncAllTabs === 'function') window.syncAllTabs();
                 serializeAllIncomeCards();
                 serializeBalanceSheet();
+                if (typeof serializeRebalancing === 'function') serializeRebalancing();
                 document.getElementById('enterFormNext').value = 'results';
                 if (handleCustomValidation(enterDataForm)) {
                     enterDataForm.submit();
@@ -5163,6 +6107,7 @@
                 if (typeof window.syncAllTabs === 'function') window.syncAllTabs();
                 serializeAllIncomeCards();
                 serializeBalanceSheet();
+                if (typeof serializeRebalancing === 'function') serializeRebalancing();
                 document.getElementById('enterFormNext').value = 'manage_data';
                 if (handleCustomValidation(enterDataForm)) {
                     enterDataForm.submit();
@@ -5178,6 +6123,7 @@
                     if (typeof window.syncAllTabs === 'function') window.syncAllTabs();
                     serializeAllIncomeCards();
                     serializeBalanceSheet();
+                    if (typeof serializeRebalancing === 'function') serializeRebalancing();
                     document.getElementById('enterFormNext').value = 'enter';
                     if (handleCustomValidation(enterDataForm)) {
                         enterDataForm.submit();
