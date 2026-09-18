@@ -4779,7 +4779,7 @@
 
             var modalEl = document.getElementById('addAssetClassModal');
             if (modalEl) {
-                var modal = bootstrap.Modal.getInstance(modalEl);
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
                 if (modal) modal.hide();
             }
 

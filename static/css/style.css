@@ -422,11 +422,11 @@ tbody tr:hover {
   color: var(--danger);
 }
 
-/* Modal Styles */
-.modal {
+/* Custom Modal Styles (specifically for standalone #howToModal) */
+#howToModal.modal {
   display: none;
   position: fixed;
-  z-index: 1000;
+  z-index: 1060;
   left: 0;
   top: 0;
   width: 100%;
@@ -436,7 +436,7 @@ tbody tr:hover {
   backdrop-filter: blur(4px);
 }
 
-.modal-content {
+#howToModal .modal-content {
   background-color: var(--bg-secondary);
   margin: 10% auto;
   padding: 2rem;
@@ -447,6 +447,12 @@ tbody tr:hover {
   box-shadow: var(--shadow-lg);
   position: relative;
   color: var(--text-primary);
+}
+
+/* Ensure Bootstrap modals always sit in front of the backdrop */
+.modal.fade {
+  z-index: 1065 !important;
+  background-color: transparent !important;
 }
 
 .close-modal {
