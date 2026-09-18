@@ -820,12 +820,19 @@ tbody tr:hover {
 
 #dataEntryTabs .nav-item {
   flex: 0 0 auto;
+  display: flex;
 }
 
 #dataEntryTabs .nav-link {
   white-space: nowrap;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.95rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.92rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  height: 100%;
 }
 
 @media (max-width: 991.98px) {
