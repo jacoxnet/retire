@@ -1855,23 +1855,12 @@
             bsState.period_view_frequency = 'all';
         }
 
-        var bsColLimitInput = document.getElementById('bsColLimitInput');
-        if (bsColLimitInput) {
-            bsColLimitInput.value = bsState.period_view_limit > 0 ? bsState.period_view_limit : 3;
-            bsColLimitInput.addEventListener('input', function() {
-                var v = parseInt(this.value, 10);
-                if (!isNaN(v) && v > 0) {
-                    bsState.period_view_limit = v;
-                    var allBtn = document.getElementById('btnBsAllPeriods');
-                    if (allBtn) allBtn.classList.remove('active');
-                    renderBalanceSheetTable();
-                    serializeBalanceSheet();
-                }
-            });
-        }
-
         function updateBsFreqButtonsUI() {
             var freq = bsState.period_view_frequency || 'all';
+            var select = document.getElementById('bsPeriodFrequencySelect');
+            if (select && select.value !== freq) {
+                select.value = freq;
+            }
             var btnAll = document.getElementById('btnBsFreqAll');
             var btnQ = document.getElementById('btnBsFreqQuarterly');
             var btnY = document.getElementById('btnBsFreqYearly');
@@ -1887,6 +1876,69 @@
             renderBalanceSheetTable();
             serializeBalanceSheet();
         };
+
+        function updateBsColumnScopeUI() {
+            var scopeSelect = document.getElementById('bsColumnScopeSelect');
+            var countContainer = document.getElementById('bsColRecentCountContainer');
+            var input = document.getElementById('bsColLimitInput');
+            var isAll = (bsState.period_view_limit === 0);
+
+            if (scopeSelect) {
+                scopeSelect.value = isAll ? 'all' : 'recent';
+            }
+
+            if (countContainer) {
+                if (isAll) {
+                    countContainer.classList.add('d-none');
+                } else {
+                    countContainer.classList.remove('d-none');
+                }
+            }
+
+            if (input) {
+                if (!isAll) {
+                    input.value = bsState.period_view_limit;
+                } else if (!input.value || parseInt(input.value, 10) <= 0) {
+                    input.value = 3;
+                }
+            }
+
+            // Legacy backward compatibility
+            var radioRecent = document.getElementById('bsColScopeRecent');
+            var radioAll = document.getElementById('bsColScopeAll');
+            if (radioAll) radioAll.checked = isAll;
+            if (radioRecent) radioRecent.checked = !isAll;
+            var allBtn = document.getElementById('btnBsAllPeriods');
+            if (allBtn) allBtn.classList.toggle('active', isAll);
+        }
+
+        window.setBsPeriodColScope = function(scope) {
+            var input = document.getElementById('bsColLimitInput');
+            if (scope === 'all') {
+                bsState.period_view_limit = 0;
+            } else {
+                var val = input ? parseInt(input.value, 10) : 3;
+                if (isNaN(val) || val <= 0) val = 3;
+                bsState.period_view_limit = val;
+            }
+            updateBsColumnScopeUI();
+            renderBalanceSheetTable();
+            serializeBalanceSheet();
+        };
+
+        var bsColLimitInput = document.getElementById('bsColLimitInput');
+        if (bsColLimitInput) {
+            bsColLimitInput.value = bsState.period_view_limit > 0 ? bsState.period_view_limit : 3;
+            bsColLimitInput.addEventListener('input', function() {
+                var v = parseInt(this.value, 10);
+                if (!isNaN(v) && v > 0) {
+                    bsState.period_view_limit = v;
+                    renderBalanceSheetTable();
+                    serializeBalanceSheet();
+                }
+            });
+        }
+        updateBsColumnScopeUI();
 
         function getVisiblePeriods() {
             var rawPeriods = bsState.periods || [];
@@ -3826,28 +3878,18 @@
         // PERIOD & ACCOUNT STRUCTURE MUTATIONS
         // =========================================================================
         window.toggleBsAllPeriods = function() {
-            var allBtn = document.getElementById('btnBsAllPeriods');
-            var input = document.getElementById('bsColLimitInput');
             if (bsState.period_view_limit === 0) {
-                var val = input ? parseInt(input.value, 10) || 3 : 3;
-                bsState.period_view_limit = val;
-                if (allBtn) allBtn.classList.remove('active');
+                setBsPeriodColScope('recent');
             } else {
-                bsState.period_view_limit = 0;
-                if (allBtn) allBtn.classList.add('active');
+                setBsPeriodColScope('all');
             }
-            renderBalanceSheetTable();
-            serializeBalanceSheet();
         };
 
         window.setBsPeriodColLimit = function(limit) {
             var n = parseInt(limit, 10);
             if (isNaN(n) || n <= 0) n = 3;
             bsState.period_view_limit = n;
-            var allBtn = document.getElementById('btnBsAllPeriods');
-            if (allBtn) allBtn.classList.remove('active');
-            var input = document.getElementById('bsColLimitInput');
-            if (input && input.value != n) input.value = n;
+            updateBsColumnScopeUI();
             renderBalanceSheetTable();
             serializeBalanceSheet();
         };
@@ -4262,6 +4304,7 @@
 
         // Initialize Balance Sheet Table & Chart on load
         updateBsFreqButtonsUI();
+        updateBsColumnScopeUI();
         renderBalanceSheetTable();
         updateBsKpis();
         renderBsHistoricalChart(bsState.chart_metric);
