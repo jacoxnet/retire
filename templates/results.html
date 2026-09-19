@@ -1243,44 +1243,6 @@
     </div>
 </div>
 
-<!-- Historical Wrap-Around Explanation Modal -->
-<div class="modal fade" id="wrapAroundModal" tabindex="-1" aria-labelledby="wrapAroundModalLabel" aria-hidden="true" style="z-index: 1065;">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content shadow-lg border-0">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold text-primary" id="wrapAroundModalLabel">
-                    <i class="fa-solid fa-rotate me-2 text-info"></i>Understanding Historical Wrap-Around
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <h6 class="fw-bold text-dark mb-2">Why does the historical sequence wrap around?</h6>
-                <p class="text-secondary mb-3">
-                    The verified historical market database spans 99 continuous years from <strong>1926 through 2024</strong>. 
-                    When you test a relatively recent crisis starting year (such as 2008, 2020, or 2022), your retirement plan horizon extends beyond 2024 (the latest completed calendar year).
-                </p>
-
-                <h6 class="fw-bold text-dark mb-2">How the sequence is mapped:</h6>
-                <p class="text-secondary mb-2">
-                    The engine progresses sequentially forward from your chosen start year until it reaches <strong>2024</strong>. 
-                    For subsequent plan years, it seamlessly <strong>wraps around to 1926</strong> (the earliest year in the dataset) and continues forward from there:
-                </p>
-                <div class="p-3 bg-light rounded border mb-3 font-monospace small text-center text-dark">
-                    ... &rarr; 2022 &rarr; 2023 &rarr; 2024 &rarr; <span class="badge bg-info text-dark">1926 (Wrap)</span> &rarr; 1927 &rarr; 1928 &rarr; 1929 &rarr; ...
-                </div>
-
-                <h6 class="fw-bold text-dark mb-2">Why this method is used:</h6>
-                <p class="text-secondary mb-0">
-                    This circular bootstrapping approach is the standard methodology in academic retirement research and financial planning tools (such as <em>FireCalc</em> and <em>cFIREsim</em>). 
-                    It avoids inventing artificial synthetic data while preserving genuine real-world multi-year correlation structures between stocks, bonds, and inflation.
-                </p>
-            </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}

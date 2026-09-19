@@ -169,7 +169,13 @@ CRISIS_SCENARIOS = {
 def get_historical_sequence(start_year, num_years):
     """
     Returns lists of stocks, bonds, cash, inflation of length num_years starting from start_year.
-    If sequence exceeds MAX_HISTORICAL_YEAR, it wraps around from MIN_HISTORICAL_YEAR.
+    If sequence exceeds MAX_HISTORICAL_YEAR, it wraps around from MIN_HISTORICAL_YEAR
+    (circular bootstrapping method).
+
+    Note: This is a standalone utility function (e.g. for full-horizon circular backtesting).
+    The hybrid Monte Carlo stress test in runs.py (run_historical_stress_test) applies historical
+    returns strictly for the designated crisis duration (all <= MAX_HISTORICAL_YEAR) and uses
+    stochastic draws for non-crisis years, rather than wrapping around.
     """
     stocks = []
     bonds = []

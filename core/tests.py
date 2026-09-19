@@ -1182,6 +1182,11 @@ class RetirementCalculationTests(TestCase):
         self.assertIn('1973_stagflation', CRISIS_SCENARIOS)
         self.assertIn('2008_gfc', CRISIS_SCENARIOS)
 
+        # Verify all crisis scenarios fall strictly within verified historical range
+        for key, scn in CRISIS_SCENARIOS.items():
+            self.assertGreaterEqual(scn['start_year'], MIN_HISTORICAL_YEAR, f"{key} starts before {MIN_HISTORICAL_YEAR}")
+            self.assertLessEqual(scn['end_year'], MAX_HISTORICAL_YEAR, f"{key} ends after {MAX_HISTORICAL_YEAR}")
+
         seq = get_historical_sequence(2000, 30)
         self.assertEqual(len(seq['stocks']), 30)
         self.assertEqual(len(seq['bonds']), 30)
@@ -1205,6 +1210,14 @@ class RetirementCalculationTests(TestCase):
         res_stagflation = run_historical_stress_test(plan, scenario_key='1973_stagflation', asset_allocation='60_40', crisis_timing='current')
         self.assertEqual(res_stagflation['scenario']['key'], '1973_stagflation')
         self.assertIn('delta_success', res_stagflation['deltas'])
+
+        # Verify guard against out-of-bounds scenarios
+        from unittest.mock import patch
+        with patch.dict('core.historical_data.CRISIS_SCENARIOS', {
+            'future_fake': {'name': 'Future Shock', 'start_year': 2025, 'end_year': 2028, 'length': 4}
+        }):
+            with self.assertRaises(ValueError):
+                run_historical_stress_test(plan, scenario_key='future_fake')
 
     def test_stress_test_api_endpoint(self):
         """Test the /api/stress_test/ endpoint."""

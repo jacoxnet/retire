@@ -2236,7 +2236,7 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
     Conducts a Monte Carlo simulation applying historical returns & inflation for the specified crisis duration,
     and regular Monte Carlo stochastic draws for all other years of the plan.
     """
-    from core.historical_data import HISTORICAL_RETURNS, CRISIS_SCENARIOS, blend_return
+    from core.historical_data import HISTORICAL_RETURNS, CRISIS_SCENARIOS, blend_return, MIN_HISTORICAL_YEAR, MAX_HISTORICAL_YEAR
 
     inputs = extract_sim_inputs(sim_input)
     years = inputs['total_years']
@@ -2252,6 +2252,12 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
     start_yr = scenario_info['start_year']
     end_yr = scenario_info.get('end_year', start_yr + scenario_info.get('length', 10) - 1)
     crisis_length = scenario_info.get('length', end_yr - start_yr + 1)
+
+    if start_yr < MIN_HISTORICAL_YEAR or end_yr > MAX_HISTORICAL_YEAR:
+        raise ValueError(
+            f"Crisis scenario '{scenario_info.get('key')}' spans {start_yr}–{end_yr}, "
+            f"which exceeds verified historical data ({MIN_HISTORICAL_YEAR}–{MAX_HISTORICAL_YEAR})."
+        )
 
     t_ret = max(0, inputs['user_ret_age'] - inputs['user_age'])
     if crisis_timing == 'retirement':
