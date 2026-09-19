@@ -1904,7 +1904,8 @@ class RetirementCalculationTests(TestCase):
         # Scenario A: All pretax is user pretax ($100k user, $0 spouse). Deficit of $10,000.
         (u_end_a, sp_end_a, roth_end, tax_end, hsa_u, hsa_s,
          u_rmd, sp_rmd, w_pre_a, w_tax, w_roth, w_hu, w_hs,
-         fed_tax_a, st_tax_a, pen_a, hsa_pen_u, hsa_pen_s) = njit_rmd_tax_withdraw(
+         fed_tax_a, st_tax_a, pen_a, hsa_pen_u, hsa_pen_s,
+         shortfall_a) = njit_rmd_tax_withdraw(
             62, 50, True, True, True,
             100000.0, 0.0, 100000.0, 0.0,
             0.0, 0.0, 0.0, 0.0,
@@ -1916,7 +1917,8 @@ class RetirementCalculationTests(TestCase):
         # Scenario B: All pretax is spouse pretax ($0 user, $100k spouse). Deficit of $10,000.
         (u_end_b, sp_end_b, roth_end, tax_end, hsa_u, hsa_s,
          u_rmd, sp_rmd, w_pre_b, w_tax, w_roth, w_hu, w_hs,
-         fed_tax_b, st_tax_b, pen_b, hsa_pen_u, hsa_pen_s) = njit_rmd_tax_withdraw(
+         fed_tax_b, st_tax_b, pen_b, hsa_pen_u, hsa_pen_s,
+         shortfall_b) = njit_rmd_tax_withdraw(
             62, 50, True, True, True,
             0.0, 100000.0, 0.0, 100000.0,
             0.0, 0.0, 0.0, 0.0,
@@ -4095,6 +4097,102 @@ class PortfolioRebalancingTests(TestCase):
         self.assertIn('rebalancing', loaded)
         self.assertEqual(loaded['rebalancing']['tolerance_percent'], 20.0)
         self.assertEqual(loaded['rebalancing']['asset_classes'][0]['name'], 'Alternative Art & Collectibles')
+
+    def test_debt_erasure_prevention_absorbing_barrier(self):
+        """
+        Verify that mid-retirement insolvency is treated as a plan failure (absorbing barrier ruin theory),
+        and cannot be erased by delayed windfalls/income restoring terminal wealth.
+        """
+        from core.runs import generate_runs
+
+        plan = {
+            'user_name': 'Insolvency Test User',
+            'user_age': 60,
+            'user_retirement_age': 60,
+            'user_age_death': 80,
+            'is_married': False,
+            'desired_spending': 60000.0,
+            'survivor_spending': 0.0,
+            'inflation_rate': 0.0,
+            'taxable_assets': {'present_balance': 60000.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'pretax_assets': {'present_balance': 0.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'roth_assets': {'present_balance': 0.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'hsa_assets': {'present_balance': 0.0, 'return_mean': 0.0, 'return_std': 0.0, 'hsa_for_medical': True},
+            # Windfall of $1,000,000 arrives at age 75 (year t=15)
+            'income_sources': [
+                {
+                    'name': 'Late Inheritance',
+                    'amount': 1000000.0,
+                    'frequency': 'one_time',
+                    'start_age_type': 'specified',
+                    'start_age_specified': 75,
+                    'end_age_type': 'specified',
+                    'end_age_specified': 75,
+                    'subject_to_tax': False
+                }
+            ],
+            'additional_spending': [],
+            'other_taxes': [],
+            'runs': 100
+        }
+        res = generate_runs(plan)
+        # Year 1: $60k assets covers $60k spending.
+        # Year 2..14: $0 assets, $60k deficit/year -> Insolvent!
+        # Year 15: $1M arrives, ending wealth at age 80 > $500,000.
+        # Under the old debt-erasure flaw, this was marked 100% SUCCESS.
+        # Under absorbing barrier solvency check, this is 0% SUCCESS.
+        self.assertEqual(res['run_success'], 0.0)
+        self.assertGreater(res['run_median'], 0.0)
+
+    def test_depleted_assets_clamp_at_zero_with_shortfall(self):
+        """
+        Verify that depleted accounts clamp at $0.0 (no negative balances) and record unfulfilled shortfall.
+        """
+        from core.runs import simulate_step, run_deterministic
+
+        # 1. Test simulate_step
+        res = simulate_step(
+            t=0, user_age=65, is_married=False, spouse_age=65,
+            user_age_death=85, spouse_age_death=85, filing_status='single',
+            desired_spending_start_age=65, desired_spending=50000.0, survivor_spending=0.0,
+            adjust_spending_inflation=False, inflation_rate=0.0,
+            additional_spending_list=[], income_sources_list=[],
+            pretax_user=0.0, pretax_spouse=0.0, roth=0.0, taxable=10000.0,
+            hsa_user=0.0, hsa_for_medical=True,
+            r_pretax_user=0.0, r_pretax_spouse=0.0, r_roth=0.0, r_taxable=0.0, r_hsa=0.0,
+            contrib_pretax_user=0.0, contrib_pretax_spouse=0.0, contrib_roth=0.0, contrib_taxable=0.0, contrib_hsa=0.0,
+            user_rmd_start_age=75
+        )
+        # $10,000 taxable covers part of $50,000; ending taxable should be $0.0 (not -$40,000)
+        self.assertEqual(res['ending_assets']['taxable'], 0.0)
+        self.assertEqual(res['ending_assets']['total'], 0.0)
+        self.assertAlmostEqual(res['shortfall'], 40000.0)
+
+        # 2. Test run_deterministic
+        plan = {
+            'user_name': 'Deterministic Shortfall User',
+            'user_age': 65,
+            'user_retirement_age': 65,
+            'user_age_death': 70,
+            'is_married': False,
+            'desired_spending': 50000.0,
+            'survivor_spending': 0.0,
+            'inflation_rate': 0.0,
+            'taxable_assets': {'present_balance': 20000.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'pretax_assets': {'present_balance': 0.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'roth_assets': {'present_balance': 0.0, 'return_mean': 0.0, 'return_std': 0.0},
+            'hsa_assets': {'present_balance': 0.0, 'return_mean': 0.0, 'return_std': 0.0, 'hsa_for_medical': True},
+            'income_sources': [],
+            'additional_spending': [],
+            'other_taxes': []
+        }
+        rows = run_deterministic(plan)
+        for r in rows:
+            self.assertGreaterEqual(r['ending_assets']['taxable'], 0.0)
+            self.assertGreaterEqual(r['ending_assets']['total'], 0.0)
+        # Year 0 has shortfall of $30k, years 1..4 have shortfall of $50k
+        self.assertAlmostEqual(rows[0]['shortfall'], 30000.0)
+        self.assertAlmostEqual(rows[1]['shortfall'], 50000.0)
 
 
 

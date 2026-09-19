@@ -425,8 +425,8 @@ def njit_rmd_tax_withdraw(
                 final_penalty = final_penalty + hsa_penalty_spouse
                 total_base_tax = final_fed_tax + final_state_tax + final_penalty
 
-        if deficit > 0.0:
-            taxable_end = taxable_end - deficit
+        shortfall = deficit if deficit > 0.0 else 0.0
+        taxable_end = max(0.0, taxable_end)
 
     return (
         pretax_user_end, pretax_spouse_end, roth_end, taxable_end, hsa_user_end, hsa_spouse_end,
@@ -434,6 +434,7 @@ def njit_rmd_tax_withdraw(
         w_pretax_extra, w_taxable, w_roth, w_hsa_user, w_hsa_spouse,
         final_fed_tax, final_state_tax, final_penalty,
         hsa_penalty_user, hsa_penalty_spouse,
+        shortfall
     )
 
 def calculate_income_growth_factor(
@@ -908,7 +909,8 @@ def simulate_step(
      user_rmd_t, spouse_rmd_t,
      w_pretax_extra, w_taxable, w_roth, w_hsa_user, w_hsa_spouse,
      final_fed_tax, final_state_tax, final_penalty,
-     hsa_penalty_user, hsa_penalty_spouse) = njit_rmd_tax_withdraw(
+     hsa_penalty_user, hsa_penalty_spouse,
+     shortfall) = njit_rmd_tax_withdraw(
         user_age_t, spouse_age_t if is_married else user_age_t, user_alive, spouse_alive, is_married,
         pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
         roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
@@ -1007,7 +1009,8 @@ def simulate_step(
         'additional_spending': add_spending_t,
         'additional_spending_breakdown': add_spending_breakdown_t,
         'withdrawals': withdrawals,
-        'life_insurance_payout': life_insurance_payout
+        'life_insurance_payout': life_insurance_payout,
+        'shortfall': shortfall
     }
 
 def _get_single_account_contributions_for_year(t, user_age, is_married, spouse_age, current_year, asset_data):
@@ -1445,7 +1448,9 @@ def njit_simulate_path(
     inf_factors=None,
     taxable_deposit_t=-1,
     taxable_deposit_amt=0.0,
-    terminal_life_ins_estate=0.0
+    terminal_life_ins_estate=0.0,
+    success_flags=None,
+    path_idx=-1
 ):
     pretax_user = pretax_user_init
     pretax_spouse = pretax_spouse_init
@@ -1454,6 +1459,8 @@ def njit_simulate_path(
     hsa_user = hsa_user_init
     hsa_spouse = hsa_spouse_init
     
+    ever_depleted = False
+
     if trajectory_arr is not None:
         trajectory_arr[0] = pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
 
@@ -1537,7 +1544,8 @@ def njit_simulate_path(
          user_rmd_t, spouse_rmd_t,
          w_pretax_extra, w_taxable, w_roth, w_hsa_u, w_hsa_s,
          final_fed_tax, final_state_tax, final_penalty,
-         hsa_penalty_user, hsa_penalty_spouse) = njit_rmd_tax_withdraw(
+         hsa_penalty_user, hsa_penalty_spouse,
+         shortfall) = njit_rmd_tax_withdraw(
             user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
             pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
             roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
@@ -1547,6 +1555,9 @@ def njit_simulate_path(
             other_taxes_arr[t], state_tax_rate, state_ss_exempt_code,
             hsa_user_for_medical_code, hsa_spouse_for_medical_code,
         )
+
+        if shortfall > 0.0:
+            ever_depleted = True
 
         pretax_user = pretax_user_end
         pretax_spouse = pretax_spouse_end
@@ -1562,6 +1573,8 @@ def njit_simulate_path(
     terminal_estate = ending_portfolio + terminal_life_ins_estate
     if trajectory_arr is not None:
         trajectory_arr[total_years] = terminal_estate
+    if success_flags is not None and path_idx >= 0:
+        success_flags[path_idx] = 1.0 if (not ever_depleted and ending_portfolio >= 0.0) else 0.0
     return terminal_estate
 
 @numba.njit(parallel=True, cache=True)
@@ -1599,7 +1612,9 @@ def njit_simulate_all_paths(
                 inf_factors,
                 taxable_deposit_t,
                 taxable_deposit_amt,
-                terminal_life_ins_estate
+                terminal_life_ins_estate,
+                success_flags,
+                i
             )
         else:
             ending_wealths[i] = njit_simulate_path(
@@ -1616,10 +1631,10 @@ def njit_simulate_all_paths(
                 inf_factors,
                 taxable_deposit_t,
                 taxable_deposit_amt,
-                terminal_life_ins_estate
+                terminal_life_ins_estate,
+                success_flags,
+                i
             )
-        if success_flags is not None:
-            success_flags[i] = 1.0 if (ending_wealths[i] - terminal_life_ins_estate >= 0.0) else 0.0
 
 def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None):
     desired_spending = test_spending if test_spending is not None else inputs['desired_spending']
@@ -2208,7 +2223,8 @@ def run_deterministic(sim_input):
             'additional_spending': res['additional_spending'],
             'additional_spending_breakdown': res['additional_spending_breakdown'],
             'ending_assets': res['ending_assets'],
-            'withdrawals': res['withdrawals']
+            'withdrawals': res['withdrawals'],
+            'shortfall': res.get('shortfall', 0.0)
         })
         
     return rows
