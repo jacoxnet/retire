@@ -9,4 +9,5 @@ urlpatterns = [
     path('load_plan/', views.load_plan_view, name='load_plan'),
     path('change_mode/', views.change_mode_view, name='change_mode'),
     path('api/stress_test/', views.stress_test_api, name='stress_test_api'),
+    path('api/cpi_data/', views.cpi_data_api, name='cpi_data_api'),
 ]

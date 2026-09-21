@@ -17,6 +17,7 @@ from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.urls import reverse
+from core.cpi_service import load_cpi_data
 
 import numpy as np
 
@@ -648,13 +649,17 @@ def enter_view(request):
         data_block['marginal_tax_rate'] = calc_tax_rate
         data_block['rebalancing'] = rebalancing
         
+        cpi_data = load_cpi_data()
+        cpi_data_json = json.dumps(cpi_data)
+
         if validation_errors:
             for err in validation_errors:
                 messages.error(request, err)
             data_block['target_success_rate_error'] = is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0)
             data_block['runs_error'] = (runs < 1 or runs > 100000)
             request.session['simulation_data'] = data_block
-            return render(request, 'enter.html', data_block)
+            context = dict(data_block, cpi_data_json=cpi_data_json)
+            return render(request, 'enter.html', context)
             
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
@@ -672,7 +677,9 @@ def enter_view(request):
             messages.success(request, "New session started. Simulation data reset to default values.")
             return redirect(reverse('enter'))
         data = get_session_sim_data(request)
-        return render(request, 'enter.html', data)
+        cpi_data = load_cpi_data()
+        context = dict(data, cpi_data_json=json.dumps(cpi_data))
+        return render(request, 'enter.html', context)
 
 @require_http_methods(["GET"])
 def results_view(request):
@@ -765,3 +772,11 @@ def stress_test_api(request):
 
     res = run_historical_stress_test(sim_input, scenario_key=scenario_key, asset_allocation=allocation, crisis_timing=timing)
     return JsonResponse(res)
+
+
+@require_http_methods(["GET"])
+def cpi_data_api(request):
+    from django.http import JsonResponse
+    force = request.GET.get('refresh') == '1'
+    data = load_cpi_data(force_refresh=force)
+    return JsonResponse(data)

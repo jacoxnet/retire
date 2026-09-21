@@ -1623,6 +1623,88 @@
         var bsChartInstance = null;
         window._isSyncing = false;
 
+        var cpiData = {};
+        try {
+            var rawCpiEl = document.getElementById('initial-cpi-data');
+            if (rawCpiEl && rawCpiEl.textContent.trim()) {
+                cpiData = JSON.parse(rawCpiEl.textContent);
+            }
+        } catch (e) {
+            console.error("Error loading initial CPI data:", e);
+        }
+
+        function getCpiPriorMonth(dateStr) {
+            if (!dateStr) return "2026-08";
+            var cleaned = String(dateStr).trim().replace(/\//g, '-');
+            var parts = cleaned.split('-');
+            var y = parseInt(parts[0], 10);
+            var m = parts.length > 1 ? parseInt(parts[1], 10) : 1;
+            if (isNaN(y) || isNaN(m)) {
+                var now = new Date();
+                y = now.getFullYear();
+                m = now.getMonth() + 1;
+            }
+            if (m === 1) {
+                y -= 1;
+                m = 12;
+            } else {
+                m -= 1;
+            }
+            return String(y) + '-' + (m < 10 ? '0' : '') + m;
+        }
+
+        function getLatestCpiMonth() {
+            var keys = Object.keys(cpiData).sort();
+            if (keys.length === 0) return { ym: "2026-08", index: 334.980 };
+            var latestKey = keys[keys.length - 1];
+            return { ym: latestKey, index: cpiData[latestKey] };
+        }
+
+        function getCpiIndex(dateStr, isPriorMonthAlready) {
+            var ym = isPriorMonthAlready ? dateStr : getCpiPriorMonth(dateStr);
+            var keys = Object.keys(cpiData).sort();
+            if (keys.length === 0) return { ym: ym, index: 100.0 };
+            if (cpiData[ym] !== undefined && cpiData[ym] !== null) return { ym: ym, index: cpiData[ym] };
+            if (ym < keys[0]) return { ym: keys[0], index: cpiData[keys[0]] };
+            return { ym: keys[keys.length - 1], index: cpiData[keys[keys.length - 1]] };
+        }
+
+        function getEffectiveTarget(baseTarget, autoInflate, baseDate, evalDate) {
+            var baseAmt = parseFloat(baseTarget) || 0.0;
+            if (!autoInflate || baseAmt <= 0) {
+                return {
+                    effectiveTarget: baseAmt,
+                    baseTarget: baseAmt,
+                    autoInflate: false,
+                    baseMonth: "",
+                    baseIndex: 0,
+                    evalMonth: "",
+                    evalIndex: 0,
+                    ratio: 1.0,
+                    inflationPct: 0.0
+                };
+            }
+            var baseInfo = getCpiIndex(baseDate);
+            var evalInfo = evalDate ? getCpiIndex(evalDate) : getLatestCpiMonth();
+            var ratio = 1.0;
+            if (baseInfo.index > 0 && evalInfo.index > 0) {
+                ratio = evalInfo.index / baseInfo.index;
+            }
+            var effectiveTarget = Math.round(baseAmt * ratio);
+            var inflationPct = Math.round((ratio - 1.0) * 10000) / 100;
+            return {
+                effectiveTarget: effectiveTarget,
+                baseTarget: baseAmt,
+                autoInflate: true,
+                baseMonth: baseInfo.ym,
+                baseIndex: baseInfo.index,
+                evalMonth: evalInfo.ym,
+                evalIndex: evalInfo.index,
+                ratio: ratio,
+                inflationPct: inflationPct
+            };
+        }
+
         try {
             var rawBs = JSON.parse(document.getElementById('initial-balance-sheet').textContent);
             if (rawBs && rawBs.categories) {
@@ -1637,6 +1719,15 @@
                 if (!bsState.categories.daily) bsState.categories.daily = { title: "Daily Spending Accounts (Checking & Cash)", is_pretax: false, accounts: [] };
                 if (!bsState.categories.real_estate) bsState.categories.real_estate = { properties: [] };
                 if (!bsState.categories.debts) bsState.categories.debts = [];
+
+                if (bsState.categories.emergency) {
+                    if (bsState.categories.emergency.target_auto_inflate === undefined) bsState.categories.emergency.target_auto_inflate = false;
+                    if (!bsState.categories.emergency.target_base_date) bsState.categories.emergency.target_base_date = bsState.current_period || todayStr;
+                }
+                (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
+                    if (g.target_auto_inflate === undefined) g.target_auto_inflate = false;
+                    if (!g.target_base_date) g.target_base_date = bsState.current_period || todayStr;
+                });
             }
         } catch (e) {
             console.log("No initial balance sheet data found.");
@@ -2713,7 +2804,9 @@
             var emgCat = bsState.categories.emergency || { title: "Emergency Fund Accounts", target_amount: 0.0, accounts: [] };
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
-            var emgTarget = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+            var emgTargetBase = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+            var emgCalc = getEffectiveTarget(emgTargetBase, emgCat.target_auto_inflate, emgCat.target_base_date, currPeriod);
+            var emgTarget = emgCalc.effectiveTarget;
             var isEmgCollapsed = !!bsState.collapsed_categories['emergency'];
             var emgCount = (emgCat.accounts || []).length;
 
@@ -2724,8 +2817,12 @@
             bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + emgCat.title + '<span class="bs-count-badge">' + emgCount + ' ' + (emgCount === 1 ? 'account' : 'accounts') + '</span></span>';
             bHtml += '<div class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded border small" onclick="event.stopPropagation()">';
             bHtml += '<span class="text-muted">Target Goal:</span>';
-            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 100px; height: 24px;" value="' + formatMoney(emgTarget) + '" oninput="onBsEmergencyTargetInput(this)" onblur="renderBalanceSheetTable()">';
+            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 100px; height: 24px;" value="' + formatMoney(emgTargetBase) + '" oninput="onBsEmergencyTargetInput(this)" onblur="renderBalanceSheetTable()">';
+            bHtml += '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' + (emgCalc.autoInflate ? 'text-primary fw-bold' : 'text-secondary') + '" onclick="openTargetCpiModal(\'emergency\')" title="Configure CPI-U Inflation Adjustment"><i class="fa-solid fa-arrow-trend-up"></i></button>';
             bHtml += '</div>';
+            if (emgCalc.autoInflate) {
+                bHtml += '<span class="badge bg-primary-subtle text-primary border border-primary-subtle clickable py-1 px-2" onclick="event.stopPropagation(); openTargetCpiModal(\'emergency\')" title="Base Target ' + formatMoney(emgTargetBase) + ' (Ref Month: ' + emgCalc.baseMonth + ') adjusted by ' + (emgCalc.inflationPct >= 0 ? '+' : '') + emgCalc.inflationPct + '% CPI-U to ' + emgCalc.evalMonth + '"><i class="fa-solid fa-arrow-trend-up me-1"></i>CPI: ' + formatMoney(emgTarget) + ' (' + (emgCalc.inflationPct >= 0 ? '+' : '') + emgCalc.inflationPct + '%)</span>';
+            }
             bHtml += '</div>';
             bHtml += '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" onclick="event.stopPropagation(); addBsAccount(\'emergency\')"><i class="fa fa-plus me-1"></i>Add Emergency Account</button>';
             bHtml += '</div>';
@@ -2819,7 +2916,9 @@
 
             if (goalsCat.goal_groups && goalsCat.goal_groups.length > 0) {
                 goalsCat.goal_groups.forEach(function(group, gIdx) {
-                    var gTarget = parseFloat(group.target_amount || 0.0);
+                    var gTargetBase = parseFloat(group.target_amount || 0.0);
+                    var gCalc = getEffectiveTarget(gTargetBase, group.target_auto_inflate, group.target_base_date, currPeriod);
+                    var gTarget = gCalc.effectiveTarget;
                     var gTotals = {};
                     visPeriods.forEach(function(p) { gTotals[p] = 0; });
 
@@ -2851,8 +2950,12 @@
                         bHtml += '<div class="d-flex align-items-center flex-wrap gap-2" onclick="event.stopPropagation()">';
                         bHtml += '<div class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded border small">';
                         bHtml += '<span class="small text-muted fw-medium">Target:</span>';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 95px; height: 24px;" value="' + formatMoney(gTarget) + '" oninput="onBsGoalTargetInput(this, ' + gIdx + ')" onblur="renderBalanceSheetTable()">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 95px; height: 24px;" value="' + formatMoney(gTargetBase) + '" oninput="onBsGoalTargetInput(this, ' + gIdx + ')" onblur="renderBalanceSheetTable()">';
+                        bHtml += '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' + (gCalc.autoInflate ? 'text-primary fw-bold' : 'text-secondary') + '" onclick="event.stopPropagation(); openTargetCpiModal(\'goal\', ' + gIdx + ')" title="Configure CPI-U Inflation Adjustment"><i class="fa-solid fa-arrow-trend-up"></i></button>';
                         bHtml += '</div>';
+                        if (gCalc.autoInflate) {
+                            bHtml += '<span class="badge bg-primary-subtle text-primary border border-primary-subtle clickable py-1 px-2" onclick="event.stopPropagation(); openTargetCpiModal(\'goal\', ' + gIdx + ')" title="Base Target ' + formatMoney(gTargetBase) + ' (Ref Month: ' + gCalc.baseMonth + ') adjusted by ' + (gCalc.inflationPct >= 0 ? '+' : '') + gCalc.inflationPct + '% CPI-U to ' + gCalc.evalMonth + '"><i class="fa-solid fa-arrow-trend-up me-1"></i>CPI: ' + formatMoney(gTarget) + ' (' + (gCalc.inflationPct >= 0 ? '+' : '') + gCalc.inflationPct + '%)</span>';
+                        }
                         bHtml += '<div id="goal_badge_container_' + gIdx + '" class="d-inline-flex align-items-center">';
                         if (gShortage > 0) {
                             bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
@@ -3295,7 +3398,9 @@
 
             // 2. Recalculate Emergency
             var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 0.0 };
-            var emgTarget = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+            var emgTargetBase = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+            var emgCalc = getEffectiveTarget(emgTargetBase, emgCat.target_auto_inflate, emgCat.target_base_date, currPeriod);
+            var emgTarget = emgCalc.effectiveTarget;
             var emgTotals = {};
             visPeriods.forEach(function(p) { emgTotals[p] = 0; });
             (emgCat.accounts || []).forEach(function(a) {
@@ -3330,7 +3435,9 @@
             // 3. Recalculate Goals
             var goalsCat = bsState.categories.goals || { goal_groups: [] };
             (goalsCat.goal_groups || []).forEach(function(group, gIdx) {
-                var gTarget = parseFloat(group.target_amount || 0.0);
+                var gTargetBase = parseFloat(group.target_amount || 0.0);
+                var gCalc = getEffectiveTarget(gTargetBase, group.target_auto_inflate, group.target_base_date, currPeriod);
+                var gTarget = gCalc.effectiveTarget;
                 var gTotals = {};
                 visPeriods.forEach(function(p) { gTotals[p] = 0; });
                 (group.accounts || []).forEach(function(a) {
@@ -3510,6 +3617,9 @@
             var val = parseMoney(inputEl.value);
             bsState.categories.emergency.target_amount = val;
             bsState.emergency_goal_amount = val;
+            if (!bsState.categories.emergency.target_base_date) {
+                bsState.categories.emergency.target_base_date = bsState.current_period || todayStr;
+            }
             recalculateBsTableDisplay();
             serializeBalanceSheet();
         };
@@ -3518,6 +3628,9 @@
             var val = parseMoney(inputEl.value);
             if (bsState.categories.goals.goal_groups[gIdx]) {
                 bsState.categories.goals.goal_groups[gIdx].target_amount = val;
+                if (!bsState.categories.goals.goal_groups[gIdx].target_base_date) {
+                    bsState.categories.goals.goal_groups[gIdx].target_base_date = bsState.current_period || todayStr;
+                }
             }
             recalculateBsTableDisplay();
             serializeBalanceSheet();
@@ -4078,6 +4191,8 @@
                 id: 'goal_' + Date.now(),
                 name: name,
                 target_amount: target,
+                target_auto_inflate: false,
+                target_base_date: bsState.current_period || todayStr,
                 accounts: [
                     {
                         id: 'acc_g_' + Date.now(),
@@ -4259,7 +4374,8 @@
             var currPeriod = visPeriods[visPeriods.length - 1];
             if (type === 'emergency') {
                 var emgCat = bsState.categories.emergency || { accounts: [], target_amount: 0.0 };
-                var emgTarget = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+                var emgTargetBase = parseFloat(emgCat.target_amount !== undefined ? emgCat.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+                var emgCalc = getEffectiveTarget(emgTargetBase, emgCat.target_auto_inflate, emgCat.target_base_date, currPeriod);
                 var currEmgTotal = 0;
                 var emgAccNames = [];
                 (emgCat.accounts || []).forEach(function(a) {
@@ -4267,12 +4383,13 @@
                     currEmgTotal += val;
                     emgAccNames.push(a.name + ' (' + formatMoney(val) + ')');
                 });
-                openGoalShortageModal('Emergency Reserve', emgTarget, currEmgTotal, emgAccNames);
+                openGoalShortageModal('Emergency Reserve', emgCalc.effectiveTarget, currEmgTotal, emgAccNames, emgCalc);
             } else if (type === 'goal') {
                 var goalsCat = bsState.categories.goals || { goal_groups: [] };
                 var group = (goalsCat.goal_groups || [])[gIdx];
                 if (!group) return;
-                var gTarget = parseFloat(group.target_amount || 0.0);
+                var gTargetBase = parseFloat(group.target_amount || 0.0);
+                var gCalc = getEffectiveTarget(gTargetBase, group.target_auto_inflate, group.target_base_date, currPeriod);
                 var gCurr = 0;
                 var gAccNames = [];
                 (group.accounts || []).forEach(function(a) {
@@ -4280,11 +4397,11 @@
                     gCurr += val;
                     gAccNames.push(a.name + ' (' + formatMoney(val) + ')');
                 });
-                openGoalShortageModal(group.name || 'Goal', gTarget, gCurr, gAccNames);
+                openGoalShortageModal(group.name || 'Goal', gCalc.effectiveTarget, gCurr, gAccNames, gCalc);
             }
         };
 
-        window.openGoalShortageModal = function(goalName, targetAmt, currentAmt, accountsList) {
+        window.openGoalShortageModal = function(goalName, targetAmt, currentAmt, accountsList, cpiInfo) {
             var shortage = Math.max(0, targetAmt - currentAmt);
             var surplus = Math.max(0, currentAmt - targetAmt);
             var percent = targetAmt > 0 ? Math.round((currentAmt / targetAmt) * 100) : 100;
@@ -4292,6 +4409,25 @@
             document.getElementById('modalGoalName').textContent = goalName;
             document.getElementById('modalGoalTarget').textContent = formatMoney(targetAmt);
             document.getElementById('modalGoalCurrent').textContent = formatMoney(currentAmt);
+
+            var baseRow = document.getElementById('modalGoalBaseTargetRow');
+            var baseVal = document.getElementById('modalGoalBaseTarget');
+            var cpiBadge = document.getElementById('modalGoalCpiBadge');
+            var targetLabel = document.getElementById('modalGoalTargetLabel');
+
+            if (cpiInfo && cpiInfo.autoInflate) {
+                if (baseRow) baseRow.style.display = 'flex';
+                if (baseVal) baseVal.textContent = formatMoney(cpiInfo.baseTarget) + ' (Ref Month: ' + (cpiInfo.baseMonth || '') + ')';
+                if (targetLabel) targetLabel.textContent = 'CPI-Adjusted Target:';
+                if (cpiBadge) {
+                    cpiBadge.style.display = 'inline-block';
+                    cpiBadge.textContent = (cpiInfo.inflationPct >= 0 ? '+' : '') + cpiInfo.inflationPct + '% CPI-U (' + (cpiInfo.evalMonth || '') + ')';
+                }
+            } else {
+                if (baseRow) baseRow.style.display = 'none';
+                if (targetLabel) targetLabel.textContent = 'Target Goal Amount:';
+                if (cpiBadge) cpiBadge.style.display = 'none';
+            }
 
             var elShortage = document.getElementById('modalGoalShortage');
             var elLabel = document.getElementById('modalShortageLabel');
@@ -4327,6 +4463,142 @@
                 var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
                 modal.show();
             }
+        };
+
+        // =========================================================================
+        // TARGET CPI-U INFLATION MODAL HANDLERS
+        // =========================================================================
+        window.openTargetCpiModal = function(type, gIdx) {
+            var targetObj = null;
+            var targetAmt = 0;
+            var title = "CPI-U Inflation Adjustment";
+
+            if (type === 'emergency') {
+                targetObj = bsState.categories.emergency || { target_amount: 0.0, target_auto_inflate: false };
+                targetAmt = parseFloat(targetObj.target_amount !== undefined ? targetObj.target_amount : (bsState.emergency_goal_amount !== undefined ? bsState.emergency_goal_amount : 0.0)) || 0.0;
+                title = "Emergency Fund Target — CPI-U Inflation";
+            } else if (type === 'goal') {
+                var goalsCat = bsState.categories.goals || { goal_groups: [] };
+                targetObj = (goalsCat.goal_groups || [])[gIdx];
+                if (!targetObj) return;
+                targetAmt = parseFloat(targetObj.target_amount || 0.0);
+                title = (targetObj.name || "Goal") + " Target — CPI-U Inflation";
+            } else {
+                return;
+            }
+
+            document.getElementById('targetCpiModalLabel').innerHTML = '<i class="fa-solid fa-arrow-trend-up me-2"></i>' + title;
+            document.getElementById('cpiModalTargetType').value = type;
+            document.getElementById('cpiModalGoalIdx').value = (gIdx !== undefined && gIdx !== null) ? gIdx : '';
+
+            var autoInflate = !!targetObj.target_auto_inflate;
+            document.getElementById('cpiModalAutoInflate').checked = autoInflate;
+            document.getElementById('cpiModalTargetAmount').value = formatMoney(targetAmt);
+
+            // Default base date: use target_base_date if present, else bsState.current_period or today
+            var baseDate = targetObj.target_base_date || bsState.current_period || new Date().toISOString().split('T')[0];
+            var parts = String(baseDate).split('-');
+            var y = parts[0] || '2026';
+            var m = parts[1] || '01';
+            if (m.length === 1) m = '0' + m;
+
+            var selMonth = document.getElementById('cpiModalMonth');
+            if (selMonth) selMonth.value = m;
+            var inYear = document.getElementById('cpiModalYear');
+            if (inYear) inYear.value = y;
+
+            updateCpiModalPreview();
+
+            var modalEl = document.getElementById('targetCpiModal');
+            if (modalEl) {
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+        };
+
+        window.onCpiModalInputChange = function() {
+            updateCpiModalPreview();
+        };
+
+        window.updateCpiModalPreview = function() {
+            var autoInflate = document.getElementById('cpiModalAutoInflate').checked;
+            var targetAmt = parseMoney(document.getElementById('cpiModalTargetAmount').value);
+            var m = document.getElementById('cpiModalMonth').value;
+            var y = document.getElementById('cpiModalYear').value || '2026';
+            var baseDate = y + '-' + m + '-01';
+
+            var cfgBody = document.getElementById('cpiModalConfigBody');
+            if (cfgBody) {
+                cfgBody.style.opacity = autoInflate ? '1.0' : '0.45';
+            }
+
+            var calc = getEffectiveTarget(targetAmt, true, baseDate, bsState.current_period);
+
+            var elBaseMonth = document.getElementById('cpiModalBaseMonthDisplay');
+            var elLatestMonth = document.getElementById('cpiModalLatestMonthDisplay');
+            var elInflationPct = document.getElementById('cpiModalInflationPctDisplay');
+            var elEffectiveTarget = document.getElementById('cpiModalEffectiveTargetDisplay');
+            var elIncreaseNote = document.getElementById('cpiModalIncreaseNote');
+
+            if (elBaseMonth) {
+                elBaseMonth.textContent = (calc.baseMonth || '—') + ' (CPI-U: ' + (calc.baseIndex ? calc.baseIndex.toFixed(3) : '—') + ')';
+            }
+            if (elLatestMonth) {
+                elLatestMonth.textContent = (calc.evalMonth || '—') + ' (CPI-U: ' + (calc.evalIndex ? calc.evalIndex.toFixed(3) : '—') + ' - Latest FRED)';
+            }
+            if (elInflationPct) {
+                elInflationPct.textContent = (calc.inflationPct >= 0 ? '+' : '') + calc.inflationPct.toFixed(2) + '%';
+                elInflationPct.className = calc.inflationPct >= 0 ? 'fw-bold text-primary fs-6' : 'fw-bold text-success fs-6';
+            }
+            if (elEffectiveTarget) {
+                elEffectiveTarget.textContent = formatMoney(calc.effectiveTarget);
+            }
+            if (elIncreaseNote) {
+                var diff = calc.effectiveTarget - calc.baseTarget;
+                if (diff !== 0) {
+                    elIncreaseNote.textContent = '(' + (diff > 0 ? '+' : '') + formatMoney(diff) + ' inflation adjustment)';
+                } else {
+                    elIncreaseNote.textContent = '(Zero inflation change for this period)';
+                }
+            }
+        };
+
+        window.saveTargetCpiModal = function() {
+            var type = document.getElementById('cpiModalTargetType').value;
+            var gIdxStr = document.getElementById('cpiModalGoalIdx').value;
+            var autoInflate = document.getElementById('cpiModalAutoInflate').checked;
+            var targetAmt = parseMoney(document.getElementById('cpiModalTargetAmount').value);
+            var m = document.getElementById('cpiModalMonth').value;
+            var y = document.getElementById('cpiModalYear').value || '2026';
+            var baseDate = y + '-' + m + '-01';
+
+            if (type === 'emergency') {
+                if (!bsState.categories.emergency) {
+                    bsState.categories.emergency = { title: "Emergency Fund Accounts", target_amount: 0.0, accounts: [] };
+                }
+                bsState.categories.emergency.target_amount = targetAmt;
+                bsState.categories.emergency.target_auto_inflate = autoInflate;
+                bsState.categories.emergency.target_base_date = baseDate;
+                bsState.emergency_goal_amount = targetAmt;
+            } else if (type === 'goal') {
+                var gIdx = parseInt(gIdxStr, 10);
+                var goalsCat = bsState.categories.goals || { goal_groups: [] };
+                var group = (goalsCat.goal_groups || [])[gIdx];
+                if (group) {
+                    group.target_amount = targetAmt;
+                    group.target_auto_inflate = autoInflate;
+                    group.target_base_date = baseDate;
+                }
+            }
+
+            var modalEl = document.getElementById('targetCpiModal');
+            if (modalEl) {
+                var modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+
+            renderBalanceSheetTable();
+            serializeBalanceSheet();
         };
 
         function serializeBalanceSheet() {

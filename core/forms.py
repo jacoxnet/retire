@@ -796,6 +796,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'id': 'goal_car',
             'name': 'Next Vehicle Replacement',
             'target_amount': 0.0,
+            'target_auto_inflate': False,
+            'target_base_date': curr_period,
             'accounts': [
                 {
                     'id': 'acc_g_car_1',
@@ -821,6 +823,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'id': 'goal_hvac',
             'name': 'Home Maintenance & HVAC Reserve',
             'target_amount': 0.0,
+            'target_auto_inflate': False,
+            'target_base_date': curr_period,
             'accounts': [
                 {
                     'id': 'acc_g_hvac_1',
@@ -837,6 +841,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'id': 'goal_travel',
             'name': 'Vacation & Travel Fund',
             'target_amount': 0.0,
+            'target_auto_inflate': False,
+            'target_base_date': curr_period,
             'accounts': [
                 {
                     'id': 'acc_g_trv_1',
@@ -853,6 +859,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'id': 'goal_tech',
             'name': 'Tech & Electronics Sinking Fund',
             'target_amount': 0.0,
+            'target_auto_inflate': False,
+            'target_base_date': curr_period,
             'accounts': [
                 {
                     'id': 'acc_g_tech_1',
@@ -949,6 +957,8 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
                 'title': 'Emergency Fund Accounts',
                 'is_pretax': False,
                 'target_amount': 0.0,
+                'target_auto_inflate': False,
+                'target_base_date': curr_period,
                 'accounts': emergency_accs,
             },
             'goals': {
@@ -969,26 +979,49 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
 
 def parse_balance_sheet(raw_json_or_post, default_data=None):
     """Parse and normalize the balance sheet data structure from POST input or JSON."""
+    bs = None
     if isinstance(raw_json_or_post, str):
         try:
-            bs = json.loads(raw_json_or_post)
-            if isinstance(bs, dict) and 'categories' in bs:
-                return bs
+            parsed = json.loads(raw_json_or_post)
+            if isinstance(parsed, dict) and 'categories' in parsed:
+                bs = parsed
         except Exception:
             pass
 
-    if isinstance(raw_json_or_post, dict):
+    if bs is None and isinstance(raw_json_or_post, dict):
         if 'categories' in raw_json_or_post:
-            return raw_json_or_post
-        if 'balance_sheet_json' in raw_json_or_post:
+            bs = raw_json_or_post
+        elif 'balance_sheet_json' in raw_json_or_post:
             try:
-                bs = json.loads(raw_json_or_post['balance_sheet_json'])
-                if isinstance(bs, dict) and 'categories' in bs:
-                    return bs
+                parsed = json.loads(raw_json_or_post['balance_sheet_json'])
+                if isinstance(parsed, dict) and 'categories' in parsed:
+                    bs = parsed
             except Exception:
                 pass
 
-    return build_default_balance_sheet(data=default_data)
+    if bs is None:
+        bs = build_default_balance_sheet(data=default_data)
+
+    # Normalize inflation fields for emergency and goal groups
+    curr_period = bs.get('current_period') or (bs.get('periods') and bs.get('periods')[-1]) or datetime.date.today().isoformat()
+    cats = bs.get('categories', {})
+    emg = cats.get('emergency')
+    if isinstance(emg, dict):
+        if 'target_auto_inflate' not in emg:
+            emg['target_auto_inflate'] = False
+        if 'target_base_date' not in emg or not emg['target_base_date']:
+            emg['target_base_date'] = curr_period
+
+    goals = cats.get('goals')
+    if isinstance(goals, dict):
+        for g in goals.get('goal_groups', []):
+            if isinstance(g, dict):
+                if 'target_auto_inflate' not in g:
+                    g['target_auto_inflate'] = False
+                if 'target_base_date' not in g or not g['target_base_date']:
+                    g['target_base_date'] = curr_period
+
+    return bs
 
 
 def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_age=60,
