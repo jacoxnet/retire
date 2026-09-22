@@ -816,8 +816,14 @@ def simulate_step(
 
     # Dedicated Social Security calculation
     if social_security_data is not None:
-        u_entitled = bool(social_security_data.get('user_entitled', True))
-        sp_entitled = bool(social_security_data.get('spouse_entitled', False)) and is_married
+        u_receiving = bool(social_security_data.get('user_receiving', False))
+        u_future_entitled = bool(social_security_data.get('user_future_entitled', social_security_data.get('user_entitled', True)))
+        u_entitled = u_receiving or u_future_entitled
+
+        sp_receiving = bool(social_security_data.get('spouse_receiving', False)) if is_married else False
+        sp_future_entitled = bool(social_security_data.get('spouse_future_entitled', social_security_data.get('spouse_entitled', False))) if is_married else False
+        sp_entitled = (sp_receiving or sp_future_entitled) and is_married
+
         u_start = int(social_security_data.get('user_start_age', 67))
         sp_start = int(social_security_data.get('spouse_start_age', 67))
 
@@ -831,8 +837,8 @@ def simulate_step(
             sp_amt *= 12.0
         sp_ss_inf = (sp_amt * ((1.0 + inflation_rate / 100.0) ** t)) if sp_entitled else 0.0
 
-        u_ss_active = user_alive and u_entitled and (user_age_t >= u_start)
-        sp_ss_active = spouse_alive and sp_entitled and (spouse_age_t >= sp_start)
+        u_ss_active = user_alive and (u_receiving or (u_future_entitled and user_age_t >= u_start))
+        sp_ss_active = spouse_alive and (sp_receiving or (sp_future_entitled and spouse_age_t >= sp_start))
 
         u_ss_t = 0.0
         sp_ss_t = 0.0
@@ -1784,12 +1790,18 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
 
         # Dedicated Social Security calculation in Numba inputs pre-compilation
         ss_data = inputs.get('social_security', {})
-        u_entitled = ss_data.get('user_entitled', True)
+        u_receiving = bool(ss_data.get('user_receiving', False))
+        u_future_entitled = bool(ss_data.get('user_future_entitled', ss_data.get('user_entitled', True)))
+        u_entitled = u_receiving or u_future_entitled
+
         u_amt = float(ss_data.get('user_amount', 2500.0))
         u_freq = ss_data.get('user_freq', 'monthly')
         u_start_age = int(ss_data.get('user_start_age', 67))
 
-        sp_entitled = ss_data.get('spouse_entitled', False) if is_married else False
+        sp_receiving = bool(ss_data.get('spouse_receiving', False)) if is_married else False
+        sp_future_entitled = bool(ss_data.get('spouse_future_entitled', ss_data.get('spouse_entitled', False))) if is_married else False
+        sp_entitled = (sp_receiving or sp_future_entitled) and is_married
+
         sp_amt = float(ss_data.get('spouse_amount', 0.0)) if is_married else 0.0
         sp_freq = ss_data.get('spouse_freq', 'monthly')
         sp_start_age = int(ss_data.get('spouse_start_age', 67)) if is_married else 67
@@ -1800,10 +1812,10 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         sp_base = sp_amt * 12.0 if sp_freq == 'monthly' else sp_amt
 
         u_ss_inf = (u_base * inf_factor) if u_entitled else 0.0
-        sp_ss_inf = (sp_base * inf_factor) if (sp_entitled and is_married) else 0.0
+        sp_ss_inf = (sp_base * inf_factor) if sp_entitled else 0.0
 
-        u_ss_active = user_alive and u_entitled and (user_age_t >= u_start_age)
-        sp_ss_active = spouse_alive and sp_entitled and is_married and (spouse_age_t >= sp_start_age)
+        u_ss_active = user_alive and (u_receiving or (u_future_entitled and user_age_t >= u_start_age))
+        sp_ss_active = spouse_alive and sp_entitled and (sp_receiving or (sp_future_entitled and spouse_age_t >= sp_start_age))
 
         u_ss_t = 0.0
         sp_ss_t = 0.0

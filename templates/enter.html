@@ -475,18 +475,31 @@
                         <!-- User Social Security Section -->
                         <div class="col-md-6 border-end">
                             <h4 class="h6 fw-bold text-primary mb-3">Your Social Security</h4>
+                            <!-- Question 1: Are you receiving Social Security? -->
                             <div class="mb-3">
-                                <label class="form-label fw-bold" for="user_ss_entitled">Are you, or will you be, entitled to Social Security?</label>
-                                <select class="form-select" id="user_ss_entitled" name="user_ss_entitled">
-                                    <option value="true" {% if social_security.user_entitled %}selected{% endif %}>Yes</option>
-                                    <option value="false" {% if not social_security.user_entitled %}selected{% endif %}>No</option>
+                                <label class="form-label fw-bold" for="user_ss_receiving">Are you receiving Social Security?</label>
+                                <select class="form-select" id="user_ss_receiving" name="user_ss_receiving">
+                                    <option value="false" {% if not social_security.user_receiving %}selected{% endif %}>No</option>
+                                    <option value="true" {% if social_security.user_receiving %}selected{% endif %}>Yes</option>
                                 </select>
                             </div>
+                            <!-- Question 2: Future entitlement (shown if not receiving) -->
+                            <div class="mb-3" id="user_ss_future_group"
+                                style="display: {% if not social_security.user_receiving %}block{% else %}none{% endif %};">
+                                <label class="form-label fw-bold" for="user_ss_future_entitled">Will you become entitled to receive Social Security in the future?</label>
+                                <select class="form-select" id="user_ss_future_entitled" name="user_ss_future_entitled">
+                                    <option value="true" {% if social_security.user_future_entitled %}selected{% endif %}>Yes</option>
+                                    <option value="false" {% if not social_security.user_future_entitled %}selected{% endif %}>No</option>
+                                </select>
+                            </div>
+                            <!-- Benefit Fields Group -->
                             <div id="user_ss_fields_group"
-                                style="display: {% if social_security.user_entitled %}block{% else %}none{% endif %};">
+                                style="display: {% if social_security.user_receiving or social_security.user_future_entitled %}block{% else %}none{% endif %};">
                                 <div class="row">
                                     <div class="col-6 mb-3">
-                                        <label class="form-label fw-semibold" for="user_ss_amount">Initial Amount</label>
+                                        <label class="form-label fw-semibold" for="user_ss_amount" id="user_ss_amount_label">
+                                            {% if social_security.user_receiving %}Current Benefit Amount{% else %}Initial Amount{% endif %}
+                                        </label>
                                         <input type="text" inputmode="numeric" class="form-control currency-input"
                                             id="user_ss_amount" name="user_ss_amount"
                                             value="{{ social_security.user_amount|floatformat:0 }}">
@@ -499,7 +512,9 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div class="mb-3">
+                                <!-- Claiming Age (shown ONLY if not receiving and future entitled) -->
+                                <div class="mb-3" id="user_ss_claiming_age_group"
+                                    style="display: {% if not social_security.user_receiving and social_security.user_future_entitled %}block{% else %}none{% endif %};">
                                     <label class="form-label fw-semibold" for="user_ss_start_age">Your Age at Claiming (62 – 70)</label>
                                     <input type="number" class="form-control" id="user_ss_start_age"
                                         name="user_ss_start_age" value="{{ social_security.user_start_age }}"
@@ -512,18 +527,31 @@
                         <div class="col-md-6" id="spouse_ss_container"
                             style="display: {% if is_married %}block{% else %}none{% endif %};">
                             <h4 class="h6 fw-bold text-info mb-3">Spouse's Social Security</h4>
+                            <!-- Question 1: Is your spouse receiving Social Security? -->
                             <div class="mb-3">
-                                <label class="form-label fw-bold" for="spouse_ss_entitled">Is your spouse, or will your spouse be, entitled to Social Security?</label>
-                                <select class="form-select" id="spouse_ss_entitled" name="spouse_ss_entitled">
-                                    <option value="true" {% if social_security.spouse_entitled %}selected{% endif %}>Yes</option>
-                                    <option value="false" {% if not social_security.spouse_entitled %}selected{% endif %}>No</option>
+                                <label class="form-label fw-bold" for="spouse_ss_receiving">Is your spouse receiving Social Security?</label>
+                                <select class="form-select" id="spouse_ss_receiving" name="spouse_ss_receiving">
+                                    <option value="false" {% if not social_security.spouse_receiving %}selected{% endif %}>No</option>
+                                    <option value="true" {% if social_security.spouse_receiving %}selected{% endif %}>Yes</option>
                                 </select>
                             </div>
+                            <!-- Question 2: Future entitlement (shown if not receiving) -->
+                            <div class="mb-3" id="spouse_ss_future_group"
+                                style="display: {% if not social_security.spouse_receiving %}block{% else %}none{% endif %};">
+                                <label class="form-label fw-bold" for="spouse_ss_future_entitled">Will your spouse become entitled to receive Social Security in the future?</label>
+                                <select class="form-select" id="spouse_ss_future_entitled" name="spouse_ss_future_entitled">
+                                    <option value="true" {% if social_security.spouse_future_entitled %}selected{% endif %}>Yes</option>
+                                    <option value="false" {% if not social_security.spouse_future_entitled %}selected{% endif %}>No</option>
+                                </select>
+                            </div>
+                            <!-- Benefit Fields Group -->
                             <div id="spouse_ss_fields_group"
-                                style="display: {% if social_security.spouse_entitled %}block{% else %}none{% endif %};">
+                                style="display: {% if social_security.spouse_receiving or social_security.spouse_future_entitled %}block{% else %}none{% endif %};">
                                 <div class="row">
                                     <div class="col-6 mb-3">
-                                        <label class="form-label fw-semibold" for="spouse_ss_amount">Initial Amount</label>
+                                        <label class="form-label fw-semibold" for="spouse_ss_amount" id="spouse_ss_amount_label">
+                                            {% if social_security.spouse_receiving %}Current Benefit Amount{% else %}Initial Amount{% endif %}
+                                        </label>
                                         <input type="text" inputmode="numeric" class="form-control currency-input"
                                             id="spouse_ss_amount" name="spouse_ss_amount"
                                             value="{{ social_security.spouse_amount|floatformat:0 }}">
@@ -536,7 +564,9 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div class="mb-3">
+                                <!-- Claiming Age (shown ONLY if not receiving and future entitled) -->
+                                <div class="mb-3" id="spouse_ss_claiming_age_group"
+                                    style="display: {% if not social_security.spouse_receiving and social_security.spouse_future_entitled %}block{% else %}none{% endif %};">
                                     <label class="form-label fw-semibold" for="spouse_ss_start_age">Spouse's Age at Claiming (62 – 70)</label>
                                     <input type="number" class="form-control" id="spouse_ss_start_age"
                                         name="spouse_ss_start_age" value="{{ social_security.spouse_start_age }}"

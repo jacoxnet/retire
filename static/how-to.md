@@ -29,8 +29,7 @@ Five tabs. You can press **Run Simulation** from any tab.
   Spending mode).
 - **Life insurance:** death benefit, term vs. permanent, and term expiration age,
   for each spouse.
-- **Social Security:** whether entitled, amount and frequency, and claiming age
-  (62–70) for each spouse.
+- **Social Security:** whether currently receiving (inflating immediately) or entitled in the future with a claiming age (62–70) for each spouse.
 - **State tax:** flat state income-tax rate and whether Social Security is exempt.
 
 ### Accounts for Retirement

@@ -929,6 +929,147 @@ class RetirementCalculationTests(TestCase):
         self.assertNotIn("Spouse's Social Security", row_t12['income_breakdown'])
         self.assertEqual(row_t12['income_breakdown']["Your Social Security"], 36000.0)
 
+    def test_social_security_already_receiving_no_claiming_age_validation(self):
+        """Users already receiving SS (even with age > 70) should not need to enter claiming age or trigger validation errors."""
+        resp = self.client.post('/', {
+            'user_name': 'Older Receiving User',
+            'user_age': 72,
+            'user_retirement_age': 72,
+            'user_age_death': 92,
+            'is_married': True,
+            'spouse_name': 'Older Receiving Spouse',
+            'spouse_age': 75,
+            'spouse_retirement_age': 75,
+            'spouse_age_death': 95,
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'desired_spending': 50000.0,
+            'user_ss_receiving': 'true',
+            'user_ss_amount': '1500',
+            'user_ss_freq': 'monthly',
+            'spouse_ss_receiving': 'true',
+            'spouse_ss_amount': '1200',
+            'spouse_ss_freq': 'monthly',
+        })
+        self.assertEqual(resp.status_code, 302)
+        session_data = self.client.session.get('simulation_data', {})
+        ss = session_data.get('social_security', {})
+        self.assertTrue(ss.get('user_receiving'))
+        self.assertTrue(ss.get('user_entitled'))
+        self.assertTrue(ss.get('spouse_receiving'))
+        self.assertTrue(ss.get('spouse_entitled'))
+
+    def test_social_security_already_receiving_inflation_progression(self):
+        """Social Security for already-receiving beneficiaries starts immediately at t=0 and inflates annually."""
+        from core.runs import extract_sim_inputs, run_deterministic
+        sim_input = {
+            'user_name': 'Inflation Test User',
+            'user_age': 71,
+            'user_retirement_age': 71,
+            'user_age_death': 75,
+            'is_married': False,
+            'filing_status': 'single',
+            'current_year': 2026,
+            'inflation_rate': 3.0,
+            'desired_spending': 20000.0,
+            'social_security': {
+                'user_receiving': True,
+                'user_future_entitled': False,
+                'user_entitled': True,
+                'user_amount': 1000.0,
+                'user_freq': 'monthly',
+                'user_start_age': 67, # Should be ignored because user_receiving is True
+            },
+            'pretax_assets': {'present_balance': 100000.0, 'contrib_amount': 0.0, 'return_mean': 4.0},
+            'roth_assets': {'present_balance': 0.0},
+            'taxable_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0},
+            'additional_spending': [],
+            'income_sources': []
+        }
+        inputs = extract_sim_inputs(sim_input)
+        det_rows = run_deterministic(inputs)
+
+        # t=0: $1,000/mo * 12 = $12,000
+        self.assertAlmostEqual(det_rows[0]['income_breakdown']['Your Social Security'], 12000.0, places=2)
+        # t=1: $12,000 * 1.03 = $12,360
+        self.assertAlmostEqual(det_rows[1]['income_breakdown']['Your Social Security'], 12360.0, places=2)
+        # t=2: $12,000 * (1.03)^2 = $12,730.80
+        self.assertAlmostEqual(det_rows[2]['income_breakdown']['Your Social Security'], 12730.80, places=2)
+
+    def test_social_security_future_entitlement_validation_flow(self):
+        """When not currently receiving, future entitlement triggers claiming age validation."""
+        # Invalid claiming age when future entitled
+        resp_invalid = self.client.post('/', {
+            'user_name': 'Future Entitled User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'current_year': 2026,
+            'desired_spending': 40000.0,
+            'user_ss_receiving': 'false',
+            'user_ss_future_entitled': 'true',
+            'user_ss_start_age': '61', # Invalid: must be 62-70
+        })
+        self.assertEqual(resp_invalid.status_code, 200)
+        self.assertContains(resp_invalid, 'Your Social Security Claiming Age must be between 62 and 70.')
+
+        # Not receiving and not future entitled -> 0 benefit, no claiming age error
+        resp_valid_no_ss = self.client.post('/', {
+            'user_name': 'No SS User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': False,
+            'current_year': 2026,
+            'desired_spending': 40000.0,
+            'user_ss_receiving': 'false',
+            'user_ss_future_entitled': 'false',
+            'user_ss_start_age': '60', # Ignored because not entitled
+        })
+        self.assertEqual(resp_valid_no_ss.status_code, 302)
+        ss = self.client.session.get('simulation_data', {}).get('social_security', {})
+        self.assertFalse(ss.get('user_receiving'))
+        self.assertFalse(ss.get('user_future_entitled'))
+        self.assertFalse(ss.get('user_entitled'))
+
+    def test_social_security_legacy_plan_migration_and_loading(self):
+        """Loading a legacy plan without user_receiving correctly infers receiving status based on age >= claiming age."""
+        from django.urls import reverse
+        import json
+        plan_dict = {
+            'user_name': 'Legacy Plan User',
+            'user_age': 72,
+            'user_retirement_age': 65,
+            'user_age_death': 90,
+            'is_married': True,
+            'spouse_name': 'Legacy Spouse',
+            'spouse_age': 63,
+            'spouse_retirement_age': 65,
+            'spouse_age_death': 90,
+            'social_security': {
+                'user_entitled': True,
+                'user_amount': 2500.0,
+                'user_freq': 'monthly',
+                'user_start_age': 67,
+                'spouse_entitled': True,
+                'spouse_amount': 1500.0,
+                'spouse_freq': 'monthly',
+                'spouse_start_age': 67,
+            },
+            'accounts': []
+        }
+        resp = self.client.post(reverse('load_plan'), {'json_data': json.dumps(plan_dict)})
+        self.assertEqual(resp.status_code, 302)
+        ss = self.client.session.get('simulation_data', {}).get('social_security', {})
+        # User is 72 >= 67 -> user_receiving = True
+        self.assertTrue(ss.get('user_receiving'))
+        self.assertFalse(ss.get('user_future_entitled'))
+        # Spouse is 63 < 67 -> spouse_receiving = False, spouse_future_entitled = True
+        self.assertFalse(ss.get('spouse_receiving'))
+        self.assertTrue(ss.get('spouse_future_entitled'))
+
     def test_custom_pension_income_stream_persistence(self):
         # Post form with custom Pension income stream (without legacy income_is_ss array)
         response = self.client.post('/', {

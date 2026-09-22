@@ -50,10 +50,14 @@ def get_default_data():
         'spouse_life_insurance_type': 'permanent',
         'spouse_life_insurance_term_age': 70,
         'social_security': {
+            'user_receiving': False,
+            'user_future_entitled': True,
             'user_entitled': True,
             'user_amount': 0.0,
             'user_freq': 'monthly',
             'user_start_age': 67,
+            'spouse_receiving': False,
+            'spouse_future_entitled': False,
             'spouse_entitled': False,
             'spouse_amount': 0.0,
             'spouse_freq': 'monthly',
@@ -190,6 +194,31 @@ def load_plan_view(request):
             data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
         elif 'simulation_type' not in data and 'goal_seeking' in data:
             data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
+
+        # Normalize / migrate social_security
+        if 'social_security' in data and isinstance(data['social_security'], dict):
+            ss = data['social_security']
+            if 'user_receiving' not in ss:
+                u_ent = get_bool(ss.get('user_entitled', True))
+                u_age = get_int(data.get('user_age'), 60)
+                u_start = get_int(ss.get('user_start_age'), 67)
+                ss['user_receiving'] = bool(u_ent and u_age >= u_start)
+                ss['user_future_entitled'] = bool(u_ent and u_age < u_start)
+            else:
+                ss['user_receiving'] = get_bool(ss.get('user_receiving'))
+                ss['user_future_entitled'] = get_bool(ss.get('user_future_entitled'))
+            ss['user_entitled'] = ss['user_receiving'] or ss['user_future_entitled']
+
+            if 'spouse_receiving' not in ss:
+                sp_ent = get_bool(ss.get('spouse_entitled', False))
+                sp_age = get_int(data.get('spouse_age'), 60)
+                sp_start = get_int(ss.get('spouse_start_age'), 67)
+                ss['spouse_receiving'] = bool(sp_ent and sp_age >= sp_start)
+                ss['spouse_future_entitled'] = bool(sp_ent and sp_age < sp_start)
+            else:
+                ss['spouse_receiving'] = get_bool(ss.get('spouse_receiving'))
+                ss['spouse_future_entitled'] = get_bool(ss.get('spouse_future_entitled'))
+            ss['spouse_entitled'] = ss['spouse_receiving'] or ss['spouse_future_entitled']
 
         # Load or migrate balance sheet
         if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
@@ -418,21 +447,46 @@ def enter_view(request):
         state_ss_exempt = get_bool(request.POST.get('state_ss_exempt'))
 
         # Dedicated Social Security
-        user_ss_entitled = request.POST.get('user_ss_entitled') == 'true' if request.POST.get('user_ss_entitled') is not None else True
+        if 'user_ss_receiving' in request.POST:
+            user_ss_receiving = request.POST.get('user_ss_receiving') == 'true'
+            user_ss_future_entitled = request.POST.get('user_ss_future_entitled') == 'true' if not user_ss_receiving else False
+        else:
+            user_ss_receiving = False
+            user_ss_future_entitled = request.POST.get('user_ss_entitled') == 'true' if request.POST.get('user_ss_entitled') is not None else True
+        user_ss_entitled = user_ss_receiving or user_ss_future_entitled
+
         user_ss_amount = get_float(request.POST.get('user_ss_amount'), 0.0)
         user_ss_freq = request.POST.get('user_ss_freq', 'monthly')
         user_ss_start_age = get_int(request.POST.get('user_ss_start_age'), 67)
 
-        spouse_ss_entitled = request.POST.get('spouse_ss_entitled') == 'true' if is_married else False
-        spouse_ss_amount = get_float(request.POST.get('spouse_ss_amount'), 0.0) if is_married else 0.0
-        spouse_ss_freq = request.POST.get('spouse_ss_freq', 'monthly')
-        spouse_ss_start_age = get_int(request.POST.get('spouse_ss_start_age'), 67) if is_married else 67
+        if is_married:
+            if 'spouse_ss_receiving' in request.POST:
+                spouse_ss_receiving = request.POST.get('spouse_ss_receiving') == 'true'
+                spouse_ss_future_entitled = request.POST.get('spouse_ss_future_entitled') == 'true' if not spouse_ss_receiving else False
+            else:
+                spouse_ss_receiving = False
+                spouse_ss_future_entitled = request.POST.get('spouse_ss_entitled') == 'true'
+            spouse_ss_entitled = spouse_ss_receiving or spouse_ss_future_entitled
+            spouse_ss_amount = get_float(request.POST.get('spouse_ss_amount'), 0.0)
+            spouse_ss_freq = request.POST.get('spouse_ss_freq', 'monthly')
+            spouse_ss_start_age = get_int(request.POST.get('spouse_ss_start_age'), 67)
+        else:
+            spouse_ss_receiving = False
+            spouse_ss_future_entitled = False
+            spouse_ss_entitled = False
+            spouse_ss_amount = 0.0
+            spouse_ss_freq = 'monthly'
+            spouse_ss_start_age = 67
 
         social_security = {
+            'user_receiving': user_ss_receiving,
+            'user_future_entitled': user_ss_future_entitled,
             'user_entitled': user_ss_entitled,
             'user_amount': user_ss_amount,
             'user_freq': user_ss_freq,
             'user_start_age': user_ss_start_age,
+            'spouse_receiving': spouse_ss_receiving,
+            'spouse_future_entitled': spouse_ss_future_entitled,
             'spouse_entitled': spouse_ss_entitled,
             'spouse_amount': spouse_ss_amount,
             'spouse_freq': spouse_ss_freq,
@@ -568,10 +622,10 @@ def enter_view(request):
         if state_tax_rate < 0.0 or state_tax_rate > 100.0:
             validation_errors.append("State Income Tax Rate must be between 0% and 100%.")
 
-        if user_ss_entitled:
+        if not user_ss_receiving and user_ss_future_entitled:
             if user_ss_start_age < 62 or user_ss_start_age > 70:
                 validation_errors.append("Your Social Security Claiming Age must be between 62 and 70.")
-        if is_married and spouse_ss_entitled:
+        if is_married and (not spouse_ss_receiving) and spouse_ss_future_entitled:
             if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
                 validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
 

@@ -277,23 +277,59 @@
         isMarriedCheckbox.addEventListener('change', toggleSpouseSection);
 
         // Social Security Entitlement Fields Toggle
-        const userSsEntitled = document.getElementById('user_ss_entitled');
+        const userSsReceiving = document.getElementById('user_ss_receiving');
+        const userSsFutureGroup = document.getElementById('user_ss_future_group');
+        const userSsFutureEntitled = document.getElementById('user_ss_future_entitled');
         const userSsFieldsGroup = document.getElementById('user_ss_fields_group');
-        function toggleUserSsFields() {
-            if (userSsEntitled && userSsFieldsGroup) {
-                userSsFieldsGroup.style.display = userSsEntitled.value === 'true' ? 'block' : 'none';
-            }
-        }
-        if (userSsEntitled) userSsEntitled.addEventListener('change', toggleUserSsFields);
+        const userSsClaimingAgeGroup = document.getElementById('user_ss_claiming_age_group');
+        const userSsAmountLabel = document.getElementById('user_ss_amount_label');
 
-        const spouseSsEntitled = document.getElementById('spouse_ss_entitled');
-        const spouseSsFieldsGroup = document.getElementById('spouse_ss_fields_group');
-        function toggleSpouseSsFields() {
-            if (spouseSsEntitled && spouseSsFieldsGroup) {
-                spouseSsFieldsGroup.style.display = spouseSsEntitled.value === 'true' ? 'block' : 'none';
+        function toggleUserSsFields() {
+            const isReceiving = userSsReceiving && userSsReceiving.value === 'true';
+            const isFuture = userSsFutureEntitled && userSsFutureEntitled.value === 'true';
+
+            if (userSsFutureGroup) {
+                userSsFutureGroup.style.display = isReceiving ? 'none' : 'block';
+            }
+            if (userSsFieldsGroup) {
+                userSsFieldsGroup.style.display = (isReceiving || (!isReceiving && isFuture)) ? 'block' : 'none';
+            }
+            if (userSsClaimingAgeGroup) {
+                userSsClaimingAgeGroup.style.display = (!isReceiving && isFuture) ? 'block' : 'none';
+            }
+            if (userSsAmountLabel) {
+                userSsAmountLabel.textContent = isReceiving ? 'Current Benefit Amount' : 'Initial Amount';
             }
         }
-        if (spouseSsEntitled) spouseSsEntitled.addEventListener('change', toggleSpouseSsFields);
+        if (userSsReceiving) userSsReceiving.addEventListener('change', toggleUserSsFields);
+        if (userSsFutureEntitled) userSsFutureEntitled.addEventListener('change', toggleUserSsFields);
+
+        const spouseSsReceiving = document.getElementById('spouse_ss_receiving');
+        const spouseSsFutureGroup = document.getElementById('spouse_ss_future_group');
+        const spouseSsFutureEntitled = document.getElementById('spouse_ss_future_entitled');
+        const spouseSsFieldsGroup = document.getElementById('spouse_ss_fields_group');
+        const spouseSsClaimingAgeGroup = document.getElementById('spouse_ss_claiming_age_group');
+        const spouseSsAmountLabel = document.getElementById('spouse_ss_amount_label');
+
+        function toggleSpouseSsFields() {
+            const isReceiving = spouseSsReceiving && spouseSsReceiving.value === 'true';
+            const isFuture = spouseSsFutureEntitled && spouseSsFutureEntitled.value === 'true';
+
+            if (spouseSsFutureGroup) {
+                spouseSsFutureGroup.style.display = isReceiving ? 'none' : 'block';
+            }
+            if (spouseSsFieldsGroup) {
+                spouseSsFieldsGroup.style.display = (isReceiving || (!isReceiving && isFuture)) ? 'block' : 'none';
+            }
+            if (spouseSsClaimingAgeGroup) {
+                spouseSsClaimingAgeGroup.style.display = (!isReceiving && isFuture) ? 'block' : 'none';
+            }
+            if (spouseSsAmountLabel) {
+                spouseSsAmountLabel.textContent = isReceiving ? 'Current Benefit Amount' : 'Initial Amount';
+            }
+        }
+        if (spouseSsReceiving) spouseSsReceiving.addEventListener('change', toggleSpouseSsFields);
+        if (spouseSsFutureEntitled) spouseSsFutureEntitled.addEventListener('change', toggleSpouseSsFields);
 
         // Life Insurance & Survivorship UI Logic
         function updateLifeInsuranceUI() {
@@ -1812,14 +1848,20 @@
 
             // 2. Sum Social Security benefits from DOM
             var totalSS = 0.0;
-            var userSSEntitled = (document.getElementById('user_ss_entitled')?.value === 'true');
+            var userSSReceiving = (document.getElementById('user_ss_receiving')?.value === 'true');
+            var userSSFuture = (document.getElementById('user_ss_future_entitled')?.value === 'true');
+            var legacyUserEntitled = (document.getElementById('user_ss_entitled')?.value === 'true');
+            var userSSEntitled = userSSReceiving || (!userSSReceiving && userSSFuture) || legacyUserEntitled;
             if (userSSEntitled) {
                 var uAmt = parseMoney(document.getElementById('user_ss_amount')?.value || '0');
                 var uFreq = document.getElementById('user_ss_freq')?.value || 'monthly';
                 if (uFreq === 'monthly') uAmt *= 12.0;
                 totalSS += uAmt;
             }
-            var spouseSSEntitled = isMarried && (document.getElementById('spouse_ss_entitled')?.value === 'true');
+            var spouseSSReceiving = isMarried && (document.getElementById('spouse_ss_receiving')?.value === 'true');
+            var spouseSSFuture = isMarried && !spouseSSReceiving && (document.getElementById('spouse_ss_future_entitled')?.value === 'true');
+            var legacySpouseEntitled = isMarried && (document.getElementById('spouse_ss_entitled')?.value === 'true');
+            var spouseSSEntitled = spouseSSReceiving || spouseSSFuture || legacySpouseEntitled;
             if (spouseSSEntitled) {
                 var spAmt = parseMoney(document.getElementById('spouse_ss_amount')?.value || '0');
                 var spFreq = document.getElementById('spouse_ss_freq')?.value || 'monthly';
@@ -1927,8 +1969,8 @@
         }
 
         ['state_tax_rate', 'desired_spending', 'is_married', 'filing_status',
-         'user_ss_entitled', 'user_ss_amount', 'user_ss_freq',
-         'spouse_ss_entitled', 'spouse_ss_amount', 'spouse_ss_freq'].forEach(function(id) {
+         'user_ss_receiving', 'user_ss_future_entitled', 'user_ss_entitled', 'user_ss_amount', 'user_ss_freq',
+         'spouse_ss_receiving', 'spouse_ss_future_entitled', 'spouse_ss_entitled', 'spouse_ss_amount', 'spouse_ss_freq'].forEach(function(id) {
             var el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', refreshBsMarginalTaxRate);
@@ -6169,7 +6211,12 @@
 
 
             // 5. Social Security Claiming Age Validation
-            if (document.getElementById('user_ss_entitled')?.value === 'true') {
+            var uReceiving = document.getElementById('user_ss_receiving')?.value === 'true';
+            var uFuture = document.getElementById('user_ss_future_entitled')?.value === 'true';
+            var legacyUEntitled = document.getElementById('user_ss_entitled')?.value === 'true';
+            var shouldValidateUAge = (!uReceiving && uFuture) || (!document.getElementById('user_ss_receiving') && legacyUEntitled);
+
+            if (shouldValidateUAge) {
                 var uSsAgeInput = document.getElementById('user_ss_start_age');
                 var uSsAge = uSsAgeInput ? parseInt(uSsAgeInput.value, 10) : 67;
                 if (isNaN(uSsAge) || uSsAge < 62 || uSsAge > 70) {
@@ -6177,7 +6224,13 @@
                     errors.push({ element: uSsAgeInput, tab: 'income-tab', message: 'Your Social Security Claiming Age must be between 62 and 70.' });
                 }
             }
-            if (isMarried && document.getElementById('spouse_ss_entitled')?.value === 'true') {
+
+            var spReceiving = isMarried && (document.getElementById('spouse_ss_receiving')?.value === 'true');
+            var spFuture = isMarried && (document.getElementById('spouse_ss_future_entitled')?.value === 'true');
+            var legacySpEntitled = isMarried && (document.getElementById('spouse_ss_entitled')?.value === 'true');
+            var shouldValidateSpAge = (isMarried && !spReceiving && spFuture) || (isMarried && !document.getElementById('spouse_ss_receiving') && legacySpEntitled);
+
+            if (shouldValidateSpAge) {
                 var spSsAgeInput = document.getElementById('spouse_ss_start_age');
                 var spSsAge = spSsAgeInput ? parseInt(spSsAgeInput.value, 10) : 67;
                 if (isNaN(spSsAge) || spSsAge < 62 || spSsAge > 70) {

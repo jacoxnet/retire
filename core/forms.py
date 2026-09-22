@@ -632,12 +632,14 @@ def calculate_marginal_tax_rate(data):
     ss_data = data.get('social_security', {})
     total_ss = 0.0
     if isinstance(ss_data, dict):
-        if get_bool(ss_data.get('user_entitled', True)):
+        u_entitled = get_bool(ss_data.get('user_receiving', False)) or get_bool(ss_data.get('user_future_entitled', False)) or get_bool(ss_data.get('user_entitled', True))
+        if u_entitled:
             u_amt = float(ss_data.get('user_amount', 0.0) or 0.0)
             if ss_data.get('user_freq', 'monthly') == 'monthly':
                 u_amt *= 12.0
             total_ss += u_amt
-        if is_married and get_bool(ss_data.get('spouse_entitled', False)):
+        sp_entitled = get_bool(ss_data.get('spouse_receiving', False)) or get_bool(ss_data.get('spouse_future_entitled', False)) or get_bool(ss_data.get('spouse_entitled', False))
+        if is_married and sp_entitled:
             sp_amt = float(ss_data.get('spouse_amount', 0.0) or 0.0)
             if ss_data.get('spouse_freq', 'monthly') == 'monthly':
                 sp_amt *= 12.0
