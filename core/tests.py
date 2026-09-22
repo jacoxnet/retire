@@ -2807,6 +2807,137 @@ class BalanceSheetTests(TestCase):
         # Should render enter page with error message
         self.assertContains(resp, "Multiple accounts cannot have the same name")
 
+    def test_sync_accounts_to_balance_sheet_case_insensitive_linking(self):
+        """Test that an account card with case variation (e.g. 'Roth ira' vs 'Roth IRA')
+        links to the existing balance sheet account without creating duplicates or duplicate validation errors.
+        """
+        from core.forms import build_default_balance_sheet, sync_accounts_to_balance_sheet, validate_balance_sheet_accounts
+
+        bs = build_default_balance_sheet()
+        # Default balance sheet has 1 roth account named 'Roth IRA'
+        self.assertEqual(len(bs['categories']['roth']['accounts']), 1)
+        self.assertEqual(bs['categories']['roth']['accounts'][0]['name'], 'Roth IRA')
+
+        # User provides account card with lowercase 'Roth ira'
+        accounts = [
+            {
+                'id': 'acc_card_new_1',
+                'name': 'Roth ira',
+                'type': 'roth',
+                'owner': 'user',
+                'balance': 75000.0,
+                'contrib_amount': 7000.0,
+            }
+        ]
+
+        updated_bs = sync_accounts_to_balance_sheet(bs, accounts)
+        roth_accs = updated_bs['categories']['roth']['accounts']
+        # Must still be only 1 account, NOT duplicated
+        self.assertEqual(len(roth_accs), 1)
+        self.assertEqual(roth_accs[0]['name'], 'Roth ira')
+        self.assertEqual(roth_accs[0]['values'][updated_bs['current_period']], 75000.0)
+
+        # Validation must pass with no duplicate errors
+        errors = validate_balance_sheet_accounts(updated_bs)
+        self.assertEqual(errors, [])
+
+    def test_sync_balance_sheet_to_accounts_case_insensitive_linking(self):
+        """Test that sync_balance_sheet_to_accounts matches existing accounts case-insensitively."""
+        from core.forms import build_default_balance_sheet, sync_balance_sheet_to_accounts
+
+        bs = build_default_balance_sheet()
+        # In BS, name is 'Roth IRA'
+        bs['categories']['roth']['accounts'][0]['values'][bs['current_period']] = 60000.0
+
+        existing = [
+            {
+                'id': 'acc_existing_1',
+                'name': 'roth ira',
+                'type': 'roth',
+                'owner': 'user',
+                'balance': 50000.0,
+                'contrib_amount': 5000.0
+            }
+        ]
+
+        synced = sync_balance_sheet_to_accounts(bs, existing_accounts=existing)
+        # Should match and preserve existing account attributes
+        roth_acc = next(a for a in synced if a['type'] == 'roth')
+        self.assertEqual(roth_acc['balance'], 60000.0)
+        self.assertEqual(roth_acc['contrib_amount'], 5000.0)
+
+    def test_enter_post_with_case_variant_name_succeeds(self):
+        """Test submitting 'Traditional 401(k)/IRA' and 'Roth ira' via POST succeeds without duplicate errors."""
+        from django.urls import reverse
+        from core.forms import build_default_balance_sheet
+        import json
+
+        bs = build_default_balance_sheet()
+
+        post_data = {
+            'user_name': 'Jane Doe',
+            'user_age': '60',
+            'user_retirement_age': '65',
+            'user_age_death': '90',
+            'desired_spending': '60000',
+            'runs': '100',
+            'account_id[]': ['acc_card_1', 'acc_card_2'],
+            'account_name[]': ['Traditional 401(k)/IRA', 'Roth ira'],
+            'account_type[]': ['pretax', 'roth'],
+            'account_owner[]': ['user', 'user'],
+            'account_balance[]': ['100000', '50000'],
+            'account_contrib_amount[]': ['0', '0'],
+            'account_contrib_freq[]': ['annual', 'annual'],
+            'account_contrib_start_age[]': ['60', '60'],
+            'account_contrib_end_age_type[]': ['retirement', 'retirement'],
+            'account_contrib_end_age_specified[]': ['65', '65'],
+            'account_contrib_adjust_inflation[]': ['true', 'true'],
+            'account_return_mean[]': ['6.0%', '6.0%'],
+            'account_return_std[]': ['10.0%', '10.0%'],
+            'balance_sheet_json': json.dumps(bs),
+            'next': 'results'
+        }
+
+        resp = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(resp.url.endswith('/results/'))
+
+    def test_sync_accounts_to_balance_sheet_removes_unlinked_duplicate_across_categories(self):
+        """Test that if a card shares a name with an unlinked account in a different category,
+        the unlinked account is purged to prevent duplicate name errors.
+        """
+        from core.forms import build_default_balance_sheet, sync_accounts_to_balance_sheet, validate_balance_sheet_accounts
+
+        bs = build_default_balance_sheet()
+        # bs has 'acc_roth_1' with name 'Roth IRA' in 'roth' category
+        self.assertTrue(any(a['name'] == 'Roth IRA' for a in bs['categories']['roth']['accounts']))
+
+        # Card 2 has name 'Roth ira', but card type is pretax (e.g. before user switches type, or user keeps pretax)
+        accounts = [
+            {
+                'id': 'acc_pretax_100',
+                'name': 'Traditional 401(k) / IRA',
+                'type': 'pretax',
+                'balance': 50000.0
+            },
+            {
+                'id': 'acc_pretax_101',
+                'name': 'Roth ira',
+                'type': 'pretax',
+                'balance': 20000.0
+            }
+        ]
+
+        updated_bs = sync_accounts_to_balance_sheet(bs, accounts)
+        # Unlinked 'acc_roth_1' in roth category should be removed so no duplicate 'Roth ira' collision occurs
+        roth_acc_names = [a['name'].lower() for a in updated_bs['categories']['roth']['accounts']]
+        self.assertNotIn('roth ira', roth_acc_names)
+
+        # Validation must pass without duplicate errors
+        errors = validate_balance_sheet_accounts(updated_bs)
+        self.assertEqual(errors, [])
+
+
 
 class AgeDisambiguationTests(TestCase):
     def test_resolve_age_user_and_spouse_specified(self):

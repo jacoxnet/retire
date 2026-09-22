@@ -761,29 +761,29 @@
 
             col.querySelector('.btnDeleteAccount').addEventListener('click', function() {
                 col.remove();
-                if (typeof window.validateDuplicateAccountNames === 'function') {
-                    window.validateDuplicateAccountNames();
-                }
                 if (typeof window.syncAccountCardsToBsState === 'function') {
                     window.syncAccountCardsToBsState();
+                }
+                if (typeof window.validateDuplicateAccountNames === 'function') {
+                    window.validateDuplicateAccountNames();
                 }
             });
 
             col.querySelectorAll('input, select').forEach(function(el) {
                 el.addEventListener('input', function() {
-                    if (el.name === 'account_name[]' && typeof window.validateDuplicateAccountNames === 'function') {
-                        window.validateDuplicateAccountNames();
-                    }
                     if (typeof window.syncAccountCardsToBsState === 'function') {
                         window.syncAccountCardsToBsState();
+                    }
+                    if (el.name === 'account_name[]' && typeof window.validateDuplicateAccountNames === 'function') {
+                        window.validateDuplicateAccountNames();
                     }
                 });
                 el.addEventListener('change', function() {
-                    if (el.name === 'account_name[]' && typeof window.validateDuplicateAccountNames === 'function') {
-                        window.validateDuplicateAccountNames();
-                    }
                     if (typeof window.syncAccountCardsToBsState === 'function') {
                         window.syncAccountCardsToBsState();
+                    }
+                    if (el.name === 'account_name[]' && typeof window.validateDuplicateAccountNames === 'function') {
+                        window.validateDuplicateAccountNames();
                     }
                 });
             });
@@ -794,6 +794,9 @@
             attachPercentInputListeners(col.querySelector('[name="account_return_mean[]"]'));
             attachPercentInputListeners(col.querySelector('[name="account_return_std[]"]'));
             updateSpouseDropdownOptions();
+            if (typeof window.syncAccountCardsToBsState === 'function') {
+                window.syncAccountCardsToBsState();
+            }
             if (typeof window.validateDuplicateAccountNames === 'function') {
                 window.validateDuplicateAccountNames();
             }
@@ -802,9 +805,6 @@
         if (btnAddAccount) {
             btnAddAccount.addEventListener('click', function () {
                 addAccountCard();
-                if (typeof window.syncAccountCardsToBsState === 'function') {
-                    window.syncAccountCardsToBsState();
-                }
             });
         }
 
@@ -2298,7 +2298,7 @@
                     var cardId = col.dataset.accountId || col.querySelector('[name="account_id[]"]')?.value;
                     if (cardId) cardsByAccId.set(cardId, col);
                     var cardName = col.querySelector('[name="account_name[]"]')?.value?.trim();
-                    if (cardName) cardsByName.set(cardName, col);
+                    if (cardName) cardsByName.set(cardName.toLowerCase(), col);
                 });
 
                 var targetIds = new Set(retireAccounts.map(function(a) { return a.id; }));
@@ -2306,14 +2306,16 @@
                 // 1. Remove cards that are no longer in retireAccounts
                 existingCardCols.forEach(function(col) {
                     var cardId = col.dataset.accountId || col.querySelector('[name="account_id[]"]')?.value;
-                    if (cardId && !targetIds.has(cardId)) {
+                    var cardName = col.querySelector('[name="account_name[]"]')?.value?.trim()?.toLowerCase();
+                    var nameInTarget = cardName && retireAccounts.some(function(a) { return (a.name || '').trim().toLowerCase() === cardName; });
+                    if (cardId && !targetIds.has(cardId) && !nameInTarget) {
                         col.remove();
                     }
                 });
 
                 // 2. Update existing cards or create new cards in retireAccounts order
                 retireAccounts.forEach(function(aData) {
-                    var cardCol = cardsByAccId.get(aData.id) || (aData.name ? cardsByName.get(aData.name) : null);
+                    var cardCol = cardsByAccId.get(aData.id) || (aData.name ? cardsByName.get(aData.name.trim().toLowerCase()) : null);
                     if (cardCol && container.contains(cardCol)) {
                         cardCol.dataset.accountId = aData.id;
                         var idInput = cardCol.querySelector('[name="account_id[]"]');
@@ -2419,7 +2421,7 @@
                     if (cat && cat.accounts) {
                         cat.accounts.forEach(function(a) {
                             if (a.id) bsAccsById.set(a.id, { catKey: catKey, account: a });
-                            if (a.name) bsAccsByName.set(a.name, { catKey: catKey, account: a });
+                            if (a.name) bsAccsByName.set(a.name.trim().toLowerCase(), { catKey: catKey, account: a });
                         });
                     }
                 });
@@ -2427,7 +2429,7 @@
                 (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
                     (g.accounts || []).forEach(function(a) {
                         if (a.id) bsAccsById.set(a.id, { catKey: 'goals', group: g, account: a });
-                        if (a.name) bsAccsByName.set(a.name, { catKey: 'goals', group: g, account: a });
+                        if (a.name) bsAccsByName.set(a.name.trim().toLowerCase(), { catKey: 'goals', group: g, account: a });
                     });
                 });
 
@@ -2466,10 +2468,61 @@
 
                     var targetCatKey = ['pretax', 'roth', 'taxable', 'hsa'].includes(type) ? type : 'taxable';
 
-                    var found = (cardId && bsAccsById.has(cardId)) ? bsAccsById.get(cardId) : (name && bsAccsByName.has(name) ? bsAccsByName.get(name) : null);
+                    var nameKey = name ? name.toLowerCase() : '';
+                    var found = (cardId && bsAccsById.has(cardId)) ? bsAccsById.get(cardId) : (nameKey && bsAccsByName.has(nameKey) ? bsAccsByName.get(nameKey) : null);
+
+                    // If another unlinked account in bsState shares this name, remove the unlinked duplicate across all categories
+                    if (nameKey) {
+                        var targetId = found ? found.account.id : cardId;
+                        ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'].forEach(function(k) {
+                            var cat = bsState.categories[k];
+                            if (cat && cat.accounts) {
+                                cat.accounts = cat.accounts.filter(function(x) {
+                                    if ((x.name || '').trim().toLowerCase() === nameKey && x.id !== targetId) {
+                                        var otherCardUsesIt = Array.from(cards).some(function(otherCol) {
+                                            if (otherCol === col) return false;
+                                            var ocId = otherCol.dataset.accountId || otherCol.querySelector('[name="account_id[]"]')?.value;
+                                            return ocId === x.id;
+                                        });
+                                        if (!otherCardUsesIt) {
+                                            bsAccsById.delete(x.id);
+                                            bsAccsByName.delete(nameKey);
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                });
+                            }
+                        });
+                        (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
+                            if (g.accounts) {
+                                g.accounts = g.accounts.filter(function(x) {
+                                    if ((x.name || '').trim().toLowerCase() === nameKey && x.id !== targetId) {
+                                        var otherCardUsesIt = Array.from(cards).some(function(otherCol) {
+                                            if (otherCol === col) return false;
+                                            var ocId = otherCol.dataset.accountId || otherCol.querySelector('[name="account_id[]"]')?.value;
+                                            return ocId === x.id;
+                                        });
+                                        if (!otherCardUsesIt) {
+                                            bsAccsById.delete(x.id);
+                                            bsAccsByName.delete(nameKey);
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                });
+                            }
+                        });
+                    }
 
                     if (found) {
                         var acc = found.account;
+                        // Synchronize card ID to the matched account's ID if matched by name
+                        if (cardId !== acc.id) {
+                            col.dataset.accountId = acc.id;
+                            var idInput = col.querySelector('[name="account_id[]"]');
+                            if (idInput) idInput.value = acc.id;
+                        }
                         acc.name = name || acc.name;
                         acc.type = type;
                         acc.owner = owner;
@@ -2487,7 +2540,7 @@
                         acc.values[currPeriod] = bal;
 
                         activeCardIds.add(acc.id);
-                        if (acc.name) activeCardNames.add(acc.name);
+                        if (acc.name) activeCardNames.add(acc.name.trim().toLowerCase());
 
                         // If user switched account type (e.g. pretax -> roth), move to new category
                         if (found.catKey !== targetCatKey && found.catKey !== 'goals' && found.catKey !== 'emergency' && found.catKey !== 'daily') {
@@ -2541,9 +2594,29 @@
                         if (!cat.accounts) cat.accounts = [];
                         cat.accounts.push(newAcc);
                         bsAccsById.set(newAccId, { catKey: targetCatKey, account: newAcc });
-                        if (newAcc.name) bsAccsByName.set(newAcc.name, { catKey: targetCatKey, account: newAcc });
+                        if (newAcc.name) bsAccsByName.set(newAcc.name.trim().toLowerCase(), { catKey: targetCatKey, account: newAcc });
                         activeCardIds.add(newAccId);
-                        if (newAcc.name) activeCardNames.add(newAcc.name);
+                        if (newAcc.name) activeCardNames.add(newAcc.name.trim().toLowerCase());
+                    }
+                });
+
+                // Clean up unlinked default placeholders in categories that have active retirement cards
+                ['pretax', 'roth', 'taxable'].forEach(function(catKey) {
+                    var defaultId = 'acc_' + catKey + '_1';
+                    if (!activeCardIds.has(defaultId)) {
+                        var cat = bsState.categories[catKey];
+                        if (cat && cat.accounts) {
+                            var placeholder = cat.accounts.find(function(a) { return a.id === defaultId; });
+                            if (placeholder) {
+                                var vals = Object.values(placeholder.values || {});
+                                var hasBalance = vals.some(function(v) { return parseFloat(v) > 0; });
+                                if (!hasBalance) {
+                                    cat.accounts = cat.accounts.filter(function(a) { return a.id !== defaultId; });
+                                    bsAccsById.delete(defaultId);
+                                    if (placeholder.name) bsAccsByName.delete(placeholder.name.trim().toLowerCase());
+                                }
+                            }
+                        }
                     }
                 });
 
@@ -2552,7 +2625,7 @@
                     var cat = bsState.categories[catKey];
                     if (cat && cat.accounts) {
                         cat.accounts.forEach(function(a) {
-                            if (a.include_in_retirement && !activeCardIds.has(a.id) && (!a.name || !activeCardNames.has(a.name))) {
+                            if (a.include_in_retirement && !activeCardIds.has(a.id) && (!a.name || !activeCardNames.has(a.name.trim().toLowerCase()))) {
                                 a.include_in_retirement = false;
                             }
                         });
@@ -2560,7 +2633,7 @@
                 });
                 (bsState.categories.goals?.goal_groups || []).forEach(function(g) {
                     (g.accounts || []).forEach(function(a) {
-                        if (a.include_in_retirement && !activeCardIds.has(a.id) && (!a.name || !activeCardNames.has(a.name))) {
+                        if (a.include_in_retirement && !activeCardIds.has(a.id) && (!a.name || !activeCardNames.has(a.name.trim().toLowerCase()))) {
                             a.include_in_retirement = false;
                         }
                     });
@@ -4609,6 +4682,9 @@
         }
 
         // Initialize Balance Sheet Table & Chart on load
+        if (typeof window.syncAccountCardsToBsState === 'function') {
+            window.syncAccountCardsToBsState();
+        }
         updateBsFreqButtonsUI();
         updateBsColumnScopeUI();
         renderBalanceSheetTable();
