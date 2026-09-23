@@ -23,11 +23,22 @@ STD_DEDUCTION_2026_HOH = 24150
 
 TAX_RATES = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]
 
+# 2026 Preferential Long-Term Capital Gains / Qualified Dividends Brackets
+LTCG_THRESHOLDS_2026_SINGLE = [48350.0, 533400.0]
+LTCG_THRESHOLDS_2026_JOINT = [96700.0, 600050.0]
+LTCG_THRESHOLDS_2026_HOH = [64750.0, 566700.0]
+LTCG_RATES = [0.0, 0.15, 0.20]
+
 # Numba Pre-compiled Arrays
 THRESHOLDS_SINGLE_ARR = np.array([12400.0, 50400.0, 105700.0, 201775.0, 256225.0, 640600.0], dtype=np.float64)
 THRESHOLDS_JOINT_ARR = np.array([24800.0, 100800.0, 211400.0, 403550.0, 512450.0, 768700.0], dtype=np.float64)
 THRESHOLDS_HOH_ARR = np.array([17700.0, 67450.0, 105700.0, 201775.0, 256225.0, 640600.0], dtype=np.float64)
 TAX_RATES_ARR = np.array([0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37], dtype=np.float64)
+
+LTCG_THRESHOLDS_SINGLE_ARR = np.array([48350.0, 533400.0], dtype=np.float64)
+LTCG_THRESHOLDS_JOINT_ARR = np.array([96700.0, 600050.0], dtype=np.float64)
+LTCG_THRESHOLDS_HOH_ARR = np.array([64750.0, 566700.0], dtype=np.float64)
+LTCG_RATES_ARR = np.array([0.0, 0.15, 0.20], dtype=np.float64)
 
 # Literature-typical planning assumptions for cross-asset-class correlation, used to jointly
 # draw stock/bond/cash factors for the Monte Carlo engine (order: stocks, bonds, cash).
@@ -104,6 +115,21 @@ def calculate_tax(taxable_income, thresholds, rates):
     tax += (taxable_income - prev_threshold) * rates[-1]
     return tax
 
+def calculate_preferential_tax(taxable_ord, taxable_pref, thresholds, rates):
+    """Calculates tax on qualified dividends and long-term capital gains stacking on top of ordinary taxable income."""
+    if taxable_pref <= 0.0:
+        return 0.0
+    y_tot = taxable_ord + taxable_pref
+    t0 = thresholds[0]
+    t1 = thresholds[1]
+    r1 = rates[1]
+    r2 = rates[2]
+    amt1 = max(0.0, min(y_tot, t1) - max(taxable_ord, t0))
+    tax = amt1 * r1
+    amt2 = max(0.0, y_tot - max(taxable_ord, t1))
+    tax += amt2 * r2
+    return tax
+
 def resolve_age(age_type, specified_val, user_age=60, user_ret_age=65, is_married=False, spouse_age=None, spouse_ret_age=None, user_age_death=100, spouse_age_death=100, default_val=100):
     if age_type in ['specified', 'age', 'user_specified']:
         try:
@@ -172,6 +198,20 @@ def njit_spousal_rollover(
             contrib_pretax_user, contrib_pretax_spouse, contrib_hsa_user, contrib_hsa_spouse)
 
 @numba.njit(cache=True)
+def njit_calc_fed_tax_dual(tot_ord_income, pref_income, std_deduction, ord_thresholds, ord_rates, ltcg_thresholds, ltcg_rates):
+    if tot_ord_income >= std_deduction:
+        taxable_ord = tot_ord_income - std_deduction
+        taxable_pref = pref_income
+    else:
+        taxable_ord = 0.0
+        excess_ded = std_deduction - tot_ord_income
+        taxable_pref = max(0.0, pref_income - excess_ded)
+    
+    ord_tax = njit_calculate_tax(taxable_ord, ord_thresholds, ord_rates)
+    pref_tax = njit_calculate_preferential_tax(taxable_ord, taxable_pref, ltcg_thresholds, ltcg_rates)
+    return ord_tax, pref_tax, (ord_tax + pref_tax)
+
+@numba.njit(cache=True)
 def njit_rmd_tax_withdraw(
     user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
     pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
@@ -181,6 +221,11 @@ def njit_rmd_tax_withdraw(
     total_spending_target, taxable_income_sources, ss_benefits, nontaxable_income,
     other_taxes_t, state_tax_rate, state_ss_exempt_code,
     hsa_user_for_medical_code, hsa_spouse_for_medical_code,
+    taxable_basis_mid=0.0,
+    taxable_yield_interest=0.0,
+    taxable_yield_div_ord=0.0,
+    taxable_yield_div_qual=0.0,
+    taxable_yield_cg_dist=0.0,
 ):
     state_rate = state_tax_rate / 100.0
     total_income_sources = taxable_income_sources + ss_benefits + nontaxable_income
@@ -199,18 +244,33 @@ def njit_rmd_tax_withdraw(
 
     if filing_status_t_code == 1:
         thresholds_t = THRESHOLDS_JOINT_ARR * inf_factor
+        ltcg_thresholds_t = LTCG_THRESHOLDS_JOINT_ARR * inf_factor
         std_deduction_t = STD_DEDUCTION_2026_JOINT * inf_factor
     elif filing_status_t_code == 2:
         thresholds_t = THRESHOLDS_HOH_ARR * inf_factor
+        ltcg_thresholds_t = LTCG_THRESHOLDS_HOH_ARR * inf_factor
         std_deduction_t = STD_DEDUCTION_2026_HOH * inf_factor
     else:
         thresholds_t = THRESHOLDS_SINGLE_ARR * inf_factor
+        ltcg_thresholds_t = LTCG_THRESHOLDS_SINGLE_ARR * inf_factor
         std_deduction_t = STD_DEDUCTION_2026_SINGLE * inf_factor
 
-    base_agi_ex_ss = taxable_income_sources + rmd_t
+    # Investment yields breakdown
+    y_ord_inv = taxable_yield_interest + taxable_yield_div_ord
+    y_pref_inv = taxable_yield_div_qual + taxable_yield_cg_dist
+
+    base_ord_ex_ss = taxable_income_sources + rmd_t + y_ord_inv
+    base_agi_ex_ss = base_ord_ex_ss + y_pref_inv
+
+    # Social Security provisional income includes total AGI ex SS (including LTCG/QD)
     base_taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
-    base_taxable_income = max(0.0, base_agi_ex_ss + base_taxable_ss - std_deduction_t)
-    base_tax = njit_calculate_tax(base_taxable_income, thresholds_t, TAX_RATES_ARR)
+    tot_ord_income = base_ord_ex_ss + base_taxable_ss
+    cur_pref_income = y_pref_inv
+
+    ord_tax, pref_tax, base_tax = njit_calc_fed_tax_dual(
+        tot_ord_income, cur_pref_income, std_deduction_t,
+        thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+    )
 
     base_st_ss = 0.0 if state_ss_exempt_code == 1 else base_taxable_ss
     base_st_taxable_income = max(0.0, base_agi_ex_ss + base_st_ss - std_deduction_t)
@@ -226,6 +286,7 @@ def njit_rmd_tax_withdraw(
     pretax_end = pretax_user_end + pretax_spouse_end
     roth_end = roth_mid
     taxable_end = taxable_mid
+    taxable_basis_end = taxable_basis_mid
     hsa_user_end = hsa_user_mid
     hsa_spouse_end = hsa_spouse_mid
 
@@ -235,20 +296,80 @@ def njit_rmd_tax_withdraw(
     w_hsa_user = 0.0
     w_hsa_spouse = 0.0
     final_fed_tax = base_tax
+    final_fed_ord_tax = ord_tax
+    final_fed_pref_tax = pref_tax
     final_state_tax = base_state_tax
     final_penalty = 0.0
     hsa_penalty_user = 0.0
     hsa_penalty_spouse = 0.0
+    realized_cg = 0.0
 
     if net_base >= 0.0:
         taxable_end = taxable_mid + net_base
+        taxable_basis_end = taxable_basis_mid + net_base
     else:
         deficit = -net_base
 
-        # A. Taxable assets
-        w_taxable = min(deficit, max(0.0, taxable_end))
-        taxable_end = taxable_end - w_taxable
-        deficit = deficit - w_taxable
+        # A. Taxable assets (with realized capital gains and gross-up)
+        if taxable_end > 0.0 and deficit > 0.0:
+            basis_ratio = min(1.0, max(0.0, taxable_basis_end / taxable_end))
+            gain_ratio = 1.0 - basis_ratio
+            if gain_ratio <= 0.0001:
+                w_taxable = min(deficit, taxable_end)
+                taxable_end = taxable_end - w_taxable
+                taxable_basis_end = max(0.0, taxable_basis_end - w_taxable)
+                deficit = deficit - w_taxable
+            else:
+                g_max = taxable_end * gain_ratio
+                _, _, fed_tax_gmax = njit_calc_fed_tax_dual(
+                    tot_ord_income, cur_pref_income + g_max, std_deduction_t,
+                    thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                )
+                extra_fed_gmax = fed_tax_gmax - base_tax
+                extra_st_gmax = g_max * state_rate
+                net_cash_max = taxable_end - (extra_fed_gmax + extra_st_gmax)
+
+                if net_cash_max <= deficit:
+                    w_taxable = taxable_end
+                    realized_cg = g_max
+                    taxable_end = 0.0
+                    taxable_basis_end = 0.0
+                    deficit = deficit - net_cash_max
+                    cur_pref_income += realized_cg
+                    final_fed_ord_tax, final_fed_pref_tax, final_fed_tax = njit_calc_fed_tax_dual(
+                        tot_ord_income, cur_pref_income, std_deduction_t,
+                        thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                    )
+                    final_state_tax += extra_st_gmax
+                    total_base_tax = final_fed_tax + final_state_tax
+                else:
+                    low = 0.0
+                    high = taxable_end
+                    for _ in range(25):
+                        mid = (low + high) / 2.0
+                        g = mid * gain_ratio
+                        _, _, fed_mid = njit_calc_fed_tax_dual(
+                            tot_ord_income, cur_pref_income + g, std_deduction_t,
+                            thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                        )
+                        st_mid = g * state_rate
+                        net_cash = mid - ((fed_mid - base_tax) + st_mid)
+                        if net_cash < deficit:
+                            low = mid
+                        else:
+                            high = mid
+                    w_taxable = high
+                    realized_cg = w_taxable * gain_ratio
+                    taxable_basis_end = max(0.0, taxable_basis_end - (w_taxable * basis_ratio))
+                    taxable_end = max(0.0, taxable_end - w_taxable)
+                    cur_pref_income += realized_cg
+                    final_fed_ord_tax, final_fed_pref_tax, final_fed_tax = njit_calc_fed_tax_dual(
+                        tot_ord_income, cur_pref_income, std_deduction_t,
+                        thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                    )
+                    final_state_tax += realized_cg * state_rate
+                    total_base_tax = final_fed_tax + final_state_tax
+                    deficit = 0.0
 
         # B. Pre-tax extra withdrawals (gross-up solver)
         if deficit > 0.0 and pretax_end > 0.0:
@@ -259,10 +380,13 @@ def njit_rmd_tax_withdraw(
             spouse_pen_rate = 0.10 if ((spouse_alive or not user_alive) and spouse_age_t < 59.5) else 0.0
             eff_pre_pen_rate = u_ratio * user_pen_rate + s_ratio * spouse_pen_rate
 
-            agi_max = base_agi_ex_ss + pretax_end
+            agi_max = base_agi_ex_ss + realized_cg + pretax_end
             tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
-            fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
-            fed_tax_max = njit_calculate_tax(fed_taxable_max, thresholds_t, TAX_RATES_ARR)
+            tot_ord_max = base_ord_ex_ss + tax_ss_max + pretax_end
+            _, _, fed_tax_max = njit_calc_fed_tax_dual(
+                tot_ord_max, cur_pref_income, std_deduction_t,
+                thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+            )
             st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
             st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
             st_tax_max = st_taxable_max * state_rate
@@ -278,10 +402,13 @@ def njit_rmd_tax_withdraw(
                 high = pretax_end
                 for _ in range(25):
                     mid = (low + high) / 2.0
-                    agi = base_agi_ex_ss + mid
+                    agi = base_agi_ex_ss + realized_cg + mid
                     tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t_code)
-                    fed_taxable = max(0.0, agi + tax_ss - std_deduction_t)
-                    fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                    tot_ord_mid = base_ord_ex_ss + tax_ss + mid
+                    _, _, fed_tax = njit_calc_fed_tax_dual(
+                        tot_ord_mid, cur_pref_income, std_deduction_t,
+                        thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                    )
                     st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
                     st_taxable = max(0.0, agi + st_ss - std_deduction_t)
                     st_tax = st_taxable * state_rate
@@ -295,12 +422,15 @@ def njit_rmd_tax_withdraw(
                 pretax_end = pretax_end - w_pretax_extra
                 deficit = 0.0
 
-            base_agi_ex_ss += w_pretax_extra
-            taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
-            fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-            final_fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+            agi_end = base_agi_ex_ss + realized_cg + w_pretax_extra
+            taxable_ss = njit_calculate_taxable_ss(agi_end, ss_benefits, filing_status_t_code)
+            tot_ord_end = base_ord_ex_ss + taxable_ss + w_pretax_extra
+            final_fed_ord_tax, final_fed_pref_tax, final_fed_tax = njit_calc_fed_tax_dual(
+                tot_ord_end, cur_pref_income, std_deduction_t,
+                thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+            )
             st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
-            st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+            st_taxable = max(0.0, agi_end + st_ss - std_deduction_t)
             final_state_tax = st_taxable * state_rate
             final_penalty = eff_pre_pen_rate * w_pretax_extra
             total_base_tax = final_fed_tax + final_state_tax + final_penalty
@@ -324,10 +454,13 @@ def njit_rmd_tax_withdraw(
                 hsa_user_end = hsa_user_end - w_hsa_user
                 deficit = deficit - w_hsa_user
             else:
-                agi_max = base_agi_ex_ss + hsa_user_end
+                agi_max = base_agi_ex_ss + realized_cg + w_pretax_extra + hsa_user_end
                 tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
-                fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
-                fed_tax_max = njit_calculate_tax(fed_taxable_max, thresholds_t, TAX_RATES_ARR)
+                tot_ord_max = base_ord_ex_ss + tax_ss_max + w_pretax_extra + hsa_user_end
+                _, _, fed_tax_max = njit_calc_fed_tax_dual(
+                    tot_ord_max, cur_pref_income, std_deduction_t,
+                    thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                )
                 st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
                 st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
                 st_tax_max = st_taxable_max * state_rate
@@ -343,10 +476,13 @@ def njit_rmd_tax_withdraw(
                     high = hsa_user_end
                     for _ in range(25):
                         mid = (low + high) / 2.0
-                        agi = base_agi_ex_ss + mid
+                        agi = base_agi_ex_ss + realized_cg + w_pretax_extra + mid
                         tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t_code)
-                        fed_taxable = max(0.0, agi + tax_ss - std_deduction_t)
-                        fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                        tot_ord_mid = base_ord_ex_ss + tax_ss + w_pretax_extra + mid
+                        _, _, fed_tax = njit_calc_fed_tax_dual(
+                            tot_ord_mid, cur_pref_income, std_deduction_t,
+                            thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                        )
                         st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
                         st_taxable = max(0.0, agi + st_ss - std_deduction_t)
                         st_tax = st_taxable * state_rate
@@ -360,12 +496,15 @@ def njit_rmd_tax_withdraw(
                     hsa_user_end = hsa_user_end - w_hsa_user
                     deficit = 0.0
 
-                base_agi_ex_ss += w_hsa_user
-                taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
-                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                final_fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                agi_end = base_agi_ex_ss + realized_cg + w_pretax_extra + w_hsa_user
+                taxable_ss = njit_calculate_taxable_ss(agi_end, ss_benefits, filing_status_t_code)
+                tot_ord_end = base_ord_ex_ss + taxable_ss + w_pretax_extra + w_hsa_user
+                final_fed_ord_tax, final_fed_pref_tax, final_fed_tax = njit_calc_fed_tax_dual(
+                    tot_ord_end, cur_pref_income, std_deduction_t,
+                    thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                )
                 st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
-                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                st_taxable = max(0.0, agi_end + st_ss - std_deduction_t)
                 final_state_tax = st_taxable * state_rate
                 hsa_penalty_user = 0.20 * w_hsa_user if (user_alive and user_age_t < 65.0) else 0.0
                 final_penalty = (eff_pre_pen_rate * w_pretax_extra) + hsa_penalty_user
@@ -378,10 +517,13 @@ def njit_rmd_tax_withdraw(
                 hsa_spouse_end = hsa_spouse_end - w_hsa_spouse
                 deficit = deficit - w_hsa_spouse
             else:
-                agi_max = base_agi_ex_ss + hsa_spouse_end
+                agi_max = base_agi_ex_ss + realized_cg + w_pretax_extra + w_hsa_user + hsa_spouse_end
                 tax_ss_max = njit_calculate_taxable_ss(agi_max, ss_benefits, filing_status_t_code)
-                fed_taxable_max = max(0.0, agi_max + tax_ss_max - std_deduction_t)
-                fed_tax_max = njit_calculate_tax(fed_taxable_max, thresholds_t, TAX_RATES_ARR)
+                tot_ord_max = base_ord_ex_ss + tax_ss_max + w_pretax_extra + w_hsa_user + hsa_spouse_end
+                _, _, fed_tax_max = njit_calc_fed_tax_dual(
+                    tot_ord_max, cur_pref_income, std_deduction_t,
+                    thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                )
                 st_ss_max = 0.0 if state_ss_exempt_code == 1 else tax_ss_max
                 st_taxable_max = max(0.0, agi_max + st_ss_max - std_deduction_t)
                 st_tax_max = st_taxable_max * state_rate
@@ -397,10 +539,13 @@ def njit_rmd_tax_withdraw(
                     high = hsa_spouse_end
                     for _ in range(25):
                         mid = (low + high) / 2.0
-                        agi = base_agi_ex_ss + mid
+                        agi = base_agi_ex_ss + realized_cg + w_pretax_extra + w_hsa_user + mid
                         tax_ss = njit_calculate_taxable_ss(agi, ss_benefits, filing_status_t_code)
-                        fed_taxable = max(0.0, agi + tax_ss - std_deduction_t)
-                        fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                        tot_ord_mid = base_ord_ex_ss + tax_ss + w_pretax_extra + w_hsa_user + mid
+                        _, _, fed_tax = njit_calc_fed_tax_dual(
+                            tot_ord_mid, cur_pref_income, std_deduction_t,
+                            thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                        )
                         st_ss = 0.0 if state_ss_exempt_code == 1 else tax_ss
                         st_taxable = max(0.0, agi + st_ss - std_deduction_t)
                         st_tax = st_taxable * state_rate
@@ -414,12 +559,15 @@ def njit_rmd_tax_withdraw(
                     hsa_spouse_end = hsa_spouse_end - w_hsa_spouse
                     deficit = 0.0
 
-                base_agi_ex_ss += w_hsa_spouse
-                taxable_ss = njit_calculate_taxable_ss(base_agi_ex_ss, ss_benefits, filing_status_t_code)
-                fed_taxable = max(0.0, base_agi_ex_ss + taxable_ss - std_deduction_t)
-                final_fed_tax = njit_calculate_tax(fed_taxable, thresholds_t, TAX_RATES_ARR)
+                agi_end = base_agi_ex_ss + realized_cg + w_pretax_extra + w_hsa_user + w_hsa_spouse
+                taxable_ss = njit_calculate_taxable_ss(agi_end, ss_benefits, filing_status_t_code)
+                tot_ord_end = base_ord_ex_ss + taxable_ss + w_pretax_extra + w_hsa_user + w_hsa_spouse
+                final_fed_ord_tax, final_fed_pref_tax, final_fed_tax = njit_calc_fed_tax_dual(
+                    tot_ord_end, cur_pref_income, std_deduction_t,
+                    thresholds_t, TAX_RATES_ARR, ltcg_thresholds_t, LTCG_RATES_ARR
+                )
                 st_ss = 0.0 if state_ss_exempt_code == 1 else taxable_ss
-                st_taxable = max(0.0, base_agi_ex_ss + st_ss - std_deduction_t)
+                st_taxable = max(0.0, agi_end + st_ss - std_deduction_t)
                 final_state_tax = st_taxable * state_rate
                 hsa_penalty_spouse = 0.20 * w_hsa_spouse if ((spouse_alive or not user_alive) and spouse_age_t < 65.0) else 0.0
                 final_penalty = final_penalty + hsa_penalty_spouse
@@ -434,7 +582,8 @@ def njit_rmd_tax_withdraw(
         w_pretax_extra, w_taxable, w_roth, w_hsa_user, w_hsa_spouse,
         final_fed_tax, final_state_tax, final_penalty,
         hsa_penalty_user, hsa_penalty_spouse,
-        shortfall
+        shortfall,
+        taxable_basis_end, realized_cg, final_fed_ord_tax, final_fed_pref_tax
     )
 
 def calculate_income_growth_factor(
@@ -633,7 +782,10 @@ def simulate_step(
     hsa_spouse=0.0, hsa_spouse_for_medical=True, r_hsa_spouse=0.0, contrib_hsa_spouse=0.0,
     hsa=None, hsa_for_medical=None, r_hsa=None, contrib_hsa=None,
     user_ret_age=65, spouse_ret_age=65,
-    life_insurance_payout=0.0
+    life_insurance_payout=0.0,
+    taxable_dividend_yield=0.0, taxable_qualified_dividend_pct=100.0,
+    taxable_interest_yield=0.0, taxable_capital_gains_dist_rate=0.0,
+    taxable_cost_basis_ratio=100.0, taxable_cost_basis=None
 ):
     # Backwards-compatibility aliases
     if hsa is not None:
@@ -656,12 +808,14 @@ def simulate_step(
         # Both are dead, nothing to simulate
         return {
             'beginning_assets': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
-            'ending_assets': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
+            'ending_assets': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'roth': 0.0, 'taxable': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0, 'taxable_basis': 0.0},
             'withdrawals': {'pretax': 0.0, 'pretax_user': 0.0, 'pretax_spouse': 0.0, 'pretax_rmd': 0.0, 'user_pretax_rmd': 0.0, 'spouse_pretax_rmd': 0.0, 'pretax_extra': 0.0, 'taxable': 0.0, 'roth': 0.0, 'hsa': 0.0, 'hsa_user': 0.0, 'hsa_spouse': 0.0, 'total': 0.0},
             'taxes': {'federal_tax': 0.0, 'state_tax': 0.0, 'early_withdrawal_penalty': 0.0, 'hsa_penalty_user': 0.0, 'hsa_penalty_spouse': 0.0, 'other_taxes': 0.0, 'total_tax': 0.0},
+            'tax_breakdown': {'fed_tax': 0.0, 'fed_ordinary_tax': 0.0, 'fed_ltcg_tax': 0.0, 'state_tax': 0.0, 'penalty': 0.0, 'hsa_penalty': 0.0, 'other_taxes': 0.0, 'other_taxes_breakdown': {}},
             'cash_flow': {'desired_spending': 0.0, 'additional_spending': 0.0, 'total_spending': 0.0, 'net_inflows': 0.0, 'total_income': 0.0, 'deficit': 0.0, 'surplus': 0.0},
             'income_sources_total': 0.0,
             'income_sources_breakdown': {},
+            'investment_income': {'interest': 0.0, 'ordinary_dividends': 0.0, 'qualified_dividends': 0.0, 'capital_gains_distributions': 0.0, 'realized_capital_gains': 0.0, 'total': 0.0},
             'contributions_total': 0.0,
             'life_insurance_payout': 0.0,
         }
@@ -683,11 +837,22 @@ def simulate_step(
     pretax_user_prior = max(0.0, pretax_user)
     pretax_spouse_prior = max(0.0, pretax_spouse) if is_married else 0.0
 
+    # Basis initialization and tracking
+    if taxable_cost_basis is None:
+        taxable_basis_curr = max(0.0, taxable) * (float(taxable_cost_basis_ratio) / 100.0)
+    else:
+        taxable_basis_curr = max(0.0, float(taxable_cost_basis))
+
+    # Apply 50% step-up in basis on first death if married
+    if is_married and t == t_first_death and taxable > 0.0:
+        taxable_basis_curr = 0.5 * taxable_basis_curr + 0.5 * max(0.0, taxable)
+
     # 2. Add Contributions and any Life Insurance Payout
     pretax_user_before = max(0.0, pretax_user + contrib_pretax_user)
     pretax_spouse_before = max(0.0, pretax_spouse + contrib_pretax_spouse) if is_married else 0.0
     roth_before = max(0.0, roth + contrib_roth)
     taxable_before = taxable + contrib_taxable + max(0.0, life_insurance_payout)
+    taxable_basis_before = taxable_basis_curr + contrib_taxable + max(0.0, life_insurance_payout)
     hsa_user_before = max(0.0, hsa_user + contrib_hsa_user)
     hsa_spouse_before = max(0.0, hsa_spouse + contrib_hsa_spouse) if is_married else 0.0
     
@@ -707,6 +872,22 @@ def simulate_step(
     hsa_user_mid = hsa_user_before + growth_hsa_user
     hsa_spouse_mid = hsa_spouse_before + growth_hsa_spouse
     hsa_mid = hsa_user_mid + hsa_spouse_mid
+
+    # Compute taxable annual yields
+    if taxable_before > 0.0:
+        y_int = taxable_before * (float(taxable_interest_yield) / 100.0)
+        tot_div = taxable_before * (float(taxable_dividend_yield) / 100.0)
+        y_div_qual = tot_div * (float(taxable_qualified_dividend_pct) / 100.0)
+        y_div_ord = tot_div - y_div_qual
+        y_cg_dist = taxable_before * (float(taxable_capital_gains_dist_rate) / 100.0)
+    else:
+        y_int = 0.0
+        tot_div = 0.0
+        y_div_qual = 0.0
+        y_div_ord = 0.0
+        y_cg_dist = 0.0
+
+    taxable_basis_mid = taxable_basis_before + y_int + tot_div + y_cg_dist
     
     # 4. Calculate Desired Spending
     is_spending_active = (user_age_t >= desired_spending_start_age)
@@ -916,7 +1097,8 @@ def simulate_step(
      w_pretax_extra, w_taxable, w_roth, w_hsa_user, w_hsa_spouse,
      final_fed_tax, final_state_tax, final_penalty,
      hsa_penalty_user, hsa_penalty_spouse,
-     shortfall) = njit_rmd_tax_withdraw(
+     shortfall,
+     taxable_basis_end, realized_cg, final_fed_ord_tax, final_fed_pref_tax) = njit_rmd_tax_withdraw(
         user_age_t, spouse_age_t if is_married else user_age_t, user_alive, spouse_alive, is_married,
         pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
         roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
@@ -925,6 +1107,7 @@ def simulate_step(
         total_spending_target, taxable_income_sources, ss_benefits, nontaxable_income,
         other_taxes_t, state_tax_rate, state_ss_exempt_code,
         hsa_user_for_medical_code, hsa_spouse_for_medical_code,
+        taxable_basis_mid, y_int, y_div_ord, y_div_qual, y_cg_dist
     )
 
     rmd_t = user_rmd_t + spouse_rmd_t
@@ -941,7 +1124,8 @@ def simulate_step(
         'hsa': hsa_user + hsa_spouse,
         'hsa_user': hsa_user,
         'hsa_spouse': hsa_spouse,
-        'total': pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse
+        'total': pretax_user + pretax_spouse + roth + taxable + hsa_user + hsa_spouse,
+        'taxable_basis': taxable_basis_curr
     }
     
     end_assets = {
@@ -953,7 +1137,8 @@ def simulate_step(
         'hsa': hsa_user_end + hsa_spouse_end,
         'hsa_user': hsa_user_end,
         'hsa_spouse': hsa_spouse_end,
-        'total': pretax_user_end + pretax_spouse_end + roth_end + taxable_end + hsa_user_end + hsa_spouse_end
+        'total': pretax_user_end + pretax_spouse_end + roth_end + taxable_end + hsa_user_end + hsa_spouse_end,
+        'taxable_basis': taxable_basis_end
     }
     
     conts = {
@@ -995,11 +1180,22 @@ def simulate_step(
 
     tax_breakdown = {
         'fed_tax': final_fed_tax,
+        'fed_ordinary_tax': final_fed_ord_tax,
+        'fed_ltcg_tax': final_fed_pref_tax,
         'state_tax': final_state_tax,
         'penalty': final_penalty,
         'hsa_penalty': hsa_penalty_total,
         'other_taxes': other_taxes_t,
         'other_taxes_breakdown': other_taxes_breakdown_t
+    }
+
+    investment_income = {
+        'interest': y_int,
+        'ordinary_dividends': y_div_ord,
+        'qualified_dividends': y_div_qual,
+        'capital_gains_distributions': y_cg_dist,
+        'realized_capital_gains': realized_cg,
+        'total': y_int + y_div_ord + y_div_qual + y_cg_dist + realized_cg
     }
     
     return {
@@ -1009,6 +1205,7 @@ def simulate_step(
         'growth': growth,
         'income_sources_total': total_income_sources,
         'income_sources_breakdown': income_breakdown,
+        'investment_income': investment_income,
         'taxes_paid': final_tax_and_penalty,
         'tax_breakdown': tax_breakdown,
         'desired_spending': desired_spending_t,
@@ -1198,6 +1395,23 @@ def extract_sim_inputs(sim_input):
     spouse_pretax_data = raw.get('spouse_pretax_assets', {}) if is_married else {}
     roth_data = raw.get('roth_assets', {})
     taxable_data = raw.get('taxable_assets', {})
+    if taxable_data is None:
+        taxable_data = {}
+    if 'dividend_yield' not in taxable_data:
+        taxable_data['dividend_yield'] = 2.0
+    if 'qualified_dividend_pct' not in taxable_data:
+        taxable_data['qualified_dividend_pct'] = 85.0
+    if 'interest_yield' not in taxable_data:
+        taxable_data['interest_yield'] = 0.0
+    if 'capital_gains_dist_rate' not in taxable_data:
+        taxable_data['capital_gains_dist_rate'] = 0.5
+    if 'cost_basis_ratio' not in taxable_data:
+        taxable_data['cost_basis_ratio'] = 70.0
+    if 'initial_cost_basis' not in taxable_data:
+        taxable_bal = float(taxable_data.get('present_balance', 0.0))
+        cbr = float(taxable_data.get('cost_basis_ratio', 70.0))
+        taxable_data['initial_cost_basis'] = taxable_bal * (cbr / 100.0)
+
     hsa_data = raw.get('hsa_assets', {})
     spouse_hsa_data = raw.get('spouse_hsa_assets', {}) if is_married else {}
     
@@ -1334,6 +1548,17 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
     taxable_deposit_amt = routing['taxable_deposit_amt']
     terminal_life_ins_estate = routing['terminal_life_ins_estate']
 
+    tax_data = inputs.get('taxable_data', {})
+    taxable_div_yield = float(tax_data.get('dividend_yield', 2.0))
+    taxable_qual_pct = float(tax_data.get('qualified_dividend_pct', 85.0))
+    taxable_int_yield = float(tax_data.get('interest_yield', 0.0))
+    taxable_cg_dist_rate = float(tax_data.get('capital_gains_dist_rate', 0.5))
+    taxable_cost_basis_ratio = float(tax_data.get('cost_basis_ratio', 70.0))
+    if 'initial_cost_basis' in tax_data:
+        taxable_basis = float(tax_data['initial_cost_basis'])
+    else:
+        taxable_basis = max(0.0, taxable) * (taxable_cost_basis_ratio / 100.0)
+
     year_results = []
     
     for t in range(inputs['total_years']):
@@ -1371,7 +1596,13 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
             hsa_spouse=hsa_spouse, hsa_spouse_for_medical=inputs.get('spouse_hsa_for_medical', True),
             r_hsa_spouse=r_hsa_spouse, contrib_hsa_spouse=c_hsa_spouse,
             user_ret_age=inputs.get('user_ret_age', 65), spouse_ret_age=inputs.get('spouse_ret_age', 65),
-            life_insurance_payout=li_payout_t
+            life_insurance_payout=li_payout_t,
+            taxable_dividend_yield=taxable_div_yield,
+            taxable_qualified_dividend_pct=taxable_qual_pct,
+            taxable_interest_yield=taxable_int_yield,
+            taxable_capital_gains_dist_rate=taxable_cg_dist_rate,
+            taxable_cost_basis_ratio=taxable_cost_basis_ratio,
+            taxable_cost_basis=taxable_basis,
         )
         
         year_results.append(res)
@@ -1381,6 +1612,7 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
         taxable = res['ending_assets']['taxable']
         hsa_user = res['ending_assets']['hsa_user']
         hsa_spouse = res['ending_assets']['hsa_spouse']
+        taxable_basis = res['ending_assets'].get('taxable_basis', 0.0)
         
     if year_results and terminal_life_ins_estate > 0.0:
         year_results[-1]['ending_assets']['terminal_life_insurance'] = terminal_life_ins_estate
@@ -1407,6 +1639,21 @@ def njit_calculate_tax(taxable_income, thresholds, rates):
             tax += (taxable_income - prev_threshold) * rate
             return tax
     tax += (taxable_income - prev_threshold) * rates[n]
+    return tax
+
+@numba.njit(cache=True)
+def njit_calculate_preferential_tax(taxable_ord, taxable_pref, thresholds, rates):
+    if taxable_pref <= 0.0:
+        return 0.0
+    y_tot = taxable_ord + taxable_pref
+    t0 = thresholds[0]
+    t1 = thresholds[1]
+    r1 = rates[1]
+    r2 = rates[2]
+    amt1 = max(0.0, min(y_tot, t1) - max(taxable_ord, t0))
+    tax = amt1 * r1
+    amt2 = max(0.0, y_tot - max(taxable_ord, t1))
+    tax += amt2 * r2
     return tax
 
 @numba.njit(cache=True)
@@ -1456,7 +1703,12 @@ def njit_simulate_path(
     taxable_deposit_amt=0.0,
     terminal_life_ins_estate=0.0,
     success_flags=None,
-    path_idx=-1
+    path_idx=-1,
+    taxable_div_yield=2.0,
+    taxable_qual_pct=85.0,
+    taxable_int_yield=0.0,
+    taxable_cg_dist_rate=0.5,
+    taxable_basis_init=-1.0
 ):
     pretax_user = pretax_user_init
     pretax_spouse = pretax_spouse_init
@@ -1464,6 +1716,7 @@ def njit_simulate_path(
     taxable = taxable_init
     hsa_user = hsa_user_init
     hsa_spouse = hsa_spouse_init
+    taxable_basis = taxable_basis_init if taxable_basis_init >= 0.0 else max(0.0, taxable_init) * 0.70
     
     ever_depleted = False
 
@@ -1484,6 +1737,7 @@ def njit_simulate_path(
             pretax_spouse = 0.0
             roth = 0.0
             taxable = 0.0
+            taxable_basis = 0.0
             hsa_user = 0.0
             hsa_spouse = 0.0
             if trajectory_arr is not None:
@@ -1497,8 +1751,12 @@ def njit_simulate_path(
             c_pre_user[t], c_pre_spouse[t], c_hsa_user[t], c_hsa_spouse[t],
         )
 
+        if is_married and t == t_first_death and taxable > 0.0:
+            taxable_basis = 0.5 * taxable_basis + 0.5 * max(0.0, taxable)
+
         if t == taxable_deposit_t and taxable_deposit_amt > 0.0:
             taxable += taxable_deposit_amt
+            taxable_basis += taxable_deposit_amt
 
         pretax_user_prior = max(0.0, pretax_user)
         pretax_spouse_prior = max(0.0, pretax_spouse) if is_married else 0.0
@@ -1507,6 +1765,7 @@ def njit_simulate_path(
         pretax_spouse_before = max(0.0, pretax_spouse + c_pre_spouse_t) if is_married else 0.0
         roth_before = max(0.0, roth + c_roth[t])
         taxable_before = taxable + c_tax[t]
+        taxable_basis_before = taxable_basis + c_tax[t]
         hsa_user_before = max(0.0, hsa_user + c_hsa_user_t)
         hsa_spouse_before = max(0.0, hsa_spouse + c_hsa_spouse_t) if is_married else 0.0
         
@@ -1523,6 +1782,20 @@ def njit_simulate_path(
         taxable_mid = taxable_before + growth_taxable
         hsa_user_mid = hsa_user_before + growth_hsa_user
         hsa_spouse_mid = hsa_spouse_before + growth_hsa_spouse
+
+        if taxable_before > 0.0:
+            y_int = max(0.0, taxable_before * (taxable_int_yield / 100.0))
+            tot_div = max(0.0, taxable_before * (taxable_div_yield / 100.0))
+            y_div_qual = tot_div * (taxable_qual_pct / 100.0)
+            y_div_ord = tot_div - y_div_qual
+            y_cg_dist = max(0.0, taxable_before * (taxable_cg_dist_rate / 100.0))
+        else:
+            y_int = 0.0
+            y_div_ord = 0.0
+            y_div_qual = 0.0
+            y_cg_dist = 0.0
+
+        taxable_basis_mid = taxable_basis_before + y_int + tot_div + y_cg_dist
         
         if inf_factors is not None:
             inf_factor = inf_factors[t]
@@ -1551,7 +1824,8 @@ def njit_simulate_path(
          w_pretax_extra, w_taxable, w_roth, w_hsa_u, w_hsa_s,
          final_fed_tax, final_state_tax, final_penalty,
          hsa_penalty_user, hsa_penalty_spouse,
-         shortfall) = njit_rmd_tax_withdraw(
+         shortfall,
+         taxable_basis_end, realized_cg, final_fed_ord_tax, final_fed_pref_tax) = njit_rmd_tax_withdraw(
             user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
             pretax_user_prior, pretax_spouse_prior, pretax_user_mid, pretax_spouse_mid,
             roth_mid, taxable_mid, hsa_user_mid, hsa_spouse_mid,
@@ -1560,6 +1834,7 @@ def njit_simulate_path(
             total_spending_target, taxable_income_sources, ss_benefits, nontaxable_income,
             other_taxes_arr[t], state_tax_rate, state_ss_exempt_code,
             hsa_user_for_medical_code, hsa_spouse_for_medical_code,
+            taxable_basis_mid, y_int, y_div_ord, y_div_qual, y_cg_dist
         )
 
         if shortfall > 0.0:
@@ -1569,6 +1844,7 @@ def njit_simulate_path(
         pretax_spouse = pretax_spouse_end
         roth = roth_end
         taxable = taxable_end
+        taxable_basis = taxable_basis_end
         hsa_user = hsa_user_end
         hsa_spouse = hsa_spouse_end
 
@@ -1600,7 +1876,12 @@ def njit_simulate_all_paths(
     taxable_deposit_t=-1,
     taxable_deposit_amt=0.0,
     terminal_life_ins_estate=0.0,
-    success_flags=None
+    success_flags=None,
+    taxable_div_yield=2.0,
+    taxable_qual_pct=85.0,
+    taxable_int_yield=0.0,
+    taxable_cg_dist_rate=0.5,
+    taxable_basis_init=-1.0
 ):
     for i in numba.prange(runs):
         if trajectories is not None:
@@ -1620,7 +1901,12 @@ def njit_simulate_all_paths(
                 taxable_deposit_amt,
                 terminal_life_ins_estate,
                 success_flags,
-                i
+                i,
+                taxable_div_yield,
+                taxable_qual_pct,
+                taxable_int_yield,
+                taxable_cg_dist_rate,
+                taxable_basis_init
             )
         else:
             ending_wealths[i] = njit_simulate_path(
@@ -1639,7 +1925,12 @@ def njit_simulate_all_paths(
                 taxable_deposit_amt,
                 terminal_life_ins_estate,
                 success_flags,
-                i
+                i,
+                taxable_div_yield,
+                taxable_qual_pct,
+                taxable_int_yield,
+                taxable_cg_dist_rate,
+                taxable_basis_init
             )
 
 def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None):
@@ -1882,6 +2173,17 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
     hsa_user_for_medical_code = 1 if inputs.get('hsa_for_medical', True) else 0
     hsa_spouse_for_medical_code = 1 if inputs.get('spouse_hsa_for_medical', True) else 0
     
+    tax_data = inputs.get('taxable_data', {})
+    taxable_div_yield = float(tax_data.get('dividend_yield', 2.0))
+    taxable_qual_pct = float(tax_data.get('qualified_dividend_pct', 85.0))
+    taxable_int_yield = float(tax_data.get('interest_yield', 0.0))
+    taxable_cg_dist_rate = float(tax_data.get('capital_gains_dist_rate', 0.5))
+    taxable_cost_basis_ratio = float(tax_data.get('cost_basis_ratio', 70.0))
+    if 'initial_cost_basis' in tax_data:
+        taxable_basis_init = float(tax_data['initial_cost_basis'])
+    else:
+        taxable_basis_init = max(0.0, taxable_init) * (taxable_cost_basis_ratio / 100.0)
+
     routing = get_life_insurance_routing(inputs)
 
     return {
@@ -1911,6 +2213,11 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         'hsa_spouse_init': hsa_spouse_init,
         'hsa_user_for_medical_code': hsa_user_for_medical_code,
         'hsa_spouse_for_medical_code': hsa_spouse_for_medical_code,
+        'taxable_div_yield': taxable_div_yield,
+        'taxable_qual_pct': taxable_qual_pct,
+        'taxable_int_yield': taxable_int_yield,
+        'taxable_cg_dist_rate': taxable_cg_dist_rate,
+        'taxable_basis_init': taxable_basis_init,
         'user_rmd_start_age': inputs['user_rmd_start_age'],
         'spouse_rmd_start_age': inputs['spouse_rmd_start_age'],
         'inf_factors': inf_factors,
@@ -2022,7 +2329,12 @@ def generate_runs(sim_input, test_spending=None):
         nb_inp['taxable_deposit_t'],
         nb_inp['taxable_deposit_amt'],
         nb_inp['terminal_life_ins_estate'],
-        success_flags
+        success_flags,
+        nb_inp['taxable_div_yield'],
+        nb_inp['taxable_qual_pct'],
+        nb_inp['taxable_int_yield'],
+        nb_inp['taxable_cg_dist_rate'],
+        nb_inp['taxable_basis_init']
     )
     
     successes = float(np.sum(success_flags >= 1.0))
@@ -2115,7 +2427,12 @@ def binary_search(sim_input):
             nb_inp['taxable_deposit_t'],
             nb_inp['taxable_deposit_amt'],
             nb_inp['terminal_life_ins_estate'],
-            success_flags
+            success_flags,
+            nb_inp['taxable_div_yield'],
+            nb_inp['taxable_qual_pct'],
+            nb_inp['taxable_int_yield'],
+            nb_inp['taxable_cg_dist_rate'],
+            nb_inp['taxable_basis_init']
         )
         
         success_rate = float(np.mean(success_flags >= 1.0))
@@ -2229,6 +2546,7 @@ def run_deterministic(sim_input):
             'growth': res['growth'],
             'income': res['income_sources_total'],
             'income_breakdown': res['income_sources_breakdown'],
+            'investment_income': res.get('investment_income', {}),
             'taxes': res['taxes_paid'],
             'tax_breakdown': res.get('tax_breakdown', {}),
             'desired_spending': res['desired_spending'],
@@ -2384,7 +2702,12 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
         nb_inp['taxable_deposit_t'],
         nb_inp['taxable_deposit_amt'],
         nb_inp['terminal_life_ins_estate'],
-        success_flags
+        success_flags,
+        nb_inp['taxable_div_yield'],
+        nb_inp['taxable_qual_pct'],
+        nb_inp['taxable_int_yield'],
+        nb_inp['taxable_cg_dist_rate'],
+        nb_inp['taxable_basis_init']
     )
 
     successes = float(np.sum(success_flags >= 1.0))

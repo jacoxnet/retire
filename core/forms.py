@@ -200,6 +200,11 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
     acc_return_means = post.getlist('account_return_mean[]')
     acc_return_stds = post.getlist('account_return_std[]')
     acc_hsa_meds = post.getlist('account_hsa_for_medical[]')
+    acc_div_yields = post.getlist('account_dividend_yield[]')
+    acc_qual_div_pcts = post.getlist('account_qualified_dividend_pct[]')
+    acc_int_yields = post.getlist('account_interest_yield[]')
+    acc_cg_dist_rates = post.getlist('account_capital_gains_dist_rate[]')
+    acc_cost_basis_ratios = post.getlist('account_cost_basis_ratio[]')
 
     accounts = []
     for i in range(len(acc_names)):
@@ -209,6 +214,18 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
         a_name = acc_names[i].strip() if i < len(acc_names) and acc_names[i] else f"{a_owner.title()} {a_type.title()} Account"
         def_start = spouse_age if (a_owner == 'spouse' and is_married) else user_age
         def_ret = spouse_retirement_age if (a_owner == 'spouse' and is_married) else user_retirement_age
+
+        def_div_yield = 2.0 if a_type == 'taxable' else 0.0
+        def_qual_pct = 85.0 if a_type == 'taxable' else 0.0
+        def_int_yield = 0.0
+        def_cg_rate = 0.5 if a_type == 'taxable' else 0.0
+        def_basis_ratio = 70.0 if a_type == 'taxable' else 100.0
+
+        div_y = get_float(acc_div_yields[i], def_div_yield) if i < len(acc_div_yields) else def_div_yield
+        qual_pct = get_float(acc_qual_div_pcts[i], def_qual_pct) if i < len(acc_qual_div_pcts) else def_qual_pct
+        int_y = get_float(acc_int_yields[i], def_int_yield) if i < len(acc_int_yields) else def_int_yield
+        cg_rate = get_float(acc_cg_dist_rates[i], def_cg_rate) if i < len(acc_cg_dist_rates) else def_cg_rate
+        basis_ratio = get_float(acc_cost_basis_ratios[i], def_basis_ratio) if i < len(acc_cost_basis_ratios) else def_basis_ratio
 
         accounts.append({
             'id': a_id,
@@ -225,6 +242,11 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
             'return_mean': get_float(acc_return_means[i], 6.0) if i < len(acc_return_means) else 6.0,
             'return_std': get_float(acc_return_stds[i], 10.0) if i < len(acc_return_stds) else 10.0,
             'hsa_for_medical': (acc_hsa_meds[i] == 'true') if i < len(acc_hsa_meds) else True,
+            'dividend_yield': div_y,
+            'qualified_dividend_pct': qual_pct,
+            'interest_yield': int_y,
+            'capital_gains_dist_rate': cg_rate,
+            'cost_basis_ratio': basis_ratio,
         })
     return accounts
 
@@ -327,7 +349,13 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
             'contrib_start_age': user_age, 'contrib_end_age_type': 'retirement',
             'contrib_end_age_specified': user_retirement_age, 'contrib_adjust_inflation': True,
-            'return_mean': 5.0, 'return_std': 8.0, 'is_spouse': False
+            'return_mean': 5.0, 'return_std': 8.0, 'is_spouse': False,
+            'dividend_yield': 2.0,
+            'qualified_dividend_pct': 85.0,
+            'interest_yield': 0.0,
+            'capital_gains_dist_rate': 0.5,
+            'cost_basis_ratio': 70.0,
+            'initial_cost_basis': 0.0,
         },
         'hsa': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
@@ -388,6 +416,21 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
             else:
                 base['return_mean'] = sum(float(a.get('return_mean', 6.0)) for a in acc_list) / len(acc_list)
                 base['return_std'] = sum(float(a.get('return_std', 10.0)) for a in acc_list) / len(acc_list)
+
+            if key == 'taxable':
+                if total_w > 0:
+                    base['dividend_yield'] = sum(float(a.get('dividend_yield', 2.0)) * w for a, w in zip(acc_list, weights)) / total_w
+                    base['qualified_dividend_pct'] = sum(float(a.get('qualified_dividend_pct', 85.0)) * w for a, w in zip(acc_list, weights)) / total_w
+                    base['interest_yield'] = sum(float(a.get('interest_yield', 0.0)) * w for a, w in zip(acc_list, weights)) / total_w
+                    base['capital_gains_dist_rate'] = sum(float(a.get('capital_gains_dist_rate', 0.5)) * w for a, w in zip(acc_list, weights)) / total_w
+                    base['cost_basis_ratio'] = sum(float(a.get('cost_basis_ratio', 70.0)) * w for a, w in zip(acc_list, weights)) / total_w
+                else:
+                    base['dividend_yield'] = sum(float(a.get('dividend_yield', 2.0)) for a in acc_list) / len(acc_list)
+                    base['qualified_dividend_pct'] = sum(float(a.get('qualified_dividend_pct', 85.0)) for a in acc_list) / len(acc_list)
+                    base['interest_yield'] = sum(float(a.get('interest_yield', 0.0)) for a in acc_list) / len(acc_list)
+                    base['capital_gains_dist_rate'] = sum(float(a.get('capital_gains_dist_rate', 0.5)) for a in acc_list) / len(acc_list)
+                    base['cost_basis_ratio'] = sum(float(a.get('cost_basis_ratio', 70.0)) for a in acc_list) / len(acc_list)
+                base['initial_cost_basis'] = sum(float(a.get('balance', 0.0)) * (float(a.get('cost_basis_ratio', 70.0)) / 100.0) for a in acc_list)
 
             primary = acc_list[0]
             base['contrib_start_age'] = primary.get('contrib_start_age', base['contrib_start_age'])
@@ -712,6 +755,11 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'return_mean': float(acc.get('return_mean', 6.0)),
             'return_std': float(acc.get('return_std', 10.0)),
             'hsa_for_medical': acc.get('hsa_for_medical', True),
+            'dividend_yield': float(acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)),
+            'qualified_dividend_pct': float(acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)),
+            'interest_yield': float(acc.get('interest_yield', 0.0)),
+            'capital_gains_dist_rate': float(acc.get('capital_gains_dist_rate', 0.5 if atype == 'taxable' else 0.0)),
+            'cost_basis_ratio': float(acc.get('cost_basis_ratio', 70.0 if atype == 'taxable' else 100.0)),
         }
         if atype == 'pretax':
             pretax_accs.append(acc_dict)
@@ -777,6 +825,11 @@ def build_default_balance_sheet(accounts=None, current_year=2026, data=None):
             'contrib_adjust_inflation': True,
             'return_mean': 5.0,
             'return_std': 8.0,
+            'dividend_yield': 2.0,
+            'qualified_dividend_pct': 85.0,
+            'interest_yield': 0.0,
+            'capital_gains_dist_rate': 0.5,
+            'cost_basis_ratio': 70.0,
         })
 
     # Emergency Fund accounts
@@ -1109,6 +1162,11 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             r_mean = get_float(match.get('return_mean', acc.get('return_mean', 6.0)))
             r_std = get_float(match.get('return_std', acc.get('return_std', 10.0)))
             hsa_med = get_bool(match.get('hsa_for_medical', acc.get('hsa_for_medical', True)))
+            div_y = get_float(match.get('dividend_yield', acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)))
+            qual_pct = get_float(match.get('qualified_dividend_pct', acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)))
+            int_y = get_float(match.get('interest_yield', acc.get('interest_yield', 0.0)))
+            cg_rate = get_float(match.get('capital_gains_dist_rate', acc.get('capital_gains_dist_rate', 0.5 if atype == 'taxable' else 0.0)))
+            basis_ratio = get_float(match.get('cost_basis_ratio', acc.get('cost_basis_ratio', 70.0 if atype == 'taxable' else 100.0)))
         else:
             a_name = acc.get('name', f"{aowner.title()} {atype.title()} Account")
             a_inst = acc.get('institution', '')
@@ -1124,6 +1182,11 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             r_mean = get_float(acc.get('return_mean', 6.0))
             r_std = get_float(acc.get('return_std', 10.0))
             hsa_med = get_bool(acc.get('hsa_for_medical', True))
+            div_y = get_float(acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0))
+            qual_pct = get_float(acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0))
+            int_y = get_float(acc.get('interest_yield', 0.0))
+            cg_rate = get_float(acc.get('capital_gains_dist_rate', 0.5 if atype == 'taxable' else 0.0))
+            basis_ratio = get_float(acc.get('cost_basis_ratio', 70.0 if atype == 'taxable' else 100.0))
 
         acc_id = acc.get('id') or (match.get('id') if match else f"acc_{default_type}_{len(synced_accounts)+1}")
 
@@ -1143,6 +1206,11 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             'return_mean': r_mean,
             'return_std': r_std,
             'hsa_for_medical': hsa_med,
+            'dividend_yield': div_y,
+            'qualified_dividend_pct': qual_pct,
+            'interest_yield': int_y,
+            'capital_gains_dist_rate': cg_rate,
+            'cost_basis_ratio': basis_ratio,
         })
 
     # 1. Standard categories
@@ -1252,6 +1320,11 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
             matched['return_mean'] = get_float(acc.get('return_mean', matched.get('return_mean', 6.0)))
             matched['return_std'] = get_float(acc.get('return_std', matched.get('return_std', 10.0)))
             matched['hsa_for_medical'] = get_bool(acc.get('hsa_for_medical', matched.get('hsa_for_medical', True)))
+            matched['dividend_yield'] = get_float(acc.get('dividend_yield', matched.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)))
+            matched['qualified_dividend_pct'] = get_float(acc.get('qualified_dividend_pct', matched.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)))
+            matched['interest_yield'] = get_float(acc.get('interest_yield', matched.get('interest_yield', 0.0)))
+            matched['capital_gains_dist_rate'] = get_float(acc.get('capital_gains_dist_rate', matched.get('capital_gains_dist_rate', 0.5 if atype == 'taxable' else 0.0)))
+            matched['cost_basis_ratio'] = get_float(acc.get('cost_basis_ratio', matched.get('cost_basis_ratio', 70.0 if atype == 'taxable' else 100.0)))
             if 'values' not in matched or not isinstance(matched['values'], dict):
                 matched['values'] = {}
             matched['values'][curr_period] = bal
@@ -1275,6 +1348,11 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
                 'return_mean': get_float(acc.get('return_mean', 6.0)),
                 'return_std': get_float(acc.get('return_std', 10.0)),
                 'hsa_for_medical': get_bool(acc.get('hsa_for_medical', True)),
+                'dividend_yield': get_float(acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)),
+                'qualified_dividend_pct': get_float(acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)),
+                'interest_yield': get_float(acc.get('interest_yield', 0.0)),
+                'capital_gains_dist_rate': get_float(acc.get('capital_gains_dist_rate', 0.5 if atype == 'taxable' else 0.0)),
+                'cost_basis_ratio': get_float(acc.get('cost_basis_ratio', 70.0 if atype == 'taxable' else 100.0)),
             })
 
     # Clean up unlinked default placeholders if active accounts exist in that category

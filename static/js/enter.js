@@ -594,6 +594,11 @@
             var returnMean = data.return_mean !== undefined ? data.return_mean : (['taxable', 'hsa'].includes(type) ? 5.0 : 6.0);
             var returnStd = data.return_std !== undefined ? data.return_std : (['taxable', 'hsa'].includes(type) ? 8.0 : 10.0);
             var hsaForMedical = data.hsa_for_medical !== undefined ? data.hsa_for_medical : true;
+            var divYield = data.dividend_yield !== undefined ? data.dividend_yield : 2.0;
+            var qualDivPct = data.qualified_dividend_pct !== undefined ? data.qualified_dividend_pct : 85.0;
+            var intYield = data.interest_yield !== undefined ? data.interest_yield : 0.0;
+            var cgDistRate = data.capital_gains_dist_rate !== undefined ? data.capital_gains_dist_rate : 0.5;
+            var costBasisRatio = data.cost_basis_ratio !== undefined ? data.cost_basis_ratio : 70.0;
 
             var isMarried = isMarriedCheckbox.checked;
 
@@ -703,7 +708,48 @@
                         </div>
                     </div>
 
-                    <!-- Row 7: HSA Specific Medical Switch -->
+                    <!-- Row 7: Taxable Specific Tax Treatment & Unrealized Gains Drawer -->
+                    <div class="acc-taxable-treatment-group border rounded-3 p-3 bg-light mb-3" style="display: ${type === 'taxable' ? 'block' : 'none'};">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold text-dark">
+                                <i class="fa fa-sliders me-1 text-primary"></i> Tax Treatment & Cost Basis
+                            </span>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" data-bs-toggle="modal" data-bs-target="#tier1TaxAssumptionsModal" title="Explain Tax Assumptions">
+                                <i class="fa fa-info-circle text-primary me-1"></i><span class="small fw-semibold">Tier 1 Assumptions</span>
+                            </button>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Dividend Yield %</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-div-yield" name="account_dividend_yield[]" value="${formatPercent(divYield)}" step="0.1" placeholder="2.0%">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Qualified Div %</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-qual-div" name="account_qualified_dividend_pct[]" value="${formatPercent(qualDivPct)}" step="1.0" placeholder="85.0%">
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Interest Yield %</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-int-yield" name="account_interest_yield[]" value="${formatPercent(intYield)}" step="0.1" placeholder="0.0%">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Cap Gains Dist %</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-cg-dist" name="account_capital_gains_dist_rate[]" value="${formatPercent(cgDistRate)}" step="0.1" placeholder="0.5%">
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Cost Basis (% of balance)</label>
+                                    <span class="small text-muted cost-basis-dollar-preview" style="font-size: 0.75rem;">Est. Basis: $0</span>
+                                </div>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-cost-basis-ratio" name="account_cost_basis_ratio[]" value="${formatPercent(costBasisRatio)}" step="1.0" placeholder="70.0%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 8: HSA Specific Medical Switch -->
                     <div class="form-check form-switch ps-5 acc-hsa-medical-group" style="display: ${type === 'hsa' ? 'block' : 'none'};">
                         <input class="form-check-input" type="checkbox" name="account_hsa_for_medical[]" value="true" ${hsaForMedical ? 'checked' : ''}>
                         <label class="form-check-label small font-weight-bold">Used for Qualified Medical Expenses (Tax-Free)</label>
@@ -714,11 +760,35 @@
             // Listeners for this card
             const typeSelect = col.querySelector('.acc-type-select');
             const hsaMedicalGroup = col.querySelector('.acc-hsa-medical-group');
+            const taxableTreatmentGroup = col.querySelector('.acc-taxable-treatment-group');
+            const balInput = col.querySelector('[name="account_balance[]"]');
+            const ratioInput = col.querySelector('.acc-cost-basis-ratio');
+            const previewSpan = col.querySelector('.cost-basis-dollar-preview');
+
+            function updateBasisPreview() {
+                if (balInput && ratioInput && previewSpan) {
+                    var bVal = typeof parseMoney === 'function' ? parseMoney(balInput.value) : 0;
+                    var rVal = typeof parsePercent === 'function' ? parsePercent(ratioInput.value) : 70.0;
+                    if (isNaN(rVal)) rVal = 70.0;
+                    var basisDollar = Math.max(0, bVal * (rVal / 100.0));
+                    previewSpan.textContent = 'Est. Basis: ' + (typeof formatMoney === 'function' ? formatMoney(basisDollar) : ('$' + Math.round(basisDollar).toLocaleString()));
+                }
+            }
+
+            if (balInput) balInput.addEventListener('input', updateBasisPreview);
+            if (ratioInput) ratioInput.addEventListener('input', updateBasisPreview);
+            updateBasisPreview();
+
             typeSelect.addEventListener('change', function() {
                 if (this.value === 'hsa') {
                     hsaMedicalGroup.style.display = 'block';
                 } else {
                     hsaMedicalGroup.style.display = 'none';
+                }
+                if (this.value === 'taxable') {
+                    taxableTreatmentGroup.style.display = 'block';
+                } else {
+                    taxableTreatmentGroup.style.display = 'none';
                 }
             });
 
@@ -2436,6 +2506,41 @@
                         if (hsaMedSwitch && aData.hsa_for_medical !== undefined) {
                             hsaMedSwitch.checked = Boolean(aData.hsa_for_medical);
                         }
+                        var divYieldInput = cardCol.querySelector('[name="account_dividend_yield[]"]');
+                        var qualDivInput = cardCol.querySelector('[name="account_qualified_dividend_pct[]"]');
+                        var intYieldInput = cardCol.querySelector('[name="account_interest_yield[]"]');
+                        var cgDistInput = cardCol.querySelector('[name="account_capital_gains_dist_rate[]"]');
+                        var costBasisInput = cardCol.querySelector('[name="account_cost_basis_ratio[]"]');
+                        if (divYieldInput && aData.dividend_yield !== undefined && document.activeElement !== divYieldInput) {
+                            var curDY = parsePercent(divYieldInput.value);
+                            if (Math.abs(curDY - aData.dividend_yield) > 0.01) {
+                                divYieldInput.value = formatPercent(aData.dividend_yield);
+                            }
+                        }
+                        if (qualDivInput && aData.qualified_dividend_pct !== undefined && document.activeElement !== qualDivInput) {
+                            var curQD = parsePercent(qualDivInput.value);
+                            if (Math.abs(curQD - aData.qualified_dividend_pct) > 0.01) {
+                                qualDivInput.value = formatPercent(aData.qualified_dividend_pct);
+                            }
+                        }
+                        if (intYieldInput && aData.interest_yield !== undefined && document.activeElement !== intYieldInput) {
+                            var curIY = parsePercent(intYieldInput.value);
+                            if (Math.abs(curIY - aData.interest_yield) > 0.01) {
+                                intYieldInput.value = formatPercent(aData.interest_yield);
+                            }
+                        }
+                        if (cgDistInput && aData.capital_gains_dist_rate !== undefined && document.activeElement !== cgDistInput) {
+                            var curCG = parsePercent(cgDistInput.value);
+                            if (Math.abs(curCG - aData.capital_gains_dist_rate) > 0.01) {
+                                cgDistInput.value = formatPercent(aData.capital_gains_dist_rate);
+                            }
+                        }
+                        if (costBasisInput && aData.cost_basis_ratio !== undefined && document.activeElement !== costBasisInput) {
+                            var curCB = parsePercent(costBasisInput.value);
+                            if (Math.abs(curCB - aData.cost_basis_ratio) > 0.01) {
+                                costBasisInput.value = formatPercent(aData.cost_basis_ratio);
+                            }
+                        }
                     } else {
                         addAccountCard(aData);
                     }
@@ -2493,6 +2598,11 @@
                     var meanInput = col.querySelector('[name="account_return_mean[]"]');
                     var stdInput = col.querySelector('[name="account_return_std[]"]');
                     var hsaMedSwitch = col.querySelector('[name="account_hsa_for_medical[]"]');
+                    var divYieldInput = col.querySelector('[name="account_dividend_yield[]"]');
+                    var qualDivInput = col.querySelector('[name="account_qualified_dividend_pct[]"]');
+                    var intYieldInput = col.querySelector('[name="account_interest_yield[]"]');
+                    var cgDistInput = col.querySelector('[name="account_capital_gains_dist_rate[]"]');
+                    var costBasisInput = col.querySelector('[name="account_cost_basis_ratio[]"]');
 
                     var name = nameInput ? nameInput.value.trim() : '';
                     var type = typeSelect ? typeSelect.value : 'pretax';
@@ -2507,6 +2617,12 @@
                     var rMean = meanInput ? parsePercent(meanInput.value) : 6.0;
                     var rStd = stdInput ? parsePercent(stdInput.value) : 10.0;
                     var hsaForMed = hsaMedSwitch ? hsaMedSwitch.checked : true;
+
+                    var divYield = divYieldInput ? parsePercent(divYieldInput.value) : (type === 'taxable' ? 2.0 : 0.0);
+                    var qualDivPct = qualDivInput ? parsePercent(qualDivInput.value) : (type === 'taxable' ? 85.0 : 0.0);
+                    var intYield = intYieldInput ? parsePercent(intYieldInput.value) : (type === 'taxable' ? 0.0 : 0.0);
+                    var cgDistRate = cgDistInput ? parsePercent(cgDistInput.value) : (type === 'taxable' ? 0.5 : 0.0);
+                    var costBasisRatio = costBasisInput ? parsePercent(costBasisInput.value) : (type === 'taxable' ? 70.0 : 100.0);
 
                     var targetCatKey = ['pretax', 'roth', 'taxable', 'hsa'].includes(type) ? type : 'taxable';
 
@@ -2578,6 +2694,11 @@
                         acc.return_mean = rMean;
                         acc.return_std = rStd;
                         acc.hsa_for_medical = hsaForMed;
+                        acc.dividend_yield = divYield;
+                        acc.qualified_dividend_pct = qualDivPct;
+                        acc.interest_yield = intYield;
+                        acc.capital_gains_dist_rate = cgDistRate;
+                        acc.cost_basis_ratio = costBasisRatio;
                         if (!acc.values) acc.values = {};
                         acc.values[currPeriod] = bal;
 
@@ -2625,7 +2746,12 @@
                             contrib_adjust_inflation: contribAdjustInf,
                             return_mean: rMean,
                             return_std: rStd,
-                            hsa_for_medical: hsaForMed
+                            hsa_for_medical: hsaForMed,
+                            dividend_yield: divYield,
+                            qualified_dividend_pct: qualDivPct,
+                            interest_yield: intYield,
+                            capital_gains_dist_rate: cgDistRate,
+                            cost_basis_ratio: costBasisRatio
                         };
 
                         var cat = bsState.categories[targetCatKey];

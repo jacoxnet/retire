@@ -494,6 +494,20 @@
                                                         ${{ row.tax_breakdown.fed_tax|default:0|floatformat:"0"|intcomma }}
                                                     </span>
                                                 </div>
+                                                {% if row.tax_breakdown.fed_ltcg_tax > 0 %}
+                                                <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                    <span>&bull; Ordinary Tax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.tax_breakdown.fed_ordinary_tax }}" data-real="{{ row.tax_breakdown.fed_ordinary_tax }}">
+                                                        ${{ row.tax_breakdown.fed_ordinary_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                    <span>&bull; Preferential LTCG Tax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.tax_breakdown.fed_ltcg_tax }}" data-real="{{ row.tax_breakdown.fed_ltcg_tax }}">
+                                                        ${{ row.tax_breakdown.fed_ltcg_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% endif %}
                                                 <div class="d-flex justify-content-between gap-3 small mb-1">
                                                     <span>State Income Tax:</span>
                                                     <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.state_tax }}" data-real="{{ row.tax_breakdown.state_tax }}">
@@ -524,6 +538,59 @@
                                                                 </span>
                                                             </div>
                                                         {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                                {% if row.investment_income.total > 0 %}
+                                                    <div class="border-top pt-2 mt-2">
+                                                        <div class="small fw-bold text-secondary mb-1">Taxable Investment Income:</div>
+                                                        {% if row.investment_income.qualified_dividends > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Qualified Dividends:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.qualified_dividends }}" data-real="{{ row.investment_income.qualified_dividends }}">
+                                                                ${{ row.investment_income.qualified_dividends|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.ordinary_dividends > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Ordinary Dividends:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.ordinary_dividends }}" data-real="{{ row.investment_income.ordinary_dividends }}">
+                                                                ${{ row.investment_income.ordinary_dividends|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.interest > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Taxable Interest:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.interest }}" data-real="{{ row.investment_income.interest }}">
+                                                                ${{ row.investment_income.interest|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.capital_gains_distributions > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Cap Gains Distributions:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.capital_gains_distributions }}" data-real="{{ row.investment_income.capital_gains_distributions }}">
+                                                                ${{ row.investment_income.capital_gains_distributions|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.realized_capital_gains > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Realized Cap Gains:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.realized_capital_gains }}" data-real="{{ row.investment_income.realized_capital_gains }}">
+                                                                ${{ row.investment_income.realized_capital_gains|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                                {% if row.ending_assets.taxable_basis > 0 %}
+                                                    <div class="d-flex justify-content-between gap-3 small text-muted ps-2 border-top pt-1 mt-1" style="font-size: 0.75rem;">
+                                                        <span>Ending Taxable Basis:</span>
+                                                        <span class="dollar-amount" data-nominal="{{ row.ending_assets.taxable_basis }}" data-real="{{ row.ending_assets.taxable_basis }}">
+                                                            ${{ row.ending_assets.taxable_basis|floatformat:"0"|intcomma }}
+                                                        </span>
                                                     </div>
                                                 {% endif %}
                                             </div>
@@ -709,6 +776,20 @@
                                                         ${{ row.tax_breakdown.fed_tax|default:0|floatformat:"0"|intcomma }}
                                                     </span>
                                                 </div>
+                                                {% if row.tax_breakdown.fed_ltcg_tax > 0 %}
+                                                <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                    <span>&bull; Ordinary Tax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.tax_breakdown.fed_ordinary_tax }}" data-real="{{ row.tax_breakdown.fed_ordinary_tax }}">
+                                                        ${{ row.tax_breakdown.fed_ordinary_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                    <span>&bull; Preferential LTCG Tax:</span>
+                                                    <span class="dollar-amount" data-nominal="{{ row.tax_breakdown.fed_ltcg_tax }}" data-real="{{ row.tax_breakdown.fed_ltcg_tax }}">
+                                                        ${{ row.tax_breakdown.fed_ltcg_tax|default:0|floatformat:"0"|intcomma }}
+                                                    </span>
+                                                </div>
+                                                {% endif %}
                                                 <div class="d-flex justify-content-between gap-3 small mb-1">
                                                     <span>State Income Tax:</span>
                                                     <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.tax_breakdown.state_tax }}" data-real="{{ row.tax_breakdown.state_tax }}">
@@ -739,6 +820,59 @@
                                                                 </span>
                                                             </div>
                                                         {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                                {% if row.investment_income.total > 0 %}
+                                                    <div class="border-top pt-2 mt-2">
+                                                        <div class="small fw-bold text-secondary mb-1">Taxable Investment Income:</div>
+                                                        {% if row.investment_income.qualified_dividends > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Qualified Dividends:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.qualified_dividends }}" data-real="{{ row.investment_income.qualified_dividends }}">
+                                                                ${{ row.investment_income.qualified_dividends|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.ordinary_dividends > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Ordinary Dividends:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.ordinary_dividends }}" data-real="{{ row.investment_income.ordinary_dividends }}">
+                                                                ${{ row.investment_income.ordinary_dividends|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.interest > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Taxable Interest:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.interest }}" data-real="{{ row.investment_income.interest }}">
+                                                                ${{ row.investment_income.interest|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.capital_gains_distributions > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Cap Gains Distributions:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.capital_gains_distributions }}" data-real="{{ row.investment_income.capital_gains_distributions }}">
+                                                                ${{ row.investment_income.capital_gains_distributions|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                        {% if row.investment_income.realized_capital_gains > 0 %}
+                                                        <div class="d-flex justify-content-between gap-3 small text-muted ps-2 mb-1" style="font-size: 0.75rem;">
+                                                            <span>&bull; Realized Cap Gains:</span>
+                                                            <span class="dollar-amount" data-nominal="{{ row.investment_income.realized_capital_gains }}" data-real="{{ row.investment_income.realized_capital_gains }}">
+                                                                ${{ row.investment_income.realized_capital_gains|floatformat:"0"|intcomma }}
+                                                            </span>
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                                {% if row.ending_assets.taxable_basis > 0 %}
+                                                    <div class="d-flex justify-content-between gap-3 small text-muted ps-2 border-top pt-1 mt-1" style="font-size: 0.75rem;">
+                                                        <span>Ending Taxable Basis:</span>
+                                                        <span class="dollar-amount" data-nominal="{{ row.ending_assets.taxable_basis }}" data-real="{{ row.ending_assets.taxable_basis }}">
+                                                            ${{ row.ending_assets.taxable_basis|floatformat:"0"|intcomma }}
+                                                        </span>
                                                     </div>
                                                 {% endif %}
                                             </div>

@@ -1220,6 +1220,118 @@
     </div>
 </div>
 
+<!-- Tier 1 Tax Assumptions Explanation Modal -->
+<div class="modal fade" id="tier1TaxAssumptionsModal" tabindex="-1" aria-labelledby="tier1TaxAssumptionsModalLabel" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content shadow-lg border-0 rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-primary-subtle text-primary p-2 me-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                        <i class="fa fa-university fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="tier1TaxAssumptionsModalLabel">Taxable Account Tax Treatment (Tier 1 Smart Defaults)</h5>
+                        <span class="small text-muted">How taxable brokerage and savings accounts generate annual taxes</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4">
+                <div class="alert alert-info border-0 rounded-3 mb-4">
+                    <div class="d-flex">
+                        <i class="fa fa-info-circle fs-5 me-2 mt-1 text-info-emphasis"></i>
+                        <div>
+                            <strong>Why does this matter?</strong> Unlike Pre-Tax (401k/IRA) or Roth accounts where earnings grow tax-deferred or tax-free, 
+                            <strong>taxable accounts incur income taxes every single year</strong> on dividends, interest, and capital gains distributions—even when you do not withdraw any cash.
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-dark mb-3"><i class="fa fa-sliders text-primary me-2"></i>Default Institutional Assumptions (Tier 1)</h6>
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered align-middle small mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 25%;">Tax Event</th>
+                                <th style="width: 18%;">Tier 1 Default</th>
+                                <th style="width: 20%;">Tax Treatment</th>
+                                <th style="width: 37%;">Rationale & Industry Benchmark</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-bold">Dividend Yield</td>
+                                <td><span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6">2.0%</span> / yr</td>
+                                <td>Split (Ord. & Qual.)</td>
+                                <td>Reflects long-term historical yield on broad equities index funds (e.g., S&P 500 / Total Stock Market).</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Qualified Dividends</td>
+                                <td><span class="badge bg-success-subtle text-success border border-success-subtle fs-6">85.0%</span></td>
+                                <td>Preferential LTCG (0%, 15%, 20%)</td>
+                                <td>Most domestic corporate dividends meet IRS holding period rules, qualifying for lower preferential capital gains rates rather than ordinary income rates.</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Capital Gains Distributions</td>
+                                <td><span class="badge bg-warning-subtle text-warning border border-warning-subtle fs-6">0.5%</span> / yr</td>
+                                <td>Preferential LTCG (0%, 15%, 20%)</td>
+                                <td>Mutual funds and actively managed funds must pass net realized internal gains to shareholders annually (Form 1099-DIV Box 2a).</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Taxable Interest Yield</td>
+                                <td><span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle fs-6">0.0%</span> / yr</td>
+                                <td>Ordinary Income</td>
+                                <td>Assumed 0.0% for equity brokerage portfolios. Cash/Emergency accounts default to 100% ordinary interest.</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Cost Basis Ratio</td>
+                                <td><span class="badge bg-info-subtle text-info border border-info-subtle fs-6">70.0%</span> of balance</td>
+                                <td>Non-taxable Return of Basis</td>
+                                <td>For seasoned taxable accounts, ~70% is invested principal (basis) and ~30% is unrealized capital gain. Withdrawals only trigger capital gains tax on the gain portion.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="card h-100 border rounded-3 p-3 bg-light">
+                            <h6 class="fw-bold text-dark mb-2"><i class="fa fa-refresh text-success me-2"></i>Dynamic Basis Reinvestment</h6>
+                            <p class="small text-muted mb-0">
+                                In our simulation, annual dividends and capital gains distributions are assumed to be reinvested into the account. 
+                                Reinvested distributions increase your account's cost basis dollar-for-dollar, automatically reducing the realized taxable gain when you liquidate assets in retirement.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 border rounded-3 p-3 bg-light">
+                            <h6 class="fw-bold text-dark mb-2"><i class="fa fa-heartbeat text-danger me-2"></i>Spousal Step-Up in Basis</h6>
+                            <p class="small text-muted mb-0">
+                                For married couples, federal tax rules allow a step-up in cost basis upon the death of a spouse. 
+                                The engine automatically applies a <strong>50% basis step-up</strong> on the surviving spouse's taxable portfolio at the first death, protecting future withdrawals from double taxation.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-secondary border-0 rounded-3 mb-0">
+                    <div class="d-flex">
+                        <i class="fa fa-pencil-square-o fs-5 me-2 mt-1 text-secondary"></i>
+                        <div class="small">
+                            <strong>Need custom assumptions? (Tier 2 Overrides)</strong><br>
+                            If you hold municipal bonds (tax-exempt), high-yield dividend funds, or concentrated single stock positions with low basis, 
+                            expand the <strong>"Tax Treatment & Cost Basis"</strong> drawer directly on any taxable account card to specify your exact yields and basis ratio.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-primary btn-sm px-4" data-bs-dismiss="modal">Got It</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Raw data script tags for initial lists from database -->
 {{ accounts|json_script:"initial-accounts" }}
 {{ additional_spending|json_script:"initial-additional-spending" }}

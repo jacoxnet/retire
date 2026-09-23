@@ -2046,7 +2046,7 @@ class RetirementCalculationTests(TestCase):
         (u_end_a, sp_end_a, roth_end, tax_end, hsa_u, hsa_s,
          u_rmd, sp_rmd, w_pre_a, w_tax, w_roth, w_hu, w_hs,
          fed_tax_a, st_tax_a, pen_a, hsa_pen_u, hsa_pen_s,
-         shortfall_a) = njit_rmd_tax_withdraw(
+         shortfall_a, *_) = njit_rmd_tax_withdraw(
             62, 50, True, True, True,
             100000.0, 0.0, 100000.0, 0.0,
             0.0, 0.0, 0.0, 0.0,
@@ -2059,7 +2059,7 @@ class RetirementCalculationTests(TestCase):
         (u_end_b, sp_end_b, roth_end, tax_end, hsa_u, hsa_s,
          u_rmd, sp_rmd, w_pre_b, w_tax, w_roth, w_hu, w_hs,
          fed_tax_b, st_tax_b, pen_b, hsa_pen_u, hsa_pen_s,
-         shortfall_b) = njit_rmd_tax_withdraw(
+         shortfall_b, *_) = njit_rmd_tax_withdraw(
             62, 50, True, True, True,
             0.0, 100000.0, 0.0, 100000.0,
             0.0, 0.0, 0.0, 0.0,
@@ -4465,6 +4465,355 @@ class PortfolioRebalancingTests(TestCase):
         # Year 0 has shortfall of $30k, years 1..4 have shortfall of $50k
         self.assertAlmostEqual(rows[0]['shortfall'], 30000.0)
         self.assertAlmostEqual(rows[1]['shortfall'], 50000.0)
+
+
+class TaxableAccountTaxationTests(TestCase):
+    """
+    Unit tests for Tier 1 smart defaults and Tier 2 overrides for taxable accounts:
+    - Preferential LTCG tax brackets & calculation
+    - Numba JIT parity for preferential taxes
+    - Form parsing & balance-weighted aggregation
+    - Annual taxable yields (interest, ordinary/qualified dividends, cap gains distributions)
+    - Social Security provisional income inclusion
+    - Dynamic basis tracking & withdrawal gross-up bisection solver
+    - Spousal 50% basis step-up on first death
+    """
+
+    def test_preferential_tax_brackets_single(self):
+        from core.runs import (
+            calculate_preferential_tax,
+            njit_calculate_preferential_tax,
+            LTCG_THRESHOLDS_2026_SINGLE,
+            LTCG_RATES,
+            LTCG_THRESHOLDS_SINGLE_ARR,
+            LTCG_RATES_ARR
+        )
+
+        # Single 2026 thresholds: [48350, 533400], rates: [0.0, 0.15, 0.20]
+        # Case 1: All income under 0% threshold ($30,000 ordinary + $10,000 LTCG = $40,000)
+        tax = calculate_preferential_tax(30000.0, 10000.0, LTCG_THRESHOLDS_2026_SINGLE, LTCG_RATES)
+        self.assertEqual(tax, 0.0)
+        njit_tax = njit_calculate_preferential_tax(30000.0, 10000.0, LTCG_THRESHOLDS_SINGLE_ARR, LTCG_RATES_ARR)
+        self.assertEqual(njit_tax, 0.0)
+
+        # Case 2: Ordinary income straddles the 0% threshold ($40,000 ordinary + $20,000 LTCG)
+        # Total = 60,000. LTCG below 48,350 is 8,350 (taxed at 0%). Remaining 11,650 taxed at 15% = $1,747.50
+        tax = calculate_preferential_tax(40000.0, 20000.0, LTCG_THRESHOLDS_2026_SINGLE, LTCG_RATES)
+        self.assertAlmostEqual(tax, 1747.50)
+        njit_tax = njit_calculate_preferential_tax(40000.0, 20000.0, LTCG_THRESHOLDS_SINGLE_ARR, LTCG_RATES_ARR)
+        self.assertAlmostEqual(njit_tax, 1747.50)
+
+        # Case 3: High income into 20% bracket
+        # Ordinary = 500,000, LTCG = 100,000. Total = 600,000.
+        # 500k to 533,400 (33,400) taxed at 15% = 5,010.00
+        # 533,400 to 600,000 (66,600) taxed at 20% = 13,320.00
+        # Total LTCG tax = 18,330.00
+        tax = calculate_preferential_tax(500000.0, 100000.0, LTCG_THRESHOLDS_2026_SINGLE, LTCG_RATES)
+        self.assertAlmostEqual(tax, 18330.00)
+        njit_tax = njit_calculate_preferential_tax(500000.0, 100000.0, LTCG_THRESHOLDS_SINGLE_ARR, LTCG_RATES_ARR)
+        self.assertAlmostEqual(njit_tax, 18330.00)
+
+    def test_form_parsing_tier1_and_tier2_fields(self):
+        from django.http import QueryDict
+        from core.forms import parse_account_rows, aggregate_accounts
+
+        post_data = QueryDict(mutable=True)
+        post_data.setlist('account_id[]', ['acc_1', 'acc_2'])
+        post_data.setlist('account_name[]', ['Brokerage Index', 'High Yield Cash'])
+        post_data.setlist('account_type[]', ['taxable', 'taxable'])
+        post_data.setlist('account_owner[]', ['user', 'user'])
+        post_data.setlist('account_balance[]', ['100000', '100000'])
+        post_data.setlist('account_contrib_amount[]', ['0', '0'])
+        post_data.setlist('account_contrib_freq[]', ['annual', 'annual'])
+        post_data.setlist('account_contrib_start_age[]', ['60', '60'])
+        post_data.setlist('account_contrib_end_age_type[]', ['retirement', 'retirement'])
+        post_data.setlist('account_contrib_end_age_specified[]', ['', ''])
+        post_data.setlist('account_return_mean[]', ['7.0', '4.0'])
+        post_data.setlist('account_return_std[]', ['15.0', '1.0'])
+        # Taxable yield overrides
+        post_data.setlist('account_dividend_yield[]', ['2.0', '0.0'])
+        post_data.setlist('account_qualified_dividend_pct[]', ['90.0', '0.0'])
+        post_data.setlist('account_interest_yield[]', ['0.0', '4.0'])
+        post_data.setlist('account_capital_gains_dist_rate[]', ['1.0', '0.0'])
+        post_data.setlist('account_cost_basis_ratio[]', ['60.0', '100.0'])
+
+        parsed = parse_account_rows(post_data, user_age=60, user_retirement_age=65, is_married=False,
+                                    spouse_age=60, spouse_retirement_age=65, min_start_age=60)
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]['dividend_yield'], 2.0)
+        self.assertEqual(parsed[0]['qualified_dividend_pct'], 90.0)
+        self.assertEqual(parsed[0]['cost_basis_ratio'], 60.0)
+
+        self.assertEqual(parsed[1]['interest_yield'], 4.0)
+        self.assertEqual(parsed[1]['cost_basis_ratio'], 100.0)
+
+        # Aggregate accounts
+        agg = aggregate_accounts(parsed, user_age=60, user_retirement_age=65, user_age_death=95,
+                                 is_married=False, spouse_age=60, spouse_retirement_age=65, spouse_age_death=95)
+        taxable_agg = agg['taxable_assets']
+        self.assertAlmostEqual(taxable_agg['present_balance'], 200000.0)
+        # Weighted average yields: 50% acc_1 + 50% acc_2
+        self.assertAlmostEqual(taxable_agg['dividend_yield'], 1.0)
+        self.assertAlmostEqual(taxable_agg['qualified_dividend_pct'], 45.0)
+        self.assertAlmostEqual(taxable_agg['interest_yield'], 2.0)
+        self.assertAlmostEqual(taxable_agg['capital_gains_dist_rate'], 0.5)
+        self.assertAlmostEqual(taxable_agg['cost_basis_ratio'], 80.0)
+        # Initial basis: 100k * 0.6 + 100k * 1.0 = 160k
+        self.assertAlmostEqual(taxable_agg['initial_cost_basis'], 160000.0)
+
+    def test_simulate_step_taxable_yields_and_breakdown(self):
+        from core.runs import simulate_step
+
+        # Step with 1M taxable account, 2% div (85% qual), 0.5% cap gains dist, 0% interest, 70% basis
+        # Ordinary div = 20k * 0.15 = 3k. Qualified div = 17k. Cap gains dist = 5k.
+        # Preferential income = 17k + 5k = 22k.
+        res = simulate_step(
+            t=0,
+            user_age=60,
+            is_married=False,
+            spouse_age=0,
+            user_age_death=95,
+            spouse_age_death=95,
+            filing_status='single',
+            desired_spending_start_age=60,
+            desired_spending=0.0,
+            survivor_spending=0.0,
+            adjust_spending_inflation=True,
+            inflation_rate=0.0,
+            additional_spending_list=[],
+            income_sources_list=[],
+            pretax_user=0.0,
+            pretax_spouse=0.0,
+            roth=0.0,
+            taxable=1000000.0,
+            hsa_user=0.0,
+            r_pretax_user=0.0,
+            r_pretax_spouse=0.0,
+            r_roth=0.0,
+            r_taxable=0.05,
+            r_hsa_user=0.0,
+            contrib_pretax_user=0.0,
+            contrib_pretax_spouse=0.0,
+            contrib_roth=0.0,
+            contrib_taxable=0.0,
+            contrib_hsa_user=0.0,
+            user_rmd_start_age=75,
+            spouse_rmd_start_age=75,
+            social_security_data={},
+            state_tax_rate=0.0,
+            state_ss_exempt=True,
+            other_taxes_list=[],
+            user_ret_age=60,
+            spouse_ret_age=60,
+            taxable_dividend_yield=2.0,
+            taxable_qualified_dividend_pct=85.0,
+            taxable_interest_yield=0.0,
+            taxable_capital_gains_dist_rate=0.5,
+            taxable_cost_basis_ratio=70.0,
+            taxable_cost_basis=700000.0,
+        )
+
+        inv_inc = res['investment_income']
+        self.assertAlmostEqual(inv_inc['ordinary_dividends'], 3000.0)
+        self.assertAlmostEqual(inv_inc['qualified_dividends'], 17000.0)
+        self.assertAlmostEqual(inv_inc['capital_gains_distributions'], 5000.0)
+        self.assertAlmostEqual(inv_inc['interest'], 0.0)
+        self.assertAlmostEqual(inv_inc['total'], 25000.0)
+
+        # Standard deduction single 2026 = 15,000.
+        # Ordinary income = 3,000. Taxable ordinary income = max(0, 3000 - 15000) = 0.
+        # Unused deduction = 12,000. Preferential income subject to tax = max(0, 22,000 - 12,000) = 10,000.
+        # 10,000 is under the single 0% preferential threshold of $48,350 -> Fed tax = $0!
+        tb = res['tax_breakdown']
+        self.assertEqual(tb['fed_ordinary_tax'], 0.0)
+        self.assertEqual(tb['fed_ltcg_tax'], 0.0)
+        self.assertEqual(tb['fed_tax'], 0.0)
+
+        # Basis increases by reinvested distributions
+        self.assertGreater(res['ending_assets']['taxable_basis'], 700000.0)
+
+    def test_taxable_withdrawal_realized_capital_gains_solver(self):
+        from core.runs import simulate_step
+
+        # Step with $500,000 taxable account, basis $250,000 (50% basis ratio).
+        # Need $200,000 of spending.
+        # Withdrawing from taxable realizes 50% gain per dollar withdrawn (~$100,000 gain).
+        # Above the single $48,350 0% bracket, this triggers 15% LTCG tax.
+        # The bisection solver must compute the gross-up so that net proceeds cover $200k spending + taxes.
+        res = simulate_step(
+            t=0,
+            user_age=65,
+            is_married=False,
+            spouse_age=0,
+            user_age_death=95,
+            spouse_age_death=95,
+            filing_status='single',
+            desired_spending_start_age=65,
+            desired_spending=200000.0,
+            survivor_spending=0.0,
+            adjust_spending_inflation=True,
+            inflation_rate=0.0,
+            additional_spending_list=[],
+            income_sources_list=[],
+            pretax_user=0.0,
+            pretax_spouse=0.0,
+            roth=0.0,
+            taxable=500000.0,
+            hsa_user=0.0,
+            r_pretax_user=0.0,
+            r_pretax_spouse=0.0,
+            r_roth=0.0,
+            r_taxable=0.0,
+            r_hsa_user=0.0,
+            contrib_pretax_user=0.0,
+            contrib_pretax_spouse=0.0,
+            contrib_roth=0.0,
+            contrib_taxable=0.0,
+            contrib_hsa_user=0.0,
+            user_rmd_start_age=75,
+            spouse_rmd_start_age=75,
+            social_security_data={},
+            state_tax_rate=0.0,
+            state_ss_exempt=True,
+            other_taxes_list=[],
+            user_ret_age=65,
+            spouse_ret_age=65,
+            taxable_dividend_yield=0.0,
+            taxable_qualified_dividend_pct=0.0,
+            taxable_interest_yield=0.0,
+            taxable_capital_gains_dist_rate=0.0,
+            taxable_cost_basis_ratio=50.0,
+            taxable_cost_basis=250000.0,
+        )
+
+        w_tax = res['withdrawals']['taxable']
+        # Must withdraw more than 200k to cover preferential capital gains tax
+        self.assertGreater(w_tax, 200000.0)
+        self.assertGreater(res['investment_income']['realized_capital_gains'], 0.0)
+        self.assertGreater(res['tax_breakdown']['fed_ltcg_tax'], 0.0)
+        self.assertAlmostEqual(res['tax_breakdown']['fed_ordinary_tax'], 0.0)
+        # Gross withdrawal minus taxes paid must equal desired spending ($200,000)
+        self.assertAlmostEqual(w_tax - res['tax_breakdown']['fed_tax'], 200000.0, places=1)
+
+        # Remaining basis should have decreased proportionally
+        self.assertLess(res['ending_assets']['taxable_basis'], 250000.0)
+        self.assertGreater(res['ending_assets']['taxable_basis'], 0.0)
+
+    def test_spousal_basis_step_up(self):
+        from core.runs import run_simulation_path, extract_sim_inputs
+
+        # Married couple: user dies at age 70 (t=5), spouse lives to 85.
+        # Initial taxable = 1,000,000 with 50% basis = 500,000.
+        # In year t=5, spousal 50% step-up should occur.
+        raw_plan = {
+            'user_name': 'Test User',
+            'spouse_name': 'Test Spouse',
+            'user_age': 65,
+            'spouse_age': 65,
+            'user_retirement_age': 65,
+            'spouse_retirement_age': 65,
+            'user_age_death': 70,
+            'spouse_age_death': 85,
+            'is_married': True,
+            'current_year': 2026,
+            'inflation_rate': 0.0,
+            'desired_spending': 0.0,
+            'survivor_spending': 0.0,
+            'social_security': {'user_amount': 0.0, 'spouse_amount': 0.0},
+            'taxable_assets': {
+                'present_balance': 1000000.0,
+                'dividend_yield': 0.0,
+                'qualified_dividend_pct': 0.0,
+                'interest_yield': 0.0,
+                'capital_gains_dist_rate': 0.0,
+                'cost_basis_ratio': 50.0,
+                'initial_cost_basis': 500000.0
+            },
+            'pretax_assets': {'present_balance': 0.0},
+            'roth_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0},
+            'income_sources': [],
+            'additional_spending': [],
+            'other_taxes': []
+        }
+
+        inputs = extract_sim_inputs(raw_plan)
+
+        # 0% returns
+        zeros = [0.0] * inputs['total_years']
+        results = run_simulation_path(inputs, zeros, zeros, zeros, zeros)
+
+        # Before death (t=4), basis is exactly 500,000
+        basis_t4 = results[4]['ending_assets']['taxable_basis']
+        self.assertAlmostEqual(basis_t4, 500000.0, delta=10.0)
+
+        # In year t_death (t=5), 50% step-up applied:
+        # Step-up = 500k + 0.5 * (1,000,000 - 500k) = 750,000
+        basis_t5 = results[5]['ending_assets']['taxable_basis']
+        self.assertAlmostEqual(basis_t5, 750000.0, delta=10.0)
+
+    def test_numba_parity_taxable_yields_and_basis(self):
+        from core.runs import extract_sim_inputs, run_simulation_path, prepare_numba_inputs, njit_simulate_path
+
+        raw_plan = {
+            'user_name': 'Parity User',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 80,
+            'is_married': False,
+            'current_year': 2026,
+            'desired_spending': 50000.0,
+            'survivor_spending': 50000.0,
+            'inflation_rate': 0.0,
+            'taxable_assets': {
+                'present_balance': 500000.0,
+                'dividend_yield': 2.0,
+                'qualified_dividend_pct': 85.0,
+                'interest_yield': 0.0,
+                'capital_gains_dist_rate': 0.5,
+                'cost_basis_ratio': 70.0
+            },
+            'pretax_assets': {'present_balance': 0.0},
+            'roth_assets': {'present_balance': 0.0},
+            'hsa_assets': {'present_balance': 0.0},
+            'income_sources': [],
+            'additional_spending': [],
+            'other_taxes': []
+        }
+
+        inputs = extract_sim_inputs(raw_plan)
+        years = inputs['total_years']
+        returns_tax = np.full(years, 0.04, dtype=np.float64)
+        zeros = np.zeros(years, dtype=np.float64)
+
+        py_results = run_simulation_path(inputs, zeros, zeros, returns_tax, zeros)
+        py_ending_wealth = py_results[-1]['ending_assets']['total']
+
+        nb_inp = prepare_numba_inputs(inputs)
+        nb_ending_wealth = njit_simulate_path(
+            years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'],
+            inputs['user_age_death'], inputs['spouse_age_death'],
+            nb_inp['filing_status_code'], inputs['desired_spending_start_age'],
+            nb_inp['desired_spending'], nb_inp['survivor_spending'],
+            inputs['adjust_spending_inflation'], inputs['inflation_rate'],
+            inputs['hsa_for_medical'], nb_inp['user_rmd_start_age'], nb_inp['spouse_rmd_start_age'],
+            nb_inp['pretax_user_init'], nb_inp['pretax_spouse_init'], nb_inp['roth_init'],
+            nb_inp['taxable_init'], nb_inp['hsa_init'],
+            nb_inp['c_pre_user'], nb_inp['c_pre_spouse'], nb_inp['c_roth'], nb_inp['c_tax'], nb_inp['c_hsa'],
+            nb_inp['add_spending_arr'], nb_inp['inc_taxable_arr'], nb_inp['inc_ss_arr'], nb_inp['inc_nontaxable_arr'],
+            zeros, zeros, zeros, returns_tax, zeros, zeros,
+            nb_inp['state_tax_rate'], nb_inp['state_ss_exempt_code'], nb_inp['other_taxes_arr'],
+            nb_inp['hsa_spouse_init'], nb_inp['c_hsa_spouse'], nb_inp['hsa_spouse_for_medical_code'],
+            taxable_div_yield=nb_inp['taxable_div_yield'],
+            taxable_qual_pct=nb_inp['taxable_qual_pct'],
+            taxable_int_yield=nb_inp['taxable_int_yield'],
+            taxable_cg_dist_rate=nb_inp['taxable_cg_dist_rate'],
+            taxable_basis_init=nb_inp['taxable_basis_init']
+        )
+
+        self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
+
+
 
 
 

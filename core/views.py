@@ -561,6 +561,11 @@ def enter_view(request):
                 'contrib_adjust_inflation': True,
                 'return_mean': 5.0,
                 'return_std': 8.0,
+                'dividend_yield': 2.0,
+                'qualified_dividend_pct': 85.0,
+                'interest_yield': 0.0,
+                'capital_gains_dist_rate': 0.5,
+                'cost_basis_ratio': 70.0,
             }
             accounts.append(new_acc)
             balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
