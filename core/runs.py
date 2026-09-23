@@ -785,7 +785,8 @@ def simulate_step(
     life_insurance_payout=0.0,
     taxable_dividend_yield=0.0, taxable_qualified_dividend_pct=100.0,
     taxable_interest_yield=0.0, taxable_capital_gains_dist_rate=0.0,
-    taxable_cost_basis_ratio=100.0, taxable_cost_basis=None
+    taxable_cost_basis_ratio=100.0, taxable_cost_basis=None,
+    is_community_property=False
 ):
     # Backwards-compatibility aliases
     if hsa is not None:
@@ -843,9 +844,12 @@ def simulate_step(
     else:
         taxable_basis_curr = max(0.0, float(taxable_cost_basis))
 
-    # Apply 50% step-up in basis on first death if married
+    # Apply step-up in basis on first death if married (100% in community property states, 50% in common law)
     if is_married and t == t_first_death and taxable > 0.0:
-        taxable_basis_curr = 0.5 * taxable_basis_curr + 0.5 * max(0.0, taxable)
+        if is_community_property:
+            taxable_basis_curr = max(0.0, taxable)
+        else:
+            taxable_basis_curr = 0.5 * taxable_basis_curr + 0.5 * max(0.0, taxable)
 
     # 2. Add Contributions and any Life Insurance Payout
     pretax_user_before = max(0.0, pretax_user + contrib_pretax_user)
@@ -1411,6 +1415,7 @@ def extract_sim_inputs(sim_input):
         taxable_bal = float(taxable_data.get('present_balance', 0.0))
         cbr = float(taxable_data.get('cost_basis_ratio', 70.0))
         taxable_data['initial_cost_basis'] = taxable_bal * (cbr / 100.0)
+    is_comm_prop = bool(taxable_data.get('is_community_property', False) or raw.get('is_community_property', False))
 
     hsa_data = raw.get('hsa_assets', {})
     spouse_hsa_data = raw.get('spouse_hsa_assets', {}) if is_married else {}
@@ -1499,6 +1504,7 @@ def extract_sim_inputs(sim_input):
         'spouse_pretax_data': spouse_pretax_data,
         'roth_data': roth_data,
         'taxable_data': taxable_data,
+        'is_community_property': is_comm_prop,
         'hsa_data': hsa_data,
         'spouse_hsa_data': spouse_hsa_data,
         'hsa_for_medical': hsa_for_medical,
@@ -1603,6 +1609,7 @@ def run_simulation_path(inputs, returns_pretax, returns_roth, returns_taxable, r
             taxable_capital_gains_dist_rate=taxable_cg_dist_rate,
             taxable_cost_basis_ratio=taxable_cost_basis_ratio,
             taxable_cost_basis=taxable_basis,
+            is_community_property=inputs.get('is_community_property', False),
         )
         
         year_results.append(res)
@@ -1708,7 +1715,8 @@ def njit_simulate_path(
     taxable_qual_pct=85.0,
     taxable_int_yield=0.0,
     taxable_cg_dist_rate=0.5,
-    taxable_basis_init=-1.0
+    taxable_basis_init=-1.0,
+    is_community_property_code=0
 ):
     pretax_user = pretax_user_init
     pretax_spouse = pretax_spouse_init
@@ -1752,7 +1760,10 @@ def njit_simulate_path(
         )
 
         if is_married and t == t_first_death and taxable > 0.0:
-            taxable_basis = 0.5 * taxable_basis + 0.5 * max(0.0, taxable)
+            if is_community_property_code != 0:
+                taxable_basis = max(0.0, taxable)
+            else:
+                taxable_basis = 0.5 * taxable_basis + 0.5 * max(0.0, taxable)
 
         if t == taxable_deposit_t and taxable_deposit_amt > 0.0:
             taxable += taxable_deposit_amt
@@ -1881,7 +1892,8 @@ def njit_simulate_all_paths(
     taxable_qual_pct=85.0,
     taxable_int_yield=0.0,
     taxable_cg_dist_rate=0.5,
-    taxable_basis_init=-1.0
+    taxable_basis_init=-1.0,
+    is_community_property_code=0
 ):
     for i in numba.prange(runs):
         if trajectories is not None:
@@ -1906,7 +1918,8 @@ def njit_simulate_all_paths(
                 taxable_qual_pct,
                 taxable_int_yield,
                 taxable_cg_dist_rate,
-                taxable_basis_init
+                taxable_basis_init,
+                is_community_property_code
             )
         else:
             ending_wealths[i] = njit_simulate_path(
@@ -1930,7 +1943,8 @@ def njit_simulate_all_paths(
                 taxable_qual_pct,
                 taxable_int_yield,
                 taxable_cg_dist_rate,
-                taxable_basis_init
+                taxable_basis_init,
+                is_community_property_code
             )
 
 def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None):
@@ -2218,6 +2232,7 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
         'taxable_int_yield': taxable_int_yield,
         'taxable_cg_dist_rate': taxable_cg_dist_rate,
         'taxable_basis_init': taxable_basis_init,
+        'is_community_property_code': 1 if inputs.get('is_community_property', False) else 0,
         'user_rmd_start_age': inputs['user_rmd_start_age'],
         'spouse_rmd_start_age': inputs['spouse_rmd_start_age'],
         'inf_factors': inf_factors,
@@ -2334,7 +2349,8 @@ def generate_runs(sim_input, test_spending=None):
         nb_inp['taxable_qual_pct'],
         nb_inp['taxable_int_yield'],
         nb_inp['taxable_cg_dist_rate'],
-        nb_inp['taxable_basis_init']
+        nb_inp['taxable_basis_init'],
+        nb_inp['is_community_property_code']
     )
     
     successes = float(np.sum(success_flags >= 1.0))
@@ -2432,7 +2448,8 @@ def binary_search(sim_input):
             nb_inp['taxable_qual_pct'],
             nb_inp['taxable_int_yield'],
             nb_inp['taxable_cg_dist_rate'],
-            nb_inp['taxable_basis_init']
+            nb_inp['taxable_basis_init'],
+            nb_inp['is_community_property_code']
         )
         
         success_rate = float(np.mean(success_flags >= 1.0))
@@ -2710,7 +2727,8 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
         nb_inp['taxable_qual_pct'],
         nb_inp['taxable_int_yield'],
         nb_inp['taxable_cg_dist_rate'],
-        nb_inp['taxable_basis_init']
+        nb_inp['taxable_basis_init'],
+        nb_inp['is_community_property_code']
     )
 
     successes = float(np.sum(success_flags >= 1.0))

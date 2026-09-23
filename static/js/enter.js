@@ -599,6 +599,7 @@
             var intYield = data.interest_yield !== undefined ? data.interest_yield : 0.0;
             var cgDistRate = data.capital_gains_dist_rate !== undefined ? data.capital_gains_dist_rate : 0.5;
             var costBasisRatio = data.cost_basis_ratio !== undefined ? data.cost_basis_ratio : 70.0;
+            var isCommunityProperty = data.is_community_property !== undefined ? (data.is_community_property === true || data.is_community_property === 'true') : false;
 
             var isMarried = isMarriedCheckbox.checked;
 
@@ -738,13 +739,22 @@
                                 <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-cg-dist" name="account_capital_gains_dist_rate[]" value="${formatPercent(cgDistRate)}" step="0.1" placeholder="0.5%">
                             </div>
                         </div>
-                        <div class="row g-2">
+                        <div class="row g-2 mb-2">
                             <div class="col-12">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Cost Basis (% of balance)</label>
                                     <span class="small text-muted cost-basis-dollar-preview" style="font-size: 0.75rem;">Est. Basis: $0</span>
                                 </div>
                                 <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input acc-cost-basis-ratio" name="account_cost_basis_ratio[]" value="${formatPercent(costBasisRatio)}" step="1.0" placeholder="70.0%">
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <label class="form-label small text-muted mb-1" style="font-size: 0.75rem;">Resident in Community Property State?</label>
+                                <select class="form-select form-select-sm acc-community-property" name="account_is_community_property[]">
+                                    <option value="false" ${!isCommunityProperty ? 'selected' : ''}>No (Common Law: 50% Spousal Step-Up)</option>
+                                    <option value="true" ${isCommunityProperty ? 'selected' : ''}>Yes (Community Property: 100% Full Step-Up)</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -2541,6 +2551,10 @@
                                 costBasisInput.value = formatPercent(aData.cost_basis_ratio);
                             }
                         }
+                        var commPropSelect = cardCol.querySelector('[name="account_is_community_property[]"]');
+                        if (commPropSelect && aData.is_community_property !== undefined) {
+                            commPropSelect.value = (aData.is_community_property === true || aData.is_community_property === 'true') ? 'true' : 'false';
+                        }
                     } else {
                         addAccountCard(aData);
                     }
@@ -2603,6 +2617,7 @@
                     var intYieldInput = col.querySelector('[name="account_interest_yield[]"]');
                     var cgDistInput = col.querySelector('[name="account_capital_gains_dist_rate[]"]');
                     var costBasisInput = col.querySelector('[name="account_cost_basis_ratio[]"]');
+                    var commPropSelect = col.querySelector('[name="account_is_community_property[]"]');
 
                     var name = nameInput ? nameInput.value.trim() : '';
                     var type = typeSelect ? typeSelect.value : 'pretax';
@@ -2623,6 +2638,7 @@
                     var intYield = intYieldInput ? parsePercent(intYieldInput.value) : (type === 'taxable' ? 0.0 : 0.0);
                     var cgDistRate = cgDistInput ? parsePercent(cgDistInput.value) : (type === 'taxable' ? 0.5 : 0.0);
                     var costBasisRatio = costBasisInput ? parsePercent(costBasisInput.value) : (type === 'taxable' ? 70.0 : 100.0);
+                    var isCommProp = commPropSelect ? (commPropSelect.value === 'true') : false;
 
                     var targetCatKey = ['pretax', 'roth', 'taxable', 'hsa'].includes(type) ? type : 'taxable';
 
@@ -2699,6 +2715,7 @@
                         acc.interest_yield = intYield;
                         acc.capital_gains_dist_rate = cgDistRate;
                         acc.cost_basis_ratio = costBasisRatio;
+                        acc.is_community_property = isCommProp;
                         if (!acc.values) acc.values = {};
                         acc.values[currPeriod] = bal;
 
@@ -2751,7 +2768,8 @@
                             qualified_dividend_pct: qualDivPct,
                             interest_yield: intYield,
                             capital_gains_dist_rate: cgDistRate,
-                            cost_basis_ratio: costBasisRatio
+                            cost_basis_ratio: costBasisRatio,
+                            is_community_property: isCommProp
                         };
 
                         var cat = bsState.categories[targetCatKey];

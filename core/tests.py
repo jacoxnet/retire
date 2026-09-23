@@ -4536,6 +4536,7 @@ class TaxableAccountTaxationTests(TestCase):
         post_data.setlist('account_interest_yield[]', ['0.0', '4.0'])
         post_data.setlist('account_capital_gains_dist_rate[]', ['1.0', '0.0'])
         post_data.setlist('account_cost_basis_ratio[]', ['60.0', '100.0'])
+        post_data.setlist('account_is_community_property[]', ['false', 'true'])
 
         parsed = parse_account_rows(post_data, user_age=60, user_retirement_age=65, is_married=False,
                                     spouse_age=60, spouse_retirement_age=65, min_start_age=60)
@@ -4560,6 +4561,7 @@ class TaxableAccountTaxationTests(TestCase):
         self.assertAlmostEqual(taxable_agg['cost_basis_ratio'], 80.0)
         # Initial basis: 100k * 0.6 + 100k * 1.0 = 160k
         self.assertAlmostEqual(taxable_agg['initial_cost_basis'], 160000.0)
+        self.assertTrue(taxable_agg['is_community_property'])
 
     def test_simulate_step_taxable_yields_and_breakdown(self):
         from core.runs import simulate_step
@@ -4747,10 +4749,22 @@ class TaxableAccountTaxationTests(TestCase):
         basis_t4 = results[4]['ending_assets']['taxable_basis']
         self.assertAlmostEqual(basis_t4, 500000.0, delta=10.0)
 
-        # In year t_death (t=5), 50% step-up applied:
+        # In year t_death (t=5), 50% step-up applied for common law:
         # Step-up = 500k + 0.5 * (1,000,000 - 500k) = 750,000
         basis_t5 = results[5]['ending_assets']['taxable_basis']
         self.assertAlmostEqual(basis_t5, 750000.0, delta=10.0)
+
+        # Now test community property state: 100% full basis step-up upon first death
+        raw_plan['is_community_property'] = True
+        raw_plan['taxable_assets']['is_community_property'] = True
+        inputs_cp = extract_sim_inputs(raw_plan)
+        self.assertTrue(inputs_cp['is_community_property'])
+        results_cp = run_simulation_path(inputs_cp, zeros, zeros, zeros, zeros)
+        basis_cp_t4 = results_cp[4]['ending_assets']['taxable_basis']
+        self.assertAlmostEqual(basis_cp_t4, 500000.0, delta=10.0)
+        # In year t=5, full 100% step-up to fair market value: exactly 1,000,000
+        basis_cp_t5 = results_cp[5]['ending_assets']['taxable_basis']
+        self.assertAlmostEqual(basis_cp_t5, 1000000.0, delta=10.0)
 
     def test_numba_parity_taxable_yields_and_basis(self):
         from core.runs import extract_sim_inputs, run_simulation_path, prepare_numba_inputs, njit_simulate_path
@@ -4808,10 +4822,48 @@ class TaxableAccountTaxationTests(TestCase):
             taxable_qual_pct=nb_inp['taxable_qual_pct'],
             taxable_int_yield=nb_inp['taxable_int_yield'],
             taxable_cg_dist_rate=nb_inp['taxable_cg_dist_rate'],
-            taxable_basis_init=nb_inp['taxable_basis_init']
+            taxable_basis_init=nb_inp['taxable_basis_init'],
+            is_community_property_code=nb_inp['is_community_property_code']
         )
 
         self.assertAlmostEqual(py_ending_wealth, nb_ending_wealth, places=2)
+
+        # Married couple in community property state parity
+        raw_plan['is_married'] = True
+        raw_plan['spouse_age'] = 60
+        raw_plan['spouse_retirement_age'] = 65
+        raw_plan['spouse_age_death'] = 70  # dies early -> first death triggers 100% step-up
+        raw_plan['user_age_death'] = 80
+        raw_plan['is_community_property'] = True
+        raw_plan['taxable_assets']['is_community_property'] = True
+        inputs_m = extract_sim_inputs(raw_plan)
+        py_results_m = run_simulation_path(inputs_m, zeros, zeros, returns_tax, zeros)
+        py_ending_m = py_results_m[-1]['ending_assets']['total']
+
+        nb_inp_m = prepare_numba_inputs(inputs_m)
+        self.assertEqual(nb_inp_m['is_community_property_code'], 1)
+        nb_ending_m = njit_simulate_path(
+            years, inputs_m['user_age'], inputs_m['is_married'], inputs_m['spouse_age'],
+            inputs_m['user_age_death'], inputs_m['spouse_age_death'],
+            nb_inp_m['filing_status_code'], inputs_m['desired_spending_start_age'],
+            nb_inp_m['desired_spending'], nb_inp_m['survivor_spending'],
+            inputs_m['adjust_spending_inflation'], inputs_m['inflation_rate'],
+            inputs_m['hsa_for_medical'], nb_inp_m['user_rmd_start_age'], nb_inp_m['spouse_rmd_start_age'],
+            nb_inp_m['pretax_user_init'], nb_inp_m['pretax_spouse_init'], nb_inp_m['roth_init'],
+            nb_inp_m['taxable_init'], nb_inp_m['hsa_init'],
+            nb_inp_m['c_pre_user'], nb_inp_m['c_pre_spouse'], nb_inp_m['c_roth'], nb_inp_m['c_tax'], nb_inp_m['c_hsa'],
+            nb_inp_m['add_spending_arr'], nb_inp_m['inc_taxable_arr'], nb_inp_m['inc_ss_arr'], nb_inp_m['inc_nontaxable_arr'],
+            zeros, zeros, zeros, returns_tax, zeros, zeros,
+            nb_inp_m['state_tax_rate'], nb_inp_m['state_ss_exempt_code'], nb_inp_m['other_taxes_arr'],
+            nb_inp_m['hsa_spouse_init'], nb_inp_m['c_hsa_spouse'], nb_inp_m['hsa_spouse_for_medical_code'],
+            taxable_div_yield=nb_inp_m['taxable_div_yield'],
+            taxable_qual_pct=nb_inp_m['taxable_qual_pct'],
+            taxable_int_yield=nb_inp_m['taxable_int_yield'],
+            taxable_cg_dist_rate=nb_inp_m['taxable_cg_dist_rate'],
+            taxable_basis_init=nb_inp_m['taxable_basis_init'],
+            is_community_property_code=nb_inp_m['is_community_property_code']
+        )
+        self.assertAlmostEqual(py_ending_m, nb_ending_m, places=2)
 
 
 

@@ -1306,10 +1306,13 @@
                     <div class="col-md-6">
                         <div class="card h-100 border rounded-3 p-3 bg-light">
                             <h6 class="fw-bold text-dark mb-2"><i class="fa fa-heartbeat text-danger me-2"></i>Spousal Step-Up in Basis</h6>
-                            <p class="small text-muted mb-0">
-                                For married couples, federal tax rules allow a step-up in cost basis upon the death of a spouse. 
-                                The engine automatically applies a <strong>50% basis step-up</strong> on the surviving spouse's taxable portfolio at the first death, protecting future withdrawals from double taxation.
+                            <p class="small text-muted mb-1">
+                                For married couples, federal tax rules (IRC § 1014) grant a step-up in cost basis upon the death of the first spouse, shielding future withdrawals from capital gains taxes:
                             </p>
+                            <ul class="small text-muted ps-3 mb-0">
+                                <li><strong>Common Law States (Default: "No"):</strong> The engine applies a <strong>50% basis step-up</strong>, reflecting the deceased spouse's half of jointly owned property.</li>
+                                <li><strong>Community Property States ("Yes"):</strong> Married couples in community property states receive a <strong>100% full basis step-up</strong> to fair market value on both halves of community property (IRC § 1014(b)(6)), eliminating all prior unrealized capital gains at first death.</li>
+                            </ul>
                         </div>
                     </div>
                 </div>

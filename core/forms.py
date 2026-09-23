@@ -205,6 +205,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
     acc_int_yields = post.getlist('account_interest_yield[]')
     acc_cg_dist_rates = post.getlist('account_capital_gains_dist_rate[]')
     acc_cost_basis_ratios = post.getlist('account_cost_basis_ratio[]')
+    acc_is_comm_props = post.getlist('account_is_community_property[]')
 
     accounts = []
     for i in range(len(acc_names)):
@@ -226,6 +227,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
         int_y = get_float(acc_int_yields[i], def_int_yield) if i < len(acc_int_yields) else def_int_yield
         cg_rate = get_float(acc_cg_dist_rates[i], def_cg_rate) if i < len(acc_cg_dist_rates) else def_cg_rate
         basis_ratio = get_float(acc_cost_basis_ratios[i], def_basis_ratio) if i < len(acc_cost_basis_ratios) else def_basis_ratio
+        is_comm = (acc_is_comm_props[i] in ('true', 'True', 'yes', 'Yes', '1', True)) if i < len(acc_is_comm_props) else False
 
         accounts.append({
             'id': a_id,
@@ -247,6 +249,7 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
             'interest_yield': int_y,
             'capital_gains_dist_rate': cg_rate,
             'cost_basis_ratio': basis_ratio,
+            'is_community_property': is_comm,
         })
     return accounts
 
@@ -356,6 +359,7 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
             'capital_gains_dist_rate': 0.5,
             'cost_basis_ratio': 70.0,
             'initial_cost_basis': 0.0,
+            'is_community_property': False,
         },
         'hsa': {
             'present_balance': 0.0, 'contrib_amount': 0.0, 'contrib_freq': 'annual',
@@ -431,6 +435,7 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
                     base['capital_gains_dist_rate'] = sum(float(a.get('capital_gains_dist_rate', 0.5)) for a in acc_list) / len(acc_list)
                     base['cost_basis_ratio'] = sum(float(a.get('cost_basis_ratio', 70.0)) for a in acc_list) / len(acc_list)
                 base['initial_cost_basis'] = sum(float(a.get('balance', 0.0)) * (float(a.get('cost_basis_ratio', 70.0)) / 100.0) for a in acc_list)
+                base['is_community_property'] = any(bool(a.get('is_community_property', False)) for a in acc_list)
 
             primary = acc_list[0]
             base['contrib_start_age'] = primary.get('contrib_start_age', base['contrib_start_age'])
