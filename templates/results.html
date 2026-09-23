@@ -331,7 +331,12 @@
                                 <th>Contributions <small class="text-muted">(Hover)</small></th>
                                 <th>Asset Growth <small class="text-muted">(Hover)</small></th>
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
-                                <th>Taxes & Pen.</th>
+                                <th>
+                                    Taxes & Pen.
+                                    <button type="button" class="btn btn-link p-0 text-primary ms-1 align-baseline text-decoration-none" data-bs-toggle="modal" data-bs-target="#taxesPenaltiesModal" title="Click to understand why taxes and penalties are displayed only on and after retirement spending begins" aria-label="Taxes & Penalties Information">
+                                        <i class="fa-solid fa-circle-question fs-6"></i>
+                                    </button>
+                                </th>
                                 <th>Regular Retirement Spending</th>
                                 <th>Additional Spending <small class="text-muted">(Hover)</small></th>
                                 <th>Ending Assets <small class="text-muted">(Hover)</small></th>
@@ -481,6 +486,7 @@
                                         </div>
                                     </td>
                                     <td>
+                                        {% if row.is_spending_active %}
                                         <!-- Hover Tooltip for Taxes & Penalties Breakdown -->
                                         <div class="tooltip-trigger">
                                             <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
@@ -595,6 +601,9 @@
                                                 {% endif %}
                                             </div>
                                         </div>
+                                        {% else %}
+                                        <span class="text-muted small">N/A</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <span class="dollar-amount" data-nominal="{{ row.desired_spending }}" data-real="{{ row.desired_spending }}">
@@ -714,7 +723,12 @@
                                 <th>Spouse</th>
                                 <th>Regular Retirement Spending</th>
                                 <th>Additional Spending <small class="text-muted">(Hover)</small></th>
-                                <th>Taxes & Penalties</th>
+                                <th>
+                                    Taxes & Penalties
+                                    <button type="button" class="btn btn-link p-0 text-primary ms-1 align-baseline text-decoration-none" data-bs-toggle="modal" data-bs-target="#taxesPenaltiesModal" title="Click to understand why taxes and penalties are displayed only on and after retirement spending begins" aria-label="Taxes & Penalties Information">
+                                        <i class="fa-solid fa-circle-question fs-6"></i>
+                                    </button>
+                                </th>
                                 <th>Income Sources <small class="text-muted">(Hover)</small></th>
                                 <th>
                                     Portfolio Withdrawals 
@@ -763,6 +777,7 @@
                                         </div>
                                     </td>
                                     <td>
+                                        {% if row.is_spending_active %}
                                         <!-- Hover Tooltip for Taxes & Penalties Breakdown -->
                                         <div class="tooltip-trigger">
                                             <span class="dollar-amount text-danger font-weight-bold" data-nominal="{{ row.taxes }}" data-real="{{ row.taxes }}">
@@ -877,6 +892,9 @@
                                                 {% endif %}
                                             </div>
                                         </div>
+                                        {% else %}
+                                        <span class="text-muted small">N/A</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <!-- Hover Tooltip for Income Sources Breakdown -->
@@ -1366,6 +1384,63 @@
                         <ul class="small text-secondary ps-3 mb-0">
                             <li>Withdrawals drop to $0 (or whatever partial balance remains), creating an unfulfilled cash flow shortfall.</li>
                             <li>In these years: <span class="fw-bold text-danger">Portfolio Withdrawals &lt; (Spending + Taxes − Income Sources)</span>.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Taxes & Penalties Explanation Modal -->
+<div class="modal fade" id="taxesPenaltiesModal" tabindex="-1" aria-labelledby="taxesPenaltiesModalLabel" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary" id="taxesPenaltiesModalLabel">
+                    <i class="fa-solid fa-circle-info me-2"></i>Taxes &amp; Penalties in Retirement Projections
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="mb-3 text-secondary">
+                    In the projection tables, <strong>Taxes &amp; Penalties</strong> are calculated and displayed only for years <strong>on and after your Start Age for Retirement Spending</strong> (Age {{ desired_spending_start_age|default:"Retirement" }}):
+                </p>
+
+                <div class="card mb-3 border-secondary-subtle bg-light">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-secondary">Pre-Retirement Years</span>
+                            <strong class="text-dark">Prior to Retirement Spending Start Age: Displayed as "N/A"</strong>
+                        </div>
+                        <p class="small text-secondary mb-2">
+                            During your working and accumulation years before retirement spending begins:
+                        </p>
+                        <ul class="small text-secondary ps-3 mb-0">
+                            <li>Everyday living expenses and routine wage/payroll taxes (income tax withholding, FICA, Medicare) are funded directly from your ongoing employment earnings and routine household budget.</li>
+                            <li>Because the model's objective is to evaluate the <strong>sustainability and longevity of your investment portfolio</strong> across retirement, working-years wage taxes and household living expenses are outside the scope of retirement portfolio withdrawals.</li>
+                            <li>Consequently, Taxes &amp; Penalties are marked as <strong>N/A</strong> for these accumulation years.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card border-primary-subtle bg-light">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-primary">Retirement Years</span>
+                            <strong class="text-dark">On &amp; After Retirement Spending Start Age: Comprehensive Tax Modeling</strong>
+                        </div>
+                        <p class="small text-secondary mb-2">
+                            Beginning in the year you reach your Start Age for Retirement Spending, full federal and state tax liability is modeled dynamically each year:
+                        </p>
+                        <ul class="small text-secondary ps-3 mb-0">
+                            <li><strong>Federal &amp; State Ordinary Income Taxes:</strong> Computed on taxable retirement income, including pension payments, taxable Social Security benefits, pre-tax account withdrawals (RMDs and discretionary 401(k)/IRA draws), plus ordinary dividends and taxable interest.</li>
+                            <li><strong>Preferential Capital Gains Taxes:</strong> Computed on qualified dividends and capital gains distributions from taxable accounts using preferential long-term capital gains tax brackets.</li>
+                            <li><strong>Early Withdrawal Penalties:</strong> Includes the 10% IRS penalty on early non-exempt pre-tax distributions taken prior to age 59½.</li>
+                            <li><strong>Specified Additional Taxes:</strong> Any custom recurring or lump-sum taxes entered in your plan.</li>
                         </ul>
                     </div>
                 </div>

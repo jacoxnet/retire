@@ -774,6 +774,7 @@ def results_view(request):
         "user_age_death": data.get('user_age_death', 90),
         "spouse_age_death": data.get('spouse_age_death', 90),
         "is_married": data.get('is_married', False),
+        "desired_spending_start_age": det_rows[0].get('desired_spending_start_age', data.get('user_retirement_age', 65)) if det_rows else data.get('user_retirement_age', 65),
         "det_rows": det_rows,
         "pretax_assets": data.get('pretax_assets', {}),
         "spouse_pretax_assets": data.get('spouse_pretax_assets', {}),

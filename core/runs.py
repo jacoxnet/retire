@@ -2533,6 +2533,7 @@ def run_deterministic(sim_input):
         if t == years - 1 and terminal_life_ins_estate > 0:
             milestones.append(f"Life Insurance Payout to Estate / Heirs (+${terminal_life_ins_estate:,.0f})")
 
+        is_spending_active = (user_age_t >= inputs['desired_spending_start_age'])
         rows.append({
             'year_index': t,
             'year': year,
@@ -2540,6 +2541,8 @@ def run_deterministic(sim_input):
             'spouse_age': spouse_age_t if inputs['is_married'] else None,
             'user_alive': user_alive,
             'spouse_alive': spouse_alive,
+            'is_spending_active': is_spending_active,
+            'desired_spending_start_age': inputs['desired_spending_start_age'],
             'milestones': milestones,
             'beg_assets': res['beginning_assets'],
             'contribs': res['contributions'],
