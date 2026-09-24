@@ -2111,6 +2111,108 @@ class RetirementCalculationTests(TestCase):
         self.assertGreater(pen_b, 0.0)
         self.assertAlmostEqual(pen_b, 0.10 * w_pre_b, places=1)
 
+    def _withdraw(self, user_age, spouse_age=None, pretax_user=0.0, pretax_spouse=0.0, roth=0.0,
+                  hsa_user=0.0, hsa_spouse=0.0, hsa_user_medical=True, hsa_spouse_medical=True,
+                  spending=30000.0):
+        """Run one year of the withdrawal kernel with no income, taxable assets or state tax."""
+        from core.runs import njit_rmd_tax_withdraw
+        married = spouse_age is not None
+        res = njit_rmd_tax_withdraw(
+            user_age, spouse_age if married else user_age, True, married, married,
+            pretax_user, pretax_spouse, pretax_user, pretax_spouse,
+            roth, 0.0, hsa_user, hsa_spouse,
+            75, 75, 1 if married else 0, 1.0,
+            spending, 0.0, 0.0, 0.0, 0.0, 0.0, 0,
+            1 if hsa_user_medical else 0, 1 if hsa_spouse_medical else 0
+        )
+        keys = ['pretax_user_end', 'pretax_spouse_end', 'roth_end', 'taxable_end', 'hsa_user_end', 'hsa_spouse_end',
+                'user_rmd', 'spouse_rmd', 'w_pretax', 'w_taxable', 'w_roth', 'w_hsa_user', 'w_hsa_spouse',
+                'fed_tax', 'state_tax', 'penalty', 'hsa_penalty_user', 'hsa_penalty_spouse', 'shortfall']
+        return dict(zip(keys, res))
+
+    def assertNetCashCoversSpending(self, r, spending=30000.0):
+        withdrawn = r['w_pretax'] + r['w_roth'] + r['w_hsa_user'] + r['w_hsa_spouse']
+        self.assertAlmostEqual(withdrawn - (r['fed_tax'] + r['state_tax'] + r['penalty']), spending, delta=1.0)
+        self.assertEqual(r['shortfall'], 0.0)
+
+    def test_penalized_pretax_deferred_after_roth_and_medical_hsa(self):
+        r = self._withdraw(55, pretax_user=100000.0, roth=20000.0, hsa_user=50000.0, hsa_user_medical=True)
+        self.assertAlmostEqual(r['w_roth'], 20000.0)
+        self.assertAlmostEqual(r['w_hsa_user'], 10000.0)
+        self.assertEqual(r['w_pretax'], 0.0)
+        self.assertEqual(r['penalty'], 0.0)
+
+    def test_penalized_pretax_taken_before_penalized_hsa(self):
+        r = self._withdraw(55, pretax_user=100000.0, roth=20000.0, hsa_user=50000.0, hsa_user_medical=False)
+        self.assertAlmostEqual(r['w_roth'], 20000.0)
+        self.assertGreater(r['w_pretax'], 10000.0)
+        self.assertEqual(r['w_hsa_user'], 0.0)
+        self.assertAlmostEqual(r['penalty'], 0.10 * r['w_pretax'], places=4)
+        self.assertNetCashCoversSpending(r)
+
+    def test_pretax_after_59_and_half_keeps_original_order(self):
+        r = self._withdraw(60, pretax_user=100000.0, roth=20000.0, hsa_user=50000.0, hsa_user_medical=True)
+        self.assertEqual(r['w_roth'], 0.0)
+        self.assertEqual(r['w_hsa_user'], 0.0)
+        self.assertGreater(r['w_pretax'], 30000.0 - 1.0)
+        self.assertEqual(r['penalty'], 0.0)
+        self.assertNetCashCoversSpending(r)
+
+    def test_pretax_split_by_owner_when_only_spouse_under_59_and_half(self):
+        # User 62 (penalty-free) pretax stays ahead of Roth; spouse 50 pretax waits until after Roth.
+        r = self._withdraw(62, spouse_age=50, pretax_user=100000.0, pretax_spouse=100000.0, roth=50000.0)
+        self.assertGreater(r['w_pretax'], 0.0)
+        self.assertEqual(r['pretax_spouse_end'], 100000.0)
+        self.assertEqual(r['w_roth'], 0.0)
+        self.assertEqual(r['penalty'], 0.0)
+
+        r = self._withdraw(62, spouse_age=50, pretax_user=10000.0, pretax_spouse=100000.0, roth=50000.0)
+        self.assertAlmostEqual(r['w_pretax'], 10000.0)
+        self.assertEqual(r['pretax_user_end'], 0.0)
+        self.assertEqual(r['pretax_spouse_end'], 100000.0)
+        self.assertGreater(r['w_roth'], 0.0)
+        self.assertEqual(r['penalty'], 0.0)
+        self.assertNetCashCoversSpending(r)
+
+    def test_penalized_pretax_between_penalty_free_and_penalized_hsa(self):
+        # Roth -> medical user HSA -> penalized pretax -> penalized (non-medical, under 65) spouse HSA
+        r = self._withdraw(50, spouse_age=50, pretax_user=100000.0, roth=5000.0,
+                           hsa_user=5000.0, hsa_user_medical=True,
+                           hsa_spouse=50000.0, hsa_spouse_medical=False)
+        self.assertAlmostEqual(r['w_roth'], 5000.0)
+        self.assertAlmostEqual(r['w_hsa_user'], 5000.0)
+        self.assertGreater(r['w_pretax'], 20000.0)
+        self.assertEqual(r['w_hsa_spouse'], 0.0)
+        self.assertAlmostEqual(r['penalty'], 0.10 * r['w_pretax'], places=4)
+        self.assertNetCashCoversSpending(r)
+
+    def test_penalized_pretax_gross_up_includes_earlier_taxable_hsa(self):
+        # Spouse 66 non-medical HSA is taxable but penalty-free, so it comes before user's penalized pretax.
+        r = self._withdraw(50, spouse_age=66, pretax_user=100000.0,
+                           hsa_spouse=10000.0, hsa_spouse_medical=False)
+        self.assertAlmostEqual(r['w_hsa_spouse'], 10000.0)
+        self.assertEqual(r['hsa_penalty_spouse'], 0.0)
+        self.assertGreater(r['w_pretax'], 0.0)
+        self.assertAlmostEqual(r['penalty'], 0.10 * r['w_pretax'], places=4)
+        self.assertNetCashCoversSpending(r)
+
+    def test_hsa_order_unchanged_without_penalized_pretax(self):
+        # No pretax to defer: user HSA (non-medical, under 65) is still drawn before spouse HSA.
+        r = self._withdraw(55, spouse_age=55, hsa_user=50000.0, hsa_user_medical=False,
+                           hsa_spouse=50000.0, hsa_spouse_medical=True)
+        self.assertGreater(r['w_hsa_user'], 30000.0)
+        self.assertEqual(r['w_hsa_spouse'], 0.0)
+
+    def test_medical_hsa_withdrawal_not_taxed_with_later_nonmedical_hsa(self):
+        # Medical user HSA covers part of the need tax-free; only the spouse's non-medical HSA is income.
+        r = self._withdraw(70, spouse_age=70, hsa_user=10000.0, hsa_user_medical=True,
+                           hsa_spouse=100000.0, hsa_spouse_medical=False)
+        self.assertAlmostEqual(r['w_hsa_user'], 10000.0)
+        # $20k of non-medical HSA income is under the joint standard deduction, so no tax
+        self.assertAlmostEqual(r['w_hsa_spouse'], 20000.0, delta=1.0)
+        self.assertEqual(r['fed_tax'], 0.0)
+        self.assertNetCashCoversSpending(r)
+
     def test_social_security_survivor_claiming_minimum_age_60(self):
         """Verify surviving spouse does not receive deceased spouse's Social Security benefit before age 60."""
         from core.runs import extract_sim_inputs, run_deterministic
