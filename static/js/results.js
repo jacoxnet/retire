@@ -889,3 +889,62 @@ const userStartAge = chartConfig.user_start_age ?? 60;
             }
         }
     });
+
+// Deterministic Projection / Cash Flow tables: position hover tooltips with
+// position: fixed so they are not clipped by the scrollable .table-container
+// and appear in front of the sticky table header.
+document.addEventListener('DOMContentLoaded', function() {
+    const GAP = 8;
+    const MARGIN = 4;
+    let active = null;
+
+    function place(trigger, tip) {
+        tip.classList.add('tooltip-fixed');
+        tip.classList.remove('tooltip-below');
+        const r = trigger.getBoundingClientRect();
+        const w = tip.offsetWidth;
+        const h = tip.offsetHeight;
+        const vw = document.documentElement.clientWidth;
+        const vh = document.documentElement.clientHeight;
+
+        let left = tip.classList.contains('tooltip-content-right-align')
+            ? r.right - w
+            : r.left + r.width / 2 - w / 2;
+        left = Math.max(MARGIN, Math.min(left, vw - w - MARGIN));
+
+        let top = r.top - h - GAP;
+        if (top < MARGIN && r.bottom + GAP + h <= vh - MARGIN) {
+            top = r.bottom + GAP;
+            tip.classList.add('tooltip-below');
+        }
+        // setProperty with 'important' so .tooltip-content-right-align's
+        // !important left/right rules don't override the computed position.
+        tip.style.setProperty('left', left + 'px', 'important');
+        tip.style.setProperty('right', 'auto', 'important');
+        tip.style.top = top + 'px';
+    }
+
+    function reset(tip) {
+        tip.classList.remove('tooltip-fixed', 'tooltip-below');
+        tip.style.removeProperty('left');
+        tip.style.removeProperty('right');
+        tip.style.top = '';
+    }
+
+    document.querySelectorAll('#projection .tooltip-trigger, #cashflow .tooltip-trigger').forEach(trigger => {
+        const tip = trigger.querySelector('.tooltip-content');
+        if (!tip) return;
+        trigger.addEventListener('mouseenter', () => {
+            active = { trigger, tip };
+            place(trigger, tip);
+        });
+        trigger.addEventListener('mouseleave', () => {
+            if (active && active.tip === tip) active = null;
+            reset(tip);
+        });
+    });
+
+    const reposition = () => { if (active) place(active.trigger, active.tip); };
+    window.addEventListener('scroll', reposition, { passive: true, capture: true });
+    window.addEventListener('resize', reposition);
+});

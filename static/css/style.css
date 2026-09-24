@@ -779,6 +779,28 @@ tbody tr:hover {
   opacity: 1;
 }
 
+/* Projection / Cash Flow tables: tooltips are positioned with position: fixed
+   (see results.js) so they escape the .table-container overflow clipping and
+   render in front of the sticky table header. The card hover lift must be off
+   here because a transform on an ancestor would re-anchor fixed positioning. */
+#projection .card:hover,
+#cashflow .card:hover {
+  transform: none;
+}
+
+.tooltip-content.tooltip-fixed {
+  position: fixed;
+  bottom: auto;
+  transform: none;
+  z-index: 1050;
+}
+
+.tooltip-content.tooltip-fixed.tooltip-below::after {
+  top: auto;
+  bottom: 100%;
+  border-color: transparent transparent var(--border-color) transparent;
+}
+
 /* Extra wizard and tab styling */
 .nav-pills .nav-link {
   color: var(--text-secondary);
@@ -1510,4 +1532,26 @@ tbody tr:hover {
 
 .reb-pct-input[type=number] {
   -moz-appearance: textfield;
+}
+/* Tax Assumptions modal: 10% wider than modal-lg, wrapping table cells */
+@media (min-width: 992px) {
+  .tax-assumptions-dialog {
+    max-width: 880px;
+  }
+}
+
+.tax-assumptions-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tax-assumptions-table th,
+.tax-assumptions-table td {
+  white-space: normal;
+  overflow-wrap: break-word;
+  padding: 0.6rem 0.75rem;
+}
+
+.tax-assumptions-table td .badge {
+  white-space: nowrap;
 }

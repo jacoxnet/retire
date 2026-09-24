@@ -761,7 +761,7 @@
                                 <i class="fa fa-sliders me-1 text-primary"></i> Tax Treatment & Cost Basis
                             </span>
                             <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" data-bs-toggle="modal" data-bs-target="#tier1TaxAssumptionsModal" title="Explain Tax Assumptions">
-                                <i class="fa fa-info-circle text-primary me-1"></i><span class="small fw-semibold">Tier 1 Assumptions</span>
+                                <i class="fa fa-info-circle text-primary me-1"></i><span class="small fw-semibold">Assumptions</span>
                             </button>
                         </div>
                         <div class="row g-2 mb-2">

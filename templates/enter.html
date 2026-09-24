@@ -1220,9 +1220,9 @@
     </div>
 </div>
 
-<!-- Tier 1 Tax Assumptions Explanation Modal -->
+<!-- Tax Assumptions Explanation Modal -->
 <div class="modal fade" id="tier1TaxAssumptionsModal" tabindex="-1" aria-labelledby="tier1TaxAssumptionsModalLabel" aria-hidden="true" style="z-index: 1065;">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable tax-assumptions-dialog">
         <div class="modal-content shadow-lg border-0 rounded-4">
             <div class="modal-header border-0 pb-0">
                 <div class="d-flex align-items-center">
@@ -1230,7 +1230,7 @@
                         <i class="fa fa-university fs-5"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title fw-bold text-dark mb-0" id="tier1TaxAssumptionsModalLabel">Taxable Account Tax Treatment (Tier 1 Smart Defaults)</h5>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="tier1TaxAssumptionsModalLabel">Taxable Account Tax Treatment (Smart Defaults)</h5>
                         <span class="small text-muted">How taxable brokerage and savings accounts generate annual taxes</span>
                     </div>
                 </div>
@@ -1247,15 +1247,15 @@
                     </div>
                 </div>
 
-                <h6 class="fw-bold text-dark mb-3"><i class="fa fa-sliders text-primary me-2"></i>Default Institutional Assumptions (Tier 1)</h6>
+                <h6 class="fw-bold text-dark mb-3"><i class="fa fa-sliders text-primary me-2"></i>Default Institutional Assumptions</h6>
                 <div class="table-responsive mb-4">
-                    <table class="table table-bordered align-middle small mb-0">
+                    <table class="table table-bordered align-middle small mb-0 tax-assumptions-table">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 25%;">Tax Event</th>
-                                <th style="width: 18%;">Tier 1 Default</th>
+                                <th style="width: 18%;">Tax Event</th>
+                                <th style="width: 16%;">Default</th>
                                 <th style="width: 20%;">Tax Treatment</th>
-                                <th style="width: 37%;">Rationale & Industry Benchmark</th>
+                                <th style="width: 46%;">Rationale & Industry Benchmark</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1293,7 +1293,7 @@
                     </table>
                 </div>
 
-                <div class="row g-3 mb-3">
+                <div class="row g-3 mb-0">
                     <div class="col-md-6">
                         <div class="card h-100 border rounded-3 p-3 bg-light">
                             <h6 class="fw-bold text-dark mb-2"><i class="fa fa-refresh text-success me-2"></i>Dynamic Basis Reinvestment</h6>
@@ -1313,17 +1313,6 @@
                                 <li><strong>Common Law States (Default: "No"):</strong> The engine applies a <strong>50% basis step-up</strong>, reflecting the deceased spouse's half of jointly owned property.</li>
                                 <li><strong>Community Property States ("Yes"):</strong> Married couples in community property states receive a <strong>100% full basis step-up</strong> to fair market value on both halves of community property (IRC § 1014(b)(6)), eliminating all prior unrealized capital gains at first death.</li>
                             </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="alert alert-secondary border-0 rounded-3 mb-0">
-                    <div class="d-flex">
-                        <i class="fa fa-pencil-square-o fs-5 me-2 mt-1 text-secondary"></i>
-                        <div class="small">
-                            <strong>Need custom assumptions? (Tier 2 Overrides)</strong><br>
-                            If you hold municipal bonds (tax-exempt), high-yield dividend funds, or concentrated single stock positions with low basis, 
-                            expand the <strong>"Tax Treatment & Cost Basis"</strong> drawer directly on any taxable account card to specify your exact yields and basis ratio.
                         </div>
                     </div>
                 </div>
