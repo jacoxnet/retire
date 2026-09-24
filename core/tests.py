@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 import numpy as np
@@ -95,6 +96,7 @@ class RetirementCalculationTests(TestCase):
     def test_session_clear_data_view(self):
         # Verify clear_data resets session data and redirects to enter
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = {'user_name': 'Custom User', 'user_age': 70}
         session.save()
 
@@ -105,6 +107,26 @@ class RetirementCalculationTests(TestCase):
         enter_response = self.client.get('/')
         self.assertEqual(enter_response.status_code, 200)
         self.assertEqual(self.client.session['simulation_data']['user_name'], 'John Doe')
+
+    def test_session_from_previous_server_run_is_reset(self):
+        # A session left in the database by an earlier server run starts over with defaults
+        session = self.client.session
+        session['server_run_id'] = 'previous-run'
+        session['simulation_data'] = {'user_name': 'Stale User', 'user_age': 70}
+        session.save()
+
+        self.client.get('/')
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'John Doe')
+        self.assertEqual(self.client.session['server_run_id'], settings.SERVER_RUN_ID)
+
+    def test_session_from_current_server_run_is_kept(self):
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        session['simulation_data'] = {'user_name': 'Current User', 'user_age': 70}
+        session.save()
+
+        self.client.get('/')
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'Current User')
 
     def test_enter_view_post_redirects_to_results(self):
         # Verify form submit redirects directly to results view
@@ -229,6 +251,7 @@ class RetirementCalculationTests(TestCase):
         # The redirect to /results/ triggers a full simulation; cap runs since
         # this test only checks the validation message and clamped session value.
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         sim_data = session['simulation_data']
         sim_data['runs'] = 50
         session['simulation_data'] = sim_data
@@ -289,6 +312,7 @@ class RetirementCalculationTests(TestCase):
         plan_data['runs'] = 50
 
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = plan_data
         session['data_version'] = 1
         session.save()
@@ -309,6 +333,7 @@ class RetirementCalculationTests(TestCase):
         plan_data['runs'] = 50
 
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = plan_data
         session['data_version'] = 1
         session.save()
@@ -345,6 +370,7 @@ class RetirementCalculationTests(TestCase):
 
         # 3. Test Goal-Seeking mode Results page
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         sim_data = session['simulation_data']
         sim_data['goal_seeking'] = True
         session['simulation_data'] = sim_data
@@ -463,6 +489,7 @@ class RetirementCalculationTests(TestCase):
 
     def test_enter_form_without_runs_preserves_loaded_session_runs(self):
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = {'user_name': 'James Kirk', 'runs': 25000}
         session.save()
 
@@ -487,6 +514,7 @@ class RetirementCalculationTests(TestCase):
 
     def test_reset_session_data(self):
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = {'user_name': 'Old Name', 'user_age': 99}
         session.save()
         
@@ -1948,6 +1976,7 @@ class RetirementCalculationTests(TestCase):
     def test_change_mode_view_updates_spouse_hsa_return(self):
         """Verify change_mode_view updates spouse_hsa_assets return_mean."""
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = {
             'is_married': True,
             'user_age': 60,
@@ -4895,6 +4924,7 @@ class OtherIncomeStartAgeTextTests(TestCase):
     def test_user_specified_start_age_text(self):
         from core.views import get_default_data
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         data = get_default_data()
         data.update({
             'begin_spending_age_type': 'user_specified',
@@ -4913,6 +4943,7 @@ class OtherIncomeStartAgeTextTests(TestCase):
     def test_married_spouse_retirement_text(self):
         from core.views import get_default_data
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         data = get_default_data()
         data.update({
             'is_married': True,
@@ -4933,6 +4964,7 @@ class OtherIncomeStartAgeTextTests(TestCase):
     def test_married_spouse_specified_text(self):
         from core.views import get_default_data
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         data = get_default_data()
         data.update({
             'is_married': True,
@@ -4953,6 +4985,7 @@ class OtherIncomeStartAgeTextTests(TestCase):
     def test_empty_specified_start_age_fallback_text(self):
         from core.views import get_default_data
         session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
         data = get_default_data()
         data.update({
             'begin_spending_age_type': 'user_specified',

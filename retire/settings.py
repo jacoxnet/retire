@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
+import uuid
 from pathlib import Path
 
 from django.utils.csp import CSP
@@ -47,6 +49,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'core.middleware.ServerRunSessionResetMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -125,6 +128,12 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 # Session settings - expire session on browser close so new sessions start clean
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 86400  # 24 hours
+
+# Identifies this server run. Sessions created under a previous run are reset
+# to default data (see core/middleware.py). Stored in the environment so the
+# runserver autoreloader's child process inherits the parent's ID, meaning code
+# reloads keep session data but a full restart starts fresh.
+SERVER_RUN_ID = os.environ.setdefault('RETIRE_SERVER_RUN_ID', uuid.uuid4().hex)
 
 # Content-Security-Policy: only same-origin scripts plus the exact CDN files the
 # templates load. Inline event handlers are not allowed; see static/js/actions.js.
