@@ -533,6 +533,48 @@
         const beginSpendingAgeType = document.getElementById('begin_spending_age_type');
         const beginSpendingSpecifiedGroup = document.getElementById('begin_spending_specified_group');
 
+        function updateOtherIncomeSpendingAgeText() {
+            var targetEl = document.getElementById('otherIncomeSpendingStartAgeText');
+            if (!targetEl) return;
+            var spendSelect = document.getElementById('begin_spending_age_type');
+            var val = spendSelect ? spendSelect.value : 'retirement';
+            var p = getPersonLabels();
+            var isMarried = p.isMarried;
+            var userName = p.userName;
+            var spouseName = p.spouseName;
+
+            var userRef = (isMarried && userName && userName !== 'You') ? userName + "'s " : "your ";
+            var userAgeRef = (isMarried && userName && userName !== 'You') ? userName + "'s age " : "your age ";
+            var spouseRef = (isMarried && spouseName && spouseName !== 'Spouse') ? spouseName + "'s " : "your spouse's ";
+            var spouseAgeRef = (isMarried && spouseName && spouseName !== 'Spouse') ? spouseName + "'s age " : "spouse's age ";
+
+            var text = "the Start Age for Retirement Spending";
+
+            if (val === 'retirement') {
+                text = userRef + "retirement age (" + userAgeRef + p.userRetAge + ")";
+            } else if (val === 'spouse_retirement') {
+                if (isMarried) {
+                    text = spouseRef + "retirement age (" + spouseAgeRef + p.spouseRetAge + ")";
+                } else {
+                    text = userRef + "retirement age (" + userAgeRef + p.userRetAge + ")";
+                }
+            } else if (val === 'user_specified' || val === 'specified') {
+                var specInput = document.getElementById('begin_spending_age_specified');
+                var specAge = specInput ? parseInt(specInput.value, 10) : NaN;
+                if (!isNaN(specAge) && specAge >= 18 && specAge <= 120) {
+                    text = userAgeRef + specAge;
+                }
+            } else if (val === 'spouse_specified') {
+                var specInput = document.getElementById('begin_spending_age_specified');
+                var specAge = specInput ? parseInt(specInput.value, 10) : NaN;
+                if (!isNaN(specAge) && specAge >= 18 && specAge <= 120) {
+                    text = spouseAgeRef + specAge;
+                }
+            }
+
+            targetEl.textContent = text;
+        }
+
         function toggleSpendingStartAge() {
             var val = beginSpendingAgeType.value;
             var isSpec = ['specified', 'user_specified', 'spouse_specified'].includes(val);
@@ -550,13 +592,16 @@
             if (specInput) {
                 updateAgeHelperBadge(specInput, val === 'spouse_specified');
             }
+            updateOtherIncomeSpendingAgeText();
         }
         beginSpendingAgeType.addEventListener('change', toggleSpendingStartAge);
         var beginSpendingAgeSpecInput = document.getElementById('begin_spending_age_specified');
         if (beginSpendingAgeSpecInput) {
             beginSpendingAgeSpecInput.addEventListener('input', function() {
                 updateAgeHelperBadge(this, beginSpendingAgeType.value === 'spouse_specified');
+                updateOtherIncomeSpendingAgeText();
             });
+            beginSpendingAgeSpecInput.addEventListener('change', updateOtherIncomeSpendingAgeText);
         }
 
 
@@ -6248,6 +6293,7 @@
                     }
                 }
             });
+            updateOtherIncomeSpendingAgeText();
         }
 
         ['user_name', 'spouse_name', 'user_age', 'spouse_age', 'user_retirement_age', 'spouse_retirement_age', 'user_age_death', 'spouse_age_death', 'current_year'].forEach(function (id) {

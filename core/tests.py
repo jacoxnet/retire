@@ -4866,6 +4866,98 @@ class TaxableAccountTaxationTests(TestCase):
         self.assertAlmostEqual(py_ending_m, nb_ending_m, places=2)
 
 
+class OtherIncomeStartAgeTextTests(TestCase):
+    def test_default_enter_view_text(self):
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp,
+            "Enter pensions, annuity payments, consulting income, spouse's continuing income or other non-Social Security sources of non-portfolio income that will be received after"
+        )
+        self.assertContains(
+            resp,
+            '<span id="otherIncomeSpendingStartAgeText">your retirement age (your age 65)</span>'
+        )
+
+    def test_user_specified_start_age_text(self):
+        from core.views import get_default_data
+        session = self.client.session
+        data = get_default_data()
+        data.update({
+            'begin_spending_age_type': 'user_specified',
+            'begin_spending_age_specified': 60,
+            'user_retirement_age': 65,
+        })
+        session['simulation_data'] = data
+        session.save()
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp,
+            '<span id="otherIncomeSpendingStartAgeText">your age 60</span>'
+        )
+
+    def test_married_spouse_retirement_text(self):
+        from core.views import get_default_data
+        session = self.client.session
+        data = get_default_data()
+        data.update({
+            'is_married': True,
+            'user_name': 'Mike',
+            'spouse_name': 'Jane',
+            'begin_spending_age_type': 'spouse_retirement',
+            'spouse_retirement_age': 62,
+        })
+        session['simulation_data'] = data
+        session.save()
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp,
+            '<span id="otherIncomeSpendingStartAgeText">Jane\'s retirement age (Jane\'s age 62)</span>'
+        )
+
+    def test_married_spouse_specified_text(self):
+        from core.views import get_default_data
+        session = self.client.session
+        data = get_default_data()
+        data.update({
+            'is_married': True,
+            'user_name': 'Mike',
+            'spouse_name': 'Jane',
+            'begin_spending_age_type': 'spouse_specified',
+            'begin_spending_age_specified': 63,
+        })
+        session['simulation_data'] = data
+        session.save()
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp,
+            '<span id="otherIncomeSpendingStartAgeText">Jane\'s age 63</span>'
+        )
+
+    def test_empty_specified_start_age_fallback_text(self):
+        from core.views import get_default_data
+        session = self.client.session
+        data = get_default_data()
+        data.update({
+            'begin_spending_age_type': 'user_specified',
+            'begin_spending_age_specified': None,
+        })
+        session['simulation_data'] = data
+        session.save()
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp,
+            '<span id="otherIncomeSpendingStartAgeText">the Start Age for Retirement Spending</span>'
+        )
+
+
+
+
+
 
 
 
