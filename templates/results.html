@@ -312,10 +312,10 @@
                         <p class="text-secondary small mb-0">Assuming average asset class returns, with inflation and tax brackets indexed.</p>
                     </div>
                     <div class="btn-group" role="group" aria-label="Nominal/Real dollar toggle">
-                        <input type="radio" class="btn-check" name="proj_dollar_mode" id="proj_nominal" autocomplete="off" checked onclick="setDollarMode('nominal')">
+                        <input type="radio" class="btn-check" name="proj_dollar_mode" id="proj_nominal" autocomplete="off" checked data-on-click='["setDollarMode", "nominal"]'>
                         <label class="btn btn-outline-secondary btn-sm" for="proj_nominal">Nominal Dollars</label>
 
-                        <input type="radio" class="btn-check" name="proj_dollar_mode" id="proj_real" autocomplete="off" onclick="setDollarMode('real')">
+                        <input type="radio" class="btn-check" name="proj_dollar_mode" id="proj_real" autocomplete="off" data-on-click='["setDollarMode", "real"]'>
                         <label class="btn btn-outline-secondary btn-sm" for="proj_real">Real Dollars</label>
                     </div>
                 </div>
@@ -706,10 +706,10 @@
                         <p class="text-secondary small mb-0">Shows the year-by-year cash inflow, outflow, and net withdrawals from the portfolio.</p>
                     </div>
                     <div class="btn-group" role="group" aria-label="Nominal/Real dollar toggle">
-                        <input type="radio" class="btn-check" name="cf_dollar_mode" id="cf_nominal" autocomplete="off" checked onclick="setDollarMode('nominal')">
+                        <input type="radio" class="btn-check" name="cf_dollar_mode" id="cf_nominal" autocomplete="off" checked data-on-click='["setDollarMode", "nominal"]'>
                         <label class="btn btn-outline-secondary btn-sm" for="cf_nominal">Nominal Dollars</label>
 
-                        <input type="radio" class="btn-check" name="cf_dollar_mode" id="cf_real" autocomplete="off" onclick="setDollarMode('real')">
+                        <input type="radio" class="btn-check" name="cf_dollar_mode" id="cf_real" autocomplete="off" data-on-click='["setDollarMode", "real"]'>
                         <label class="btn btn-outline-secondary btn-sm" for="cf_real">Real Dollars</label>
                     </div>
                 </div>
@@ -1015,9 +1015,9 @@
                     <div class="d-flex align-items-center gap-3">
                         <span class="text-secondary small fw-bold">Display Mode:</span>
                         <div class="btn-group btn-group-sm" role="group" aria-label="Chart Dollar Mode">
-                            <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_nominal" value="nominal" checked onclick="setDollarMode('nominal')">
+                            <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_nominal" value="nominal" checked data-on-click='["setDollarMode", "nominal"]'>
                             <label class="btn btn-outline-primary" for="chart_nominal"><i class="fa fa-dollar-sign me-1"></i>Nominal</label>
-                            <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_real" value="real" onclick="setDollarMode('real')">
+                            <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_real" value="real" data-on-click='["setDollarMode", "real"]'>
                             <label class="btn btn-outline-primary" for="chart_real"><i class="fa fa-filter me-1"></i>Real (Inflation-Adjusted)</label>
                         </div>
                     </div>
@@ -1036,7 +1036,7 @@
                                 <small class="text-muted">Selected simulated portfolio paths over time</small>
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <select id="spaghettiPathCount" class="form-select form-select-sm" style="width: auto;" title="Number of paths to display" onchange="updateSpaghettiChart()">
+                                <select id="spaghettiPathCount" class="form-select form-select-sm" style="width: auto;" title="Number of paths to display" data-on-change='["updateSpaghettiChart"]'>
                                     <option value="10">10 Paths</option>
                                     <option value="25">25 Paths</option>
                                     <option value="50">50 Paths</option>
@@ -1044,7 +1044,7 @@
                                     <option value="250">250 Paths</option>
                                     <option value="500">500 Paths</option>
                                 </select>
-                                <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('spaghetti', '1. Spaghetti Chart of Monte Carlo Runs')" title="Click to enlarge">
+                                <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "spaghetti", "1. Spaghetti Chart of Monte Carlo Runs"]' title="Click to enlarge">
                                     <i class="fa fa-expand"></i>
                                 </button>
                             </div>
@@ -1067,7 +1067,7 @@
                                 </h5>
                                 <small class="text-muted">90th (Optimistic), 50th (Median), and 10th (Pessimistic) percentiles</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('trajectory', '2. Monte Carlo Wealth Trajectory')" title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "trajectory", "2. Monte Carlo Wealth Trajectory"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>
@@ -1089,7 +1089,7 @@
                                 </h5>
                                 <small class="text-muted">Pretax, Roth, Taxable, and HSA balances over time</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('assetBreakdown', '3. Stacked Asset Class Breakdown')" title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "assetBreakdown", "3. Stacked Asset Class Breakdown"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>
@@ -1111,7 +1111,7 @@
                                 </h5>
                                 <small class="text-muted">Inflows (SS, Pensions, Withdrawals) vs Outflows (Spending & Taxes)</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('incomeSpending', '4. Annual Income vs. Spending Sources')" title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "incomeSpending", "4. Annual Income vs. Spending Sources"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>
@@ -1133,7 +1133,7 @@
                                 </h5>
                                 <small class="text-muted">Year-by-year income taxes paid, highlighting RMD spikes</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" onclick="expandChart('taxLiability', '5. Lifetime Tax Liability & RMD Spikes')" title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "taxLiability", "5. Lifetime Tax Liability & RMD Spikes"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>

@@ -526,7 +526,7 @@
             var p = getPersonLabels();
             var offset = (isSpouseTarget && p.isMarried) ? (ageVal - p.spouseAge) : (ageVal - p.userAge);
             var calYear = p.currentYear + offset;
-            badge.innerHTML = `<i class="fa-regular fa-calendar me-1"></i>Year ${calYear}`;
+            badge.innerHTML = safeHtml`<i class="fa-regular fa-calendar me-1"></i>Year ${calYear}`;
         }
 
         // 2. Spending Start Age Specified Field Toggle
@@ -651,7 +651,7 @@
             var col = document.createElement('div');
             col.className = 'col-md-6 mb-4 account-card-col';
             col.dataset.accountId = id;
-            col.innerHTML = `
+            col.innerHTML = safeHtml`
                 <div class="card p-4 h-100 shadow-sm border account-card">
                     <input type="hidden" name="account_id[]" value="${id}">
                     <div class="d-flex justify-content-between align-items-start mb-3 pb-2 border-bottom">
@@ -1005,7 +1005,7 @@
             var p = getPersonLabels();
 
             var row = document.createElement('tr');
-            row.innerHTML = `
+            row.innerHTML = safeHtml`
                 <td>
                     <input type="text" class="form-control" name="add_spending_name[]" value="${name}" placeholder="e.g. Car, World Cruise" required style="min-width: 120px;">
                 </td>
@@ -1158,7 +1158,7 @@
             var pIndex = periodsContainer.children.length + 1;
             var pRow = document.createElement('div');
             pRow.className = 'p-2 mb-2 bg-light rounded border inc-period-row';
-            pRow.innerHTML = `
+            pRow.innerHTML = safeHtml`
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="badge bg-secondary period-badge">Period ${pIndex}</span>
                     <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btnDeletePeriod" title="Remove Period" style="display: ${canDelete ? 'inline-block' : 'none'};">
@@ -1293,7 +1293,7 @@
 
             var card = document.createElement('div');
             card.className = 'card border shadow-sm mb-3 income-stream-card';
-            card.innerHTML = `
+            card.innerHTML = safeHtml`
                 <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
                     <div class="d-flex align-items-center gap-2 flex-grow-1 me-3" style="max-width: 450px;">
                         <label class="form-label mb-0 fw-bold text-nowrap">Stream Name:</label>
@@ -1554,7 +1554,7 @@
 
             var card = document.createElement('div');
             card.className = 'card border shadow-sm mb-3 other-tax-card';
-            card.innerHTML = `
+            card.innerHTML = safeHtml`
                 <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
                     <div class="d-flex align-items-center gap-2 flex-grow-1 me-3" style="max-width: 450px;">
                         <label class="form-label mb-0 fw-bold text-nowrap">Tax Description:</label>
@@ -2055,6 +2055,10 @@
             serializeBalanceSheet();
         };
 
+        window.onBsTaxRateOverrideChange = function(el) {
+            if (el.value.trim() === '') resetBsMarginalTaxRateOverride();
+        };
+
         window.resetBsMarginalTaxRateOverride = function() {
             bsState.marginal_tax_rate_override = null;
             var autoRate = parseFloat(bsState.marginal_tax_rate) || 24.0;
@@ -2254,11 +2258,11 @@
                 var mStr = monthNames[monthIdx] || parts[1];
                 var dayStr = (parts.length >= 3 && parts[2]) ? parseInt(parts[2], 10) + ', ' : '';
                 var isCurrent = (p === bsState.current_period);
-                var dateHtml = '<div>' + mStr + ' ' + dayStr + year + delBtn + '</div>';
+                var dateHtml = '<div>' + escapeHtml(mStr) + ' ' + dayStr + escapeHtml(year) + delBtn + '</div>';
                 var badgeHtml = isCurrent ? '<div class="mt-1"><span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">Current</span></div>' : '';
                 return dateHtml + badgeHtml;
             }
-            return '<div>' + p + delBtn + '</div>';
+            return '<div>' + escapeHtml(p) + delBtn + '</div>';
         }
 
         function calcDelta(currVal, prevVal) {
@@ -2919,7 +2923,7 @@
             visPeriods.forEach(function(p, pIdx) {
                 var delBtn = '';
                 if (bsState.periods.length > 1 && pIdx < visPeriods.length - 1) {
-                    delBtn = ' <button type="button" class="btn btn-link btn-sm text-danger p-0 ms-1 text-decoration-none" title="Remove snapshot" onclick="removePeriodSnapshot(\'' + p + '\')"><i class="fa fa-times-circle"></i></button>';
+                    delBtn = ' <button type="button" class="btn btn-link btn-sm text-danger p-0 ms-1 text-decoration-none" title="Remove snapshot" ' + actionAttr('click', 'removePeriodSnapshot', String(p)) + '><i class="fa fa-times-circle"></i></button>';
                 }
                 hHtml += '<th class="text-end" style="min-width: 104px;">' + formatPeriodHeader(p, delBtn) + '</th>';
             });
@@ -2967,11 +2971,11 @@
                 var isCollapsed = !!bsState.collapsed_categories[catKey];
                 var accCount = (cat.accounts || []).length;
 
-                bHtml += '<tr class="bs-category-header clickable ' + (isCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'' + catKey + '\')">';
+                bHtml += '<tr class="bs-category-header clickable ' + (isCollapsed ? 'collapsed' : '') + '" ' + actionAttr('click', 'toggleBsCategory', String(catKey)) + '>';
                 bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
                 bHtml += '<div class="d-flex justify-content-between align-items-center">';
-                bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + cat.title + '<span class="bs-count-badge">' + accCount + ' ' + (accCount === 1 ? 'account' : 'accounts') + '</span></span>';
-                bHtml += '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="event.stopPropagation(); addBsAccount(\'' + catKey + '\')"><i class="fa fa-plus me-1"></i>' + addLabel + '</button>';
+                bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + escapeHtml(cat.title) + '<span class="bs-count-badge">' + accCount + ' ' + (accCount === 1 ? 'account' : 'accounts') + '</span></span>';
+                bHtml += '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" ' + actionAttr('click', 'addBsAccount', String(catKey)) + ' data-stop-click><i class="fa fa-plus me-1"></i>' + escapeHtml(addLabel) + '</button>';
                 bHtml += '</div>';
                 bHtml += '</td>';
                 bHtml += '</tr>';
@@ -2981,10 +2985,10 @@
                         cat.accounts.forEach(function(acc, aIdx) {
                             bHtml += '<tr>';
                             bHtml += '<td class="bs-sticky-col ps-4">';
-                            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsAccountFieldName(\'' + catKey + '\', ' + aIdx + ', this.value)" placeholder="Account Name">';
+                            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + escapeHtml((acc.name || '')) + '" ' + actionAttr('input', 'onBsAccountFieldName', String(catKey), aIdx, '$value') + ' placeholder="Account Name">';
                             bHtml += '</td>';
                             bHtml += '<td class="bs-inst-col">';
-                            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (acc.institution || '') + '" oninput="onBsAccountFieldInst(\'' + catKey + '\', ' + aIdx + ', this.value)" placeholder="Inst / Notes">';
+                            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + escapeHtml((acc.institution || '')) + '" ' + actionAttr('input', 'onBsAccountFieldInst', String(catKey), aIdx, '$value') + ' placeholder="Inst / Notes">';
                             bHtml += '</td>';
 
                             var accCurrVal = 0;
@@ -2996,21 +3000,21 @@
                                 if (p === prevPeriod) accPrevVal = val;
 
                                 bHtml += '<td class="text-end">';
-                                bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" oninput="onBsAccountValInput(this, \'' + catKey + '\', ' + aIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
+                                bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" ' + actionAttr('input', 'onBsAccountValInput', '$el', String(catKey), aIdx, String(p)) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
                                 bHtml += '</td>';
                             });
 
                             bHtml += '<td class="text-center"></td>';
                             bHtml += '<td class="text-center">';
-                            bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' onchange="onBsRetireCheck(\'' + catKey + '\', ' + aIdx + ', this.checked)">';
+                            bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' ' + actionAttr('change', 'onBsRetireCheck', String(catKey), aIdx, '$checked') + '>';
                             bHtml += '</td>';
                             bHtml += '<td class="text-center">';
-                            bHtml += '<button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete account" onclick="removeBsAccount(\'' + catKey + '\', ' + aIdx + ')"><i class="fa fa-trash-can"></i></button>';
+                            bHtml += '<button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete account" ' + actionAttr('click', 'removeBsAccount', String(catKey), aIdx) + '><i class="fa fa-trash-can"></i></button>';
                             bHtml += '</td>';
                             bHtml += '</tr>';
                         });
                     } else {
-                        bHtml += '<tr><td colspan="' + (visPeriods.length + 5) + '" class="text-muted small ps-4 py-2">No accounts in this category. Click "+ ' + addLabel + '" to add one.</td></tr>';
+                        bHtml += '<tr><td colspan="' + (visPeriods.length + 5) + '" class="text-muted small ps-4 py-2">No accounts in this category. Click "+ ' + escapeHtml(addLabel) + '" to add one.</td></tr>';
                     }
                 } else {
                     // Accumulate totals when collapsed
@@ -3030,11 +3034,11 @@
                     daily: 'Total Spending Accounts'
                 };
                 var subtotalTitle = catSubtotalLabels[catKey] || ('Subtotal ' + cat.title);
-                bHtml += '<tr class="bs-subtotal-row" id="subtotal_row_' + catKey + '">';
-                bHtml += '<td class="bs-sticky-col fw-bold ps-3">' + subtotalTitle + '</td>';
+                bHtml += '<tr class="bs-subtotal-row" id="subtotal_row_' + escapeHtml(catKey) + '">';
+                bHtml += '<td class="bs-sticky-col fw-bold ps-3">' + escapeHtml(subtotalTitle) + '</td>';
                 bHtml += '<td></td>';
                 visPeriods.forEach(function(p) {
-                    bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(catTotals[p]) + '</td>';
+                    bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + escapeHtml(p) + '">' + formatMoney(catTotals[p]) + '</td>';
                 });
                 bHtml += '<td class="text-center subtotal-delta"></td>';
                 bHtml += '<td colspan="2"></td>';
@@ -3052,9 +3056,9 @@
                     bHtml += '    <span>Est Deferred Income Tax</span>';
                     bHtml += '    <div class="d-inline-flex align-items-center" title="Combined Federal + State marginal tax rate. Edit to override, or clear to reset to automatic calculation.">';
                     bHtml += '      <span class="text-muted small me-1">(</span>';
-                    bHtml += '      <input type="number" step="0.1" min="0" max="99.9" class="form-control form-control-sm text-end px-1 py-0 fw-bold bs-tax-override-input ' + (hasOverride ? 'is-overridden' : '') + '" id="bsTaxRateOverrideInput" value="' + effRate.toFixed(1) + '" oninput="handleBsTaxRateOverrideInput(this)" onchange="if(this.value.trim()===\'\') resetBsMarginalTaxRateOverride();" title="Combined marginal rate. Type a custom percentage to override.">';
+                    bHtml += '      <input type="number" step="0.1" min="0" max="99.9" class="form-control form-control-sm text-end px-1 py-0 fw-bold bs-tax-override-input ' + (hasOverride ? 'is-overridden' : '') + '" id="bsTaxRateOverrideInput" value="' + effRate.toFixed(1) + '" ' + actionAttr('input', 'handleBsTaxRateOverrideInput', '$el') + ' ' + actionAttr('change', 'onBsTaxRateOverrideChange', '$el') + ' title="Combined marginal rate. Type a custom percentage to override.">';
                     bHtml += '      <span class="text-muted small ms-1">%)</span>';
-                    bHtml += '      <button type="button" class="btn btn-link btn-sm text-secondary p-0 ms-1 bs-tax-reset-btn" id="bsTaxRateResetBtn" title="Reset to auto-calculated rate (' + autoRate.toFixed(1) + '%)" style="display: ' + (hasOverride ? 'inline-block' : 'none') + '; text-decoration: none;" onclick="resetBsMarginalTaxRateOverride()">';
+                    bHtml += '      <button type="button" class="btn btn-link btn-sm text-secondary p-0 ms-1 bs-tax-reset-btn" id="bsTaxRateResetBtn" title="Reset to auto-calculated rate (' + autoRate.toFixed(1) + '%)" style="display: ' + (hasOverride ? 'inline-block' : 'none') + '; text-decoration: none;" ' + actionAttr('click', 'resetBsMarginalTaxRateOverride') + '>';
                     bHtml += '        <i class="fa-solid fa-arrow-rotate-left"></i>';
                     bHtml += '      </button>';
                     bHtml += '    </div>';
@@ -3063,7 +3067,7 @@
                     bHtml += '<td class="bs-inst-col small text-muted">Fed + State</td>';
                     visPeriods.forEach(function(p) {
                         var defTax = Math.round(catTotals[p] * taxRate);
-                        bHtml += '<td class="text-end text-danger small def-tax-val-' + p + '">(' + formatMoney(defTax) + ')</td>';
+                        bHtml += '<td class="text-end text-danger small def-tax-val-' + escapeHtml(p) + '">(' + formatMoney(defTax) + ')</td>';
                     });
                     bHtml += '<td class="text-center def-tax-delta"></td>';
                     bHtml += '<td colspan="2"></td>';
@@ -3074,7 +3078,7 @@
                     bHtml += '<td class="small text-muted">Purchasing power</td>';
                     visPeriods.forEach(function(p) {
                         var netPretax = Math.round(catTotals[p] * (1 - taxRate));
-                        bHtml += '<td class="text-end fw-bold text-success net-pretax-val-' + p + '">' + formatMoney(netPretax) + '</td>';
+                        bHtml += '<td class="text-end fw-bold text-success net-pretax-val-' + escapeHtml(p) + '">' + formatMoney(netPretax) + '</td>';
                     });
                     bHtml += '<td class="text-center net-pretax-delta"></td>';
                     bHtml += '<td colspan="2"></td>';
@@ -3114,21 +3118,21 @@
             var isEmgCollapsed = !!bsState.collapsed_categories['emergency'];
             var emgCount = (emgCat.accounts || []).length;
 
-            bHtml += '<tr class="bs-category-header clickable ' + (isEmgCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'emergency\')">';
+            bHtml += '<tr class="bs-category-header clickable ' + (isEmgCollapsed ? 'collapsed' : '') + '" ' + actionAttr('click', 'toggleBsCategory', 'emergency') + '>';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">';
             bHtml += '<div class="d-flex align-items-center gap-2">';
-            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + emgCat.title + '<span class="bs-count-badge">' + emgCount + ' ' + (emgCount === 1 ? 'account' : 'accounts') + '</span></span>';
-            bHtml += '<div class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded border small" onclick="event.stopPropagation()">';
+            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + escapeHtml(emgCat.title) + '<span class="bs-count-badge">' + emgCount + ' ' + (emgCount === 1 ? 'account' : 'accounts') + '</span></span>';
+            bHtml += '<div class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded border small" data-stop-click>';
             bHtml += '<span class="text-muted">Target Goal:</span>';
-            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 100px; height: 24px;" value="' + formatMoney(emgTargetBase) + '" oninput="onBsEmergencyTargetInput(this)" onblur="renderBalanceSheetTable()">';
-            bHtml += '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' + (emgCalc.autoInflate ? 'text-primary fw-bold' : 'text-secondary') + '" onclick="openTargetCpiModal(\'emergency\')" title="Configure CPI-U Inflation Adjustment"><i class="fa-solid fa-arrow-trend-up"></i></button>';
+            bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 100px; height: 24px;" value="' + formatMoney(emgTargetBase) + '" ' + actionAttr('input', 'onBsEmergencyTargetInput', '$el') + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
+            bHtml += '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' + (emgCalc.autoInflate ? 'text-primary fw-bold' : 'text-secondary') + '" ' + actionAttr('click', 'openTargetCpiModal', 'emergency') + ' title="Configure CPI-U Inflation Adjustment"><i class="fa-solid fa-arrow-trend-up"></i></button>';
             bHtml += '</div>';
             if (emgCalc.autoInflate) {
-                bHtml += '<span class="badge bg-primary-subtle text-primary border border-primary-subtle clickable py-1 px-2" onclick="event.stopPropagation(); openTargetCpiModal(\'emergency\')" title="Base Target ' + formatMoney(emgTargetBase) + ' (Ref Month: ' + emgCalc.baseMonth + ') adjusted by ' + (emgCalc.inflationPct >= 0 ? '+' : '') + emgCalc.inflationPct + '% CPI-U to ' + emgCalc.evalMonth + '"><i class="fa-solid fa-arrow-trend-up me-1"></i>CPI: ' + formatMoney(emgTarget) + ' (' + (emgCalc.inflationPct >= 0 ? '+' : '') + emgCalc.inflationPct + '%)</span>';
+                bHtml += '<span class="badge bg-primary-subtle text-primary border border-primary-subtle clickable py-1 px-2" ' + actionAttr('click', 'openTargetCpiModal', 'emergency') + ' data-stop-click title="Base Target ' + formatMoney(emgTargetBase) + ' (Ref Month: ' + escapeHtml(emgCalc.baseMonth) + ') adjusted by ' + (emgCalc.inflationPct >= 0 ? '+' : '') + emgCalc.inflationPct + '% CPI-U to ' + escapeHtml(emgCalc.evalMonth) + '"><i class="fa-solid fa-arrow-trend-up me-1"></i>CPI: ' + formatMoney(emgTarget) + ' (' + (emgCalc.inflationPct >= 0 ? '+' : '') + emgCalc.inflationPct + '%)</span>';
             }
             bHtml += '</div>';
-            bHtml += '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" onclick="event.stopPropagation(); addBsAccount(\'emergency\')"><i class="fa fa-plus me-1"></i>Add Emergency Account</button>';
+            bHtml += '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" ' + actionAttr('click', 'addBsAccount', 'emergency') + ' data-stop-click><i class="fa fa-plus me-1"></i>Add Emergency Account</button>';
             bHtml += '</div>';
             bHtml += '</td>';
             bHtml += '</tr>';
@@ -3137,10 +3141,10 @@
                 emgCat.accounts.forEach(function(acc, aIdx) {
                     bHtml += '<tr>';
                     bHtml += '<td class="bs-sticky-col ps-4">';
-                    bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsAccountFieldName(\'emergency\', ' + aIdx + ', this.value)" placeholder="Emergency Account Name">';
+                    bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + escapeHtml((acc.name || '')) + '" ' + actionAttr('input', 'onBsAccountFieldName', 'emergency', aIdx, '$value') + ' placeholder="Emergency Account Name">';
                     bHtml += '</td>';
                     bHtml += '<td class="bs-inst-col">';
-                    bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (acc.institution || '') + '" oninput="onBsAccountFieldInst(\'emergency\', ' + aIdx + ', this.value)" placeholder="HYSA / Bank">';
+                    bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + escapeHtml((acc.institution || '')) + '" ' + actionAttr('input', 'onBsAccountFieldInst', 'emergency', aIdx, '$value') + ' placeholder="HYSA / Bank">';
                     bHtml += '</td>';
 
                     var accCurrVal = 0;
@@ -3152,16 +3156,16 @@
                         if (p === prevPeriod) accPrevVal = val;
 
                         bHtml += '<td class="text-end">';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" oninput="onBsAccountValInput(this, \'emergency\', ' + aIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" ' + actionAttr('input', 'onBsAccountValInput', '$el', 'emergency', aIdx, String(p)) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
                         bHtml += '</td>';
                     });
 
                     bHtml += '<td class="text-center"></td>';
                     bHtml += '<td class="text-center">';
-                    bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' onchange="onBsRetireCheck(\'emergency\', ' + aIdx + ', this.checked)">';
+                    bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' ' + actionAttr('change', 'onBsRetireCheck', 'emergency', aIdx, '$checked') + '>';
                     bHtml += '</td>';
                     bHtml += '<td class="text-center">';
-                    bHtml += '<button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete account" onclick="removeBsAccount(\'emergency\', ' + aIdx + ')"><i class="fa fa-trash-can"></i></button>';
+                    bHtml += '<button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete account" ' + actionAttr('click', 'removeBsAccount', 'emergency', aIdx) + '><i class="fa fa-trash-can"></i></button>';
                     bHtml += '</td>';
                     bHtml += '</tr>';
                 });
@@ -3184,14 +3188,14 @@
             bHtml += '<td class="bs-sticky-col fw-bold ps-3">Total Emergency Funds</td>';
             bHtml += '<td id="emg_badge_container">';
             if (emgShortage > 0) {
-                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
+                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" ' + actionAttr('click', 'showGoalShortage', 'emergency') + '><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
             } else if (emgTarget > 0) {
                 var emgSurplusStr = emgSurplus > 0 ? ' (Surplus: ' + formatMoney(emgSurplus) + ')' : '';
-                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
+                bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" ' + actionAttr('click', 'showGoalShortage', 'emergency') + '><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
             }
             bHtml += '</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(emgTotals[p]) + '</td>';
+                bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + escapeHtml(p) + '">' + formatMoney(emgTotals[p]) + '</td>';
             });
             bHtml += '<td class="text-center subtotal-delta"></td>';
             bHtml += '<td colspan="2"></td>';
@@ -3209,11 +3213,11 @@
             var isGoalsCatCollapsed = !!bsState.collapsed_categories['goals'];
             var goalGroupCount = (goalsCat.goal_groups || []).length;
 
-            bHtml += '<tr class="bs-category-header clickable ' + (isGoalsCatCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'goals\')">';
+            bHtml += '<tr class="bs-category-header clickable ' + (isGoalsCatCollapsed ? 'collapsed' : '') + '" ' + actionAttr('click', 'toggleBsCategory', 'goals') + '>';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center">';
-            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + goalsCat.title + '<span class="bs-count-badge">' + goalGroupCount + ' ' + (goalGroupCount === 1 ? 'fund' : 'funds') + '</span></span>';
-            bHtml += '<button type="button" class="btn btn-outline-warning text-dark btn-sm py-0 px-2" onclick="event.stopPropagation(); addGoalGroup()"><i class="fa fa-plus me-1"></i>Add Sinking Fund / Goal</button>';
+            bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>' + escapeHtml(goalsCat.title) + '<span class="bs-count-badge">' + goalGroupCount + ' ' + (goalGroupCount === 1 ? 'fund' : 'funds') + '</span></span>';
+            bHtml += '<button type="button" class="btn btn-outline-warning text-dark btn-sm py-0 px-2" ' + actionAttr('click', 'addGoalGroup') + ' data-stop-click><i class="fa fa-plus me-1"></i>Add Sinking Fund / Goal</button>';
             bHtml += '</div>';
             bHtml += '</td>';
             bHtml += '</tr>';
@@ -3243,35 +3247,35 @@
 
                     if (!isGoalsCatCollapsed) {
                         // Goal Group Header Row (Target and Shortage/Surplus illustration inline side-by-side)
-                        bHtml += '<tr class="table-light clickable ' + (isGoalCollapsed ? 'collapsed' : '') + '" id="goal_group_row_' + gIdx + '" onclick="toggleBsGoalGroup(' + gIdx + ')">';
+                        bHtml += '<tr class="table-light clickable ' + (isGoalCollapsed ? 'collapsed' : '') + '" id="goal_group_row_' + gIdx + '" ' + actionAttr('click', 'toggleBsGoalGroup', gIdx) + '>';
                         bHtml += '<td class="bs-sticky-col ps-4 fw-semibold text-primary">';
                         bHtml += '<div class="d-flex align-items-center gap-1">';
                         bHtml += '<i class="fa fa-chevron-down bs-chevron-icon"></i>';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0 fw-semibold" style="height: 26px;" value="' + (group.name || '') + '" oninput="onBsGoalGroupName(' + gIdx + ', this.value)" onclick="event.stopPropagation()">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0 fw-semibold" style="height: 26px;" value="' + escapeHtml((group.name || '')) + '" ' + actionAttr('input', 'onBsGoalGroupName', gIdx, '$value') + ' data-stop-click>';
                         bHtml += '</div>';
                         bHtml += '</td>';
                         bHtml += '<td colspan="' + (visPeriods.length + 2) + '" class="py-2">';
-                        bHtml += '<div class="d-flex align-items-center flex-wrap gap-2" onclick="event.stopPropagation()">';
+                        bHtml += '<div class="d-flex align-items-center flex-wrap gap-2" data-stop-click>';
                         bHtml += '<div class="d-inline-flex align-items-center gap-1 bg-white px-2 py-1 rounded border small">';
                         bHtml += '<span class="small text-muted fw-medium">Target:</span>';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 95px; height: 24px;" value="' + formatMoney(gTargetBase) + '" oninput="onBsGoalTargetInput(this, ' + gIdx + ')" onblur="renderBalanceSheetTable()">';
-                        bHtml += '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' + (gCalc.autoInflate ? 'text-primary fw-bold' : 'text-secondary') + '" onclick="event.stopPropagation(); openTargetCpiModal(\'goal\', ' + gIdx + ')" title="Configure CPI-U Inflation Adjustment"><i class="fa-solid fa-arrow-trend-up"></i></button>';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input currency-input text-end py-0 fw-semibold" style="width: 95px; height: 24px;" value="' + formatMoney(gTargetBase) + '" ' + actionAttr('input', 'onBsGoalTargetInput', '$el', gIdx) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
+                        bHtml += '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' + (gCalc.autoInflate ? 'text-primary fw-bold' : 'text-secondary') + '" ' + actionAttr('click', 'openTargetCpiModal', 'goal', gIdx) + ' data-stop-click title="Configure CPI-U Inflation Adjustment"><i class="fa-solid fa-arrow-trend-up"></i></button>';
                         bHtml += '</div>';
                         if (gCalc.autoInflate) {
-                            bHtml += '<span class="badge bg-primary-subtle text-primary border border-primary-subtle clickable py-1 px-2" onclick="event.stopPropagation(); openTargetCpiModal(\'goal\', ' + gIdx + ')" title="Base Target ' + formatMoney(gTargetBase) + ' (Ref Month: ' + gCalc.baseMonth + ') adjusted by ' + (gCalc.inflationPct >= 0 ? '+' : '') + gCalc.inflationPct + '% CPI-U to ' + gCalc.evalMonth + '"><i class="fa-solid fa-arrow-trend-up me-1"></i>CPI: ' + formatMoney(gTarget) + ' (' + (gCalc.inflationPct >= 0 ? '+' : '') + gCalc.inflationPct + '%)</span>';
+                            bHtml += '<span class="badge bg-primary-subtle text-primary border border-primary-subtle clickable py-1 px-2" ' + actionAttr('click', 'openTargetCpiModal', 'goal', gIdx) + ' data-stop-click title="Base Target ' + formatMoney(gTargetBase) + ' (Ref Month: ' + escapeHtml(gCalc.baseMonth) + ') adjusted by ' + (gCalc.inflationPct >= 0 ? '+' : '') + gCalc.inflationPct + '% CPI-U to ' + escapeHtml(gCalc.evalMonth) + '"><i class="fa-solid fa-arrow-trend-up me-1"></i>CPI: ' + formatMoney(gTarget) + ' (' + (gCalc.inflationPct >= 0 ? '+' : '') + gCalc.inflationPct + '%)</span>';
                         }
                         bHtml += '<div id="goal_badge_container_' + gIdx + '" class="d-inline-flex align-items-center">';
                         if (gShortage > 0) {
-                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
+                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm" ' + actionAttr('click', 'showGoalShortage', 'goal', gIdx) + '><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
                         } else if (gTarget > 0) {
                             var surplusStr = gSurplus > 0 ? ' (Surplus: ' + formatMoney(gSurplus) + ')' : '';
-                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
+                            bHtml += '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" ' + actionAttr('click', 'showGoalShortage', 'goal', gIdx) + '><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
                         }
                         bHtml += '</div>';
                         bHtml += '</div>';
                         bHtml += '</td>';
-                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="Add account to this goal" onclick="event.stopPropagation(); addAccountToGoal(' + gIdx + ')"><i class="fa fa-plus"></i></button></td>';
-                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete goal group" onclick="event.stopPropagation(); removeGoalGroup(' + gIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
+                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="Add account to this goal" ' + actionAttr('click', 'addAccountToGoal', gIdx) + ' data-stop-click><i class="fa fa-plus"></i></button></td>';
+                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete goal group" ' + actionAttr('click', 'removeGoalGroup', gIdx) + ' data-stop-click><i class="fa fa-trash-can"></i></button></td>';
                         bHtml += '</tr>';
 
                         // Individual accounts under this goal
@@ -3279,10 +3283,10 @@
                             group.accounts.forEach(function(acc, aIdx) {
                                 bHtml += '<tr>';
                                 bHtml += '<td class="bs-sticky-col ps-5 text-muted">';
-                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + (acc.name || '') + '" oninput="onBsGoalAccountName(' + gIdx + ', ' + aIdx + ', this.value)" placeholder="Account Name (e.g. HYSA / Bond)">';
+                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input bs-acc-name-input" value="' + escapeHtml((acc.name || '')) + '" ' + actionAttr('input', 'onBsGoalAccountName', gIdx, aIdx, '$value') + ' placeholder="Account Name (e.g. HYSA / Bond)">';
                                 bHtml += '</td>';
                                 bHtml += '<td class="bs-inst-col">';
-                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (acc.institution || '') + '" oninput="onBsGoalAccountInst(' + gIdx + ', ' + aIdx + ', this.value)" placeholder="Institution">';
+                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + escapeHtml((acc.institution || '')) + '" ' + actionAttr('input', 'onBsGoalAccountInst', gIdx, aIdx, '$value') + ' placeholder="Institution">';
                                 bHtml += '</td>';
 
                                 var accCurrVal = 0;
@@ -3293,16 +3297,16 @@
                                     if (p === prevPeriod) accPrevVal = val;
 
                                     bHtml += '<td class="text-end">';
-                                    bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" oninput="onBsGoalAccountValInput(this, ' + gIdx + ', ' + aIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
+                                    bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" ' + actionAttr('input', 'onBsGoalAccountValInput', '$el', gIdx, aIdx, String(p)) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
                                     bHtml += '</td>';
                                 });
 
                                 bHtml += '<td class="text-center"></td>';
                                 bHtml += '<td class="text-center">';
-                                bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' onchange="onBsGoalRetireCheck(' + gIdx + ', ' + aIdx + ', this.checked)">';
+                                bHtml += '<input type="checkbox" class="form-check-input" ' + (acc.include_in_retirement ? 'checked' : '') + ' ' + actionAttr('change', 'onBsGoalRetireCheck', gIdx, aIdx, '$checked') + '>';
                                 bHtml += '</td>';
                                 bHtml += '<td class="text-center">';
-                                bHtml += '<button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete account" onclick="removeAccountFromGoal(' + gIdx + ', ' + aIdx + ')"><i class="fa fa-trash-can"></i></button>';
+                                bHtml += '<button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete account" ' + actionAttr('click', 'removeAccountFromGoal', gIdx, aIdx) + '><i class="fa fa-trash-can"></i></button>';
                                 bHtml += '</td>';
                                 bHtml += '</tr>';
                             });
@@ -3316,7 +3320,7 @@
             bHtml += '<td class="bs-sticky-col fw-bold ps-3">Total Sinking Fund Savings</td>';
             bHtml += '<td></td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + p + '">' + formatMoney(totalGoalsByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end fw-bold text-dark subtotal-val-' + escapeHtml(p) + '">' + formatMoney(totalGoalsByPeriod[p]) + '</td>';
             });
             bHtml += '<td class="text-center subtotal-delta"></td>';
             bHtml += '<td colspan="2"></td>';
@@ -3347,7 +3351,7 @@
             bHtml += '<td class="bs-sticky-col ps-3 text-primary">Liquid Net Worth (net of estimated deferred income tax and savings goal savings)</td>';
             bHtml += '<td class="small text-muted">Excl. def. tax & sinking funds</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end text-primary fw-bold liquid-net-goals-val-' + p + '">' + formatMoney(liquidNetTaxAndGoalsByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end text-primary fw-bold liquid-net-goals-val-' + escapeHtml(p) + '">' + formatMoney(liquidNetTaxAndGoalsByPeriod[p]) + '</td>';
             });
             var lngDelta = calcDelta(liquidNetTaxAndGoalsByPeriod[currPeriod], liquidNetTaxAndGoalsByPeriod[prevPeriod]);
             bHtml += '<td class="text-center liquid-net-goals-delta">' + formatDeltaBadge(lngDelta) + '</td>';
@@ -3359,7 +3363,7 @@
             bHtml += '<td class="bs-sticky-col ps-3 text-primary">Liquid Net Worth (net of estimated deferred income tax)</td>';
             bHtml += '<td class="small text-muted">Excl. deferred tax</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end text-primary fw-bold liquid-net-tax-val-' + p + '">' + formatMoney(liquidNetTaxByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end text-primary fw-bold liquid-net-tax-val-' + escapeHtml(p) + '">' + formatMoney(liquidNetTaxByPeriod[p]) + '</td>';
             });
             var lntDelta = calcDelta(liquidNetTaxByPeriod[currPeriod], liquidNetTaxByPeriod[prevPeriod]);
             bHtml += '<td class="text-center liquid-net-tax-delta">' + formatDeltaBadge(lntDelta) + '</td>';
@@ -3371,7 +3375,7 @@
             bHtml += '<td class="bs-sticky-col ps-3 text-primary">GROSS LIQUID NET WORTH</td>';
             bHtml += '<td class="small text-muted">Total liquid assets</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end text-primary fw-bold liquid-val-' + p + '">' + formatMoney(liquidByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end text-primary fw-bold liquid-val-' + escapeHtml(p) + '">' + formatMoney(liquidByPeriod[p]) + '</td>';
             });
             var liquidDelta = calcDelta(liquidByPeriod[currPeriod], liquidByPeriod[prevPeriod]);
             bHtml += '<td class="text-center liquid-delta">' + formatDeltaBadge(liquidDelta) + '</td>';
@@ -3386,11 +3390,11 @@
             var isReCollapsed = !!bsState.collapsed_categories['real_estate'];
             var propCount = (reCat.properties || []).length;
 
-            bHtml += '<tr class="bs-category-header clickable ' + (isReCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'real_estate\')">';
+            bHtml += '<tr class="bs-category-header clickable ' + (isReCollapsed ? 'collapsed' : '') + '" ' + actionAttr('click', 'toggleBsCategory', 'real_estate') + '>';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center">';
             bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>Real Estate & Home Equity<span class="bs-count-badge">' + propCount + ' ' + (propCount === 1 ? 'property' : 'properties') + '</span></span>';
-            bHtml += '<button type="button" class="btn btn-outline-info text-dark btn-sm py-0 px-2" onclick="event.stopPropagation(); addProperty()"><i class="fa fa-plus me-1"></i>Add Property</button>';
+            bHtml += '<button type="button" class="btn btn-outline-info text-dark btn-sm py-0 px-2" ' + actionAttr('click', 'addProperty') + ' data-stop-click><i class="fa fa-plus me-1"></i>Add Property</button>';
             bHtml += '</div>';
             bHtml += '</td>';
             bHtml += '</tr>';
@@ -3409,19 +3413,19 @@
                     if (!isReCollapsed) {
                         bHtml += '<tr>';
                         bHtml += '<td class="bs-sticky-col ps-4">';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + (prop.name || 'Primary Residence') + '" oninput="onBsPropName(' + pIdx + ', this.value)">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + escapeHtml((prop.name || 'Primary Residence')) + '" ' + actionAttr('input', 'onBsPropName', pIdx, '$value') + '>';
                         bHtml += '</td>';
                         bHtml += '<td class="bs-inst-col small text-muted">Est. Market Value</td>';
 
                         visPeriods.forEach(function(p) {
                             var val = (prop.market_values && prop.market_values[p] !== undefined) ? prop.market_values[p] : 0.0;
                             bHtml += '<td class="text-end">';
-                            bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" oninput="onBsPropMarketVal(this, ' + pIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
+                            bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end" value="' + formatMoney(val) + '" ' + actionAttr('input', 'onBsPropMarketVal', '$el', pIdx, String(p)) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
                             bHtml += '</td>';
                         });
                         bHtml += '<td class="text-center"></td>';
-                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="Add mortgage" onclick="addMortgageToProp(' + pIdx + ')"><i class="fa fa-plus me-1"></i>Mortgage</button></td>';
-                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete property" onclick="removeProperty(' + pIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
+                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="Add mortgage" ' + actionAttr('click', 'addMortgageToProp', pIdx) + '><i class="fa fa-plus me-1"></i>Mortgage</button></td>';
+                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete property" ' + actionAttr('click', 'removeProperty', pIdx) + '><i class="fa fa-trash-can"></i></button></td>';
                         bHtml += '</tr>';
                     }
 
@@ -3439,19 +3443,19 @@
                             if (!isReCollapsed) {
                                 bHtml += '<tr>';
                                 bHtml += '<td class="bs-sticky-col ps-5 text-muted small">';
-                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0" style="height: 24px;" value="' + (m.name || 'Mortgage') + '" oninput="onBsMortgageName(' + pIdx + ', ' + mIdx + ', this.value)">';
+                                bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input py-0" style="height: 24px;" value="' + escapeHtml((m.name || 'Mortgage')) + '" ' + actionAttr('input', 'onBsMortgageName', pIdx, mIdx, '$value') + '>';
                                 bHtml += '</td>';
                                 bHtml += '<td class="bs-inst-col small text-danger">Less: Mortgage</td>';
 
                                 visPeriods.forEach(function(p) {
                                     var val = (m.balances && m.balances[p] !== undefined) ? m.balances[p] : 0.0;
                                     bHtml += '<td class="text-end text-danger">';
-                                    bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end text-danger" value="' + formatMoney(val) + '" oninput="onBsMortgageVal(this, ' + pIdx + ', ' + mIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
+                                    bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end text-danger" value="' + formatMoney(val) + '" ' + actionAttr('input', 'onBsMortgageVal', '$el', pIdx, mIdx, String(p)) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
                                     bHtml += '</td>';
                                 });
                                 bHtml += '<td class="text-center"></td>';
                                 bHtml += '<td></td>';
-                                bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete mortgage" onclick="removeMortgageFromProp(' + pIdx + ', ' + mIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
+                                bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete mortgage" ' + actionAttr('click', 'removeMortgageFromProp', pIdx, mIdx) + '><i class="fa fa-trash-can"></i></button></td>';
                                 bHtml += '</tr>';
                             }
                         });
@@ -3468,7 +3472,7 @@
             bHtml += '<td class="bs-sticky-col fw-bold ps-3 text-info">NET HOME EQUITY</td>';
             bHtml += '<td class="small text-muted">Market Value − Mortgages</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end fw-bold text-info equity-val-' + p + '">' + formatMoney(netEquityByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end fw-bold text-info equity-val-' + escapeHtml(p) + '">' + formatMoney(netEquityByPeriod[p]) + '</td>';
             });
             bHtml += '<td class="text-center equity-delta"></td>';
             bHtml += '<td colspan="2"></td>';
@@ -3480,11 +3484,11 @@
             var isDebtsCollapsed = !!bsState.collapsed_categories['debts'];
             var debtCount = debtsList.length;
 
-            bHtml += '<tr class="bs-category-header clickable ' + (isDebtsCollapsed ? 'collapsed' : '') + '" onclick="toggleBsCategory(\'debts\')">';
+            bHtml += '<tr class="bs-category-header clickable ' + (isDebtsCollapsed ? 'collapsed' : '') + '" ' + actionAttr('click', 'toggleBsCategory', 'debts') + '>';
             bHtml += '<td colspan="' + (visPeriods.length + 5) + '">';
             bHtml += '<div class="d-flex justify-content-between align-items-center">';
             bHtml += '<span><i class="fa fa-chevron-down bs-chevron-icon"></i>Debts & Liabilities (Non-Mortgage)<span class="bs-count-badge">' + debtCount + ' ' + (debtCount === 1 ? 'account' : 'accounts') + '</span></span>';
-            bHtml += '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="event.stopPropagation(); addDebtAccount()"><i class="fa fa-plus me-1"></i>Add Debt Account</button>';
+            bHtml += '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" ' + actionAttr('click', 'addDebtAccount') + ' data-stop-click><i class="fa fa-plus me-1"></i>Add Debt Account</button>';
             bHtml += '</div>';
             bHtml += '</td>';
             bHtml += '</tr>';
@@ -3503,21 +3507,21 @@
                     if (!isDebtsCollapsed) {
                         bHtml += '<tr>';
                         bHtml += '<td class="bs-sticky-col ps-4">';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + (d.name || '') + '" oninput="onBsDebtName(' + dIdx + ', this.value)" placeholder="Debt Name (e.g. Auto Loan)">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input" value="' + escapeHtml((d.name || '')) + '" ' + actionAttr('input', 'onBsDebtName', dIdx, '$value') + ' placeholder="Debt Name (e.g. Auto Loan)">';
                         bHtml += '</td>';
                         bHtml += '<td class="bs-inst-col">';
-                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + (d.institution || '') + '" oninput="onBsDebtInst(' + dIdx + ', this.value)" placeholder="Lender / Card">';
+                        bHtml += '<input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" value="' + escapeHtml((d.institution || '')) + '" ' + actionAttr('input', 'onBsDebtInst', dIdx, '$value') + ' placeholder="Lender / Card">';
                         bHtml += '</td>';
 
                         visPeriods.forEach(function(p) {
                             var val = (d.values && d.values[p] !== undefined) ? d.values[p] : 0.0;
                             bHtml += '<td class="text-end text-danger">';
-                            bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end text-danger" value="' + formatMoney(val) + '" oninput="onBsDebtVal(this, ' + dIdx + ', \'' + p + '\')" onblur="renderBalanceSheetTable()">';
+                            bHtml += '<input type="text" class="form-control form-control-sm bs-input-val bs-seamless-input currency-input text-end text-danger" value="' + formatMoney(val) + '" ' + actionAttr('input', 'onBsDebtVal', '$el', dIdx, String(p)) + ' ' + actionAttr('blur', 'renderBalanceSheetTable') + '>';
                             bHtml += '</td>';
                         });
                         bHtml += '<td class="text-center"></td>';
                         bHtml += '<td></td>';
-                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete debt" onclick="removeDebtAccount(' + dIdx + ')"><i class="fa fa-trash-can"></i></button></td>';
+                        bHtml += '<td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete debt" ' + actionAttr('click', 'removeDebtAccount', dIdx) + '><i class="fa fa-trash-can"></i></button></td>';
                         bHtml += '</tr>';
                     }
                 });
@@ -3528,7 +3532,7 @@
             bHtml += '<td class="bs-sticky-col fw-bold ps-3 text-danger">Subtotal Non-Mortgage Debts</td>';
             bHtml += '<td></td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end fw-bold text-danger nonmort-debt-val-' + p + '">(' + formatMoney(debtsByPeriod[p]) + ')</td>';
+                bHtml += '<td class="text-end fw-bold text-danger nonmort-debt-val-' + escapeHtml(p) + '">(' + formatMoney(debtsByPeriod[p]) + ')</td>';
             });
             bHtml += '<td class="text-center nonmort-debt-delta"></td>';
             bHtml += '<td colspan="2"></td>';
@@ -3544,7 +3548,7 @@
             bHtml += '<td class="bs-sticky-col ps-3 text-danger">TOTAL DEBTS (Including Mortgages)</td>';
             bHtml += '<td class="small text-muted">All liabilities</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end text-danger fw-bold total-debts-val-' + p + '">(' + formatMoney(totalAllDebtsByPeriod[p]) + ')</td>';
+                bHtml += '<td class="text-end text-danger fw-bold total-debts-val-' + escapeHtml(p) + '">(' + formatMoney(totalAllDebtsByPeriod[p]) + ')</td>';
             });
             var totalDebtsDelta = calcDelta(totalAllDebtsByPeriod[currPeriod], totalAllDebtsByPeriod[prevPeriod]);
             bHtml += '<td class="text-center total-debts-delta">' + formatDebtDeltaBadge(totalDebtsDelta) + '</td>';
@@ -3562,7 +3566,7 @@
             bHtml += '<td class="bs-sticky-col ps-3 text-primary">GROSS NET WORTH</td>';
             bHtml += '<td class="small text-muted">Total Assets − Total Debts</td>';
             visPeriods.forEach(function(p) {
-                bHtml += '<td class="text-end text-primary fw-bold grand-net-worth-val-' + p + '">' + formatMoney(grandNetWorthByPeriod[p]) + '</td>';
+                bHtml += '<td class="text-end text-primary fw-bold grand-net-worth-val-' + escapeHtml(p) + '">' + formatMoney(grandNetWorthByPeriod[p]) + '</td>';
             });
             var grandDelta = calcDelta(grandNetWorthByPeriod[currPeriod], grandNetWorthByPeriod[prevPeriod]);
             bHtml += '<td class="text-center grand-net-worth-delta">' + formatDeltaBadge(grandDelta) + '</td>';
@@ -3728,10 +3732,10 @@
             if (emgBadgeCont) {
                 var emgHtml = '';
                 if (emgShortage > 0) {
-                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
+                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm" ' + actionAttr('click', 'showGoalShortage', 'emergency') + '><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(emgShortage) + '</button>';
                 } else if (emgTarget > 0) {
                     var emgSurplusStr = emgSurplus > 0 ? ' (Surplus: ' + formatMoney(emgSurplus) + ')' : '';
-                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'emergency\')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
+                    emgHtml = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" ' + actionAttr('click', 'showGoalShortage', 'emergency') + '><i class="fa fa-circle-check me-1"></i>Goal Reached!' + emgSurplusStr + '</button>';
                 }
                 emgBadgeCont.innerHTML = emgHtml;
             }
@@ -3758,10 +3762,10 @@
                 var badgeCont = document.getElementById('goal_badge_container_' + gIdx);
                 if (badgeCont) {
                     if (gShortage > 0) {
-                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
+                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm" ' + actionAttr('click', 'showGoalShortage', 'goal', gIdx) + '><i class="fa fa-triangle-exclamation me-1"></i>Remaining to reach goal: ' + formatMoney(gShortage) + '</button>';
                     } else if (gTarget > 0) {
                         var surplusStr = gSurplus > 0 ? ' (Surplus: ' + formatMoney(gSurplus) + ')' : '';
-                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" onclick="showGoalShortage(\'goal\', ' + gIdx + ')"><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
+                        badgeCont.innerHTML = '<button type="button" class="bs-shortage-btn shadow-sm bg-success-subtle text-success border border-success-subtle" ' + actionAttr('click', 'showGoalShortage', 'goal', gIdx) + '><i class="fa fa-circle-check me-1"></i>Goal Reached!' + surplusStr + '</button>';
                     } else {
                         badgeCont.innerHTML = '';
                     }
@@ -4756,7 +4760,7 @@
             if (Array.isArray(accountsList) && accountsList.length > 0) {
                 listHtml += '<div class="fw-semibold mb-1">Accounts contributing to this goal:</div><ul class="mb-0 ps-3">';
                 accountsList.forEach(function(item){
-                    listHtml += '<li>' + item + '</li>';
+                    listHtml += '<li>' + escapeHtml(item) + '</li>';
                 });
                 listHtml += '</ul>';
             }
@@ -4791,7 +4795,7 @@
                 return;
             }
 
-            document.getElementById('targetCpiModalLabel').innerHTML = '<i class="fa-solid fa-arrow-trend-up me-2"></i>' + title;
+            document.getElementById('targetCpiModalLabel').innerHTML = '<i class="fa-solid fa-arrow-trend-up me-2"></i>' + escapeHtml(title);
             document.getElementById('cpiModalTargetType').value = type;
             document.getElementById('cpiModalGoalIdx').value = (gIdx !== undefined && gIdx !== null) ? gIdx : '';
 
@@ -5132,11 +5136,11 @@
 
                 html += '<tr class="' + (isIncluded ? 'table-active-subtle' : 'opacity-75') + '">';
                 html += '<td class="text-center">';
-                html += '<input type="checkbox" class="form-check-input" style="cursor: pointer;" ' + (isIncluded ? 'checked' : '') + ' onchange="onRebAccountToggle(\'' + acc.id + '\', this.checked)">';
+                html += '<input type="checkbox" class="form-check-input" style="cursor: pointer;" ' + (isIncluded ? 'checked' : '') + ' ' + actionAttr('change', 'onRebAccountToggle', String(acc.id), '$checked') + '>';
                 html += '</td>';
-                html += '<td><strong class="text-dark">' + (acc.name || 'Account') + '</strong></td>';
-                html += '<td><span class="badge ' + badgeClass + '">' + acc.category_title + '</span></td>';
-                html += '<td class="text-secondary small">' + (acc.institution || '—') + '</td>';
+                html += '<td><strong class="text-dark">' + escapeHtml((acc.name || 'Account')) + '</strong></td>';
+                html += '<td><span class="badge ' + badgeClass + '">' + escapeHtml(acc.category_title) + '</span></td>';
+                html += '<td class="text-secondary small">' + escapeHtml((acc.institution || '—')) + '</td>';
                 html += '<td class="text-end fw-semibold">' + formatMoney(acc.balance) + '</td>';
                 html += '</tr>';
             });
@@ -5267,21 +5271,21 @@
                 var maxDol = targetPortfolioTotal * (maxPct / 100);
 
                 html += '<tr>';
-                html += '<td class="text-center"><span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span></td>';
-                html += '<td><input type="text" class="form-control form-control-sm fw-semibold" value="' + (ac.name || '') + '" onchange="onRebAssetClassNameChange(\'' + ac.id + '\', this.value)"></td>';
+                html += '<td class="text-center"><span class="reb-color-dot" style="background-color: ' + escapeHtml((ac.color || '#3b82f6')) + ';"></span></td>';
+                html += '<td><input type="text" class="form-control form-control-sm fw-semibold" value="' + escapeHtml((ac.name || '')) + '" ' + actionAttr('change', 'onRebAssetClassNameChange', String(ac.id), '$value') + '></td>';
                 html += '<td class="text-end">';
                 html += '<div class="input-group input-group-sm justify-content-end" style="max-width: 130px; margin-left: auto;">';
-                html += '<input type="text" inputmode="decimal" class="form-control text-end fw-bold reb-pct-input" value="' + (targetPct > 0 ? targetPct : 0) + '" id="rebTargetInput_' + ac.id + '" oninput="onRebAssetClassTargetInput(\'' + ac.id + '\', this.value)" onblur="onRebAssetClassTargetBlur(\'' + ac.id + '\', this)">';
+                html += '<input type="text" inputmode="decimal" class="form-control text-end fw-bold reb-pct-input" value="' + (targetPct > 0 ? targetPct : 0) + '" id="rebTargetInput_' + escapeHtml(ac.id) + '" ' + actionAttr('input', 'onRebAssetClassTargetInput', String(ac.id), '$value') + ' ' + actionAttr('blur', 'onRebAssetClassTargetBlur', String(ac.id), '$el') + '>';
                 html += '<span class="input-group-text px-2 bg-white text-muted small fw-semibold">%</span>';
                 html += '</div>';
                 html += '</td>';
-                html += '<td class="text-end fw-semibold text-primary" id="rebTargetDol_' + ac.id + '">' + formatMoney(targetDol) + '</td>';
+                html += '<td class="text-end fw-semibold text-primary" id="rebTargetDol_' + escapeHtml(ac.id) + '">' + formatMoney(targetDol) + '</td>';
                 html += '<td class="text-center">';
-                html += '<span class="badge bg-light text-dark border px-2 py-1 small" id="rebTargetCorridor_' + ac.id + '">' + minPct.toFixed(1) + '% – ' + maxPct.toFixed(1) + '% <span class="text-secondary fw-normal">(' + formatMoney(minDol) + ' – ' + formatMoney(maxDol) + ')</span></span>';
+                html += '<span class="badge bg-light text-dark border px-2 py-1 small" id="rebTargetCorridor_' + escapeHtml(ac.id) + '">' + minPct.toFixed(1) + '% – ' + maxPct.toFixed(1) + '% <span class="text-secondary fw-normal">(' + formatMoney(minDol) + ' – ' + formatMoney(maxDol) + ')</span></span>';
                 html += '</td>';
                 html += '<td class="text-center">';
                 if (rebState.asset_classes.length > 1) {
-                    html += '<button type="button" class="btn btn-link text-danger p-0 text-decoration-none" title="Delete asset class" onclick="deleteRebAssetClass(\'' + ac.id + '\')"><i class="fa fa-trash-can"></i></button>';
+                    html += '<button type="button" class="btn btn-link text-danger p-0 text-decoration-none" title="Delete asset class" ' + actionAttr('click', 'deleteRebAssetClass', String(ac.id)) + '><i class="fa fa-trash-can"></i></button>';
                 } else {
                     html += '<span class="text-muted small">—</span>';
                 }
@@ -5480,14 +5484,14 @@
                 else if (acc.category === 'taxable') badgeClass = 'bg-info text-dark';
                 else if (acc.category === 'hsa') badgeClass = 'bg-warning text-dark';
 
-                html += '<div class="reb-acc-card p-3 mb-3 ' + (is100 ? 'is-complete' : 'is-incomplete') + '" id="rebAccCard_' + acc.id + '">';
+                html += '<div class="reb-acc-card p-3 mb-3 ' + (is100 ? 'is-complete' : 'is-incomplete') + '" id="rebAccCard_' + escapeHtml(acc.id) + '">';
                 html += '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">';
                 html += '<div>';
                 html += '<div class="d-flex align-items-center gap-2">';
-                html += '<h5 class="mb-0 fw-bold text-dark">' + (acc.name || 'Account') + '</h5>';
-                html += '<span class="badge ' + badgeClass + '">' + acc.category_title + '</span>';
+                html += '<h5 class="mb-0 fw-bold text-dark">' + escapeHtml((acc.name || 'Account')) + '</h5>';
+                html += '<span class="badge ' + badgeClass + '">' + escapeHtml(acc.category_title) + '</span>';
                 if (acc.institution) {
-                    html += '<span class="small text-secondary fw-semibold">(' + acc.institution + ')</span>';
+                    html += '<span class="small text-secondary fw-semibold">(' + escapeHtml(acc.institution) + ')</span>';
                 }
                 html += '</div>';
                 html += '</div>';
@@ -5501,11 +5505,11 @@
 
                 // Quick Preset Dropdown
                 html += '<div style="min-width: 220px;">';
-                html += '<select class="form-select form-select-sm" onchange="applySingleAssetPreset(\'' + acc.id + '\', this.value)">';
+                html += '<select class="form-select form-select-sm" ' + actionAttr('change', 'applySingleAssetPreset', String(acc.id), '$value') + '>';
                 html += '<option value="">⚡ 1-Click Single Asset Preset...</option>';
                 rebState.asset_classes.forEach(function(ac) {
                     var isSole = (alloc[ac.id] === 100 || alloc[ac.id] === '100');
-                    html += '<option value="' + ac.id + '" ' + (isSole ? 'selected' : '') + '>100% ' + ac.name + '</option>';
+                    html += '<option value="' + escapeHtml(ac.id) + '" ' + (isSole ? 'selected' : '') + '>100% ' + escapeHtml(ac.name) + '</option>';
                 });
                 html += '</select>';
                 html += '</div>';
@@ -5521,30 +5525,30 @@
                     html += '<div class="col-12 col-md-6 col-lg-4">';
                     html += '<div class="p-2 rounded bg-light border d-flex align-items-center justify-content-between gap-2">';
                     html += '<div class="d-flex align-items-center gap-2 text-truncate me-1">';
-                    html += '<span class="reb-color-dot" style="background-color: ' + (ac.color || '#3b82f6') + ';"></span>';
-                    html += '<span class="small fw-semibold text-truncate" title="' + ac.name + '">' + ac.name + '</span>';
+                    html += '<span class="reb-color-dot" style="background-color: ' + escapeHtml((ac.color || '#3b82f6')) + ';"></span>';
+                    html += '<span class="small fw-semibold text-truncate" title="' + escapeHtml(ac.name) + '">' + escapeHtml(ac.name) + '</span>';
                     html += '</div>';
                     html += '<div class="d-flex align-items-center flex-shrink-0">';
                     html += '<div class="input-group input-group-sm" style="width: 115px;">';
-                    html += '<input type="text" inputmode="decimal" class="form-control form-control-sm text-end fw-bold reb-pct-input" value="' + (pct > 0 ? pct : 0) + '" oninput="onAccountAssetPercentInput(\'' + acc.id + '\', \'' + ac.id + '\', this.value)" onblur="onAccountAssetPercentBlur(\'' + acc.id + '\', \'' + ac.id + '\', this)">';
+                    html += '<input type="text" inputmode="decimal" class="form-control form-control-sm text-end fw-bold reb-pct-input" value="' + (pct > 0 ? pct : 0) + '" ' + actionAttr('input', 'onAccountAssetPercentInput', String(acc.id), String(ac.id), '$value') + ' ' + actionAttr('blur', 'onAccountAssetPercentBlur', String(acc.id), String(ac.id), '$el') + '>';
                     html += '<span class="input-group-text px-2 bg-white text-muted small fw-semibold">%</span>';
                     html += '</div>';
                     html += '</div>';
                     html += '</div>';
-                    html += '<div class="text-end text-muted small pe-1 mt-1" style="font-size: 0.75rem;" id="rebDolDisplay_' + acc.id + '_' + ac.id + '">' + formatMoney(dol) + '</div>';
+                    html += '<div class="text-end text-muted small pe-1 mt-1" style="font-size: 0.75rem;" id="rebDolDisplay_' + escapeHtml(acc.id) + '_' + escapeHtml(ac.id) + '">' + formatMoney(dol) + '</div>';
                     html += '</div>';
                 });
                 html += '</div>';
 
                 // Account Allocation Summary Footer
-                html += '<div class="d-flex flex-wrap justify-content-between align-items-center pt-2 border-top small" id="rebCardFooter_' + acc.id + '">';
+                html += '<div class="d-flex flex-wrap justify-content-between align-items-center pt-2 border-top small" id="rebCardFooter_' + escapeHtml(acc.id) + '">';
                 if (is100) {
                     html += '<div class="text-success fw-bold"><i class="fa fa-check-circle me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (100.0%)</div>';
                 } else if (totalAllocPct < 100) {
                     var remainPct = Math.round((100 - totalAllocPct) * 10) / 10;
                     var firstClsName = rebState.asset_classes[0] ? rebState.asset_classes[0].name : 'First Class';
                     html += '<div class="text-warning fw-bold"><i class="fa fa-triangle-exclamation me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-secondary">Remaining: ' + remainPct.toFixed(1) + '%</span></div>';
-                    html += '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="autoBalanceAccountRemaining(\'' + acc.id + '\', ' + remainPct + ')">Assign Remaining ' + remainPct.toFixed(1) + '% to ' + firstClsName + '</button>';
+                    html += '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" ' + actionAttr('click', 'autoBalanceAccountRemaining', String(acc.id), remainPct) + '>Assign Remaining ' + remainPct.toFixed(1) + '% to ' + escapeHtml(firstClsName) + '</button>';
                 } else {
                     html += '<div class="text-danger fw-bold"><i class="fa fa-circle-xmark me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-danger">Exceeds 100% by ' + (totalAllocPct - 100).toFixed(1) + '%</span></div>';
                 }
@@ -5593,7 +5597,7 @@
                     var remainPct = Math.round((100 - totalAllocPct) * 10) / 10;
                     var firstClsName = rebState.asset_classes[0] ? rebState.asset_classes[0].name : 'First Class';
                     footerEl.innerHTML = '<div class="text-warning fw-bold"><i class="fa fa-triangle-exclamation me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-secondary">Remaining: ' + remainPct.toFixed(1) + '%</span></div>' +
-                        '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="autoBalanceAccountRemaining(\'' + accId + '\', ' + remainPct + ')">Assign Remaining ' + remainPct.toFixed(1) + '% to ' + firstClsName + '</button>';
+                        '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" ' + actionAttr('click', 'autoBalanceAccountRemaining', String(accId), remainPct) + '>Assign Remaining ' + remainPct.toFixed(1) + '% to ' + escapeHtml(firstClsName) + '</button>';
                 } else {
                     footerEl.innerHTML = '<div class="text-danger fw-bold"><i class="fa fa-circle-xmark me-1"></i> Allocated: ' + formatMoney(allocatedDol) + ' of ' + formatMoney(acc.balance) + ' (' + totalAllocPct.toFixed(1) + '%) — <span class="text-danger">Exceeds 100% by ' + (totalAllocPct - 100).toFixed(1) + '%</span></div>';
                 }
@@ -5772,8 +5776,8 @@
                     dHtml += '<tr>';
                     dHtml += '<td>';
                     dHtml += '<div class="d-flex align-items-center gap-2">';
-                    dHtml += '<span class="reb-color-dot" style="background-color: ' + res.color + ';"></span>';
-                    dHtml += '<strong class="text-dark">' + res.name + '</strong>';
+                    dHtml += '<span class="reb-color-dot" style="background-color: ' + escapeHtml(res.color) + ';"></span>';
+                    dHtml += '<strong class="text-dark">' + escapeHtml(res.name) + '</strong>';
                     dHtml += '</div>';
                     dHtml += '</td>';
                     dHtml += '<td class="text-end fw-semibold">' + formatMoney(res.actualDol) + '</td>';
@@ -5924,8 +5928,8 @@
                 sellsNeeded.forEach(function(s) {
                     html += '<div class="d-flex justify-content-between align-items-center py-2 border-bottom border-danger-subtle">';
                     html += '<div class="d-flex align-items-center gap-2">';
-                    html += '<span class="reb-color-dot" style="background-color: ' + s.color + ';"></span>';
-                    html += '<span class="fw-bold text-dark">' + s.name + '</span>';
+                    html += '<span class="reb-color-dot" style="background-color: ' + escapeHtml(s.color) + ';"></span>';
+                    html += '<span class="fw-bold text-dark">' + escapeHtml(s.name) + '</span>';
                     html += '</div>';
                     html += '<span class="badge bg-danger fs-6">' + formatMoney(s.amount) + '</span>';
                     html += '</div>';
@@ -5943,8 +5947,8 @@
                 buysNeeded.forEach(function(b) {
                     html += '<div class="d-flex justify-content-between align-items-center py-2 border-bottom border-success-subtle">';
                     html += '<div class="d-flex align-items-center gap-2">';
-                    html += '<span class="reb-color-dot" style="background-color: ' + b.color + ';"></span>';
-                    html += '<span class="fw-bold text-dark">' + b.name + '</span>';
+                    html += '<span class="reb-color-dot" style="background-color: ' + escapeHtml(b.color) + ';"></span>';
+                    html += '<span class="fw-bold text-dark">' + escapeHtml(b.name) + '</span>';
                     html += '</div>';
                     html += '<span class="badge bg-success fs-6">' + formatMoney(b.amount) + '</span>';
                     html += '</div>';
@@ -6762,7 +6766,7 @@
 
                 var errorListHtml = '<ul class="mb-0 text-start d-inline-block ps-4">';
                 errors.forEach(function (err) {
-                    errorListHtml += '<li>' + err.message + '</li>';
+                    errorListHtml += '<li>' + escapeHtml(err.message) + '</li>';
                 });
                 errorListHtml += '</ul>';
 

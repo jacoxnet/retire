@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+from django.utils.csp import CSP
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -43,6 +45,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -123,3 +126,28 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 86400  # 24 hours
 
+# Content-Security-Policy: only same-origin scripts plus the exact CDN files the
+# templates load. Inline event handlers are not allowed; see static/js/actions.js.
+# Inline style attributes are permitted because the templates use them heavily.
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [
+        CSP.SELF,
+        "https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js",
+        "https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js",
+        "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+    ],
+    "style-src": [
+        CSP.SELF,
+        CSP.UNSAFE_INLINE,
+        "https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/",
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/",
+    ],
+    "font-src": [CSP.SELF, "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/"],
+    "img-src": [CSP.SELF, "data:"],  # Bootstrap embeds form-control icons as data: SVGs
+    "connect-src": [CSP.SELF],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+}

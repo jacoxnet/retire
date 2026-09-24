@@ -82,7 +82,7 @@
                             Reset all current retirement parameters, accounts, income streams, and taxes back to default sample values.
                         </p>
                     </div>
-                    <form method="POST" action="{% url 'clear_data' %}" id="clearDataForm" onsubmit="return confirm('Are you sure you want to clear all data and reset to default values? This action cannot be undone.');">
+                    <form method="POST" action="{% url 'clear_data' %}" id="clearDataForm" data-confirm="Are you sure you want to clear all data and reset to default values? This action cannot be undone.">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline-danger py-2 fw-semibold shadow-sm w-100" id="btnClearData">
                             <i class="fa fa-trash me-2"></i>Clear Data

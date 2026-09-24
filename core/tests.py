@@ -133,6 +133,18 @@ class RetirementCalculationTests(TestCase):
         self.assertRedirects(response, '/results/')
         self.assertEqual(self.client.session['simulation_data']['user_name'], 'Bob Smith')
         self.assertEqual(self.client.session['simulation_data']['user_age'], 62)
+        # Plans must live only in the session, never persisted to the database
+        self.assertEqual(SimulationData.objects.count(), 0)
+
+    def test_content_security_policy_header(self):
+        response = self.client.get(reverse('enter'))
+        csp = response.headers.get('Content-Security-Policy', '')
+        self.assertIn("script-src 'self'", csp)
+        self.assertIn("frame-ancestors 'none'", csp)
+        script_src = next(d for d in csp.split(';') if d.strip().startswith('script-src'))
+        self.assertNotIn("'unsafe-inline'", script_src)
+        # Inline event handlers are blocked by the CSP, so pages must not contain any
+        self.assertNotRegex(response.content.decode(), r'\son[a-z]+="')
 
     def test_hundredths_inflation_rate(self):
         post_data = {
@@ -170,6 +182,7 @@ class RetirementCalculationTests(TestCase):
         response = self.client.post('/load_plan/', {'json_data': raw_json})
         self.assertRedirects(response, '/results/')
         self.assertEqual(self.client.session['simulation_data']['user_name'], 'Aug 5 Smith')
+        self.assertEqual(SimulationData.objects.count(), 0)
 
     def test_change_mode_view(self):
         # Initialize default session

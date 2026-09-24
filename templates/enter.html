@@ -363,7 +363,7 @@
                     </div>
 
                     <div class="text-center mt-4">
-                        <button type="button" class="btn btn-secondary me-2" onclick="switchTab('assets-tab')">Next: Accounts for Retirement</button>
+                        <button type="button" class="btn btn-secondary me-2" data-on-click='["switchTab", "assets-tab"]'>Next: Accounts for Retirement</button>
                     </div>
                 </div>
             </div>
@@ -401,9 +401,9 @@
 
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('demographics-tab')">Back</button>
+                        data-on-click='["switchTab", "demographics-tab"]'>Back</button>
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('spending-tab')">Next: Additional Spending</button>
+                        data-on-click='["switchTab", "spending-tab"]'>Next: Additional Spending</button>
                 </div>
             </div>
 
@@ -458,9 +458,9 @@
 
                 <div class="text-center mt-4">
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('assets-tab')">Back</button>
+                        data-on-click='["switchTab", "assets-tab"]'>Back</button>
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('income-tab')">Next: Social Security & Income Streams</button>
+                        data-on-click='["switchTab", "income-tab"]'>Next: Social Security & Income Streams</button>
                 </div>
             </div>
 
@@ -594,9 +594,9 @@
 
                 <div class="text-center mt-4 mb-3">
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('spending-tab')">Back</button>
+                        data-on-click='["switchTab", "spending-tab"]'>Back</button>
                     <button type="button" class="btn btn-secondary me-2"
-                        onclick="switchTab('balance-sheet-tab')">Next: Balance Sheet (optional)</button>
+                        data-on-click='["switchTab", "balance-sheet-tab"]'>Next: Balance Sheet (optional)</button>
                     <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab4">
                         <i class="fa fa-play me-2"></i> Run Simulation
                     </button>
@@ -617,13 +617,13 @@
                         </div>
                         <div class="d-flex flex-wrap gap-2 align-items-center">
                             <div class="btn-group btn-group-sm" role="group" id="bsViewModeBtnGroup">
-                                <button type="button" class="btn btn-outline-primary active" id="btnBsModeDetailed" onclick="setBsViewMode('detailed')"><i class="fa-solid fa-table-list me-1"></i>Detailed View</button>
-                                <button type="button" class="btn btn-outline-primary" id="btnBsModeSummary" onclick="setBsViewMode('summary')"><i class="fa-solid fa-list-check me-1"></i>Summary View</button>
+                                <button type="button" class="btn btn-outline-primary active" id="btnBsModeDetailed" data-on-click='["setBsViewMode", "detailed"]'><i class="fa-solid fa-table-list me-1"></i>Detailed View</button>
+                                <button type="button" class="btn btn-outline-primary" id="btnBsModeSummary" data-on-click='["setBsViewMode", "summary"]'><i class="fa-solid fa-list-check me-1"></i>Summary View</button>
                             </div>
-                            <button type="button" class="btn btn-primary btn-sm px-3" id="btnAddPeriodSnapshot" onclick="promptAddPeriodSnapshot()">
+                            <button type="button" class="btn btn-primary btn-sm px-3" id="btnAddPeriodSnapshot" data-on-click='["promptAddPeriodSnapshot"]'>
                                 <i class="fa fa-calendar-plus me-1"></i> Add Balance Sheet Column
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm px-3 shadow-sm" id="btnBsRebalanceLink" onclick="navigateToRebalance()" title="Open Portfolio Rebalancing Tool">
+                            <button type="button" class="btn btn-outline-primary btn-sm px-3 shadow-sm" id="btnBsRebalanceLink" data-on-click='["navigateToRebalance"]' title="Open Portfolio Rebalancing Tool">
                                 <i class="fa-solid fa-scale-balanced me-1"></i> Rebalance?
                             </button>
                         </div>
@@ -637,7 +637,7 @@
                                 <label for="bsPeriodFrequencySelect" class="small fw-semibold text-secondary mb-0 text-nowrap">
                                     <i class="fa-regular fa-calendar me-1"></i>Dates:
                                 </label>
-                                <select class="form-select form-select-sm" id="bsPeriodFrequencySelect" onchange="setBsPeriodFrequency(this.value)" style="width: auto;">
+                                <select class="form-select form-select-sm" id="bsPeriodFrequencySelect" data-on-change='["setBsPeriodFrequency", "$value"]' style="width: auto;">
                                     <option value="all">All Recorded Dates</option>
                                     <option value="quarterly">Quarter-Ends Only</option>
                                     <option value="yearly">Year-Ends Only</option>
@@ -649,7 +649,7 @@
 
                             <!-- Item 1: Column Scope Dropdown & Conditional Count Input -->
                             <div class="d-flex flex-wrap align-items-center gap-2">
-                                <select class="form-select form-select-sm" id="bsColumnScopeSelect" onchange="setBsPeriodColScope(this.value)" style="width: auto;">
+                                <select class="form-select form-select-sm" id="bsColumnScopeSelect" data-on-change='["setBsPeriodColScope", "$value"]' style="width: auto;">
                                     <option value="all">Show Full History</option>
                                     <option value="recent">Show Most Recent History</option>
                                 </select>
@@ -733,10 +733,10 @@
                                 Net Worth & Asset History
                             </h5>
                             <div class="btn-group btn-group-sm" role="group" id="bsChartMetricToggle">
-                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn active" data-metric="gross_net_worth" onclick="changeBsChartMetric('gross_net_worth')">Gross Net Worth</button>
-                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn" data-metric="liquid_net_worth" onclick="changeBsChartMetric('liquid_net_worth')">Liquid Net Worth</button>
-                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn" data-metric="net_retirement" onclick="changeBsChartMetric('net_retirement')">Retirement Savings (Net of Income Tax)</button>
-                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn" data-metric="breakdown" onclick="changeBsChartMetric('breakdown')">Asset Breakdown</button>
+                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn active" data-metric="gross_net_worth" data-on-click='["changeBsChartMetric", "gross_net_worth"]'>Gross Net Worth</button>
+                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn" data-metric="liquid_net_worth" data-on-click='["changeBsChartMetric", "liquid_net_worth"]'>Liquid Net Worth</button>
+                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn" data-metric="net_retirement" data-on-click='["changeBsChartMetric", "net_retirement"]'>Retirement Savings (Net of Income Tax)</button>
+                                <button type="button" class="btn btn-outline-primary bs-chart-toggle-btn" data-metric="breakdown" data-on-click='["changeBsChartMetric", "breakdown"]'>Asset Breakdown</button>
                             </div>
                         </div>
                         <div style="height: 320px; position: relative;">
@@ -747,8 +747,8 @@
 
                 <!-- Navigation Action Buttons -->
                 <div class="text-center mt-4 mb-3">
-                    <button type="button" class="btn btn-secondary me-2" onclick="switchTab('income-tab')">Back: Social Security & Income Streams</button>
-                    <button type="button" class="btn btn-secondary me-2" onclick="navigateToRebalance()">Next: Rebalance (optional)</button>
+                    <button type="button" class="btn btn-secondary me-2" data-on-click='["switchTab", "income-tab"]'>Back: Social Security & Income Streams</button>
+                    <button type="button" class="btn btn-secondary me-2" data-on-click='["navigateToRebalance"]'>Next: Rebalance (optional)</button>
                     <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab5">
                         <i class="fa fa-play me-2"></i> Run Simulation
                     </button>
@@ -772,7 +772,7 @@
                             </p>
                         </div>
                         <div class="d-flex flex-wrap gap-2 align-items-center">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="syncRebalanceFromBalanceSheet(true)" title="Reload accounts and balances from the latest balance sheet column">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-on-click='["syncRebalanceFromBalanceSheet", true]' title="Reload accounts and balances from the latest balance sheet column">
                                 <i class="fa-solid fa-arrows-rotate me-1"></i> Refresh from Balance Sheet
                             </button>
                         </div>
@@ -822,9 +822,9 @@
                             <p class="text-secondary small mb-0">Select which balance sheet accounts to include in your rebalancing plan. Debts and real estate equity are excluded automatically.</p>
                         </div>
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-primary" onclick="setRebAccountSelection('investment')">Investment Only</button>
-                            <button type="button" class="btn btn-outline-primary" onclick="setRebAccountSelection('all')">Select All</button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="setRebAccountSelection('none')">Deselect All</button>
+                            <button type="button" class="btn btn-outline-primary" data-on-click='["setRebAccountSelection", "investment"]'>Investment Only</button>
+                            <button type="button" class="btn btn-outline-primary" data-on-click='["setRebAccountSelection", "all"]'>Select All</button>
+                            <button type="button" class="btn btn-outline-secondary" data-on-click='["setRebAccountSelection", "none"]'>Deselect All</button>
                         </div>
                     </div>
 
@@ -862,7 +862,7 @@
                             </h4>
                             <p class="text-secondary small mb-0">Customize your desired asset classes and specify your rebalancing tolerance band.</p>
                         </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="promptAddAssetClass()">
+                        <button type="button" class="btn btn-primary btn-sm" data-on-click='["promptAddAssetClass"]'>
                             <i class="fa fa-plus me-1"></i> Add Custom Asset Class
                         </button>
                     </div>
@@ -877,7 +877,7 @@
                                 </label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">±</span>
-                                    <input type="number" class="form-control text-center fw-bold" id="rebToleranceInput" min="1" max="100" step="0.5" value="10.0" oninput="onRebToleranceChange(this.value)">
+                                    <input type="number" class="form-control text-center fw-bold" id="rebToleranceInput" min="1" max="100" step="0.5" value="10.0" data-on-input='["onRebToleranceChange", "$value"]'>
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
@@ -886,7 +886,7 @@
                                     Rebalance Strategy Mode
                                     <i class="fa-solid fa-circle-info text-secondary ms-1 help-popover" tabindex="0" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-title="Rebalance Strategy Mode" data-bs-content="&lt;b&gt;Return to Target:&lt;/b&gt; Trades are calculated to bring every asset class back to its exact 100% target percentage.&lt;br&gt;&lt;br&gt;&lt;b&gt;Return to Boundary:&lt;/b&gt; Trades only the minimum necessary to pull out-of-range asset classes just back within acceptable tolerance bounds."></i>
                                 </label>
-                                <select class="form-select form-select-sm" id="rebModeSelect" onchange="onRebModeChange(this.value)">
+                                <select class="form-select form-select-sm" id="rebModeSelect" data-on-change='["onRebModeChange", "$value"]'>
                                     <option value="target">Full Rebalance (Return to 100% Target)</option>
                                     <option value="minimal">Minimal-Trade (Return to Boundary)</option>
                                 </select>
@@ -898,7 +898,7 @@
                                 </label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">$</span>
-                                    <input type="text" class="form-control currency-input text-end" id="rebCashFlowInput" value="$0" placeholder="0" oninput="onRebCashFlowInput(this)">
+                                    <input type="text" class="form-control currency-input text-end" id="rebCashFlowInput" value="$0" placeholder="0" data-on-input='["onRebCashFlowInput", "$el"]'>
                                 </div>
                             </div>
                         </div>
@@ -1021,7 +1021,7 @@
 
                 <!-- Bottom Navigation Buttons -->
                 <div class="text-center mt-4 mb-3">
-                    <button type="button" class="btn btn-secondary me-2" onclick="switchTab('balance-sheet-tab')">Back: Balance Sheet</button>
+                    <button type="button" class="btn btn-secondary me-2" data-on-click='["switchTab", "balance-sheet-tab"]'>Back: Balance Sheet</button>
                     <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab6">
                         <i class="fa fa-play me-2"></i> Run Simulation
                     </button>
@@ -1102,7 +1102,7 @@
 
                 <div class="p-3 bg-light rounded-3 mb-3 border">
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="cpiModalAutoInflate" onchange="onCpiModalInputChange()">
+                        <input class="form-check-input" type="checkbox" role="switch" id="cpiModalAutoInflate" data-on-change='["onCpiModalInputChange"]'>
                         <label class="form-check-label fw-bold text-dark" for="cpiModalAutoInflate">Automatically adjust target with CPI-U</label>
                     </div>
                     <div class="small text-muted mt-1 ps-1">
@@ -1115,7 +1115,7 @@
                         <label for="cpiModalTargetAmount" class="form-label small fw-bold text-secondary text-uppercase mb-1">Base Target Amount ($)</label>
                         <div class="input-group">
                             <span class="input-group-text fw-semibold">$</span>
-                            <input type="text" class="form-control fw-semibold text-end currency-input" id="cpiModalTargetAmount" oninput="onCpiModalInputChange()" placeholder="0">
+                            <input type="text" class="form-control fw-semibold text-end currency-input" id="cpiModalTargetAmount" data-on-input='["onCpiModalInputChange"]' placeholder="0">
                         </div>
                         <div class="form-text small">Nominal baseline dollar target before inflation adjustment.</div>
                     </div>
@@ -1124,7 +1124,7 @@
                         <label class="form-label small fw-bold text-secondary text-uppercase mb-1">Price Level Reference Date</label>
                         <div class="row g-2">
                             <div class="col-7">
-                                <select class="form-select form-select-sm" id="cpiModalMonth" onchange="onCpiModalInputChange()">
+                                <select class="form-select form-select-sm" id="cpiModalMonth" data-on-change='["onCpiModalInputChange"]'>
                                     <option value="01">January</option>
                                     <option value="02">February</option>
                                     <option value="03">March</option>
@@ -1140,7 +1140,7 @@
                                 </select>
                             </div>
                             <div class="col-5">
-                                <input type="number" class="form-control form-control-sm text-center fw-semibold" id="cpiModalYear" min="1913" max="2050" step="1" oninput="onCpiModalInputChange()">
+                                <input type="number" class="form-control form-control-sm text-center fw-semibold" id="cpiModalYear" min="1913" max="2050" step="1" data-on-input='["onCpiModalInputChange"]'>
                             </div>
                         </div>
                         <div class="form-text small text-muted">
@@ -1176,7 +1176,7 @@
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm px-3 shadow-sm" onclick="saveTargetCpiModal()">Save Target Settings</button>
+                <button type="button" class="btn btn-primary btn-sm px-3 shadow-sm" data-on-click='["saveTargetCpiModal"]'>Save Target Settings</button>
             </div>
         </div>
     </div>
@@ -1214,7 +1214,7 @@
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary btn-sm px-3" onclick="confirmAddAssetClass()">Add Class</button>
+                <button type="button" class="btn btn-primary btn-sm px-3" data-on-click='["confirmAddAssetClass"]'>Add Class</button>
             </div>
         </div>
     </div>

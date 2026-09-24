@@ -1,6 +1,5 @@
 import json
 from core.runs import generate_runs, binary_search, run_deterministic
-from core.models import SimulationData
 from core.forms import (
     get_float, get_int, get_bool,
     aggregate_accounts, flat_assets_to_accounts,
@@ -308,7 +307,6 @@ def load_plan_view(request):
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         request.session['cached_results'] = None
         request.session['cached_version'] = -1
-        SimulationData.objects.create(data=data)
         messages.success(request, "Plan loaded successfully!")
     except Exception as e:
         messages.error(request, f"Error loading plan: {str(e)}")
@@ -722,7 +720,6 @@ def enter_view(request):
             
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
-        SimulationData.objects.create(data=data_block)
         redirect_target = request.POST.get('next', 'results')
         if redirect_target not in ('results', 'manage_data'):
             redirect_target = 'results'
