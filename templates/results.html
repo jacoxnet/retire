@@ -293,7 +293,7 @@
                                 <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
                                 1) Required Minimum Distributions (RMDs) from Pretax accounts;
                                 2) Taxable accounts;
-                                3) Pretax accounts (with tax gross-up / circular solver);
+                                3) Pretax accounts (with tax gross-up);
                                 4) Roth accounts;
                                 5) Health Savings Accounts (HSA).
                                 <strong>Early-withdrawal exception:</strong> If an account owner is under age 59&frac12;, withdrawals from that owner's Pretax accounts would incur a 10% penalty.
@@ -1089,11 +1089,11 @@
                         <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                             <div>
                                 <h5 class="card-title text-primary mb-0 fw-bold">
-                                    <i class="fa fa-layer-group me-2"></i>3. Asset Class Breakdown (Drawdown Sequence)
+                                    <i class="fa fa-layer-group me-2"></i>3. Deterministic Asset Class Breakdown (Drawdown Sequence)
                                 </h5>
-                                <small class="text-muted">Pretax, Roth, Taxable, and HSA balances over time</small>
+                                <small class="text-muted">Deterministic baseline: Pretax, Roth, Taxable, and HSA balances over time</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "assetBreakdown", "3. Stacked Asset Class Breakdown"]' title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "assetBreakdown", "3. Deterministic Asset Class Breakdown"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>
@@ -1111,11 +1111,11 @@
                         <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                             <div>
                                 <h5 class="card-title text-primary mb-0 fw-bold">
-                                    <i class="fa fa-balance-scale me-2"></i>4. Annual Income vs. Spending Sources
+                                    <i class="fa fa-balance-scale me-2"></i>4. Deterministic Annual Income vs. Spending Sources
                                 </h5>
-                                <small class="text-muted">Inflows (SS, Pensions, Withdrawals) vs Outflows (Spending & Taxes)</small>
+                                <small class="text-muted">Deterministic baseline: Inflows (SS, Pensions, Withdrawals) vs Outflows (Spending & Taxes)</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "incomeSpending", "4. Annual Income vs. Spending Sources"]' title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "incomeSpending", "4. Deterministic Annual Income vs. Spending Sources"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>
@@ -1133,11 +1133,11 @@
                         <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
                             <div>
                                 <h5 class="card-title text-primary mb-0 fw-bold">
-                                    <i class="fa fa-file-invoice-dollar me-2"></i>5. Lifetime Tax Liability & "The Tax Bomb"
+                                    <i class="fa fa-file-invoice-dollar me-2"></i>5. Deterministic Lifetime Tax Liability & "The Tax Bomb"
                                 </h5>
-                                <small class="text-muted">Year-by-year income taxes paid, highlighting RMD spikes</small>
+                                <small class="text-muted">Deterministic baseline: Year-by-year income taxes paid, highlighting RMD spikes</small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "taxLiability", "5. Lifetime Tax Liability & RMD Spikes"]' title="Click to enlarge">
+                            <button type="button" class="btn btn-sm btn-outline-secondary chart-expand-btn" data-on-click='["expandChart", "taxLiability", "5. Deterministic Lifetime Tax Liability & RMD Spikes"]' title="Click to enlarge">
                                 <i class="fa fa-expand"></i>
                             </button>
                         </div>

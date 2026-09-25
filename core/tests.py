@@ -5102,15 +5102,37 @@ class OtherIncomeStartAgeTextTests(TestCase):
             '<span id="otherIncomeSpendingStartAgeText">the Start Age for Retirement Spending</span>'
         )
 
+    def test_ui_copy_updates_and_deterministic_chart_labels(self):
+        """Test withdrawal note update, taxable modal popup copy, and deterministic chart labels."""
+        # 1. Check Enter page taxable modal popup copy
+        enter_resp = self.client.get(reverse('enter'))
+        self.assertEqual(enter_resp.status_code, 200)
+        self.assertContains(enter_resp, 'Taxable Account Tax Treatment (Defaults)')
+        self.assertNotContains(enter_resp, 'Taxable Account Tax Treatment (Smart Defaults)')
+        self.assertContains(enter_resp, 'Default Assumptions--you can modify these')
+        self.assertNotContains(enter_resp, 'Default Institutional Assumptions')
+        self.assertContains(enter_resp, 'Assumed ~70% is invested principal (basis)')
+        self.assertNotContains(enter_resp, 'For seasoned taxable accounts, ~70%')
 
+        # 2. Check Results page withdrawal ordering note and deterministic chart labels
+        res_resp = self.client.get(reverse('results'))
+        self.assertEqual(res_resp.status_code, 200)
+        self.assertContains(res_resp, '3) Pretax accounts (with tax gross-up);')
+        self.assertNotContains(res_resp, '(with tax gross-up / circular solver)')
 
+        self.assertContains(res_resp, '3. Deterministic Asset Class Breakdown (Drawdown Sequence)')
+        self.assertContains(res_resp, '4. Deterministic Annual Income vs. Spending Sources')
+        self.assertContains(res_resp, '5. Deterministic Lifetime Tax Liability & "The Tax Bomb"')
+        self.assertContains(res_resp, '3. Deterministic Asset Class Breakdown')
+        self.assertContains(res_resp, '4. Deterministic Annual Income vs. Spending Sources')
+        self.assertContains(res_resp, '5. Deterministic Lifetime Tax Liability & RMD Spikes')
 
-
-
-
-
-
-
-
-
-
+    def test_enter_js_joint_ownership_logic(self):
+        """Verify enter.js includes joint ownership label logic for married taxable accounts."""
+        import os
+        js_path = os.path.join(settings.BASE_DIR, 'static', 'js', 'enter.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+        self.assertIn("isMarried && type === 'taxable'", js_content)
+        self.assertIn("'You (' + p.userName + ') or Joint'", js_content)
+        self.assertIn("isMarried && isTaxableCard", js_content)

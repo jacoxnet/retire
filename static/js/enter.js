@@ -681,7 +681,7 @@
                         <div class="col-5 acc-owner-group" style="display: ${isMarried ? 'block' : 'none'};">
                             <label class="form-label small fw-bold mb-1">Owner</label>
                             <select class="form-select form-select-sm acc-owner-select" name="account_owner[]">
-                                <option value="user" ${owner === 'user' ? 'selected' : ''}>You (${p.userName})</option>
+                                <option value="user" ${owner === 'user' ? 'selected' : ''}>${(isMarried && type === 'taxable') ? 'You (' + p.userName + ') or Joint' : 'You (' + p.userName + ')'}</option>
                                 <option value="spouse" ${owner === 'spouse' ? 'selected' : ''}>Spouse (${p.spouseName})</option>
                             </select>
                         </div>
@@ -834,6 +834,8 @@
             if (ratioInput) ratioInput.addEventListener('input', updateBasisPreview);
             updateBasisPreview();
 
+            const ownerSelect = col.querySelector('.acc-owner-select');
+
             typeSelect.addEventListener('change', function() {
                 if (this.value === 'hsa') {
                     hsaMedicalGroup.style.display = 'block';
@@ -845,9 +847,16 @@
                 } else {
                     taxableTreatmentGroup.style.display = 'none';
                 }
+                if (ownerSelect) {
+                    var curP = getPersonLabels();
+                    var userOpt = ownerSelect.querySelector('option[value="user"]');
+                    if (userOpt) {
+                        userOpt.textContent = (curP.isMarried && this.value === 'taxable')
+                            ? "You (" + curP.userName + ") or Joint"
+                            : "You (" + curP.userName + ")";
+                    }
+                }
             });
-
-            const ownerSelect = col.querySelector('.acc-owner-select');
             const startAgeLabel = col.querySelector('.acc-start-age-label');
             const startAgeInput = col.querySelector('.acc-start-age-input');
             const endAgeTypeSelect = col.querySelector('.acc-end-age-type');
@@ -6044,9 +6053,15 @@
                 }
 
                 if (ownerSelect) {
+                    var cardTypeSelect = col.querySelector('.acc-type-select');
+                    var isTaxableCard = cardTypeSelect && cardTypeSelect.value === 'taxable';
                     for (var i = 0; i < ownerSelect.options.length; i++) {
                         var oOpt = ownerSelect.options[i];
-                        if (oOpt.value === 'user') oOpt.textContent = "You (" + p.userName + ")";
+                        if (oOpt.value === 'user') {
+                            oOpt.textContent = (isMarried && isTaxableCard)
+                                ? "You (" + p.userName + ") or Joint"
+                                : "You (" + p.userName + ")";
+                        }
                         if (oOpt.value === 'spouse') oOpt.textContent = "Spouse (" + p.spouseName + ")";
                     }
                 }
