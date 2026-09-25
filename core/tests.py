@@ -5210,3 +5210,24 @@ class OtherIncomeStartAgeTextTests(TestCase):
         self.assertIn("window.syncAccountCardsToBsState()", js_content)
         self.assertIn("serializeBalanceSheet()", js_content)
 
+    def test_milestone_markers_only_on_expanded_charts(self):
+        """Verify milestone markers and label pills only display on enlarged modal charts."""
+        # 1. Template contains modalChartCanvas
+        resp = self.client.get(reverse('results'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="chartModal"')
+        self.assertContains(resp, 'id="modalChartCanvas"')
+
+        # 2. results.js restricts milestonePlugin to modalChartCanvas and attaches only in expandChart
+        import os
+        js_path = os.path.join(settings.BASE_DIR, 'static', 'js', 'results.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+
+        self.assertIn("if (!chart.canvas || chart.canvas.id !== 'modalChartCanvas') return;", js_content)
+        self.assertIn("plugins: [milestonePlugin]", js_content)
+        # Inline chart initializations should not include milestonePlugin
+        self.assertNotIn("chartInstances.spaghetti = new Chart(ctx, {\n            type: 'line',\n            data: { labels, datasets },\n            options: getChartOptions('Portfolio Wealth ($)', false),\n            plugins: [milestonePlugin]", js_content)
+        self.assertNotIn("chartInstances.trajectory = new Chart(ctx, {\n            type: 'line',\n            data: {\n                labels,\n                datasets: [\n                    {\n                        label: '90th Percentile (Optimistic)',\n                        data: mcP90Data.map((v, t) => scaleVal(v, t)),\n                        borderColor: '#10b981',\n                        backgroundColor: 'rgba(16, 185, 129, 0.1)',\n                        borderWidth: 2.5,\n                        pointRadius: 1,\n                        tension: 0.2\n                    },\n                    {\n                        label: '50th Percentile (Median)',\n                        data: mcP50Data.map((v, t) => scaleVal(v, t)),\n                        borderColor: '#3b82f6',\n                        backgroundColor: 'rgba(59, 130, 246, 0.1)',\n                        borderWidth: 3,\n                        pointRadius: 1,\n                        tension: 0.2\n                    },\n                    {\n                        label: '10th Percentile (Pessimistic)',\n                        data: mcP10Data.map((v, t) => scaleVal(v, t)),\n                        borderColor: '#ef4444',\n                        backgroundColor: 'rgba(239, 68, 68, 0.1)',\n                        borderWidth: 2.5,\n                        pointRadius: 1,\n                        tension: 0.2\n                    }\n                ]\n            },\n            options: getChartOptions('Portfolio Wealth ($)', true),\n            plugins: [milestonePlugin]", js_content)
+
+

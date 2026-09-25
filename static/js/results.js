@@ -232,6 +232,9 @@ const userStartAge = chartConfig.user_start_age ?? 60;
     const milestonePlugin = {
         id: 'milestonePlugin',
         afterDraw: function(chart) {
+            // Milestone markers with styled label pills should only be displayed on the larger charts
+            // shown when the user clicks the expansion button (#modalChartCanvas)
+            if (!chart.canvas || chart.canvas.id !== 'modalChartCanvas') return;
             if (!chart.chartArea) return;
             const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
             if (!x || !chart.data || !chart.data.labels) return;
@@ -387,8 +390,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         chartInstances.spaghetti = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
-            options: getChartOptions('Portfolio Wealth ($)', false),
-            plugins: [milestonePlugin]
+            options: getChartOptions('Portfolio Wealth ($)', false)
         });
     }
 
@@ -443,8 +445,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                     }
                 ]
             },
-            options: getChartOptions('Portfolio Wealth ($)', true),
-            plugins: [milestonePlugin]
+            options: getChartOptions('Portfolio Wealth ($)', true)
         });
     }
 
@@ -507,8 +508,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                     }
                 ]
             },
-            options: getChartOptions('Total Assets ($)', true, true),
-            plugins: [milestonePlugin]
+            options: getChartOptions('Total Assets ($)', true, true)
         });
     }
 
@@ -597,8 +597,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                         title: { display: true, text: 'Annual Cash Flow ($)' }
                     }
                 }
-            },
-            plugins: [milestonePlugin]
+            }
         });
     }
 
@@ -662,8 +661,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                         title: { display: true, text: 'Annual Tax Liability ($)' }
                     }
                 }
-            },
-            plugins: [milestonePlugin]
+            }
         });
     }
 
@@ -733,11 +731,20 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                     }
                 }
             },
-            plugins: (sourceChart.config.plugins && sourceChart.config.plugins.length) ? sourceChart.config.plugins : []
+            plugins: [milestonePlugin]
         });
 
         const modalEl = document.getElementById('chartModal');
         if (modalEl) {
+            if (!modalEl.dataset.resizeBound) {
+                modalEl.dataset.resizeBound = 'true';
+                modalEl.addEventListener('shown.bs.modal', function () {
+                    if (modalChartInstance) {
+                        modalChartInstance.resize();
+                        modalChartInstance.update();
+                    }
+                });
+            }
             const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
             bsModal.show();
         }
