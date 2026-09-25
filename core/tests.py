@@ -5178,3 +5178,35 @@ class OtherIncomeStartAgeTextTests(TestCase):
         self.assertIn("isMarried && type === 'taxable'", js_content)
         self.assertIn("'You (' + p.userName + ') or Joint'", js_content)
         self.assertIn("isMarried && isTaxableCard", js_content)
+
+    def test_simple_mode_elements_and_balance_sheet_sync(self):
+        """Verify Simple Mode hides Balance Sheet and Rebalance tabs and syncs state properly."""
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+
+        # Nav items have advanced-only-field
+        self.assertContains(resp, 'class="nav-item advanced-only-field" role="presentation">\n                        <button class="nav-link" id="balance-sheet-tab"')
+        self.assertContains(resp, 'class="nav-item advanced-only-field" role="presentation">\n                        <button class="nav-link" id="rebalance-tab"')
+
+        # Tab panes have advanced-only-field
+        self.assertContains(resp, '<div class="tab-pane fade advanced-only-field" id="balance-sheet"')
+        self.assertContains(resp, '<div class="tab-pane fade advanced-only-field" id="rebalance"')
+
+        # Next: Balance Sheet button on tab 4 has advanced-only-field
+        self.assertContains(resp, 'class="btn btn-secondary me-2 advanced-only-field"\n                        data-on-click=\'["switchTab", "balance-sheet-tab"]\'>Next: Balance Sheet (optional)</button>')
+
+        # Descriptions updated
+        self.assertContains(resp, 'Excludes ability to change the standard deviation of each account held for retirement')
+        self.assertContains(resp, 'Includes ability to change the standard deviation of each account held for retirement')
+
+        # enter.js contains fallback and sync logic on mode switch
+        import os
+        js_path = os.path.join(settings.BASE_DIR, 'static', 'js', 'enter.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+
+        self.assertIn("activeTabBtn.id === 'balance-sheet-tab' || activeTabBtn.id === 'rebalance-tab'", js_content)
+        self.assertIn("switchTab('assets-tab')", js_content)
+        self.assertIn("window.syncAccountCardsToBsState()", js_content)
+        self.assertIn("serializeBalanceSheet()", js_content)
+

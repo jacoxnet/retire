@@ -49,8 +49,8 @@
                 </div>
             </div>
             <div class="text-secondary small" id="plannerModeDescription">
-                <span id="descAdvanced"><i class="fa-solid fa-circle-check text-primary me-1"></i>Full model active: return volatilities, other taxes/surcharges, and portfolio rebalancing.</span>
-                <span id="descSimple" class="d-none"><i class="fa-solid fa-circle-info text-primary me-1"></i>Streamlined view: essential retirement assets, timeline, and baseline spending.</span>
+                <span id="descAdvanced"><i class="fa-solid fa-circle-check text-primary me-1"></i>Includes ability to change the standard deviation of each account held for retirement, ability to address other types of taxes/surcharges, balance sheet net worth tracking, and portfolio rebalancing.</span>
+                <span id="descSimple" class="d-none"><i class="fa-solid fa-circle-info text-primary me-1"></i>Includes a streamlined 4-step wizard based on essential retirement assets, timeline, and baseline spending. Excludes ability to change the standard deviation of each account held for retirement, ability to address other types of taxes/surcharges, balance sheet net worth tracking, and portfolio rebalancing.</span>
             </div>
         </div>
 
@@ -102,7 +102,7 @@
                             <span class="tab-summary-badge" id="tabBadgeIncome"></span>
                         </button>
                     </li>
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item advanced-only-field" role="presentation">
                         <button class="nav-link" id="balance-sheet-tab" data-bs-toggle="tab" data-bs-target="#balance-sheet"
                             type="button" role="tab" aria-controls="balance-sheet" aria-selected="false" data-tab-name="Balance Sheet (optional)">
                             <span class="tab-label-main">Balance Sheet</span>
@@ -110,7 +110,7 @@
                             <span class="tab-summary-badge" id="tabBadgeBalanceSheet"></span>
                         </button>
                     </li>
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item advanced-only-field" role="presentation">
                         <button class="nav-link" id="rebalance-tab" data-bs-toggle="tab" data-bs-target="#rebalance"
                             type="button" role="tab" aria-controls="rebalance" aria-selected="false" data-tab-name="Rebalance (optional)">
                             <span class="tab-label-main">Rebalance</span>
@@ -626,7 +626,7 @@
                 <div class="text-center mt-4 mb-3">
                     <button type="button" class="btn btn-secondary me-2"
                         data-on-click='["switchTab", "spending-tab"]'>Back</button>
-                    <button type="button" class="btn btn-secondary me-2"
+                    <button type="button" class="btn btn-secondary me-2 advanced-only-field"
                         data-on-click='["switchTab", "balance-sheet-tab"]'>Next: Balance Sheet (optional)</button>
                     <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm" id="btnRunSimulationTab4">
                         <i class="fa fa-play me-2"></i> Run Simulation
@@ -635,7 +635,7 @@
             </div>
 
             <!-- TAB 5: BALANCE SHEET & NET WORTH TRACKER -->
-            <div class="tab-pane fade" id="balance-sheet" role="tabpanel" aria-labelledby="balance-sheet-tab">
+            <div class="tab-pane fade advanced-only-field" id="balance-sheet" role="tabpanel" aria-labelledby="balance-sheet-tab">
                 <input type="hidden" name="balance_sheet_json" id="balanceSheetJsonInput">
 
                 <!-- Header card with Title and Action Controls -->
@@ -787,7 +787,7 @@
             </div>
 
             <!-- TAB 6: PORTFOLIO REBALANCING TOOL -->
-            <div class="tab-pane fade" id="rebalance" role="tabpanel" aria-labelledby="rebalance-tab">
+            <div class="tab-pane fade advanced-only-field" id="rebalance" role="tabpanel" aria-labelledby="rebalance-tab">
                 <input type="hidden" name="rebalancing_json" id="rebalancingJsonInput">
 
                 <!-- Header card with Title and Status Badges -->

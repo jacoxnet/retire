@@ -7009,15 +7009,35 @@
             function applyMode(mode) {
                 if (!form) return;
                 if (mode === 'simple') {
+                    // If user is currently on Balance Sheet or Rebalance tab, fallback to Accounts tab
+                    const activeTabBtn = document.querySelector('#dataEntryTabs .nav-link.active');
+                    if (activeTabBtn && (activeTabBtn.id === 'balance-sheet-tab' || activeTabBtn.id === 'rebalance-tab')) {
+                        if (typeof switchTab === 'function') {
+                            switchTab('assets-tab');
+                        }
+                    }
                     form.classList.add('planner-simple-mode');
                     if (radSimp) radSimp.checked = true;
                     if (descAdv) descAdv.classList.add('d-none');
                     if (descSimp) descSimp.classList.remove('d-none');
+                    if (typeof window.syncAccountCardsToBsState === 'function') {
+                        window.syncAccountCardsToBsState();
+                    }
+                    if (typeof serializeBalanceSheet === 'function') {
+                        serializeBalanceSheet();
+                    }
                 } else {
                     form.classList.remove('planner-simple-mode');
                     if (radAdv) radAdv.checked = true;
                     if (descAdv) descAdv.classList.remove('d-none');
                     if (descSimp) descSimp.classList.add('d-none');
+                    if (typeof window.syncAllTabs === 'function') {
+                        window.syncAllTabs();
+                    } else {
+                        if (typeof window.syncAccountCardsToBsState === 'function') window.syncAccountCardsToBsState();
+                        if (typeof renderBalanceSheetTable === 'function') renderBalanceSheetTable();
+                        if (typeof serializeBalanceSheet === 'function') serializeBalanceSheet();
+                    }
                 }
             }
 
