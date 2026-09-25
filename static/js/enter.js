@@ -6457,7 +6457,7 @@
                 var spendVal = parseMoney(desiredSpendingInput.value);
                 if (isNaN(spendVal) || spendVal < 0) {
                     setFieldInvalid(desiredSpendingInput, 'Desired Annual Spending must be a valid non-negative number.');
-                    errors.push({ element: desiredSpendingInput, tab: 'demographics-tab', message: 'Desired Annual Spending must be a valid non-negative number.' });
+                    errors.push({ element: desiredSpendingInput, tab: 'spending-tab', message: 'Desired Annual Spending must be a valid non-negative number.' });
                 }
             }
 
