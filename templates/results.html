@@ -5,7 +5,27 @@
 
 {% block content %}
     <div class="mb-4 text-center">
-        <h1 class="pageheading mb-0">Retirement Simulation Results</h1>
+        <h1 class="pageheading mb-2">Retirement Simulation Results</h1>
+        <div class="d-inline-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm shadow-sm" id="btnPrintSummary" onclick="window.print()" title="Print or export clean PDF executive report">
+                <i class="fa-solid fa-print me-1"></i> Print / Export Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Print Only Executive Header (Item 4B) -->
+    <div class="print-only-header d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="mb-1 fw-bold text-dark"><i class="fa-solid fa-chart-line text-primary me-2"></i>Retirement Simulation Executive Report</h2>
+                <p class="text-secondary mb-0 small">Prepared for: <strong>{{ user_name }}{% if is_married %} &amp; {{ spouse_name }}{% endif %}</strong> | Current Year: {{ current_year }}</p>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-primary fs-6 px-3 py-2">
+                    {% if not goal_seeking %}Success Rate: {{ run_success|floatformat:1 }}%{% else %}Max Spending: ${{ achieved_spending|floatformat:"0"|intcomma }}/yr{% endif %}
+                </span>
+            </div>
+        </div>
     </div>
 
     <!-- Validation & Notification Alert Container -->
@@ -54,6 +74,20 @@
 
         <!-- TAB 1: MONTE CARLO STATISTICS -->
         <div class="tab-pane fade show active" id="stats" role="tabpanel" aria-labelledby="stats-tab">
+            <!-- Item 2E: Stale Results Amber Alert Banner (No dimming on results card) -->
+            <div id="staleResultsBanner" class="alert alert-warning border border-warning shadow-sm py-2 px-3 mb-4 d-none d-flex align-items-center justify-content-between" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="fa-solid fa-triangle-exclamation text-warning fs-5 me-2"></i>
+                    <div>
+                        <strong class="text-dark">Inputs modified:</strong>
+                        <span class="text-secondary ms-1">Displayed results reflect previous parameters. Re-run simulation to update results.</span>
+                    </div>
+                </div>
+                <button type="submit" form="resultsInputsForm" class="btn btn-warning btn-sm fw-semibold ms-3 px-3 shadow-sm" id="btnStaleReRun">
+                    <i class="fa fa-sync-alt me-1"></i> Update &amp; Re-Run Now
+                </button>
+            </div>
+
             <div class="row">
                 <!-- Parameters & Simulation Mode Card -->
                 <div class="col-md-5 mb-4">
@@ -325,7 +359,7 @@
                 </div>
 
                 <div class="table-container">
-                    <table class="table table-hover align-middle">
+                    <table class="table table-hover align-middle table-sticky-cols">
                         <thead>
                             <tr>
                                 <th>Year</th>
@@ -719,7 +753,7 @@
                 </div>
 
                 <div class="table-container">
-                    <table class="table table-hover align-middle">
+                    <table class="table table-hover align-middle table-sticky-cols">
                         <thead>
                             <tr>
                                 <th>Year</th>
@@ -1459,7 +1493,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script id="chart-config-json" type="application/json">{"inflation_rate": {{ inflation_rate|default:2.5 }}, "start_year": {{ det_rows.0.year|default:2026 }}, "user_start_age": {{ det_rows.0.user_age|default:60 }}}</script>
+<script id="chart-config-json" type="application/json">{"inflation_rate": {{ inflation_rate|default:2.5 }}, "start_year": {{ det_rows.0.year|default:2026 }}, "user_start_age": {{ det_rows.0.user_age|default:60 }}, "user_retirement_age": {{ user_retirement_age|default:65 }}, "user_ss_start_age": {{ social_security.user_start_age|default:67 }}, "user_age_death": {{ user_age_death|default:90 }}, "spouse_start_age": {{ det_rows.0.spouse_age|default:"null" }}, "spouse_retirement_age": {{ spouse_retirement_age|default:65 }}, "spouse_ss_start_age": {{ social_security.spouse_start_age|default:67 }}, "spouse_age_death": {{ spouse_age_death|default:90 }}, "is_married": {{ is_married|yesno:"true,false" }}}</script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 

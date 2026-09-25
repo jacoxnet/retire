@@ -87,6 +87,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
     const mcP50Data = JSON.parse(document.getElementById('mc-p50-json')?.textContent || '[]');
     const mcP90Data = JSON.parse(document.getElementById('mc-p90-json')?.textContent || '[]');
     const mcSpaghettiPaths = JSON.parse(document.getElementById('mc-spaghetti-json')?.textContent || '[]');
+    const planData = JSON.parse(document.getElementById('plan-data-json')?.textContent || '{}');
 
 
     function formatChartCurrency(val) {
@@ -106,6 +107,246 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         }
         return val;
     }
+
+    // Item 3B: Visual Milestone Markers on Projections
+    function getMilestonesList() {
+        const list = [];
+        if (!detRowsData || detRowsData.length === 0) return list;
+
+        const isMarried = Boolean(planData.is_married ?? chartConfig.is_married);
+        const userRetAge = parseInt(planData.user_retirement_age ?? chartConfig.user_retirement_age);
+        const spouseRetAge = isMarried ? parseInt(planData.spouse_retirement_age ?? chartConfig.spouse_retirement_age) : null;
+        const userDeathAge = parseInt(planData.user_age_death ?? chartConfig.user_age_death);
+        const spouseDeathAge = isMarried ? parseInt(planData.spouse_age_death ?? chartConfig.spouse_age_death) : null;
+
+        const ss = planData.social_security || {};
+        const userSsEntitled = (ss.user_future_entitled ?? ss.user_entitled ?? true) && !ss.user_receiving;
+        const userSsAge = userSsEntitled ? parseInt(ss.user_start_age || chartConfig.user_ss_start_age || 67) : null;
+
+        const spouseSsEntitled = isMarried && (ss.spouse_future_entitled ?? ss.spouse_entitled ?? false) && !ss.spouse_receiving;
+        const spouseSsAge = spouseSsEntitled ? parseInt(ss.spouse_start_age || chartConfig.spouse_ss_start_age || 67) : null;
+
+        const registered = new Set();
+
+        // 1. Scan detRowsData for any engine milestones
+        detRowsData.forEach((row, t) => {
+            const uAge = row.user_age;
+            const spAge = row.spouse_age;
+            const rowMilestones = row.milestones || [];
+
+            rowMilestones.forEach(m => {
+                const mLower = m.toLowerCase();
+                if (mLower.includes('you retire')) {
+                    if (!registered.has('retire')) {
+                        registered.add('retire');
+                        list.push({ t, age: uAge, label: `🏁 Retire (${uAge})`, color: '#2563eb', priority: 1 });
+                    }
+                } else if (mLower.includes('spouse retires')) {
+                    if (!registered.has('sp_retire')) {
+                        registered.add('sp_retire');
+                        list.push({ t, age: spAge, label: `🏁 Spouse Retires (${spAge})`, color: '#7c3aed', priority: 2 });
+                    }
+                } else if (mLower.includes('you claim ss')) {
+                    if (!registered.has('ss')) {
+                        registered.add('ss');
+                        list.push({ t, age: uAge, label: `🏛️ SS (${uAge})`, color: '#059669', priority: 3 });
+                    }
+                } else if (mLower.includes('spouse claims ss')) {
+                    if (!registered.has('sp_ss')) {
+                        registered.add('sp_ss');
+                        list.push({ t, age: spAge, label: `🏛️ Spouse SS (${spAge})`, color: '#0d9488', priority: 4 });
+                    }
+                } else if (mLower.includes('your rmds start') || (mLower.includes('rmd') && mLower.includes('your'))) {
+                    if (!registered.has('rmd')) {
+                        registered.add('rmd');
+                        list.push({ t, age: uAge, label: `📜 RMDs (${uAge})`, color: '#d97706', priority: 5 });
+                    }
+                } else if (mLower.includes('spouse rmds start') || (mLower.includes('rmd') && mLower.includes('spouse'))) {
+                    if (!registered.has('sp_rmd')) {
+                        registered.add('sp_rmd');
+                        list.push({ t, age: spAge, label: `📜 Spouse RMDs (${spAge})`, color: '#ea580c', priority: 6 });
+                    }
+                } else if (mLower.includes('spouse final year')) {
+                    if (!registered.has('sp_death')) {
+                        registered.add('sp_death');
+                        list.push({ t, age: spAge, label: `⌛ Spouse Final (${spAge})`, color: '#64748b', priority: 7 });
+                    }
+                } else if (mLower.includes('your final year')) {
+                    if (!registered.has('death')) {
+                        registered.add('death');
+                        list.push({ t, age: uAge, label: `⌛ Final Year (${uAge})`, color: '#475569', priority: 8 });
+                    }
+                }
+            });
+        });
+
+        // 2. Fallbacks from user plan parameters if any were not flagged in detRowsData:
+        if (!registered.has('retire') && userRetAge) {
+            const t = detRowsData.findIndex(r => r.user_age === userRetAge);
+            if (t !== -1) {
+                registered.add('retire');
+                list.push({ t, age: userRetAge, label: `🏁 Retire (${userRetAge})`, color: '#2563eb', priority: 1 });
+            }
+        }
+        if (isMarried && !registered.has('sp_retire') && spouseRetAge) {
+            const t = detRowsData.findIndex(r => r.spouse_age === spouseRetAge);
+            if (t !== -1) {
+                registered.add('sp_retire');
+                list.push({ t, age: spouseRetAge, label: `🏁 Spouse Retires (${spouseRetAge})`, color: '#7c3aed', priority: 2 });
+            }
+        }
+        if (!registered.has('ss') && userSsAge) {
+            const t = detRowsData.findIndex(r => r.user_age === userSsAge);
+            if (t !== -1) {
+                registered.add('ss');
+                list.push({ t, age: userSsAge, label: `🏛️ SS (${userSsAge})`, color: '#059669', priority: 3 });
+            }
+        }
+        if (isMarried && !registered.has('sp_ss') && spouseSsAge) {
+            const t = detRowsData.findIndex(r => r.spouse_age === spouseSsAge);
+            if (t !== -1) {
+                registered.add('sp_ss');
+                list.push({ t, age: spouseSsAge, label: `🏛️ Spouse SS (${spouseSsAge})`, color: '#0d9488', priority: 4 });
+            }
+        }
+        if (isMarried && !registered.has('sp_death') && spouseDeathAge) {
+            const t = detRowsData.findIndex(r => r.spouse_age === spouseDeathAge);
+            if (t !== -1) {
+                registered.add('sp_death');
+                list.push({ t, age: spouseDeathAge, label: `⌛ Spouse Final (${spouseDeathAge})`, color: '#64748b', priority: 7 });
+            }
+        }
+        if (!registered.has('death') && userDeathAge) {
+            const t = detRowsData.findIndex(r => r.user_age === userDeathAge);
+            if (t !== -1) {
+                registered.add('death');
+                list.push({ t, age: userDeathAge, label: `⌛ Final Year (${userDeathAge})`, color: '#475569', priority: 8 });
+            }
+        }
+
+        // Sort chronologically by year index t, then by priority
+        list.sort((a, b) => a.t - b.t || a.priority - b.priority);
+        return list;
+    }
+
+    const milestonePlugin = {
+        id: 'milestonePlugin',
+        afterDraw: function(chart) {
+            if (!chart.chartArea) return;
+            const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+            if (!x || !chart.data || !chart.data.labels) return;
+
+            const milestones = getMilestonesList();
+            if (milestones.length === 0) return;
+
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const rendered = [];
+
+            // Calculate x positions and dimensions
+            milestones.forEach(m => {
+                if (m.t < 0 || m.t >= chart.data.labels.length) return;
+                const xPos = x.getPixelForValue(m.t);
+                if (xPos < left - 10 || xPos > right + 10) return;
+
+                ctx.save();
+                ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                const textWidth = ctx.measureText(m.label).width;
+                ctx.restore();
+
+                const pillW = textWidth + 12;
+                const pillH = 17;
+                rendered.push({
+                    ...m,
+                    xPos,
+                    pillW,
+                    pillH
+                });
+            });
+
+            // Assign vertical staggering levels to prevent horizontal pill badge overlap
+            const levels = [];
+            rendered.forEach(item => {
+                let pillX = item.xPos - (item.pillW / 2);
+                if (pillX < left + 2) pillX = left + 2;
+                if (pillX + item.pillW > right - 2) pillX = right - item.pillW - 2;
+                item.pillX = pillX;
+
+                let assignedLevel = 0;
+                while (true) {
+                    const occupied = levels[assignedLevel] || [];
+                    const collides = occupied.some(interval => {
+                        return !(pillX + item.pillW + 6 <= interval[0] || pillX >= interval[1] + 6);
+                    });
+                    if (!collides) {
+                        occupied.push([pillX, pillX + item.pillW]);
+                        levels[assignedLevel] = occupied;
+                        item.level = assignedLevel;
+                        break;
+                    }
+                    assignedLevel++;
+                }
+            });
+
+            // Pass 1: Draw vertical dashed marker lines from top to bottom
+            rendered.forEach(item => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = 1.5;
+                ctx.moveTo(item.xPos, top);
+                ctx.lineTo(item.xPos, bottom);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // Pass 2: Draw styled label pills over the marker lines
+            rendered.forEach(item => {
+                ctx.save();
+                const pillY = top + 2 + (item.level * 19);
+
+                // Connector line if staggered down
+                if (item.level > 0) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = item.color;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([2, 2]);
+                    ctx.moveTo(item.xPos, top);
+                    ctx.lineTo(item.xPos, pillY);
+                    ctx.stroke();
+                }
+
+                // High contrast background & border
+                ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([]);
+
+                ctx.shadowColor = isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.12)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 1;
+
+                ctx.beginPath();
+                if (typeof ctx.roundRect === 'function') {
+                    ctx.roundRect(item.pillX, pillY, item.pillW, item.pillH, 4);
+                } else {
+                    ctx.rect(item.pillX, pillY, item.pillW, item.pillH);
+                }
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.shadowColor = 'transparent';
+                ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.fillStyle = item.color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.label, item.pillX + (item.pillW / 2), pillY + (item.pillH / 2));
+
+                ctx.restore();
+            });
+        }
+    };
 
     function initAllCharts() {
         initSpaghettiChart();
@@ -146,7 +387,8 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         chartInstances.spaghetti = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
-            options: getChartOptions('Portfolio Wealth ($)', false)
+            options: getChartOptions('Portfolio Wealth ($)', false),
+            plugins: [milestonePlugin]
         });
     }
 
@@ -201,7 +443,8 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                     }
                 ]
             },
-            options: getChartOptions('Portfolio Wealth ($)', true)
+            options: getChartOptions('Portfolio Wealth ($)', true),
+            plugins: [milestonePlugin]
         });
     }
 
@@ -264,7 +507,8 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                     }
                 ]
             },
-            options: getChartOptions('Total Assets ($)', true, true)
+            options: getChartOptions('Total Assets ($)', true, true),
+            plugins: [milestonePlugin]
         });
     }
 
@@ -331,6 +575,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: { padding: { top: 25, right: 12 } },
                 events: ['click', 'touchstart'],
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
@@ -347,11 +592,13 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                     x: { stacked: true, grid: { display: false } },
                     y: {
                         stacked: true,
+                        grace: '8%',
                         ticks: { callback: value => formatChartCurrency(value) },
                         title: { display: true, text: 'Annual Cash Flow ($)' }
                     }
                 }
-            }
+            },
+            plugins: [milestonePlugin]
         });
     }
 
@@ -389,6 +636,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: { padding: { top: 25, right: 12 } },
                 events: ['click', 'touchstart'],
                 plugins: {
                     legend: { display: false },
@@ -409,11 +657,13 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                 scales: {
                     x: { grid: { display: false } },
                     y: {
+                        grace: '8%',
                         ticks: { callback: value => formatChartCurrency(value) },
                         title: { display: true, text: 'Annual Tax Liability ($)' }
                     }
                 }
-            }
+            },
+            plugins: [milestonePlugin]
         });
     }
 
@@ -421,6 +671,9 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         return {
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: { top: 25, right: 12 }
+            },
             events: ['click', 'touchstart'],
             interaction: { mode: 'index', intersect: false },
             plugins: {
@@ -437,6 +690,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                 x: { grid: { display: false } },
                 y: {
                     stacked: stacked,
+                    grace: '8%',
                     ticks: { callback: value => formatChartCurrency(value) },
                     title: { display: true, text: yAxisTitle }
                 }
@@ -478,7 +732,8 @@ const userStartAge = chartConfig.user_start_age ?? 60;
                         labels: { boxWidth: 14, font: { size: 13 } }
                     }
                 }
-            }
+            },
+            plugins: (sourceChart.config.plugins && sourceChart.config.plugins.length) ? sourceChart.config.plugins : []
         });
 
         const modalEl = document.getElementById('chartModal');
@@ -486,6 +741,50 @@ const userStartAge = chartConfig.user_start_age ?? 60;
             const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
             bsModal.show();
         }
+    }
+
+    // Item 2E: Stale Results Tracker (No Dimming on Results Card)
+    function setupStaleResultsTracker() {
+        const form = document.getElementById('resultsInputsForm');
+        const banner = document.getElementById('staleResultsBanner');
+        if (!form || !banner) return;
+
+        const initialValues = {};
+        const inputs = form.querySelectorAll('input, select');
+        inputs.forEach(inp => {
+            if (inp.type === 'radio') {
+                if (inp.checked) initialValues[inp.name] = inp.value;
+            } else if (inp.name) {
+                initialValues[inp.name] = inp.value;
+            }
+        });
+
+        function checkStale() {
+            let isModified = false;
+            inputs.forEach(inp => {
+                if (inp.type === 'radio') {
+                    if (inp.checked && initialValues[inp.name] !== inp.value) {
+                        isModified = true;
+                    }
+                } else if (inp.name && inp.value !== initialValues[inp.name]) {
+                    isModified = true;
+                }
+            });
+
+            const submitBtns = form.querySelectorAll('button[type="submit"]');
+            if (isModified) {
+                banner.classList.remove('d-none');
+                banner.classList.add('d-flex');
+                submitBtns.forEach(b => b.classList.add('btn-rerun-highlight'));
+            } else {
+                banner.classList.add('d-none');
+                banner.classList.remove('d-flex');
+                submitBtns.forEach(b => b.classList.remove('btn-rerun-highlight'));
+            }
+        }
+
+        form.addEventListener('input', checkStale);
+        form.addEventListener('change', checkStale);
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -497,6 +796,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         }
 
         setTimeout(initAllCharts, 150);
+        setupStaleResultsTracker();
     });
 
     // ==========================================

@@ -33,6 +33,27 @@
         {% csrf_token %}
         <input type="hidden" name="next" id="enterFormNext" value="results">
 
+        <!-- Planner View Mode Toggle (Item 3A: Default Advanced Mode) -->
+        <div class="planner-mode-bar d-flex justify-content-between align-items-center mb-4 p-2 px-3 rounded-3 shadow-sm flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="small fw-bold text-secondary text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Planner Mode:</span>
+                <div class="btn-group btn-group-sm" role="group" id="plannerModeToggle" aria-label="Planner View Mode">
+                    <input type="radio" class="btn-check" name="planner_mode" id="mode_advanced" value="advanced" autocomplete="off" checked>
+                    <label class="btn btn-outline-primary px-3 fw-semibold" for="mode_advanced">
+                        <i class="fa-solid fa-sliders me-1"></i> Advanced Mode (Default)
+                    </label>
+                    <input type="radio" class="btn-check" name="planner_mode" id="mode_simple" value="simple" autocomplete="off">
+                    <label class="btn btn-outline-primary px-3 fw-semibold" for="mode_simple">
+                        <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Simple Mode
+                    </label>
+                </div>
+            </div>
+            <div class="text-secondary small" id="plannerModeDescription">
+                <span id="descAdvanced"><i class="fa-solid fa-circle-check text-primary me-1"></i>Full model active: return volatilities, other taxes/surcharges, and portfolio rebalancing.</span>
+                <span id="descSimple" class="d-none"><i class="fa-solid fa-circle-info text-primary me-1"></i>Streamlined view: essential retirement assets, timeline, and baseline spending.</span>
+            </div>
+        </div>
+
         <!-- Submenu Tab Navigation -->
         <div class="subnav-container mb-4" id="dataEntrySubNav">
             <!-- Mobile/narrow screen bar (< 1200px) with active section label and hamburger button -->
@@ -57,24 +78,28 @@
                             data-bs-target="#demographics" type="button" role="tab" aria-controls="demographics"
                             aria-selected="true" data-tab-name="Demographics & Plan Details">
                             <span class="tab-label-main">Demographics & Plan Details</span>
+                            <span class="tab-summary-badge" id="tabBadgeDemographics"></span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="assets-tab" data-bs-toggle="tab" data-bs-target="#assets" type="button"
                             role="tab" aria-controls="assets" aria-selected="false" data-tab-name="Accounts for Retirement">
                             <span class="tab-label-main">Accounts for Retirement</span>
+                            <span class="tab-summary-badge" id="tabBadgeAccounts"></span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="spending-tab" data-bs-toggle="tab" data-bs-target="#spending"
                             type="button" role="tab" aria-controls="spending" aria-selected="false" data-tab-name="Spending">
                             <span class="tab-label-main">Spending</span>
+                            <span class="tab-summary-badge" id="tabBadgeSpending"></span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button"
                             role="tab" aria-controls="income" aria-selected="false" data-tab-name="Social Security & Income Streams">
                             <span class="tab-label-main">Social Security & Income Streams</span>
+                            <span class="tab-summary-badge" id="tabBadgeIncome"></span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -82,6 +107,7 @@
                             type="button" role="tab" aria-controls="balance-sheet" aria-selected="false" data-tab-name="Balance Sheet (optional)">
                             <span class="tab-label-main">Balance Sheet</span>
                             <span class="tab-label-sub">(optional)</span>
+                            <span class="tab-summary-badge" id="tabBadgeBalanceSheet"></span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -89,6 +115,7 @@
                             type="button" role="tab" aria-controls="rebalance" aria-selected="false" data-tab-name="Rebalance (optional)">
                             <span class="tab-label-main">Rebalance</span>
                             <span class="tab-label-sub">(optional)</span>
+                            <span class="tab-summary-badge" id="tabBadgeRebalance"></span>
                         </button>
                     </li>
                 </ul>
@@ -441,8 +468,8 @@
                     </div>
                 </div>
 
-                <!-- OTHER TAXES CARD -->
-                <div class="card p-4 mb-4">
+                <!-- OTHER TAXES CARD (Item 3A: Advanced Only) -->
+                <div class="card p-4 mb-4 advanced-only-card">
                     <h3 class="mb-2">Other Taxes</h3>
                     <div class="alert alert-info border-0 shadow-sm mb-3">
                         <i class="fa-solid fa-circle-info me-2"></i>

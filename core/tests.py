@@ -451,6 +451,48 @@ class RetirementCalculationTests(TestCase):
         spouse_rmd_row = [r for r in rows if r['spouse_age'] == 75][0]
         self.assertIn("Spouse RMDs Start (75)", spouse_rmd_row['milestones'])
 
+    def test_milestone_markers_and_chart_config(self):
+        import json
+        with open('saved json files/sept23.json', 'r') as f:
+            sept23_data = json.load(f)
+
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        session['simulation_data'] = sept23_data
+        session['data_version'] = 99
+        session.save()
+
+        res_resp = self.client.get('/results/')
+        self.assertEqual(res_resp.status_code, 200)
+
+        # Context contains user retirement age 58 and spouse 60
+        self.assertEqual(res_resp.context['user_retirement_age'], 58)
+        self.assertEqual(res_resp.context['spouse_retirement_age'], 60)
+        self.assertEqual(res_resp.context['user_age'], 38)
+        self.assertEqual(res_resp.context['spouse_age'], 41)
+        self.assertEqual(res_resp.context['user_age_death'], 98)
+        self.assertEqual(res_resp.context['spouse_age_death'], 85)
+
+        # In chart-config-json in response HTML
+        self.assertContains(res_resp, '"user_retirement_age": 58')
+        self.assertContains(res_resp, '"spouse_retirement_age": 60')
+        self.assertContains(res_resp, '"user_ss_start_age": 70')
+        self.assertContains(res_resp, '"spouse_ss_start_age": 62')
+
+        # In det_rows milestones
+        det_rows = res_resp.context['det_rows']
+        sp_ret_row = [r for r in det_rows if r['spouse_age'] == 60][0]
+        self.assertIn("Spouse Retires (60)", sp_ret_row['milestones'])
+
+        u_ret_row = [r for r in det_rows if r['user_age'] == 58][0]
+        self.assertIn("You Retire (58)", u_ret_row['milestones'])
+
+        sp_ss_row = [r for r in det_rows if r['spouse_age'] == 62][0]
+        self.assertIn("Spouse Claims SS (62)", sp_ss_row['milestones'])
+
+        u_ss_row = [r for r in det_rows if r['user_age'] == 70][0]
+        self.assertIn("You Claim SS (70)", u_ss_row['milestones'])
+
 
 
 

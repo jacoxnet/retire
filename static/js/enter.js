@@ -742,7 +742,7 @@
                             <label class="form-label small fw-bold mb-1">Average Return %</label>
                             <input type="text" inputmode="decimal" class="form-control form-control-sm percent-input" name="account_return_mean[]" value="${formatPercent(returnMean)}" step="0.1">
                         </div>
-                        <div class="col-6">
+                        <div class="col-6 advanced-only-field">
                             <label class="form-label small fw-bold mb-1">Volatility (Std Dev)</label>
                             <select class="form-select form-select-sm acc-volatility-select">
                                 <option value="low" ${Math.abs(returnStd - 4.5) < 0.1 ? 'selected' : ''}>Low (4.5%)</option>
@@ -755,7 +755,7 @@
                     </div>
 
                     <!-- Row 7: Taxable Specific Tax Treatment & Unrealized Gains Drawer -->
-                    <div class="acc-taxable-treatment-group border rounded-3 p-3 bg-light mb-3" style="display: ${type === 'taxable' ? 'block' : 'none'};">
+                    <div class="acc-taxable-treatment-group border rounded-3 p-3 bg-light mb-3 advanced-only-field" style="display: ${type === 'taxable' ? 'block' : 'none'};">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="small fw-bold text-dark">
                                 <i class="fa fa-sliders me-1 text-primary"></i> Tax Treatment & Cost Basis
@@ -6896,4 +6896,151 @@
         if (typeof window.validateDuplicateAccountNames === 'function') {
             window.validateDuplicateAccountNames();
         }
+
+        // ======================================================================
+        // Item 2B: Step Completion & Summary Badges on Data Entry Tabs
+        // ======================================================================
+        function formatBadgeMoney(val) {
+            if (isNaN(val) || val <= 0) return '0';
+            if (val >= 1e6) {
+                return (val / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+            } else if (val >= 1e3) {
+                return Math.round(val / 1e3) + 'K';
+            }
+            return Math.round(val).toLocaleString();
+        }
+
+        function updateTabBadges() {
+            // Tab 1: Demographics
+            const uAge = parseInt(document.getElementById('user_age')?.value || 0);
+            const uRet = parseInt(document.getElementById('user_retirement_age')?.value || 0);
+            const badgeDemo = document.getElementById('tabBadgeDemographics');
+            if (badgeDemo) {
+                if (uAge > 0 && uRet > 0) {
+                    badgeDemo.innerHTML = `<span class="badge"><i class="fa-solid fa-circle-check text-success"></i>Age ${uAge}→${uRet}</span>`;
+                } else {
+                    badgeDemo.innerHTML = '';
+                }
+            }
+
+            // Tab 2: Accounts
+            const badgeAcc = document.getElementById('tabBadgeAccounts');
+            if (badgeAcc) {
+                const balInputs = document.querySelectorAll('#accountsContainer [name="account_balance[]"]');
+                let totalBal = 0;
+                let count = balInputs.length;
+                balInputs.forEach(inp => {
+                    const clean = (inp.value || '').replace(/[$, ]/g, '');
+                    const n = parseFloat(clean);
+                    if (!isNaN(n)) totalBal += n;
+                });
+                if (count > 0) {
+                    badgeAcc.innerHTML = `<span class="badge"><i class="fa-solid fa-circle-check text-success"></i>${count} accts • $${formatBadgeMoney(totalBal)}</span>`;
+                } else {
+                    badgeAcc.innerHTML = `<span class="badge text-warning"><i class="fa-solid fa-circle-exclamation"></i>0 accounts</span>`;
+                }
+            }
+
+            // Tab 3: Spending
+            const badgeSpend = document.getElementById('tabBadgeSpending');
+            if (badgeSpend) {
+                const spendInput = document.getElementById('desired_spending');
+                const cleanSpend = (spendInput?.value || '').replace(/[$, ]/g, '');
+                const spendVal = parseFloat(cleanSpend);
+                if (!isNaN(spendVal) && spendVal > 0) {
+                    badgeSpend.innerHTML = `<span class="badge"><i class="fa-solid fa-circle-check text-success"></i>$${formatBadgeMoney(spendVal)}/yr</span>`;
+                } else {
+                    badgeSpend.innerHTML = `<span class="badge text-muted">Baseline</span>`;
+                }
+            }
+
+            // Tab 4: Income Streams & Social Security
+            const badgeIncome = document.getElementById('tabBadgeIncome');
+            if (badgeIncome) {
+                const ssUserAmount = parseFloat((document.getElementById('user_ss_amount')?.value || '0').replace(/[$, ]/g, '')) || 0;
+                const otherRows = document.querySelectorAll('#incomeSourcesTable tbody tr');
+                const streamCount = (ssUserAmount > 0 ? 1 : 0) + (otherRows ? otherRows.length : 0);
+                if (streamCount > 0) {
+                    badgeIncome.innerHTML = `<span class="badge"><i class="fa-solid fa-circle-check text-success"></i>${streamCount} stream${streamCount > 1 ? 's' : ''}</span>`;
+                } else {
+                    badgeIncome.innerHTML = `<span class="badge text-muted">None</span>`;
+                }
+            }
+
+            // Tab 5: Balance Sheet (optional)
+            const badgeBS = document.getElementById('tabBadgeBalanceSheet');
+            if (badgeBS) {
+                badgeBS.innerHTML = `<span class="badge text-muted">Optional</span>`;
+            }
+
+            // Tab 6: Rebalance (optional)
+            const badgeReb = document.getElementById('tabBadgeRebalance');
+            if (badgeReb) {
+                badgeReb.innerHTML = `<span class="badge text-muted">Optional</span>`;
+            }
+        }
+
+        window.updateTabBadges = updateTabBadges;
+        updateTabBadges();
+
+        // Listen for input changes across form to update badges
+        const formEl = document.getElementById('enterDataForm');
+        if (formEl) {
+            formEl.addEventListener('input', function(e) {
+                if (e.target && (e.target.matches('input') || e.target.matches('select'))) {
+                    updateTabBadges();
+                }
+            });
+            formEl.addEventListener('change', function() {
+                updateTabBadges();
+            });
+        }
+
+        // ======================================================================
+        // Item 3A: Simple Mode vs Advanced Mode Toggle (Default: Advanced)
+        // ======================================================================
+        function setupPlannerModeToggle() {
+            const form = document.getElementById('enterDataForm');
+            const radAdv = document.getElementById('mode_advanced');
+            const radSimp = document.getElementById('mode_simple');
+            const descAdv = document.getElementById('descAdvanced');
+            const descSimp = document.getElementById('descSimple');
+
+            function applyMode(mode) {
+                if (!form) return;
+                if (mode === 'simple') {
+                    form.classList.add('planner-simple-mode');
+                    if (radSimp) radSimp.checked = true;
+                    if (descAdv) descAdv.classList.add('d-none');
+                    if (descSimp) descSimp.classList.remove('d-none');
+                } else {
+                    form.classList.remove('planner-simple-mode');
+                    if (radAdv) radAdv.checked = true;
+                    if (descAdv) descAdv.classList.remove('d-none');
+                    if (descSimp) descSimp.classList.add('d-none');
+                }
+            }
+
+            const savedMode = localStorage.getItem('planner_mode') || 'advanced';
+            applyMode(savedMode);
+
+            if (radAdv) {
+                radAdv.addEventListener('change', function() {
+                    if (this.checked) {
+                        localStorage.setItem('planner_mode', 'advanced');
+                        applyMode('advanced');
+                    }
+                });
+            }
+            if (radSimp) {
+                radSimp.addEventListener('change', function() {
+                    if (this.checked) {
+                        localStorage.setItem('planner_mode', 'simple');
+                        applyMode('simple');
+                    }
+                });
+            }
+        }
+
+        setupPlannerModeToggle();
     });

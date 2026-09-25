@@ -75,4 +75,32 @@
                     }
                 });
             }
+
+            // Theme Toggle logic
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+            const themeToggleIcon = document.getElementById('themeToggleIcon');
+
+            function applyThemeIcon(theme) {
+                if (!themeToggleIcon) return;
+                if (theme === 'dark') {
+                    themeToggleIcon.className = 'fa-solid fa-sun text-warning';
+                    if (themeToggleBtn) themeToggleBtn.setAttribute('title', 'Switch to Light Theme');
+                } else {
+                    themeToggleIcon.className = 'fa-solid fa-moon text-secondary';
+                    if (themeToggleBtn) themeToggleBtn.setAttribute('title', 'Switch to Dark Theme');
+                }
+            }
+
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            applyThemeIcon(currentTheme);
+
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', function() {
+                    const activeTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    const newTheme = activeTheme === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('retire_theme', newTheme);
+                    applyThemeIcon(newTheme);
+                });
+            }
         });

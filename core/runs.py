@@ -2507,14 +2507,29 @@ def run_deterministic(sim_input):
             continue
             
         milestones = []
-        if user_alive and user_age_t == inputs['user_rmd_start_age']:
-            milestones.append(f"Your RMDs Start ({user_age_t})")
-        if spouse_alive and spouse_age_t == inputs['spouse_rmd_start_age']:
-            milestones.append(f"Spouse RMDs Start ({spouse_age_t})")
         if user_alive and user_age_t == inputs['user_ret_age']:
             milestones.append(f"You Retire ({user_age_t})")
         if spouse_alive and spouse_age_t == inputs['spouse_ret_age']:
             milestones.append(f"Spouse Retires ({spouse_age_t})")
+
+        ss_data = inputs.get('social_security', {})
+        u_receiving = bool(ss_data.get('user_receiving', False))
+        u_future_entitled = bool(ss_data.get('user_future_entitled', ss_data.get('user_entitled', True)))
+        u_start_age = int(ss_data.get('user_start_age', 67))
+
+        sp_receiving = bool(ss_data.get('spouse_receiving', False)) if inputs.get('is_married') else False
+        sp_future_entitled = bool(ss_data.get('spouse_future_entitled', ss_data.get('spouse_entitled', False))) if inputs.get('is_married') else False
+        sp_start_age = int(ss_data.get('spouse_start_age', 67)) if inputs.get('is_married') else 67
+
+        if user_alive and u_future_entitled and not u_receiving and user_age_t == u_start_age:
+            milestones.append(f"You Claim SS ({user_age_t})")
+        if spouse_alive and sp_future_entitled and not sp_receiving and inputs.get('is_married') and spouse_age_t == sp_start_age:
+            milestones.append(f"Spouse Claims SS ({spouse_age_t})")
+
+        if user_alive and user_age_t == inputs['user_rmd_start_age']:
+            milestones.append(f"Your RMDs Start ({user_age_t})")
+        if spouse_alive and spouse_age_t == inputs['spouse_rmd_start_age']:
+            milestones.append(f"Spouse RMDs Start ({spouse_age_t})")
         if user_alive and user_age_t == inputs['user_age_death']:
             milestones.append(f"Your Final Year ({user_age_t})")
         if spouse_alive and spouse_age_t == inputs['spouse_age_death']:
