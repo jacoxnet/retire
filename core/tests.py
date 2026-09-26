@@ -5230,4 +5230,313 @@ class OtherIncomeStartAgeTextTests(TestCase):
         self.assertNotIn("chartInstances.spaghetti = new Chart(ctx, {\n            type: 'line',\n            data: { labels, datasets },\n            options: getChartOptions('Portfolio Wealth ($)', false),\n            plugins: [milestonePlugin]", js_content)
         self.assertNotIn("chartInstances.trajectory = new Chart(ctx, {\n            type: 'line',\n            data: {\n                labels,\n                datasets: [\n                    {\n                        label: '90th Percentile (Optimistic)',\n                        data: mcP90Data.map((v, t) => scaleVal(v, t)),\n                        borderColor: '#10b981',\n                        backgroundColor: 'rgba(16, 185, 129, 0.1)',\n                        borderWidth: 2.5,\n                        pointRadius: 1,\n                        tension: 0.2\n                    },\n                    {\n                        label: '50th Percentile (Median)',\n                        data: mcP50Data.map((v, t) => scaleVal(v, t)),\n                        borderColor: '#3b82f6',\n                        backgroundColor: 'rgba(59, 130, 246, 0.1)',\n                        borderWidth: 3,\n                        pointRadius: 1,\n                        tension: 0.2\n                    },\n                    {\n                        label: '10th Percentile (Pessimistic)',\n                        data: mcP10Data.map((v, t) => scaleVal(v, t)),\n                        borderColor: '#ef4444',\n                        backgroundColor: 'rgba(239, 68, 68, 0.1)',\n                        borderWidth: 2.5,\n                        pointRadius: 1,\n                        tension: 0.2\n                    }\n                ]\n            },\n            options: getChartOptions('Portfolio Wealth ($)', true),\n            plugins: [milestonePlugin]", js_content)
 
+    def test_sept23_account_contribution_inflation_toggle_persistence_and_deterministic_projection(self):
+        """Verify turning off adjust for inflation on taxable account and HSA in sept23.json persists
+
+        to session, renders as unchecked when navigating back to enter, and stops inflation adjustment
+        in deterministic projection.
+        """
+        import json
+        with open('saved json files/sept23.json', 'r') as f:
+            sept23_data = json.load(f)
+
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        session['simulation_data'] = sept23_data
+        session['data_version'] = 1
+        session.save()
+
+        # Build POST payload from sept23_data accounts, changing taxable contrib to 500
+        # and setting adjust_for_inflation to false for taxable and HSA accounts
+        accs = sept23_data['accounts']
+        post_data = {
+            'simulation_type': 'regular',
+            'user_name': sept23_data.get('user_name', 'Gemini'),
+            'user_age': sept23_data.get('user_age', 38),
+            'user_retirement_age': sept23_data.get('user_retirement_age', 58),
+            'user_age_death': sept23_data.get('user_age_death', 98),
+            'is_married': 'true',
+            'spouse_name': sept23_data.get('spouse_name', 'Claude'),
+            'spouse_age': sept23_data.get('spouse_age', 41),
+            'spouse_retirement_age': sept23_data.get('spouse_retirement_age', 60),
+            'spouse_age_death': sept23_data.get('spouse_age_death', 85),
+            'filing_status': 'joint',
+            'current_year': 2026,
+            'begin_spending_age_type': sept23_data.get('begin_spending_age_type', 'spouse_retirement'),
+            'begin_spending_age_specified': sept23_data.get('begin_spending_age_specified', 60),
+            'desired_spending': sept23_data.get('desired_spending', 108000),
+            'survivor_spending': sept23_data.get('survivor_spending', 80000),
+            'adjust_spending_inflation': 'true',
+            'inflation_rate': sept23_data.get('inflation_rate', 3.5),
+            'runs': 1000,
+            'target_success_rate': 85,
+            'state_tax_rate': 4.5,
+            'state_ss_exempt': 'true',
+            'next': 'results',
+        }
+
+        # Multi-value account fields
+        account_names = []
+        account_ids = []
+        account_types = []
+        account_owners = []
+        account_balances = []
+        account_contrib_amts = []
+        account_contrib_freqs = []
+        account_contrib_starts = []
+        account_contrib_end_types = []
+        account_contrib_end_specs = []
+        account_contrib_infs = []
+        account_return_means = []
+        account_return_stds = []
+        account_hsa_meds = []
+        account_div_yields = []
+        account_qual_div_pcts = []
+        account_int_yields = []
+        account_cg_dist_rates = []
+        account_cost_basis_ratios = []
+        account_is_comm_props = []
+
+        for acc in accs:
+            a_type = acc.get('type')
+            is_taxable = (a_type == 'taxable')
+            is_hsa = (a_type == 'hsa')
+
+            account_ids.append(acc.get('id'))
+            account_names.append(acc.get('name'))
+            account_types.append(a_type)
+            account_owners.append(acc.get('owner', 'user'))
+            account_balances.append(str(acc.get('balance', 0)))
+
+            if is_taxable:
+                account_contrib_amts.append('500') # Changed to $500
+                account_contrib_infs.append('false') # Turned off adjust for inflation
+            elif is_hsa:
+                account_contrib_amts.append(str(acc.get('contrib_amount', 775)))
+                account_contrib_infs.append('false') # Turned off adjust for inflation
+            else:
+                account_contrib_amts.append(str(acc.get('contrib_amount', 0)))
+                account_contrib_infs.append('true')
+
+            account_contrib_freqs.append(acc.get('contrib_freq', 'annual'))
+            account_contrib_starts.append(str(acc.get('contrib_start_age', 38)))
+            account_contrib_end_types.append(acc.get('contrib_end_age_type', 'retirement'))
+            account_contrib_end_specs.append(str(acc.get('contrib_end_age_specified', 58)))
+            account_return_means.append(str(acc.get('return_mean', 6.0)))
+            account_return_stds.append(str(acc.get('return_std', 10.0)))
+            account_hsa_meds.append('true')
+            account_div_yields.append(str(acc.get('dividend_yield', 2.0)))
+            account_qual_div_pcts.append(str(acc.get('qualified_dividend_pct', 85.0)))
+            account_int_yields.append(str(acc.get('interest_yield', 0.0)))
+            account_cg_dist_rates.append(str(acc.get('capital_gains_dist_rate', 0.5)))
+            account_cost_basis_ratios.append(str(acc.get('cost_basis_ratio', 70.0)))
+            account_is_comm_props.append('false')
+
+        post_data['account_id[]'] = account_ids
+        post_data['account_name[]'] = account_names
+        post_data['account_type[]'] = account_types
+        post_data['account_owner[]'] = account_owners
+        post_data['account_balance[]'] = account_balances
+        post_data['account_contrib_amount[]'] = account_contrib_amts
+        post_data['account_contrib_freq[]'] = account_contrib_freqs
+        post_data['account_contrib_start_age[]'] = account_contrib_starts
+        post_data['account_contrib_end_age_type[]'] = account_contrib_end_types
+        post_data['account_contrib_end_age_specified[]'] = account_contrib_end_specs
+        post_data['account_contrib_adjust_inflation[]'] = account_contrib_infs
+        post_data['account_return_mean[]'] = account_return_means
+        post_data['account_return_std[]'] = account_return_stds
+        post_data['account_hsa_for_medical[]'] = account_hsa_meds
+        post_data['account_dividend_yield[]'] = account_div_yields
+        post_data['account_qualified_dividend_pct[]'] = account_qual_div_pcts
+        post_data['account_interest_yield[]'] = account_int_yields
+        post_data['account_capital_gains_dist_rate[]'] = account_cg_dist_rates
+        post_data['account_cost_basis_ratio[]'] = account_cost_basis_ratios
+        post_data['account_is_community_property[]'] = account_is_comm_props
+        post_data['balance_sheet_json'] = json.dumps(sept23_data.get('balance_sheet', {}))
+
+        resp = self.client.post(reverse('enter'), post_data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse('results'), resp.url)
+
+        # 1. Verify session data has contrib_adjust_inflation == False for taxable and HSA
+        saved_sim = self.client.session['simulation_data']
+        saved_taxable = [a for a in saved_sim['accounts'] if a.get('type') == 'taxable'][0]
+        saved_hsa = [a for a in saved_sim['accounts'] if a.get('type') == 'hsa'][0]
+        saved_pretax = [a for a in saved_sim['accounts'] if a.get('type') == 'pretax'][0]
+
+        self.assertEqual(saved_taxable['contrib_amount'], 500.0)
+        self.assertFalse(saved_taxable['contrib_adjust_inflation'])
+        self.assertFalse(saved_hsa['contrib_adjust_inflation'])
+        self.assertTrue(saved_pretax['contrib_adjust_inflation'])
+
+        # Also check balance sheet sync
+        bs_cats = saved_sim['balance_sheet']['categories']
+        bs_taxable_acc = bs_cats['taxable']['accounts'][0]
+        bs_hsa_acc = bs_cats['hsa']['accounts'][0]
+        self.assertFalse(bs_taxable_acc['contrib_adjust_inflation'])
+        self.assertFalse(bs_hsa_acc['contrib_adjust_inflation'])
+
+        # 2. Verify deterministic projection contributions are NOT inflated for taxable and HSA
+        from core.runs import run_deterministic
+        det_result = run_deterministic(saved_sim)
+        rows = det_result
+
+        # Year 0 (t=0): Gemini is 38, Claude is 41.
+        row_0 = rows[0]
+        self.assertEqual(row_0['contribs']['taxable'], 500.0)
+        # Claude's HSA contrib_start_age is 42, so at t=0 (spouse age 41) it is 0
+        self.assertEqual(row_0['contribs']['hsa'], 0.0)
+
+        # Year 1 (t=1): Gemini is 39, Claude is 42 (HSA starts).
+        row_1 = rows[1]
+        self.assertAlmostEqual(row_1['contribs']['taxable'], 500.0, places=1)
+        self.assertAlmostEqual(row_1['contribs']['hsa'], 775.0, places=1)
+
+        # Pretax user contribution at t=1 SHOULD be adjusted for inflation: 23000 * 1.035 = 23805
+        # Total pretax at t=1: Gemini 401k (23000 * 1.035 = 23805) + Claude 403b (600*12 * 1.035 = 7452) + Claude Roth (7000 * 1.035 = 7245)
+        self.assertGreater(row_1['contribs']['pretax'], row_0['contribs']['pretax'])
+
+        # Year 2 (t=2): Taxable should still be 500.0 (NOT 500 * 1.035^2 = 535.6), HSA should still be 775.0 (NOT 775 * 1.035^2 = 830.2)
+        row_2 = rows[2]
+        self.assertAlmostEqual(row_2['contribs']['taxable'], 500.0, places=1)
+        self.assertAlmostEqual(row_2['contribs']['hsa'], 775.0, places=1)
+
+        # Year 5 (t=5): Taxable should STILL be 500.0, HSA should STILL be 775.0
+        row_5 = rows[5]
+        self.assertAlmostEqual(row_5['contribs']['taxable'], 500.0, places=1)
+        self.assertAlmostEqual(row_5['contribs']['hsa'], 775.0, places=1)
+
+        # 3. Verify GET /enter/ retains false for taxable and HSA in initial-accounts JSON script
+        enter_resp = self.client.get(reverse('enter'))
+        self.assertEqual(enter_resp.status_code, 200)
+
+        # Extract initial-accounts JSON block
+        content = enter_resp.content.decode('utf-8')
+        start_marker = '<script id="initial-accounts" type="application/json">'
+        end_marker = '</script>'
+        start_idx = content.find(start_marker)
+        self.assertNotEqual(start_idx, -1)
+        start_idx += len(start_marker)
+        end_idx = content.find(end_marker, start_idx)
+        json_str = content[start_idx:end_idx]
+        rendered_accounts = json.loads(json_str)
+
+        rend_taxable = [a for a in rendered_accounts if a.get('type') == 'taxable'][0]
+        rend_hsa = [a for a in rendered_accounts if a.get('type') == 'hsa'][0]
+        rend_pretax = [a for a in rendered_accounts if a.get('type') == 'pretax'][0]
+
+        self.assertFalse(rend_taxable['contrib_adjust_inflation'])
+        self.assertFalse(rend_hsa['contrib_adjust_inflation'])
+        self.assertTrue(rend_pretax['contrib_adjust_inflation'])
+
+    def test_all_adjust_for_inflation_switches(self):
+        """Verify that turning off each adjust for inflation switch (desired spending,
+
+        additional spending, income sources, other taxes) stops inflation adjustment.
+        """
+        from core.runs import run_deterministic
+
+        base_data = {
+            'user_name': 'TestUser',
+            'user_age': 60,
+            'user_retirement_age': 65,
+            'user_age_death': 70,
+            'is_married': False,
+            'filing_status': 'single',
+            'current_year': 2026,
+            'begin_spending_age_type': 'retirement',
+            'begin_spending_age_specified': 65,
+            'desired_spending': 50000,
+            'survivor_spending': 0,
+            'adjust_spending_inflation': False, # Desired spending inflation OFF
+            'inflation_rate': 4.0,
+            'runs': 500,
+            'target_success_rate': 80,
+            'state_tax_rate': 0.0,
+            'state_ss_exempt': True,
+            'accounts': [
+                {
+                    'id': 'acc_taxable_test',
+                    'name': 'Taxable Account',
+                    'type': 'taxable',
+                    'owner': 'user',
+                    'balance': 100000,
+                    'contrib_amount': 1000,
+                    'contrib_freq': 'annual',
+                    'contrib_start_age': 60,
+                    'contrib_end_age_type': 'retirement',
+                    'contrib_end_age_specified': 65,
+                    'contrib_adjust_inflation': False, # Account contrib inflation OFF
+                    'return_mean': 5.0,
+                    'return_std': 8.0,
+                }
+            ],
+            'additional_spending': [
+                {
+                    'name': 'Car Purchase',
+                    'amount': 20000,
+                    'start_age': 62,
+                    'start_age_type': 'user',
+                    'interval': 0,
+                    'adjust_inflation': False, # Additional spending inflation OFF
+                }
+            ],
+            'income_sources': [
+                {
+                    'name': 'Annuity',
+                    'amount': 12000,
+                    'frequency': 'annual',
+                    'start_age_type': 'retirement',
+                    'start_age_specified': 65,
+                    'end_age_type': 'death',
+                    'end_age_specified': 70,
+                    'subject_to_tax': True,
+                    'adjust_type': 'none', # Income adjustment OFF
+                    'adjust_val': 0.0,
+                }
+            ],
+            'other_taxes': [
+                {
+                    'name': 'Property Tax Surcharge',
+                    'amount': 3000,
+                    'frequency': 'annual',
+                    'start_age_type': 'retirement',
+                    'start_age_specified': 65,
+                    'end_age_type': 'death',
+                    'end_age_specified': 70,
+                    'adjust_type': 'none', # Other tax adjustment OFF
+                    'adjust_val': 0.0,
+                }
+            ]
+        }
+
+        # Aggregate accounts
+        from core.forms import aggregate_accounts
+        agg = aggregate_accounts(base_data['accounts'], 60, 65, 70, False, 60, 65, 70)
+        base_data.update(agg)
+
+        det = run_deterministic(base_data)
+        rows = det
+
+        # 1. Account contributions: should stay exactly 1000 at t=0, 1, 2, etc.
+        self.assertEqual(rows[0]['contribs']['taxable'], 1000.0)
+        self.assertEqual(rows[1]['contribs']['taxable'], 1000.0)
+        self.assertEqual(rows[2]['contribs']['taxable'], 1000.0)
+
+        # 2. Desired spending: at retirement (age 65, t=5), desired spending should be exactly 50000
+        # (NOT 50000 * 1.04^5 = 60832)
+        row_ret = [r for r in rows if r['user_age'] == 65][0]
+        self.assertEqual(row_ret['desired_spending'], 50000.0)
+
+        # 3. Additional spending at age 62 (t=2) should be exactly 20000 (NOT 20000 * 1.04^2 = 21632)
+        row_car = [r for r in rows if r['user_age'] == 62][0]
+        self.assertEqual(row_car['additional_spending'], 20000.0)
+
+        # 4. Income source at age 65 (t=5) should be exactly 12000 (NOT 12000 * 1.04^5)
+        self.assertEqual(row_ret['income_breakdown']['Annuity'], 12000.0)
+
+        # 5. Other tax at age 65 (t=5) should be exactly 3000 (NOT 3000 * 1.04^5)
+        self.assertEqual(row_ret['tax_breakdown']['other_taxes'], 3000.0)
+
+
 

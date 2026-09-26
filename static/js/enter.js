@@ -732,8 +732,9 @@
 
                     <!-- Row 5: Adjust for Inflation Switch -->
                     <div class="form-check form-switch mb-3 ps-5">
-                        <input class="form-check-input" type="checkbox" name="account_contrib_adjust_inflation[]" value="true" ${contribAdjustInf ? 'checked' : ''}>
-                        <label class="form-check-label small font-weight-bold">Adjust Contributions for Inflation</label>
+                        <input class="form-check-input acc-contrib-adjust-inf-check" type="checkbox" id="acc_contrib_adjust_inf_${id}" ${contribAdjustInf ? 'checked' : ''}>
+                        <input type="hidden" class="acc-contrib-adjust-inf-hidden" name="account_contrib_adjust_inflation[]" value="${contribAdjustInf ? 'true' : 'false'}">
+                        <label class="form-check-label small font-weight-bold" for="acc_contrib_adjust_inf_${id}">Adjust Contributions for Inflation</label>
                     </div>
 
                     <!-- Row 6: Expected Returns & Volatility -->
@@ -806,13 +807,29 @@
 
                     <!-- Row 8: HSA Specific Medical Switch -->
                     <div class="form-check form-switch ps-5 acc-hsa-medical-group" style="display: ${type === 'hsa' ? 'block' : 'none'};">
-                        <input class="form-check-input" type="checkbox" name="account_hsa_for_medical[]" value="true" ${hsaForMedical ? 'checked' : ''}>
-                        <label class="form-check-label small font-weight-bold">Used for Qualified Medical Expenses (Tax-Free)</label>
+                        <input class="form-check-input acc-hsa-med-check" type="checkbox" id="acc_hsa_med_${id}" ${hsaForMedical ? 'checked' : ''}>
+                        <input type="hidden" class="acc-hsa-med-hidden" name="account_hsa_for_medical[]" value="${hsaForMedical ? 'true' : 'false'}">
+                        <label class="form-check-label small font-weight-bold" for="acc_hsa_med_${id}">Used for Qualified Medical Expenses (Tax-Free)</label>
                     </div>
                 </div>
             `;
 
             // Listeners for this card
+            const infCheck = col.querySelector('.acc-contrib-adjust-inf-check');
+            const infHidden = col.querySelector('.acc-contrib-adjust-inf-hidden');
+            if (infCheck && infHidden) {
+                infCheck.addEventListener('change', function() {
+                    infHidden.value = this.checked ? 'true' : 'false';
+                });
+            }
+
+            const hsaMedCheck = col.querySelector('.acc-hsa-med-check');
+            const hsaMedHidden = col.querySelector('.acc-hsa-med-hidden');
+            if (hsaMedCheck && hsaMedHidden) {
+                hsaMedCheck.addEventListener('change', function() {
+                    hsaMedHidden.value = this.checked ? 'true' : 'false';
+                });
+            }
             const typeSelect = col.querySelector('.acc-type-select');
             const hsaMedicalGroup = col.querySelector('.acc-hsa-medical-group');
             const taxableTreatmentGroup = col.querySelector('.acc-taxable-treatment-group');
@@ -2512,8 +2529,10 @@
                         var startAgeInput = cardCol.querySelector('[name="account_contrib_start_age[]"]');
                         var endAgeTypeSelect = cardCol.querySelector('.acc-end-age-type');
                         var endAgeSpecInput = cardCol.querySelector('.acc-end-age-spec');
-                        var infSwitch = cardCol.querySelector('[name="account_contrib_adjust_inflation[]"]');
-                        var hsaMedSwitch = cardCol.querySelector('[name="account_hsa_for_medical[]"]');
+                        var infCheck = cardCol.querySelector('.acc-contrib-adjust-inf-check');
+                        var infHidden = cardCol.querySelector('.acc-contrib-adjust-inf-hidden') || cardCol.querySelector('[name="account_contrib_adjust_inflation[]"]');
+                        var hsaMedCheck = cardCol.querySelector('.acc-hsa-med-check');
+                        var hsaMedHidden = cardCol.querySelector('.acc-hsa-med-hidden') || cardCol.querySelector('[name="account_hsa_for_medical[]"]');
 
                         if (nameInput && nameInput.value !== aData.name && document.activeElement !== nameInput) {
                             nameInput.value = aData.name || '';
@@ -2556,8 +2575,10 @@
                                 endAgeSpecInput.value = aData.contrib_end_age_specified;
                             }
                         }
-                        if (infSwitch && aData.contrib_adjust_inflation !== undefined) {
-                            infSwitch.checked = Boolean(aData.contrib_adjust_inflation);
+                        if (aData.contrib_adjust_inflation !== undefined) {
+                            var isInf = Boolean(aData.contrib_adjust_inflation);
+                            if (infCheck) infCheck.checked = isInf;
+                            if (infHidden) infHidden.value = isInf ? 'true' : 'false';
                         }
                         if (meanInput && aData.return_mean !== undefined && document.activeElement !== meanInput) {
                             var curMean = parsePercent(meanInput.value);
@@ -2571,8 +2592,10 @@
                                 stdInput.value = formatPercent(aData.return_std);
                             }
                         }
-                        if (hsaMedSwitch && aData.hsa_for_medical !== undefined) {
-                            hsaMedSwitch.checked = Boolean(aData.hsa_for_medical);
+                        if (aData.hsa_for_medical !== undefined) {
+                            var isHsaMed = Boolean(aData.hsa_for_medical);
+                            if (hsaMedCheck) hsaMedCheck.checked = isHsaMed;
+                            if (hsaMedHidden) hsaMedHidden.value = isHsaMed ? 'true' : 'false';
                         }
                         var divYieldInput = cardCol.querySelector('[name="account_dividend_yield[]"]');
                         var qualDivInput = cardCol.querySelector('[name="account_qualified_dividend_pct[]"]');
@@ -2666,10 +2689,12 @@
                     var startAgeInput = col.querySelector('[name="account_contrib_start_age[]"]');
                     var endAgeTypeSelect = col.querySelector('.acc-end-age-type');
                     var endAgeSpecInput = col.querySelector('.acc-end-age-spec');
-                    var infSwitch = col.querySelector('[name="account_contrib_adjust_inflation[]"]');
+                    var infCheck = col.querySelector('.acc-contrib-adjust-inf-check');
+                    var infHidden = col.querySelector('.acc-contrib-adjust-inf-hidden') || col.querySelector('[name="account_contrib_adjust_inflation[]"]');
                     var meanInput = col.querySelector('[name="account_return_mean[]"]');
                     var stdInput = col.querySelector('[name="account_return_std[]"]');
-                    var hsaMedSwitch = col.querySelector('[name="account_hsa_for_medical[]"]');
+                    var hsaMedCheck = col.querySelector('.acc-hsa-med-check');
+                    var hsaMedHidden = col.querySelector('.acc-hsa-med-hidden') || col.querySelector('[name="account_hsa_for_medical[]"]');
                     var divYieldInput = col.querySelector('[name="account_dividend_yield[]"]');
                     var qualDivInput = col.querySelector('[name="account_qualified_dividend_pct[]"]');
                     var intYieldInput = col.querySelector('[name="account_interest_yield[]"]');
@@ -2686,10 +2711,12 @@
                     var contribStartAge = startAgeInput && startAgeInput.value !== '' ? parseInt(startAgeInput.value, 10) : undefined;
                     var contribEndAgeType = endAgeTypeSelect ? endAgeTypeSelect.value : 'retirement';
                     var contribEndAgeSpec = endAgeSpecInput && endAgeSpecInput.value !== '' ? parseInt(endAgeSpecInput.value, 10) : undefined;
-                    var contribAdjustInf = infSwitch ? infSwitch.checked : true;
+                    var contribAdjustInf = infCheck ? infCheck.checked : (infHidden ? infHidden.value === 'true' : true);
+                    if (infHidden) infHidden.value = contribAdjustInf ? 'true' : 'false';
                     var rMean = meanInput ? parsePercent(meanInput.value) : 6.0;
                     var rStd = stdInput ? parsePercent(stdInput.value) : 10.0;
-                    var hsaForMed = hsaMedSwitch ? hsaMedSwitch.checked : true;
+                    var hsaForMed = hsaMedCheck ? hsaMedCheck.checked : (hsaMedHidden ? hsaMedHidden.value === 'true' : true);
+                    if (hsaMedHidden) hsaMedHidden.value = hsaForMed ? 'true' : 'false';
 
                     var divYield = divYieldInput ? parsePercent(divYieldInput.value) : (type === 'taxable' ? 2.0 : 0.0);
                     var qualDivPct = qualDivInput ? parsePercent(qualDivInput.value) : (type === 'taxable' ? 85.0 : 0.0);

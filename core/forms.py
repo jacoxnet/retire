@@ -240,10 +240,10 @@ def parse_account_rows(post, user_age, user_retirement_age, is_married, spouse_a
             'contrib_start_age': max(def_start, get_int(acc_contrib_starts[i], def_start) if i < len(acc_contrib_starts) else def_start),
             'contrib_end_age_type': acc_contrib_end_types[i] if i < len(acc_contrib_end_types) else ('spouse_retirement' if a_owner == 'spouse' else 'retirement'),
             'contrib_end_age_specified': get_int(acc_contrib_end_specs[i], def_ret) if i < len(acc_contrib_end_specs) else def_ret,
-            'contrib_adjust_inflation': (acc_contrib_infs[i] == 'true') if i < len(acc_contrib_infs) else True,
+            'contrib_adjust_inflation': get_bool(acc_contrib_infs[i]) if i < len(acc_contrib_infs) else True,
             'return_mean': get_float(acc_return_means[i], 6.0) if i < len(acc_return_means) else 6.0,
             'return_std': get_float(acc_return_stds[i], 10.0) if i < len(acc_return_stds) else 10.0,
-            'hsa_for_medical': (acc_hsa_meds[i] == 'true') if i < len(acc_hsa_meds) else True,
+            'hsa_for_medical': get_bool(acc_hsa_meds[i]) if i < len(acc_hsa_meds) else True,
             'dividend_yield': div_y,
             'qualified_dividend_pct': qual_pct,
             'interest_yield': int_y,
@@ -441,7 +441,7 @@ def aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, 
             base['contrib_start_age'] = primary.get('contrib_start_age', base['contrib_start_age'])
             base['contrib_end_age_type'] = primary.get('contrib_end_age_type', base['contrib_end_age_type'])
             base['contrib_end_age_specified'] = primary.get('contrib_end_age_specified', base['contrib_end_age_specified'])
-            base['contrib_adjust_inflation'] = primary.get('contrib_adjust_inflation', True)
+            base['contrib_adjust_inflation'] = get_bool(primary.get('contrib_adjust_inflation', True))
             if 'hsa_for_medical' in base:
                 base['hsa_for_medical'] = any(a.get('hsa_for_medical', True) for a in acc_list)
             base['accounts'] = acc_list
@@ -1163,10 +1163,16 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             c_start = get_int(match.get('contrib_start_age', acc.get('contrib_start_age', def_start)))
             c_end_type = match.get('contrib_end_age_type') or acc.get('contrib_end_age_type', 'spouse_retirement' if aowner == 'spouse' else 'retirement')
             c_end_spec = get_int(match.get('contrib_end_age_specified', acc.get('contrib_end_age_specified', def_ret)))
-            c_inf = get_bool(match.get('contrib_adjust_inflation', acc.get('contrib_adjust_inflation', True)))
+            c_inf_val = match.get('contrib_adjust_inflation')
+            if c_inf_val is None:
+                c_inf_val = acc.get('contrib_adjust_inflation', True)
+            c_inf = get_bool(c_inf_val)
             r_mean = get_float(match.get('return_mean', acc.get('return_mean', 6.0)))
             r_std = get_float(match.get('return_std', acc.get('return_std', 10.0)))
-            hsa_med = get_bool(match.get('hsa_for_medical', acc.get('hsa_for_medical', True)))
+            hsa_med_val = match.get('hsa_for_medical')
+            if hsa_med_val is None:
+                hsa_med_val = acc.get('hsa_for_medical', True)
+            hsa_med = get_bool(hsa_med_val)
             div_y = get_float(match.get('dividend_yield', acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)))
             qual_pct = get_float(match.get('qualified_dividend_pct', acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)))
             int_y = get_float(match.get('interest_yield', acc.get('interest_yield', 0.0)))
@@ -1321,10 +1327,16 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
             matched['contrib_start_age'] = get_int(acc.get('contrib_start_age', matched.get('contrib_start_age', 60)))
             matched['contrib_end_age_type'] = acc.get('contrib_end_age_type', matched.get('contrib_end_age_type', 'retirement'))
             matched['contrib_end_age_specified'] = get_int(acc.get('contrib_end_age_specified', matched.get('contrib_end_age_specified', 65)))
-            matched['contrib_adjust_inflation'] = get_bool(acc.get('contrib_adjust_inflation', matched.get('contrib_adjust_inflation', True)))
+            c_inf_val = acc.get('contrib_adjust_inflation')
+            if c_inf_val is None:
+                c_inf_val = matched.get('contrib_adjust_inflation', True)
+            matched['contrib_adjust_inflation'] = get_bool(c_inf_val)
             matched['return_mean'] = get_float(acc.get('return_mean', matched.get('return_mean', 6.0)))
             matched['return_std'] = get_float(acc.get('return_std', matched.get('return_std', 10.0)))
-            matched['hsa_for_medical'] = get_bool(acc.get('hsa_for_medical', matched.get('hsa_for_medical', True)))
+            hsa_med_val = acc.get('hsa_for_medical')
+            if hsa_med_val is None:
+                hsa_med_val = matched.get('hsa_for_medical', True)
+            matched['hsa_for_medical'] = get_bool(hsa_med_val)
             matched['dividend_yield'] = get_float(acc.get('dividend_yield', matched.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)))
             matched['qualified_dividend_pct'] = get_float(acc.get('qualified_dividend_pct', matched.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)))
             matched['interest_yield'] = get_float(acc.get('interest_yield', matched.get('interest_yield', 0.0)))
