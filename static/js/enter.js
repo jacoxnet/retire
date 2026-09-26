@@ -256,17 +256,20 @@
         const survivorSpendingGroup = document.getElementById('survivor_spending_group');
         const spouseSsContainer = document.getElementById('spouse_ss_container');
 
-        function toggleSpouseSection() {
+        // Called with the change event when the user toggles Married, and with no
+        // argument on page load, where the saved filing status must be kept.
+        function toggleSpouseSection(evt) {
+            var userToggled = !!evt;
             if (isMarriedCheckbox.checked) {
                 spouseSection.style.display = 'block';
                 survivorSpendingGroup.style.display = 'block';
                 if (spouseSsContainer) spouseSsContainer.style.display = 'block';
-                document.getElementById('filing_status').value = 'joint';
+                if (userToggled) document.getElementById('filing_status').value = 'joint';
             } else {
                 spouseSection.style.display = 'none';
                 survivorSpendingGroup.style.display = 'none';
                 if (spouseSsContainer) spouseSsContainer.style.display = 'none';
-                document.getElementById('filing_status').value = 'single';
+                if (userToggled) document.getElementById('filing_status').value = 'single';
             }
             updateSpouseDropdownOptions();
             updateAccountsSpouseOwners();

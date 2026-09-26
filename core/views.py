@@ -721,7 +721,7 @@ def enter_view(request):
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         redirect_target = request.POST.get('next', 'results')
-        if redirect_target not in ('results', 'manage_data'):
+        if redirect_target not in ('results', 'manage_data', 'enter'):
             redirect_target = 'results'
         return redirect(reverse(redirect_target))
     else:

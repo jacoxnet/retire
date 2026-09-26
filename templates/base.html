@@ -19,12 +19,7 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20260925-1">
     <link rel="icon" href="{% static 'favicon.png' %}">
-    <script>
-        (function() {
-            var savedTheme = localStorage.getItem('retire_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        })();
-    </script>
+    <script src="{% static 'js/theme-init.js' %}"></script>
 </head>
 
 <body>

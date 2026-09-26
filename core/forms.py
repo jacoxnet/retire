@@ -152,6 +152,10 @@ def parse_income_sources(post):
                             })
                     if clean_adjs:
                         row['adjustments'] = clean_adjs
+                        # The form only submits the schedule; keep the flat legacy
+                        # fields in step with its first period instead of defaults.
+                        row['adjust_type'] = clean_adjs[0]['adjust_type']
+                        row['adjust_val'] = clean_adjs[0]['adjust_val']
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
         
@@ -1173,6 +1177,10 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             if hsa_med_val is None:
                 hsa_med_val = acc.get('hsa_for_medical', True)
             hsa_med = get_bool(hsa_med_val)
+            comm_prop_val = match.get('is_community_property')
+            if comm_prop_val is None:
+                comm_prop_val = acc.get('is_community_property', False)
+            comm_prop = get_bool(comm_prop_val)
             div_y = get_float(match.get('dividend_yield', acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)))
             qual_pct = get_float(match.get('qualified_dividend_pct', acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)))
             int_y = get_float(match.get('interest_yield', acc.get('interest_yield', 0.0)))
@@ -1193,6 +1201,7 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             r_mean = get_float(acc.get('return_mean', 6.0))
             r_std = get_float(acc.get('return_std', 10.0))
             hsa_med = get_bool(acc.get('hsa_for_medical', True))
+            comm_prop = get_bool(acc.get('is_community_property', False))
             div_y = get_float(acc.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0))
             qual_pct = get_float(acc.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0))
             int_y = get_float(acc.get('interest_yield', 0.0))
@@ -1222,6 +1231,7 @@ def sync_balance_sheet_to_accounts(balance_sheet, existing_accounts=None, user_a
             'interest_yield': int_y,
             'capital_gains_dist_rate': cg_rate,
             'cost_basis_ratio': basis_ratio,
+            'is_community_property': comm_prop,
         })
 
     # 1. Standard categories
@@ -1337,6 +1347,10 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
             if hsa_med_val is None:
                 hsa_med_val = matched.get('hsa_for_medical', True)
             matched['hsa_for_medical'] = get_bool(hsa_med_val)
+            comm_prop_val = acc.get('is_community_property')
+            if comm_prop_val is None:
+                comm_prop_val = matched.get('is_community_property', False)
+            matched['is_community_property'] = get_bool(comm_prop_val)
             matched['dividend_yield'] = get_float(acc.get('dividend_yield', matched.get('dividend_yield', 2.0 if atype == 'taxable' else 0.0)))
             matched['qualified_dividend_pct'] = get_float(acc.get('qualified_dividend_pct', matched.get('qualified_dividend_pct', 85.0 if atype == 'taxable' else 0.0)))
             matched['interest_yield'] = get_float(acc.get('interest_yield', matched.get('interest_yield', 0.0)))
@@ -1370,6 +1384,7 @@ def sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=2026):
                 'interest_yield': get_float(acc.get('interest_yield', 0.0)),
                 'capital_gains_dist_rate': get_float(acc.get('capital_gains_dist_rate', 0.5 if atype == 'taxable' else 0.0)),
                 'cost_basis_ratio': get_float(acc.get('cost_basis_ratio', 70.0 if atype == 'taxable' else 100.0)),
+                'is_community_property': get_bool(acc.get('is_community_property', False)),
             })
 
     # Clean up unlinked default placeholders if active accounts exist in that category
