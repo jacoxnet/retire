@@ -5538,5 +5538,112 @@ class OtherIncomeStartAgeTextTests(TestCase):
         # 5. Other tax at age 65 (t=5) should be exactly 3000 (NOT 3000 * 1.04^5)
         self.assertEqual(row_ret['tax_breakdown']['other_taxes'], 3000.0)
 
+    def test_multiple_income_sources_persistence_and_initial_render(self):
+        """Verify that multiple income sources (e.g. Pension and Annuity) persist
+
+        through simulation and are properly rendered into initial-income-sources JSON block.
+        Also verifies enter.js contains safe guards preventing undefined bsState exceptions
+        during initial list loading.
+        """
+        import json
+        import os
+        from django.conf import settings
+        from django.urls import reverse
+        from core.runs import run_deterministic
+
+        # 1. Check enter.js static guard assertions
+        js_path = os.path.join(settings.BASE_DIR, 'static', 'js', 'enter.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+
+        # refreshBsMarginalTaxRate must guard against undefined bsState
+        self.assertIn("if (typeof bsState === 'undefined' || !bsState || typeof bsState !== 'object') return;", js_content)
+        # addIncomeRow must check bsState before calling refreshBsMarginalTaxRate
+        self.assertIn("typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function'", js_content)
+
+        # 2. Setup session with two income streams: Pension ($1,000/mo, inflation=True) and Annuity ($500/mo, inflation=False)
+        from core.views import get_default_data
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        data = get_default_data()
+        data['income_sources'] = [
+            {
+                'name': 'Pension',
+                'amount': 1000.0,
+                'frequency': 'monthly',
+                'start_age_type': 'retirement',
+                'start_age_specified': 65,
+                'end_age_type': 'death',
+                'end_age_specified': 90,
+                'adjust_type': 'inflation',
+                'adjust_val': 0.0,
+                'adjust_start_age_type': 'start',
+                'adjust_start_age_specified': 65,
+                'periods': [
+                    {'period_id': 1, 'amount': 1000.0, 'start_age_type': 'retirement', 'start_age_specified': 65,
+                     'end_age_type': 'death', 'end_age_specified': 90, 'adjust_type': 'inflation', 'adjust_val': 0.0,
+                     'adjust_start_age_type': 'start', 'adjust_start_age_specified': 65}
+                ],
+                'subject_to_tax': True,
+                'owner': 'user',
+            },
+            {
+                'name': 'Annuity',
+                'amount': 500.0,
+                'frequency': 'monthly',
+                'start_age_type': 'retirement',
+                'start_age_specified': 65,
+                'end_age_type': 'death',
+                'end_age_specified': 90,
+                'adjust_type': 'none',
+                'adjust_val': 0.0,
+                'adjust_start_age_type': 'start',
+                'adjust_start_age_specified': 65,
+                'periods': [
+                    {'period_id': 1, 'amount': 500.0, 'start_age_type': 'retirement', 'start_age_specified': 65,
+                     'end_age_type': 'death', 'end_age_specified': 90, 'adjust_type': 'none', 'adjust_val': 0.0,
+                     'adjust_start_age_type': 'start', 'adjust_start_age_specified': 65}
+                ],
+                'subject_to_tax': True,
+                'owner': 'user',
+            }
+        ]
+        session['simulation_data'] = data
+        session.save()
+
+        # 3. Deterministic projection contains both Pension and Annuity
+        rows = run_deterministic(data)
+        row_65 = [r for r in rows if r['user_age'] == 65][0]
+        self.assertIn('Pension', row_65['income_breakdown'])
+        self.assertIn('Annuity', row_65['income_breakdown'])
+        self.assertEqual(row_65['income_breakdown']['Pension'], 12000.0) # $1,000/mo * 12
+        self.assertEqual(row_65['income_breakdown']['Annuity'], 6000.0)   # $500/mo * 12
+
+        # 4. GET / (enter page) renders both income sources in #initial-income-sources
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode('utf-8')
+
+        start_marker = '<script id="initial-income-sources" type="application/json">'
+        end_marker = '</script>'
+        start_idx = content.find(start_marker)
+        self.assertNotEqual(start_idx, -1)
+        start_idx += len(start_marker)
+        end_idx = content.find(end_marker, start_idx)
+        json_str = content[start_idx:end_idx]
+        rendered_incomes = json.loads(json_str)
+
+        self.assertEqual(len(rendered_incomes), 2)
+        names = [inc['name'] for inc in rendered_incomes]
+        self.assertIn('Pension', names)
+        self.assertIn('Annuity', names)
+
+        pension = [inc for inc in rendered_incomes if inc['name'] == 'Pension'][0]
+        annuity = [inc for inc in rendered_incomes if inc['name'] == 'Annuity'][0]
+        self.assertEqual(pension['amount'], 1000.0)
+        self.assertEqual(pension['adjust_type'], 'inflation')
+        self.assertEqual(annuity['amount'], 500.0)
+        self.assertEqual(annuity['adjust_type'], 'none')
+
 
 

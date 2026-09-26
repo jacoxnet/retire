@@ -1524,21 +1524,21 @@
 
             card.querySelector('.btnDeleteRow').addEventListener('click', function () {
                 card.remove();
-                if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
+                if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
             });
 
             var amtInp = card.querySelector('[name="income_amount[]"]');
             if (amtInp) {
-                amtInp.addEventListener('input', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
-                amtInp.addEventListener('change', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+                amtInp.addEventListener('input', function() { if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+                amtInp.addEventListener('change', function() { if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
             }
             var freqSel = card.querySelector('.inc-frequency');
             if (freqSel) {
-                freqSel.addEventListener('change', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+                freqSel.addEventListener('change', function() { if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
             }
             var taxSel = card.querySelector('[name="income_subject_to_tax[]"]');
             if (taxSel) {
-                taxSel.addEventListener('change', function() { if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
+                taxSel.addEventListener('change', function() { if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate(); });
             }
 
             if (incomeStreamsContainer) {
@@ -1548,13 +1548,15 @@
             attachPercentInputListeners(card.querySelector('.inc-survivor-pct'));
             updateCardSurvivorSection(card);
             updateSpouseDropdownOptions();
-            if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
+            if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') {
+                refreshBsMarginalTaxRate();
+            }
         }
 
         if (btnAddIncomeRow) {
             btnAddIncomeRow.addEventListener('click', function () {
                 addIncomeRow();
-                if (typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
+                if (typeof bsState !== 'undefined' && bsState && typeof refreshBsMarginalTaxRate === 'function') refreshBsMarginalTaxRate();
             });
         }
 
@@ -1749,7 +1751,11 @@
             var initialAccounts = JSON.parse(document.getElementById('initial-accounts').textContent);
             if (Array.isArray(initialAccounts) && initialAccounts.length > 0) {
                 initialAccounts.forEach(function (acc) {
-                    addAccountCard(acc);
+                    try {
+                        addAccountCard(acc);
+                    } catch (err) {
+                        console.error("Error loading initial account:", acc, err);
+                    }
                 });
             }
         } catch (e) { console.log("No initial accounts"); }
@@ -1758,7 +1764,11 @@
             var initialAddSpending = JSON.parse(document.getElementById('initial-additional-spending').textContent);
             if (Array.isArray(initialAddSpending)) {
                 initialAddSpending.forEach(function (item) {
-                    addSpendingRow(item);
+                    try {
+                        addSpendingRow(item);
+                    } catch (err) {
+                        console.error("Error loading initial spending item:", item, err);
+                    }
                 });
             }
         } catch (e) { console.log("No initial spending items"); }
@@ -1767,7 +1777,11 @@
             var initialIncome = JSON.parse(document.getElementById('initial-income-sources').textContent);
             if (Array.isArray(initialIncome)) {
                 initialIncome.forEach(function (item) {
-                    addIncomeRow(item);
+                    try {
+                        addIncomeRow(item);
+                    } catch (err) {
+                        console.error("Error loading initial income source:", item, err);
+                    }
                 });
             }
         } catch (e) { console.log("No initial income sources"); }
@@ -1776,7 +1790,11 @@
             var initialOtherTaxes = JSON.parse(document.getElementById('initial-other-taxes').textContent);
             if (Array.isArray(initialOtherTaxes)) {
                 initialOtherTaxes.forEach(function (item) {
-                    addOtherTaxRow(item);
+                    try {
+                        addOtherTaxRow(item);
+                    } catch (err) {
+                        console.error("Error loading initial other tax:", item, err);
+                    }
                 });
             }
         } catch (e) { console.log("No initial other taxes"); }
@@ -2086,6 +2104,7 @@
         };
 
         window.resetBsMarginalTaxRateOverride = function() {
+            if (typeof bsState === 'undefined' || !bsState || typeof bsState !== 'object') return;
             bsState.marginal_tax_rate_override = null;
             var autoRate = parseFloat(bsState.marginal_tax_rate) || 24.0;
             var inputEl = document.getElementById('bsTaxRateOverrideInput');
@@ -2095,13 +2114,14 @@
             }
             var resetBtn = document.getElementById('bsTaxRateResetBtn');
             if (resetBtn) resetBtn.style.display = 'none';
-            recalculateBsTableDisplay();
-            updateBsKpis();
-            renderBsHistoricalChart(bsState.chart_metric);
-            serializeBalanceSheet();
+            if (typeof recalculateBsTableDisplay === 'function') recalculateBsTableDisplay();
+            if (typeof updateBsKpis === 'function') updateBsKpis();
+            if (typeof renderBsHistoricalChart === 'function') renderBsHistoricalChart(bsState.chart_metric);
+            if (typeof serializeBalanceSheet === 'function') serializeBalanceSheet();
         };
 
         function refreshBsMarginalTaxRate() {
+            if (typeof bsState === 'undefined' || !bsState || typeof bsState !== 'object') return;
             bsState.marginal_tax_rate = getCalculatedMarginalTaxRate();
             var inputEl = document.getElementById('bsTaxRateOverrideInput');
             var resetBtn = document.getElementById('bsTaxRateResetBtn');
@@ -2117,10 +2137,10 @@
                     resetBtn.title = 'Reset to auto-calculated rate (' + bsState.marginal_tax_rate.toFixed(1) + '%)';
                 }
             }
-            recalculateBsTableDisplay();
-            updateBsKpis();
-            renderBsHistoricalChart(bsState.chart_metric);
-            serializeBalanceSheet();
+            if (typeof recalculateBsTableDisplay === 'function') recalculateBsTableDisplay();
+            if (typeof updateBsKpis === 'function') updateBsKpis();
+            if (typeof renderBsHistoricalChart === 'function') renderBsHistoricalChart(bsState.chart_metric);
+            if (typeof serializeBalanceSheet === 'function') serializeBalanceSheet();
         }
 
         ['state_tax_rate', 'desired_spending', 'is_married', 'filing_status',
