@@ -394,3 +394,75 @@ class NavigationPersistenceTests(TestCase):
         self._seed(_rich_plan())
         resp = self._post_from_page(self._render_enter(), next_page='enter')
         self.assertEqual(resp.url, reverse('enter'))
+
+
+class ResultsInputsPersistenceTests(TestCase):
+    """The Results page's Simulation Inputs card posts every field on each submit."""
+
+    def setUp(self):
+        plan = _rich_plan()
+        plan['runs'] = 50
+        plan['inflation_rate'] = 3.14
+        # Distinct returns that the card's one-decimal display cannot show exactly.
+        for i, acc in enumerate(plan['accounts']):
+            acc['return_mean'] = 5.0 + i * 0.37
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        session['simulation_data'] = plan
+        session.save()
+        self.saved = server_round_trip(self.client)
+
+    def _results_form(self):
+        content = self.client.get(reverse('results')).content.decode('utf-8')
+        start = content.find('id="resultsInputsForm"')
+        self.assertNotEqual(start, -1)
+        parser = _FormControlParser()
+        parser.feed(content[content.rfind('<form', 0, start):content.find('</form>', start)])
+        return {k: v for k, v in parser.fields if k != 'csrfmiddlewaretoken'}
+
+    def _submit(self, **changes):
+        post = self._results_form()
+        post.update(changes)
+        resp = self.client.post(reverse('change_mode'), post)
+        self.assertEqual(resp.status_code, 302)
+        return copy.deepcopy(self.client.session['simulation_data']), [str(m) for m in resp.wsgi_request._messages]
+
+    def test_untouched_fields_are_not_rewritten(self):
+        after, _ = self._submit(runs='60')
+        before = dict(self.saved, runs=60)
+        diffs = list(_diff({k: v for k, v in before.items() if k not in DERIVED_KEYS},
+                           {k: v for k, v in after.items() if k not in DERIVED_KEYS}))
+        self.assertEqual(diffs, [], 'Changing only runs altered other values:\n  ' + '\n  '.join(diffs))
+
+    def test_changed_return_is_applied_exactly(self):
+        after, _ = self._submit(taxable_return_mean='7.25')
+        taxable = [a for a in after['accounts'] if a['type'] == 'taxable']
+        self.assertTrue(taxable)
+        self.assertEqual({a['return_mean'] for a in taxable}, {7.25})
+        untouched = {a['id']: a['return_mean'] for a in self.saved['accounts'] if a['type'] != 'taxable'}
+        self.assertEqual(untouched, {a['id']: a['return_mean'] for a in after['accounts'] if a['type'] != 'taxable'})
+
+    def test_age_of_death_that_breaks_schedules_is_rejected(self):
+        # sept23 has additional spending starting at 62, so death at 60 is invalid.
+        after, msgs = self._submit(user_age_death='60', runs='70')
+        self.assertEqual(after['user_age_death'], self.saved['user_age_death'])
+        self.assertEqual(after['runs'], 70, 'other edits in the same submit should still apply')
+        self.assertIn('Age at Death was not changed.', msgs)
+
+    def test_valid_age_of_death_is_applied_and_enter_still_saves(self):
+        after, msgs = self._submit(user_age_death='95')
+        self.assertEqual(after['user_age_death'], 95)
+        self.assertNotIn('Age at Death was not changed.', msgs)
+        self.assertEqual(server_round_trip(self.client)['user_age_death'], 95)
+
+
+class FilingStatusNormalizationTests(TestCase):
+
+    def test_married_single_is_saved_as_joint(self):
+        plan = _rich_plan()
+        plan['filing_status'] = 'single'
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        session['simulation_data'] = plan
+        session.save()
+        self.assertEqual(server_round_trip(self.client)['filing_status'], 'joint')

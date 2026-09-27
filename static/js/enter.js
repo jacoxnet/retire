@@ -1011,9 +1011,9 @@
                     } else {
                         ownerGroup.style.display = 'none';
                         typeCol.className = 'col-12';
-                        if (ownerSelect) ownerSelect.value = 'user';
                     }
                 }
+                if (ownerSelect) syncSpouseChoice(ownerSelect, isMarried, 'user');
             });
         }
 
@@ -6049,9 +6049,43 @@
         toggleSpouseSection();
         toggleSpendingStartAge();
 
+        // Unticking Married moves each spouse-based age choice to its single-person
+        // equivalent. Remember the original so that ticking Married again (before
+        // saving) restores it, unless the user has since picked something else.
+        // Returns true when the select's value was changed.
+        function syncSpouseChoice(select, isMarried, singleValue) {
+            if (!isMarried && select.value.includes('spouse')) {
+                select.dataset.marriedValue = select.value;
+                select.dataset.singleValue = singleValue;
+                select.value = singleValue;
+                return true;
+            }
+            if (isMarried && select.dataset.marriedValue !== undefined) {
+                var restore = select.value === select.dataset.singleValue;
+                if (restore) select.value = select.dataset.marriedValue;
+                delete select.dataset.marriedValue;
+                delete select.dataset.singleValue;
+                return restore;
+            }
+            return false;
+        }
+
         function updateSpouseDropdownOptions() {
             var p = getPersonLabels();
             var isMarried = p.isMarried;
+
+            // 0. Filing Status: married users can't file Single (the engine treats it as Joint)
+            var filingSelect = document.getElementById('filing_status');
+            if (filingSelect) {
+                var singleOpt = filingSelect.querySelector('option[value="single"]');
+                if (singleOpt) {
+                    singleOpt.style.display = isMarried ? 'none' : '';
+                    singleOpt.disabled = isMarried;
+                }
+                if (isMarried && filingSelect.value === 'single') {
+                    filingSelect.value = 'joint';
+                }
+            }
 
             // 1. Retirement Spending Start Age Select
             var spendSelect = document.getElementById('begin_spending_age_type');
@@ -6072,8 +6106,7 @@
                         opt.disabled = !isMarried;
                     }
                 }
-                if (!isMarried && spendSelect.value.includes('spouse')) {
-                    spendSelect.value = 'retirement';
+                if (syncSpouseChoice(spendSelect, isMarried, 'retirement')) {
                     toggleSpendingStartAge();
                 }
             }
@@ -6138,8 +6171,7 @@
                             eOpt.disabled = !isMarried;
                         }
                     }
-                    if (!isMarried && endAgeTypeSelect.value.includes('spouse')) {
-                        endAgeTypeSelect.value = 'retirement';
+                    if (syncSpouseChoice(endAgeTypeSelect, isMarried, 'retirement')) {
                         var changeEvt = new Event('change');
                         endAgeTypeSelect.dispatchEvent(changeEvt);
                     }
@@ -6160,9 +6192,7 @@
                         if (sOpt.value === 'user') sOpt.textContent = p.userName + "'s Age";
                         if (sOpt.value === 'spouse') sOpt.textContent = p.spouseName + "'s Age";
                     }
-                    if (!isMarried && startTypeSelect.value === 'spouse') {
-                        startTypeSelect.value = 'user';
-                    }
+                    syncSpouseChoice(startTypeSelect, isMarried, 'user');
                 }
                 if (startAgeInput) {
                     updateAgeHelperBadge(startAgeInput, startTypeSelect ? startTypeSelect.value === 'spouse' : false);
@@ -6190,8 +6220,7 @@
                             opt.disabled = !isMarried;
                         }
                     }
-                    if (!isMarried && incStartSelect.value.includes('spouse')) {
-                        incStartSelect.value = 'retirement';
+                    if (syncSpouseChoice(incStartSelect, isMarried, 'retirement')) {
                         var evt = new Event('change');
                         incStartSelect.dispatchEvent(evt);
                     }
@@ -6213,8 +6242,7 @@
                             eOpt.disabled = !isMarried;
                         }
                     }
-                    if (!isMarried && incEndSelect.value.includes('spouse')) {
-                        incEndSelect.value = 'death';
+                    if (syncSpouseChoice(incEndSelect, isMarried, 'death')) {
                         var eEvt = new Event('change');
                         incEndSelect.dispatchEvent(eEvt);
                     }
@@ -6242,8 +6270,7 @@
                                 pOpt.textContent = "At Current Age (" + p.userAge + ")";
                             }
                         }
-                        if (!isMarried && pStartSelect.value.includes('spouse')) {
-                            pStartSelect.value = 'current_age';
+                        if (syncSpouseChoice(pStartSelect, isMarried, 'current_age')) {
                             var pEvt = new Event('change');
                             pStartSelect.dispatchEvent(pEvt);
                         }
@@ -6271,8 +6298,7 @@
                                 peOpt.disabled = !isMarried;
                             }
                         }
-                        if (!isMarried && pEndSelect.value.includes('spouse')) {
-                            pEndSelect.value = 'death';
+                        if (syncSpouseChoice(pEndSelect, isMarried, 'death')) {
                             var peEvt = new Event('change');
                             pEndSelect.dispatchEvent(peEvt);
                         }
@@ -6305,8 +6331,7 @@
                             opt.disabled = !isMarried;
                         }
                     }
-                    if (!isMarried && otStartSelect.value.includes('spouse')) {
-                        otStartSelect.value = 'retirement';
+                    if (syncSpouseChoice(otStartSelect, isMarried, 'retirement')) {
                         var otEvt = new Event('change');
                         otStartSelect.dispatchEvent(otEvt);
                     }
@@ -6329,8 +6354,7 @@
                             eOpt.disabled = !isMarried;
                         }
                     }
-                    if (!isMarried && otEndSelect.value.includes('spouse')) {
-                        otEndSelect.value = 'death';
+                    if (syncSpouseChoice(otEndSelect, isMarried, 'death')) {
                         var oteEvt = new Event('change');
                         otEndSelect.dispatchEvent(oteEvt);
                     }
@@ -6355,8 +6379,7 @@
                             aOpt.disabled = !isMarried;
                         }
                     }
-                    if (!isMarried && otAdjStartSelect.value.includes('spouse')) {
-                        otAdjStartSelect.value = 'current_age';
+                    if (syncSpouseChoice(otAdjStartSelect, isMarried, 'current_age')) {
                         var otaEvt = new Event('change');
                         otAdjStartSelect.dispatchEvent(otaEvt);
                     }

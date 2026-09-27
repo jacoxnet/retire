@@ -313,6 +313,28 @@ def load_plan_view(request):
         
     return redirect(reverse(redirect_target))
 
+def death_age_errors(data):
+    """The Enter page's checks that depend on age of death, for edits made elsewhere."""
+    user_age = get_int(data.get('user_age'), 60)
+    user_age_death = get_int(data.get('user_age_death'), 90)
+    is_married = get_bool(data.get('is_married'))
+    spouse_age = get_int(data.get('spouse_age'), 60)
+    spouse_age_death = get_int(data.get('spouse_age_death'), 92)
+
+    errors = []
+    if user_age_death <= user_age or user_age_death > 120:
+        errors.append(f"Your Age at Death must be an integer greater than Your Present Age ({user_age}) up to 120.")
+    if is_married and (spouse_age_death <= spouse_age or spouse_age_death > 120):
+        errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
+    if data.get('begin_spending_age_type') == 'specified':
+        begin_age = get_int(data.get('begin_spending_age_specified'), 65)
+        if begin_age < user_age or begin_age > user_age_death:
+            errors.append(f"Specified Spending Start Age ({begin_age}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
+    errors.extend(validate_accounts(data.get('accounts', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    errors.extend(validate_additional_spending(data.get('additional_spending', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    return errors
+
+
 @require_http_methods(["POST"])
 def change_mode_view(request):
     sim_type = request.POST.get('simulation_type', 'regular')
@@ -332,11 +354,26 @@ def change_mode_view(request):
         else:
             data['target_success_rate'] = target_rate
 
+    # The Simulation Inputs card shows rounded values and always submits every
+    # field, so an untouched field posts back a rounded copy of the saved value.
+    # Only apply a field when the user actually changed what was displayed.
+    def changed_value(key, current, decimals):
+        if key not in request.POST:
+            return None
+        posted = get_float(request.POST.get(key), None)
+        if posted is None:
+            return None
+        if current is not None and round(posted, decimals) == round(get_float(current), decimals):
+            return None
+        return posted
+
     # Input adjustments from Simulation Inputs card sliders/steppers
-    if 'desired_spending' in request.POST:
-        data['desired_spending'] = get_float(request.POST.get('desired_spending'), data.get('desired_spending', 0.0))
-    if 'inflation_rate' in request.POST:
-        data['inflation_rate'] = get_float(request.POST.get('inflation_rate'), data.get('inflation_rate', 2.5))
+    new_spending = changed_value('desired_spending', data.get('desired_spending'), 0)
+    if new_spending is not None:
+        data['desired_spending'] = new_spending
+    new_inflation = changed_value('inflation_rate', data.get('inflation_rate'), 1)
+    if new_inflation is not None:
+        data['inflation_rate'] = new_inflation
     if 'runs' in request.POST:
         runs_val = get_int(request.POST.get('runs'), data.get('runs', 10000))
         if runs_val < 1 or runs_val > 100000:
@@ -344,17 +381,33 @@ def change_mode_view(request):
             data['runs'] = min(100000, max(1, runs_val))
         else:
             data['runs'] = runs_val
-    if 'user_age_death' in request.POST:
-        data['user_age_death'] = get_int(request.POST.get('user_age_death'), data.get('user_age_death', 90))
-    if 'spouse_age_death' in request.POST:
-        data['spouse_age_death'] = get_int(request.POST.get('spouse_age_death'), data.get('spouse_age_death', 90))
+
+    # Age of death drives every age-based schedule, so apply the same checks the
+    # Enter page runs; an invalid change is rejected rather than saved.
+    new_user_death = changed_value('user_age_death', data.get('user_age_death'), 0)
+    new_spouse_death = changed_value('spouse_age_death', data.get('spouse_age_death'), 0) if data.get('is_married') else None
+    if new_user_death is not None or new_spouse_death is not None:
+        trial = dict(data)
+        if new_user_death is not None:
+            trial['user_age_death'] = int(new_user_death)
+        if new_spouse_death is not None:
+            trial['spouse_age_death'] = int(new_spouse_death)
+        death_errors = death_age_errors(trial)
+        if death_errors:
+            for err in death_errors:
+                messages.error(request, err)
+            messages.error(request, "Age at Death was not changed.")
+        else:
+            data['user_age_death'] = trial['user_age_death']
+            data['spouse_age_death'] = trial['spouse_age_death']
 
     # Asset return updates
     updated_returns = False
     for prefix in ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa']:
         key = f'{prefix}_return_mean'
-        if key in request.POST:
-            val = get_float(request.POST.get(key), data.get(prefix + '_assets', {}).get('return_mean', 5.0))
+        current_return = (data.get(prefix + '_assets') or {}).get('return_mean')
+        val = changed_value(key, current_return, 1)
+        if val is not None:
             if prefix + '_assets' not in data or not isinstance(data[prefix + '_assets'], dict):
                 data[prefix + '_assets'] = {}
             data[prefix + '_assets']['return_mean'] = val
@@ -424,6 +477,8 @@ def enter_view(request):
         filing_status = request.POST.get('filing_status', 'single')
         if not is_married and filing_status == 'joint':
             filing_status = 'single'
+        elif is_married and filing_status == 'single':
+            filing_status = 'joint'
             
         current_year = get_int(request.POST.get('current_year'), 2026)
         

@@ -319,3 +319,107 @@ class EnterPageBrowserTests(StaticLiveServerTestCase):
         end_types = [a['contrib_end_age_type'] for a in saved['accounts']]
         self.assertEqual(len(end_types), len(plan['accounts']))
         self.assertNotIn('first_death', end_types, 'disabled first_death option was kept')
+
+    def test_married_users_are_not_offered_single_filing(self):
+        plan = copy.deepcopy(self.plan)
+        plan['filing_status'] = 'single'  # e.g. an older saved plan
+        self._seed_browser_session(plan)
+        self._open_enter()
+        state = self.page.evaluate("""() => {
+            const sel = document.getElementById('filing_status');
+            const single = sel.querySelector('option[value="single"]');
+            return {value: sel.value, singleDisabled: single.disabled};
+        }""")
+        self.assertEqual(state, {'value': 'joint', 'singleDisabled': True})
+        # Unmarrying offers Single again and selects it; re-marrying switches back to Joint.
+        self.page.uncheck('#is_married')
+        self.assertEqual(self.page.eval_on_selector('#filing_status', 'e => e.value'), 'single')
+        self.assertFalse(self.page.eval_on_selector('#filing_status option[value="single"]', 'o => o.disabled'))
+        self.page.check('#is_married')
+        self.assertEqual(self.page.eval_on_selector('#filing_status', 'e => e.value'), 'joint')
+        self._leave_via_manage_data()
+        self.assertEqual(self._saved_data()['filing_status'], 'joint')
+        self._assert_no_js_errors()
+
+    # -- controls that restructure the page (skipped by the generic sweep) -------
+
+    def _account_card(self, acc_id):
+        return self.page.locator(
+            f'#accountsContainer .account-card-col:has(input[name="account_id[]"][value="{acc_id}"])')
+
+    @staticmethod
+    def _saved_account(saved, acc_id):
+        return next(a for a in saved['accounts'] if a['id'] == acc_id)
+
+    @staticmethod
+    def _balance_sheet_entry(saved, acc_id):
+        for cat_key, cat in saved['balance_sheet']['categories'].items():
+            if isinstance(cat, dict):
+                for acc in cat.get('accounts', []):
+                    if acc.get('id') == acc_id:
+                        return cat_key, acc
+        return None, None
+
+    def test_changing_account_type_moves_it_everywhere(self):
+        for acc_id, new_type in [('acc_g_401k', 'roth'), ('acc_joint_taxable', 'pretax'), ('acc_g_roth', 'taxable')]:
+            with self.subTest(account=acc_id, new_type=new_type):
+                original = self._saved_account(self.plan, acc_id)
+                self._seed_browser_session(self.plan)
+                self._open_enter()
+                self._open_tab('assets')
+                self._account_card(acc_id).locator('.acc-type-select').select_option(new_type)
+                self._leave_via_manage_data()
+
+                saved = self._saved_data()
+                acc = self._saved_account(saved, acc_id)
+                self.assertEqual(acc['type'], new_type)
+                self.assertEqual((acc['balance'], acc['contrib_amount'], acc['return_mean']),
+                                 (original['balance'], original['contrib_amount'], original['return_mean']))
+                self.assertEqual(self._balance_sheet_entry(saved, acc_id)[0], new_type,
+                                 'balance sheet still files the account under its old type')
+                self.assertIn(acc_id, [a['id'] for a in saved[f'{new_type}_assets'].get('accounts', [])],
+                              'simulation totals do not include the account under its new type')
+
+                self._open_enter()
+                self._open_tab('assets')
+                self.assertEqual(self._account_card(acc_id).locator('.acc-type-select').input_value(), new_type)
+                self._assert_no_js_errors()
+
+    def test_changing_account_owner_to_spouse(self):
+        self._seed_browser_session(self.plan)
+        self._open_enter()
+        self._open_tab('assets')
+        card = self._account_card('acc_g_401k')
+        card.locator('.acc-owner-select').select_option('spouse')
+        # The spouse is 41, so a start age of 38 is no longer valid; the user must update it.
+        card.locator('[name="account_contrib_start_age[]"]').fill(str(self.plan['spouse_age'] + 1))
+        self._leave_via_manage_data()
+
+        saved = self._saved_data()
+        acc = self._saved_account(saved, 'acc_g_401k')
+        self.assertEqual((acc['owner'], acc['contrib_end_age_type']), ('spouse', 'spouse_retirement'))
+        self.assertEqual(self._balance_sheet_entry(saved, 'acc_g_401k')[1]['owner'], 'spouse')
+        self.assertIn('acc_g_401k', [a['id'] for a in saved['spouse_pretax_assets'].get('accounts', [])])
+        self.assertNotIn('acc_g_401k', [a['id'] for a in saved['pretax_assets'].get('accounts', [])])
+
+        self._open_enter()
+        self._open_tab('assets')
+        self.assertEqual(self._account_card('acc_g_401k').locator('.acc-owner-select').input_value(), 'spouse')
+        self._assert_no_js_errors()
+
+    def test_toggling_married_off_and_on_before_saving_keeps_spouse_data(self):
+        self._seed_browser_session(self.plan)
+        self._open_enter()
+        self.page.uncheck('#is_married')
+        self.page.check('#is_married')
+        self._leave_via_manage_data()
+
+        saved = self._saved_data()
+        for key in ('is_married', 'spouse_name', 'spouse_age', 'spouse_retirement_age', 'spouse_age_death',
+                    'survivor_spending', 'begin_spending_age_type'):
+            self.assertEqual(saved[key], self.plan[key], key)
+        self.assertEqual([(a['id'], a['owner']) for a in saved['accounts']],
+                         [(a['id'], a['owner']) for a in self.plan['accounts']])
+        self.assertEqual([(i['start_age_type'], i['end_age_type']) for i in saved['income_sources']],
+                         [(i['start_age_type'], i['end_age_type']) for i in self.plan['income_sources']])
+        self._assert_no_js_errors()
