@@ -626,7 +626,7 @@
         "marginal_tax_rate": 26.5,
         "marginal_tax_rate_override": null,
         "period_view_limit": 0,
-        "period_view_frequency": "all",
+        "period_view_frequency": "yearly",
         "chart_metric": "breakdown",
         "emergency_goal_amount": 40000,
         "categories": {
@@ -1703,22 +1703,30 @@
         ],
         "account_allocations": {
             "acc_jack_403b": {
-                "ac_stocks": 100
+                "ac_stocks": 90,
+                "ac_reits": 5,
+                "ac_bitcoin": 5
             },
             "acc_diane_pretax_ira": {
-                "ac_stocks": 100
+                "ac_stocks": 60,
+                "ac_bonds": 40
             },
             "acc_jack_roth_ira": {
-                "ac_stocks": 100
+                "ac_stocks": 70,
+                "ac_reits": 20,
+                "ac_bitcoin": 10
             },
             "acc_diane_roth_401k": {
-                "ac_stocks": 100
+                "ac_stocks": 65,
+                "ac_bonds": 35
             },
             "acc_joint_taxable": {
-                "ac_stocks": 100
+                "ac_stocks": 70,
+                "ac_bonds": 30
             },
             "acc_jack_hsa": {
-                "ac_stocks": 100
+                "ac_stocks": 50,
+                "ac_bonds": 50
             },
             "acc_emg_cash": {
                 "ac_stocks": 100
