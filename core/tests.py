@@ -209,6 +209,7 @@ class RetirementCalculationTests(TestCase):
         self.assertIn('chart-print-img', css)
         self.assertIn('#charts .col-print-6', css)
         self.assertIn('#charts .col-print-12', css)
+        self.assertIn('flex: 0 0 70%', css)
         self.assertIn('273px', css)
         self.assertIn('#projection table th', css)
         self.assertIn('#cashflow table th', css)

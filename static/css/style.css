@@ -2177,14 +2177,12 @@ tbody tr:hover {
   }
 
   /* =========================================================================
-     Section 4: Charts Subpage (Strictly 1 Page)
+     Section 4: Charts Subpage
      ========================================================================= */
   #charts {
     display: block !important;
     page-break-before: always !important;
     break-before: page !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
@@ -2206,8 +2204,11 @@ tbody tr:hover {
   }
 
   #charts .row.g-4 {
+    display: block !important;
     --bs-gutter-x: 0.5rem !important;
     --bs-gutter-y: 0.35rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     margin-top: 0 !important;
   }
 
@@ -2219,6 +2220,7 @@ tbody tr:hover {
     margin-bottom: 0 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    break-inside: avoid-page !important;
   }
 
   #charts .chart-card .card-header {
@@ -2247,6 +2249,9 @@ tbody tr:hover {
     max-height: 273px !important;
     width: 100% !important;
     position: relative !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    break-inside: avoid-page !important;
   }
 
   /* Hide canvas and display rendered static print image */
@@ -2260,18 +2265,53 @@ tbody tr:hover {
     height: 100% !important;
     max-height: 273px !important;
     object-fit: fill !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
-  /* 2 - 1 - 2 Chart Layout (Row 1: 50% / 50%, Row 2: 100%, Row 3: 50% / 50%) */
+  /* 2 - 1 - 2 Chart Layout (Row 1: 50% / 50%, Row 2: 70% Centered, Row 3: 50% / 50%) */
   #charts .col-print-6 {
+    display: inline-block !important;
+    vertical-align: top !important;
+    width: 49.5% !important;
+    max-width: 49.5% !important;
     flex: 0 0 50% !important;
-    max-width: 50% !important;
-    width: 50% !important;
+    margin-bottom: 6px !important;
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    break-inside: avoid-page !important;
   }
 
   #charts .col-print-12 {
-    flex: 0 0 100% !important;
-    max-width: 100% !important;
-    width: 100% !important;
+    display: block !important;
+    width: 70% !important;
+    max-width: 70% !important;
+    flex: 0 0 70% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: 4px !important;
+    margin-bottom: 6px !important;
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+    clear: both !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    break-inside: avoid-page !important;
+  }
+
+  /* Prevent row pairs from splitting apart across pages */
+  #charts .col-print-6:nth-of-type(1) {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  #charts .col-print-6:nth-of-type(4) {
+    clear: left !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 }
