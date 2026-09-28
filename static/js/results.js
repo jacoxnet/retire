@@ -973,6 +973,14 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         }
     });
 
+    // Print / Export Executive Report
+    const btnPrintSummary = document.getElementById('btnPrintSummary');
+    if (btnPrintSummary) {
+        btnPrintSummary.addEventListener('click', function() {
+            window.print();
+        });
+    }
+
     // Save Plan (JSON)
     const btnExportJSON = document.getElementById('btnExportJSON');
     if (btnExportJSON) {

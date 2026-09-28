@@ -159,14 +159,25 @@ class RetirementCalculationTests(TestCase):
         self.assertEqual(SimulationData.objects.count(), 0)
 
     def test_content_security_policy_header(self):
-        response = self.client.get(reverse('enter'))
-        csp = response.headers.get('Content-Security-Policy', '')
-        self.assertIn("script-src 'self'", csp)
-        self.assertIn("frame-ancestors 'none'", csp)
-        script_src = next(d for d in csp.split(';') if d.strip().startswith('script-src'))
-        self.assertNotIn("'unsafe-inline'", script_src)
-        # Inline event handlers are blocked by the CSP, so pages must not contain any
-        self.assertNotRegex(response.content.decode(), r'\son[a-z]+="')
+        self.client.get('/')
+        for path in ('/', '/results/', '/manage_data/'):
+            response = self.client.get(path)
+            csp = response.headers.get('Content-Security-Policy', '')
+            self.assertIn("script-src 'self'", csp)
+            self.assertIn("frame-ancestors 'none'", csp)
+            script_src = next(d for d in csp.split(';') if d.strip().startswith('script-src'))
+            self.assertNotIn("'unsafe-inline'", script_src)
+            # Inline event handlers are blocked by the CSP, so pages must not contain any
+            self.assertNotRegex(response.content.decode(), r'\son[a-z]+="', f'{path} contains inline event handler')
+
+    def test_results_page_print_export_button(self):
+        self.client.get('/')
+        response = self.client.get('/results/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="btnPrintSummary"')
+        self.assertContains(response, 'Print / Export Report')
+        # Button must not have inline onclick handler which would be blocked by CSP
+        self.assertNotContains(response, 'onclick=')
 
     def test_hundredths_inflation_rate(self):
         post_data = {
