@@ -973,11 +973,83 @@ const userStartAge = chartConfig.user_start_age ?? 60;
         }
     });
 
+    // Prepare all tabs and chart canvases before print
+    function prepareForPrint() {
+        const panes = document.querySelectorAll('.tab-content > .tab-pane');
+        panes.forEach(p => {
+            p.classList.add('show', 'active');
+        });
+
+        // Disable animations so charts paint completely and synchronously
+        const origAnimation = (window.Chart && Chart.defaults) ? Chart.defaults.animation : undefined;
+        if (window.Chart && Chart.defaults) {
+            Chart.defaults.animation = false;
+        }
+
+        initAllCharts();
+
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) {
+                if (typeof chart.resize === 'function') chart.resize();
+                if (typeof chart.update === 'function') chart.update('none');
+            }
+        });
+
+        // Export rendered canvas bitmaps to static images for 100% reliable printing
+        const chartMap = [
+            { canvasId: 'spaghettiChartCanvas', imgId: 'spaghettiChartPrintImg' },
+            { canvasId: 'trajectoryChartCanvas', imgId: 'trajectoryChartPrintImg' },
+            { canvasId: 'assetBreakdownChartCanvas', imgId: 'assetBreakdownChartPrintImg' },
+            { canvasId: 'incomeSpendingChartCanvas', imgId: 'incomeSpendingChartPrintImg' },
+            { canvasId: 'taxLiabilityChartCanvas', imgId: 'taxLiabilityChartPrintImg' }
+        ];
+
+        chartMap.forEach(item => {
+            const canvas = document.getElementById(item.canvasId);
+            const img = document.getElementById(item.imgId);
+            if (canvas && img) {
+                try {
+                    img.src = canvas.toDataURL('image/png');
+                } catch (e) {
+                    console.error('Error generating print image for', item.canvasId, e);
+                }
+            }
+        });
+
+        if (window.Chart && Chart.defaults && origAnimation !== undefined) {
+            Chart.defaults.animation = origAnimation;
+        }
+    }
+
+    function restoreAfterPrint() {
+        const activeTab = document.querySelector('#resultsTabs .nav-link.active');
+        const targetId = activeTab ? activeTab.getAttribute('data-bs-target') : '#stats';
+        const panes = document.querySelectorAll('.tab-content > .tab-pane');
+        panes.forEach(p => {
+            if ('#' + p.id === targetId) {
+                p.classList.add('show', 'active');
+            } else {
+                p.classList.remove('show', 'active');
+            }
+        });
+        Object.values(chartInstances).forEach(chart => {
+            if (chart && typeof chart.resize === 'function') {
+                chart.resize();
+            }
+        });
+    }
+
+    window.addEventListener('beforeprint', prepareForPrint);
+    window.addEventListener('afterprint', restoreAfterPrint);
+
     // Print / Export Executive Report
     const btnPrintSummary = document.getElementById('btnPrintSummary');
     if (btnPrintSummary) {
         btnPrintSummary.addEventListener('click', function() {
-            window.print();
+            prepareForPrint();
+            setTimeout(function() {
+                window.print();
+            }, 80);
         });
     }
 

@@ -179,6 +179,75 @@ class RetirementCalculationTests(TestCase):
         # Button must not have inline onclick handler which would be blocked by CSP
         self.assertNotContains(response, 'onclick=')
 
+    def test_print_stylesheet_and_structure(self):
+        self.client.get('/')
+        response = self.client.get('/results/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="stats"')
+        self.assertContains(response, 'id="projection"')
+        self.assertContains(response, 'id="cashflow"')
+        self.assertContains(response, 'id="charts"')
+        self.assertContains(response, 'class="print-only-header')
+        self.assertContains(response, 'id="spaghettiChartPrintImg"')
+        self.assertContains(response, 'id="trajectoryChartPrintImg"')
+        self.assertContains(response, 'id="assetBreakdownChartPrintImg"')
+        self.assertContains(response, 'id="incomeSpendingChartPrintImg"')
+        self.assertContains(response, 'id="taxLiabilityChartPrintImg"')
+        self.assertContains(response, 'col-print-6')
+        self.assertContains(response, 'col-print-12')
+
+        # Verify static CSS contains expected print pagination, landscape, and repeating header rules
+        with open('static/css/style.css', 'r', encoding='utf-8') as f:
+            css = f.read()
+        self.assertIn('@media print', css)
+        self.assertIn('size: landscape', css)
+        self.assertIn('display: table-header-group', css)
+        self.assertIn('overflow: visible', css)
+        self.assertIn('#projection, #cashflow', css)
+        self.assertIn('#stats', css)
+        self.assertIn('#charts', css)
+        self.assertIn('chart-print-img', css)
+        self.assertIn('#charts .col-print-6', css)
+        self.assertIn('#charts .col-print-12', css)
+        self.assertIn('273px', css)
+        self.assertIn('#projection table th', css)
+        self.assertIn('#cashflow table th', css)
+
+        # Verify results.js print preparation lifecycle and image export
+        with open('static/js/results.js', 'r', encoding='utf-8') as f:
+            js = f.read()
+        self.assertIn('beforeprint', js)
+        self.assertIn('afterprint', js)
+        self.assertIn('prepareForPrint', js)
+        self.assertIn('toDataURL', js)
+
+    def test_sept27_plan_results_print_sections(self):
+        import json
+        with open('saved json files/sept27.json', 'r') as f:
+            sept27_data = json.load(f)
+
+        # Cap runs for fast test execution
+        sept27_data['runs'] = 50
+
+        session = self.client.session
+        session['server_run_id'] = settings.SERVER_RUN_ID
+        session['simulation_data'] = sept27_data
+        session['data_version'] = 99
+        session.save()
+
+        res = self.client.get('/results/')
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'Jack')
+        self.assertContains(res, 'Diane')
+        self.assertContains(res, 'id="stats"')
+        self.assertContains(res, 'id="projection"')
+        self.assertContains(res, 'id="cashflow"')
+        self.assertContains(res, 'id="charts"')
+        self.assertContains(res, 'id="btnPrintSummary"')
+        # 51 projection rows for Jack & Diane (2026 to 2076)
+        self.assertEqual(len(res.context['det_rows']), 51)
+        self.assertContains(res, '2076')
+
     def test_hundredths_inflation_rate(self):
         post_data = {
             'simulation_type': 'regular',
