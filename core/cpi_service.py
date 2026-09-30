@@ -6,12 +6,12 @@ Implements the fixed prior-month reporting lag rule, Treasury contingency
 overrides (such as October 2025 shutdown), and resilient caching with offline fallback.
 """
 
-import os
 import json
-import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+from django.core.cache import cache
 
 # U.S. Treasury Department official contingency index values (under 31 CFR Part 356)
 # invoked for TIPS and inflation obligations when official BLS figures are suspended.
@@ -21,8 +21,8 @@ TREASURY_CONTINGENCY_OVERRIDES = {
 
 BASE_DIR = Path(__file__).resolve().parent
 SEED_FILE = BASE_DIR / "data" / "cpi_u_historical.json"
-CACHE_FILE = BASE_DIR / "data" / "cpi_cache.json"
 FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCNS"
+CACHE_KEY = "cpi_u_monthly_dataset"
 CACHE_TTL_SECONDS = 86400  # 24 hours
 
 
@@ -111,49 +111,42 @@ def _interpolate_missing_months(data: dict) -> dict:
 
 
 def load_cpi_data(force_refresh: bool = False) -> dict:
-    """Load the full CPI-U monthly dataset.
-    Prioritizes local cache; if expired or missing, tries to refresh from FRED.
-    Falls back gracefully to bundled historical seed data.
-    """
-    now_ts = time.time()
-    cached_data = None
+    """Load the full CPI-U monthly dataset using the hybrid approach.
 
-    if CACHE_FILE.exists() and not force_refresh:
-        try:
-            with open(CACHE_FILE, "r") as f:
-                cache_payload = json.load(f)
-                timestamp = cache_payload.get("timestamp", 0)
-                if now_ts - timestamp < CACHE_TTL_SECONDS and "data" in cache_payload:
-                    return cache_payload["data"]
-                cached_data = cache_payload.get("data")
-        except Exception:
-            pass
+    1. Checks Django's cache first if force_refresh is False.
+    2. On cache miss or force_refresh, attempts to fetch latest observations from FRED.
+    3. If FRED succeeds, stores the dataset in Django cache and returns it.
+    4. If FRED fails (network error, timeout, offline), falls back to existing cache if available,
+       then bundled read-only seed data (cpi_u_historical.json), and lastly Treasury contingency overrides.
+    """
+    if not force_refresh:
+        cached_data = cache.get(CACHE_KEY)
+        if cached_data:
+            return cached_data
 
     # Try refreshing from FRED
     try:
         fred_data = fetch_fred_cpi_data(timeout=5)
         if fred_data and len(fred_data) > 500:
             fred_data = _interpolate_missing_months(fred_data)
-            try:
-                CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-                with open(CACHE_FILE, "w") as f:
-                    json.dump({"timestamp": now_ts, "data": fred_data}, f)
-            except Exception:
-                pass
+            cache.set(CACHE_KEY, fred_data, CACHE_TTL_SECONDS)
             return fred_data
     except Exception:
         pass
 
-    # If refresh failed, return existing cached data if available
+    # If refresh failed, keep existing cached data if available
+    cached_data = cache.get(CACHE_KEY)
     if cached_data:
         return cached_data
 
-    # Fallback to seed data
+    # Fallback to bundled historical seed data
     if SEED_FILE.exists():
         try:
             with open(SEED_FILE, "r") as f:
                 seed_data = json.load(f)
-                return _interpolate_missing_months(seed_data)
+                interpolated = _interpolate_missing_months(seed_data)
+                cache.set(CACHE_KEY, interpolated, CACHE_TTL_SECONDS)
+                return interpolated
         except Exception:
             pass
 

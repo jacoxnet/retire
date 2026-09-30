@@ -1,6 +1,6 @@
-"""Unit and integration tests for CPI-U target inflation and FRED service."""
-
 import json
+from unittest.mock import patch
+from django.core.cache import cache
 from django.test import TestCase, Client
 from django.urls import reverse
 
@@ -11,6 +11,8 @@ from core.cpi_service import (
     calculate_cpi_inflation,
     get_latest_cpi_month,
     TREASURY_CONTINGENCY_OVERRIDES,
+    CACHE_KEY,
+    BASE_DIR,
 )
 from core.forms import build_default_balance_sheet, parse_balance_sheet
 
@@ -18,12 +20,56 @@ from core.forms import build_default_balance_sheet, parse_balance_sheet
 class CpiServiceTests(TestCase):
     """Test CPI data retrieval, interpolation, contingency overrides, and lag calculations."""
 
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
     def test_load_cpi_data_contains_treasury_contingency(self):
         data = load_cpi_data()
         self.assertIsInstance(data, dict)
         self.assertGreater(len(data), 500)
         # October 2025 federal shutdown contingency
         self.assertEqual(data.get("2025-10"), 325.604)
+
+    def test_load_cpi_data_cache_hit_avoids_network(self):
+        cache.set(CACHE_KEY, {"2026-08": 334.98, "2025-10": 325.604})
+        with patch("core.cpi_service.fetch_fred_cpi_data") as mock_fetch:
+            data = load_cpi_data(force_refresh=False)
+            mock_fetch.assert_not_called()
+            self.assertEqual(data.get("2026-08"), 334.98)
+
+    def test_load_cpi_data_force_refresh_bypasses_cache(self):
+        cache.set(CACHE_KEY, {"2026-08": 100.0})
+        dummy_fred = {
+            f"20{i:02d}-{m:02d}": 300.0 + i
+            for i in range(0, 45)
+            for m in range(1, 13)
+            if f"20{i:02d}-{m:02d}" != "2025-10"
+        }
+        with patch("core.cpi_service.fetch_fred_cpi_data", return_value=dummy_fred) as mock_fetch:
+            data = load_cpi_data(force_refresh=True)
+            mock_fetch.assert_called_once()
+            self.assertEqual(data["2025-10"], 325.604)  # Treasury contingency applied
+            self.assertEqual(cache.get(CACHE_KEY)["2025-10"], 325.604)
+
+    def test_load_cpi_data_offline_fallback_to_seed(self):
+        with patch("core.cpi_service.fetch_fred_cpi_data", side_effect=Exception("FRED offline")):
+            data = load_cpi_data(force_refresh=False)
+            self.assertIsInstance(data, dict)
+            self.assertGreater(len(data), 500)
+            self.assertEqual(data.get("2025-10"), 325.604)
+            # Verify cached for subsequent requests
+            self.assertIsNotNone(cache.get(CACHE_KEY))
+
+    def test_no_cache_file_created_in_source_tree(self):
+        cache_file = BASE_DIR / "data" / "cpi_cache.json"
+        self.assertFalse(cache_file.exists())
+        load_cpi_data()
+        self.assertFalse(cache_file.exists(), "cpi_cache.json should NOT be created in the source tree")
 
     def test_get_prior_month_str(self):
         self.assertEqual(get_prior_month_str("2024-02-15"), "2024-01")

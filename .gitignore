@@ -62,6 +62,7 @@ db.sqlite3
 db.sqlite3-journal
 assets/
 core/migrations/*
+core/data/cpi_cache.json
 
 # Flask stuff:
 instance/
