@@ -1,4 +1,5 @@
 import json
+import math
 import datetime
 
 """
@@ -31,9 +32,10 @@ def get_float(val, default=0.0):
     try:
         if isinstance(val, str):
             val = val.replace('$', '').replace('%', '').replace(',', '').strip()
-        return float(val)
+        num = float(val)
     except (TypeError, ValueError):
         return default
+    return num if math.isfinite(num) else default
 
 
 def get_int(val, default=0):
@@ -41,7 +43,7 @@ def get_int(val, default=0):
         if isinstance(val, str):
             val = val.replace('$', '').replace('%', '').replace(',', '').strip()
         return int(float(val))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -582,6 +584,196 @@ def validate_scheduled_items(label, items):
                 a_start = item.get('adjust_start_age_specified', 65)
                 if a_start < 18 or a_start > 120:
                     errors.append(f"{label} '{name}' Adjustment Start Age must be between 18 and 120.")
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Imported plan normalization: a loaded JSON file bypasses the POST parsers
+# above, so its fields are coerced to the same types they would produce.
+# ---------------------------------------------------------------------------
+
+PLAN_SCALAR_KINDS = {
+    'goal_seeking': 'bool',
+    'simulation_type': 'str',
+    'user_name': 'str',
+    'user_age': 'int',
+    'user_retirement_age': 'int',
+    'user_age_death': 'int',
+    'is_married': 'bool',
+    'spouse_name': 'str',
+    'spouse_age': 'int',
+    'spouse_retirement_age': 'int',
+    'spouse_age_death': 'int',
+    'filing_status': 'str',
+    'current_year': 'int',
+    'begin_spending_age_type': 'str',
+    'begin_spending_age_specified': 'int',
+    'desired_spending': 'float',
+    'survivor_spending': 'float',
+    'adjust_spending_inflation': 'bool',
+    'inflation_rate': 'float',
+    'runs': 'int',
+    'target_success_rate': 'float',
+    'state_tax_rate': 'float',
+    'state_ss_exempt': 'bool',
+    'user_life_insurance_amount': 'float',
+    'user_life_insurance_type': 'str',
+    'user_life_insurance_term_age': 'int',
+    'spouse_life_insurance_amount': 'float',
+    'spouse_life_insurance_type': 'str',
+    'spouse_life_insurance_term_age': 'int',
+    'marginal_tax_rate': 'float',
+}
+
+SOCIAL_SECURITY_KINDS = {
+    'user_receiving': 'bool',
+    'user_future_entitled': 'bool',
+    'user_entitled': 'bool',
+    'user_amount': 'float',
+    'user_freq': 'str',
+    'user_start_age': 'int',
+    'spouse_receiving': 'bool',
+    'spouse_future_entitled': 'bool',
+    'spouse_entitled': 'bool',
+    'spouse_amount': 'float',
+    'spouse_freq': 'str',
+    'spouse_start_age': 'int',
+}
+
+FLAT_ASSET_KEYS = ['pretax_assets', 'spouse_pretax_assets', 'roth_assets',
+                   'taxable_assets', 'hsa_assets', 'spouse_hsa_assets']
+
+FLAT_ASSET_KINDS = {
+    'present_balance': 'float',
+    'contrib_amount': 'float',
+    'contrib_freq': 'str',
+    'contrib_start_age': 'int',
+    'contrib_end_age_type': 'str',
+    'contrib_end_age_specified': 'int',
+    'contrib_adjust_inflation': 'bool',
+    'return_mean': 'float',
+    'return_std': 'float',
+    'hsa_for_medical': 'bool',
+}
+
+ACCOUNT_KINDS = {
+    'id': 'str',
+    'name': 'str',
+    'type': 'str',
+    'owner': 'str',
+    'balance': 'float',
+    'contrib_amount': 'float',
+    'contrib_freq': 'str',
+    'contrib_start_age': 'int',
+    'contrib_end_age_type': 'str',
+    'contrib_end_age_specified': 'int',
+    'contrib_adjust_inflation': 'bool',
+    'return_mean': 'float',
+    'return_std': 'float',
+    'hsa_for_medical': 'bool',
+    'dividend_yield': 'float',
+    'qualified_dividend_pct': 'float',
+    'interest_yield': 'float',
+    'capital_gains_dist_rate': 'float',
+    'cost_basis_ratio': 'float',
+    'is_community_property': 'bool',
+}
+
+ADJUSTMENT_KINDS = {
+    'start_type': 'str',
+    'start_spec': 'int',
+    'end_type': 'str',
+    'end_spec': 'int',
+    'adjust_type': 'str',
+    'adjust_val': 'float',
+}
+
+PLAN_ROW_KINDS = {
+    'accounts': ACCOUNT_KINDS,
+    'additional_spending': {key: kind for key, _post_key, kind, _default in ADDITIONAL_SPENDING_SPEC},
+    'income_sources': {key: kind for key, _post_key, kind, _default in INCOME_SOURCE_SPEC},
+    'other_taxes': {key: kind for key, _post_key, kind, _default in OTHER_TAX_SPEC},
+}
+
+PLAN_KEYS = (set(PLAN_SCALAR_KINDS) | set(FLAT_ASSET_KEYS) | set(PLAN_ROW_KINDS)
+             | {'social_security', 'balance_sheet', 'rebalancing'})
+
+_KIND_NAMES = {'int': 'a whole number', 'float': 'a number', 'str': 'text'}
+
+
+def _coerce(value, kind):
+    """Convert value to kind, raising ValueError when it can't be done cleanly."""
+    if kind == 'bool':
+        return get_bool(value)
+    if isinstance(value, (dict, list)):
+        raise ValueError
+    if kind == 'str':
+        return str(value)
+    if isinstance(value, bool):
+        raise ValueError
+    num = get_float(value, None)
+    if num is None:
+        raise ValueError
+    return int(num) if kind == 'int' else num
+
+
+def _coerce_fields(obj, kinds, label, errors):
+    """Coerce obj's known fields in place. A null is dropped so the usual
+    default applies; a value of the wrong type is reported and dropped."""
+    for key, kind in kinds.items():
+        if key not in obj:
+            continue
+        if obj[key] is None:
+            del obj[key]
+            continue
+        try:
+            obj[key] = _coerce(obj[key], kind)
+        except ValueError:
+            errors.append(f"Imported plan: {label} '{key}' must be {_KIND_NAMES.get(kind, kind)}.")
+            del obj[key]
+
+
+def normalize_imported_plan(data):
+    """Coerce an imported plan dict in place to the shapes and types the Enter
+    form produces, dropping unknown keys. Returns a list of error messages for
+    values that had to be discarded."""
+    errors = []
+    for key in list(data):
+        if key not in PLAN_KEYS:
+            del data[key]
+
+    _coerce_fields(data, PLAN_SCALAR_KINDS, 'field', errors)
+
+    for key in ['social_security', 'balance_sheet', 'rebalancing'] + FLAT_ASSET_KEYS:
+        if key in data and not isinstance(data[key], dict):
+            errors.append(f"Imported plan: '{key}' must be an object.")
+            del data[key]
+    if 'social_security' in data:
+        _coerce_fields(data['social_security'], SOCIAL_SECURITY_KINDS, 'Social Security field', errors)
+    for key in FLAT_ASSET_KEYS:
+        if key in data:
+            _coerce_fields(data[key], FLAT_ASSET_KINDS, f"{key} field", errors)
+
+    for key, kinds in PLAN_ROW_KINDS.items():
+        if key not in data:
+            continue
+        if not isinstance(data[key], list):
+            errors.append(f"Imported plan: '{key}' must be a list.")
+            del data[key]
+            continue
+        rows = [row for row in data[key] if isinstance(row, dict)]
+        if len(rows) != len(data[key]):
+            errors.append(f"Imported plan: entries in '{key}' that were not objects were skipped.")
+        for idx, row in enumerate(rows, 1):
+            _coerce_fields(row, kinds, f"{key} #{idx}", errors)
+            if 'adjustments' in row:
+                if isinstance(row['adjustments'], list):
+                    row['adjustments'] = [adj for adj in row['adjustments'] if isinstance(adj, dict)]
+                    for adj in row['adjustments']:
+                        _coerce_fields(adj, ADJUSTMENT_KINDS, f"{key} #{idx} adjustment", errors)
+                else:
+                    del row['adjustments']
+        data[key] = rows
     return errors
 
 

@@ -1363,7 +1363,7 @@
 {{ balance_sheet|json_script:"initial-balance-sheet" }}
 {{ marginal_tax_rate|default:"24.0"|json_script:"initial-marginal-tax-rate" }}
 {{ rebalancing|json_script:"initial-rebalancing" }}
-<script id="initial-cpi-data" type="application/json">{{ cpi_data_json|default:"{}"|safe }}</script>
+{{ cpi_data|json_script:"initial-cpi-data" }}
 
 {% endblock %}
 

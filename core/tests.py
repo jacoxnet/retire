@@ -100,7 +100,7 @@ class RetirementCalculationTests(TestCase):
         session['simulation_data'] = {'user_name': 'Custom User', 'user_age': 70}
         session.save()
 
-        response = self.client.get('/clear/')
+        response = self.client.post('/clear/')
         self.assertRedirects(response, '/')
         
         # Verify default data re-initialized on enter view GET
@@ -635,15 +635,16 @@ class RetirementCalculationTests(TestCase):
         saved_data = self.client.session['simulation_data']
         self.assertEqual(saved_data['runs'], 25000)
 
-    def test_reset_session_data(self):
+    def test_reset_requires_post(self):
+        # Resetting data changes state, so a GET (which skips CSRF checks) must not do it
         session = self.client.session
         session['server_run_id'] = settings.SERVER_RUN_ID
         session['simulation_data'] = {'user_name': 'Old Name', 'user_age': 99}
         session.save()
-        
-        response = self.client.get('/?reset=1')
-        self.assertRedirects(response, '/')
-        self.assertEqual(self.client.session['simulation_data']['user_name'], 'John Doe')
+
+        self.assertEqual(self.client.get('/?reset=1').status_code, 200)
+        self.assertEqual(self.client.get('/clear/').status_code, 405)
+        self.assertEqual(self.client.session['simulation_data']['user_name'], 'Old Name')
 
     def test_income_stream_frequencies(self):
         from core.runs import run_deterministic

@@ -11,6 +11,7 @@ from core.forms import (
     parse_balance_sheet, sync_balance_sheet_to_accounts,
     sync_accounts_to_balance_sheet,
     build_default_rebalancing, parse_rebalancing,
+    normalize_imported_plan,
 )
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
@@ -164,31 +165,36 @@ def manage_data_view(request):
         'plan_data_json': data
     })
 
-@require_http_methods(["GET", "POST"])
+REDIRECT_TARGETS = ('results', 'manage_data', 'enter')
+
+def safe_redirect_target(name, default):
+    """Limit a posted 'next' value to the app's own pages."""
+    return name if name in REDIRECT_TARGETS else default
+
+@require_http_methods(["POST"])
 def clear_data_view(request):
     request.session['simulation_data'] = get_default_data()
     request.session['data_version'] = request.session.get('data_version', 0) + 1
     request.session['cached_results'] = None
     request.session['cached_version'] = -1
     messages.success(request, "All simulation data has been cleared.")
-    next_url = request.POST.get('next') or request.GET.get('next')
-    if next_url:
-        return redirect(reverse(next_url))
-    return redirect(reverse('enter'))
+    return redirect(reverse(safe_redirect_target(request.POST.get('next'), 'enter')))
 
 @require_http_methods(["POST"])
 def load_plan_view(request):
     raw_json = request.POST.get('json_data')
-    redirect_target = request.POST.get('next', 'results')
+    redirect_target = safe_redirect_target(request.POST.get('next'), 'results')
     if not raw_json:
         messages.error(request, "No plan data provided.")
         return redirect(reverse(redirect_target))
     
     try:
-        data = json.loads(raw_json)
+        data = json.loads(raw_json, parse_constant=reject_json_constant)
         if not isinstance(data, dict):
             raise ValueError("Invalid JSON format")
-            
+
+        import_errors = normalize_imported_plan(data)
+
         if 'goal_seeking' not in data and 'simulation_type' in data:
             data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
         elif 'simulation_type' not in data and 'goal_seeking' in data:
@@ -303,15 +309,27 @@ def load_plan_view(request):
             data['balance_sheet']['marginal_tax_rate'] = calc_tax_rate
         data['marginal_tax_rate'] = calc_tax_rate
 
+        # Hold the file to the same rules as the Enter page. A plan with
+        # problems is still loaded, but opens on the Enter page to be fixed.
+        import_errors.extend(plan_errors(data))
+
         request.session['simulation_data'] = data
         request.session['data_version'] = request.session.get('data_version', 0) + 1
         request.session['cached_results'] = None
         request.session['cached_version'] = -1
+        if import_errors:
+            for err in import_errors:
+                messages.error(request, err)
+            messages.warning(request, "Plan loaded, but some values need to be corrected before running the simulation.")
+            return redirect(reverse('enter'))
         messages.success(request, "Plan loaded successfully!")
     except Exception as e:
         messages.error(request, f"Error loading plan: {str(e)}")
         
     return redirect(reverse(redirect_target))
+
+def reject_json_constant(name):
+    raise ValueError(f"Invalid number in plan file: {name}")
 
 def death_age_errors(data):
     """The Enter page's checks that depend on age of death, for edits made elsewhere."""
@@ -332,6 +350,90 @@ def death_age_errors(data):
             errors.append(f"Specified Spending Start Age ({begin_age}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
     errors.extend(validate_accounts(data.get('accounts', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
     errors.extend(validate_additional_spending(data.get('additional_spending', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    return errors
+
+
+def plan_errors(data):
+    """Every check the Enter page applies to a submission, run against a plan
+    dict so a submitted form and an imported file are held to the same rules."""
+    is_goal_seeking = get_bool(data.get('goal_seeking'))
+    runs = get_int(data.get('runs'), 10000)
+    target_success_rate = get_float(data.get('target_success_rate'), 80.0)
+    user_age = get_int(data.get('user_age'), 60)
+    user_retirement_age = get_int(data.get('user_retirement_age'), 65)
+    user_age_death = get_int(data.get('user_age_death'), 90)
+    is_married = get_bool(data.get('is_married'))
+    spouse_age = get_int(data.get('spouse_age'), 60)
+    spouse_retirement_age = get_int(data.get('spouse_retirement_age'), 65)
+    spouse_age_death = get_int(data.get('spouse_age_death'), 92)
+    ss = data.get('social_security') if isinstance(data.get('social_security'), dict) else {}
+
+    errors = []
+    if runs < 1 or runs > 100000:
+        errors.append("Number of Simulations must be an integer between 1 and 100,000.")
+    if is_goal_seeking and (target_success_rate < 1.0 or target_success_rate > 99.0):
+        errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
+
+    if user_age < 18 or user_age > 120:
+        errors.append("Your Present Age must be an integer between 18 and 120.")
+    if user_retirement_age < user_age or user_retirement_age > 120:
+        errors.append(f"Your Retirement Age must be between Your Present Age ({user_age}) and 120.")
+    if user_age_death <= user_age or user_age_death > 120:
+        errors.append(f"Your Age at Death must be an integer greater than Your Present Age ({user_age}) up to 120.")
+
+    if is_married:
+        if spouse_age < 18 or spouse_age > 120:
+            errors.append("Spouse's Present Age must be an integer between 18 and 120.")
+        if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
+            errors.append(f"Spouse's Retirement Age must be between Spouse's Present Age ({spouse_age}) and 120.")
+        if spouse_age_death <= spouse_age or spouse_age_death > 120:
+            errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
+        if get_float(data.get('survivor_spending'), 0.0) < 0:
+            errors.append("Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.")
+
+    if data.get('begin_spending_age_type') == 'specified':
+        begin_age = get_int(data.get('begin_spending_age_specified'), 65)
+        if begin_age < user_age or begin_age > user_age_death:
+            errors.append(f"Specified Spending Start Age ({begin_age}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
+
+    if get_float(data.get('desired_spending'), 0.0) < 0:
+        errors.append("Desired Annual Spending must be a valid non-negative number.")
+
+    state_tax_rate = get_float(data.get('state_tax_rate'), 0.0)
+    if state_tax_rate < 0.0 or state_tax_rate > 100.0:
+        errors.append("State Income Tax Rate must be between 0% and 100%.")
+
+    if not get_bool(ss.get('user_receiving')) and get_bool(ss.get('user_future_entitled')):
+        user_ss_start_age = get_int(ss.get('user_start_age'), 67)
+        if user_ss_start_age < 62 or user_ss_start_age > 70:
+            errors.append("Your Social Security Claiming Age must be between 62 and 70.")
+    if is_married and not get_bool(ss.get('spouse_receiving')) and get_bool(ss.get('spouse_future_entitled')):
+        spouse_ss_start_age = get_int(ss.get('spouse_start_age'), 67)
+        if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
+            errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
+
+    if get_float(data.get('user_life_insurance_amount'), 0.0) < 0:
+        errors.append("Your Life Insurance Death Benefit must be a non-negative number.")
+    if data.get('user_life_insurance_type') == 'term':
+        term_age = get_int(data.get('user_life_insurance_term_age'), 70)
+        if term_age < 18 or term_age > 120:
+            errors.append("Your Term Life Policy Expiration Age must be between 18 and 120.")
+    if is_married:
+        if get_float(data.get('spouse_life_insurance_amount'), 0.0) < 0:
+            errors.append("Spouse's Life Insurance Death Benefit must be a non-negative number.")
+        if data.get('spouse_life_insurance_type') == 'term':
+            term_age = get_int(data.get('spouse_life_insurance_term_age'), 70)
+            if term_age < 18 or term_age > 120:
+                errors.append("Spouse's Term Life Policy Expiration Age must be between 18 and 120.")
+
+    # Accounts are validated once, whichever path (dynamic or legacy fields)
+    # produced them; the derived pretax/roth/taxable/hsa aggregates are views
+    # over the same accounts, so they don't need a second validation pass.
+    errors.extend(validate_accounts(data.get('accounts', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    errors.extend(validate_balance_sheet_accounts(data.get('balance_sheet')))
+    errors.extend(validate_additional_spending(data.get('additional_spending', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    errors.extend(validate_scheduled_items("Income Source", data.get('income_sources', [])))
+    errors.extend(validate_scheduled_items("Other Tax item", data.get('other_taxes', [])))
     return errors
 
 
@@ -637,79 +739,16 @@ def enter_view(request):
 
         is_goal_seeking = (simulation_type == 'goal_seeking')
         
-        # Validation checks
+        # A non-numeric Number of Simulations falls back to the saved value
+        # above, so catch it here; plan_errors() checks the range.
         validation_errors = []
-        if request.POST.get('runs') is not None:
-            raw_runs = request.POST.get('runs')
+        raw_runs = request.POST.get('runs')
+        if raw_runs is not None:
             try:
-                runs_val = int(raw_runs)
-                if runs_val < 1 or runs_val > 100000:
-                    validation_errors.append("Number of Simulations must be an integer between 1 and 100,000.")
+                int(raw_runs)
             except (TypeError, ValueError):
                 validation_errors.append("Number of Simulations must be a valid number between 1 and 100,000.")
-        elif runs < 1 or runs > 100000:
-            validation_errors.append("Number of Simulations must be an integer between 1 and 100,000.")
-            
-        if is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0):
-            validation_errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
-            
-        if user_age < 18 or user_age > 120:
-            validation_errors.append("Your Present Age must be an integer between 18 and 120.")
-        if user_retirement_age < user_age or user_retirement_age > 120:
-            validation_errors.append(f"Your Retirement Age must be between Your Present Age ({user_age}) and 120.")
-        if user_age_death <= user_age or user_age_death > 120:
-            validation_errors.append(f"Your Age at Death must be an integer greater than Your Present Age ({user_age}) up to 120.")
-            
-        if is_married:
-            if spouse_age < 18 or spouse_age > 120:
-                validation_errors.append("Spouse's Present Age must be an integer between 18 and 120.")
-            if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
-                validation_errors.append(f"Spouse's Retirement Age must be between Spouse's Present Age ({spouse_age}) and 120.")
-            if spouse_age_death <= spouse_age or spouse_age_death > 120:
-                validation_errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
-            if survivor_spending < 0:
-                validation_errors.append("Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.")
 
-        if begin_spending_age_type == 'specified':
-            if begin_spending_age_specified < user_age or begin_spending_age_specified > user_age_death:
-                validation_errors.append(f"Specified Spending Start Age ({begin_spending_age_specified}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
-
-        if desired_spending < 0:
-            validation_errors.append("Desired Annual Spending must be a valid non-negative number.")
-
-        if state_tax_rate < 0.0 or state_tax_rate > 100.0:
-            validation_errors.append("State Income Tax Rate must be between 0% and 100%.")
-
-        if not user_ss_receiving and user_ss_future_entitled:
-            if user_ss_start_age < 62 or user_ss_start_age > 70:
-                validation_errors.append("Your Social Security Claiming Age must be between 62 and 70.")
-        if is_married and (not spouse_ss_receiving) and spouse_ss_future_entitled:
-            if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
-                validation_errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
-
-        # Life Insurance Validation
-        if user_life_insurance_amount < 0:
-            validation_errors.append("Your Life Insurance Death Benefit must be a non-negative number.")
-        if user_life_insurance_type == 'term':
-            if user_life_insurance_term_age < 18 or user_life_insurance_term_age > 120:
-                validation_errors.append("Your Term Life Policy Expiration Age must be between 18 and 120.")
-
-        if is_married:
-            if spouse_life_insurance_amount < 0:
-                validation_errors.append("Spouse's Life Insurance Death Benefit must be a non-negative number.")
-            if spouse_life_insurance_type == 'term':
-                if spouse_life_insurance_term_age < 18 or spouse_life_insurance_term_age > 120:
-                    validation_errors.append("Spouse's Term Life Policy Expiration Age must be between 18 and 120.")
-
-        # Accounts are validated once, whichever path (dynamic or legacy fields)
-        # produced them; the derived pretax/roth/taxable/hsa aggregates below are
-        # views over the same accounts, so they don't need a second validation pass.
-        validation_errors.extend(validate_accounts(accounts, user_age, user_age_death, is_married, spouse_age, spouse_age_death))
-        validation_errors.extend(validate_balance_sheet_accounts(balance_sheet))
-        validation_errors.extend(validate_additional_spending(additional_spending, user_age, user_age_death, is_married, spouse_age, spouse_age_death))
-        validation_errors.extend(validate_scheduled_items("Income Source", income_sources))
-        validation_errors.extend(validate_scheduled_items("Other Tax item", other_taxes))
-                
         # Store in JSON block
         data_block = {
             'goal_seeking': is_goal_seeking,
@@ -760,9 +799,8 @@ def enter_view(request):
         data_block['balance_sheet'] = balance_sheet
         data_block['marginal_tax_rate'] = calc_tax_rate
         data_block['rebalancing'] = rebalancing
-        
-        cpi_data = load_cpi_data()
-        cpi_data_json = json.dumps(cpi_data)
+
+        validation_errors.extend(plan_errors(data_block))
 
         if validation_errors:
             for err in validation_errors:
@@ -770,26 +808,15 @@ def enter_view(request):
             data_block['target_success_rate_error'] = is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0)
             data_block['runs_error'] = (runs < 1 or runs > 100000)
             request.session['simulation_data'] = data_block
-            context = dict(data_block, cpi_data_json=cpi_data_json)
+            context = dict(data_block, cpi_data=load_cpi_data())
             return render(request, 'enter.html', context)
             
         request.session['simulation_data'] = data_block
         request.session['data_version'] = request.session.get('data_version', 0) + 1
-        redirect_target = request.POST.get('next', 'results')
-        if redirect_target not in ('results', 'manage_data', 'enter'):
-            redirect_target = 'results'
-        return redirect(reverse(redirect_target))
+        return redirect(reverse(safe_redirect_target(request.POST.get('next'), 'results')))
     else:
-        if request.GET.get('new_session') == '1' or request.GET.get('reset') == '1':
-            request.session['simulation_data'] = get_default_data()
-            request.session['data_version'] = request.session.get('data_version', 0) + 1
-            request.session['cached_results'] = None
-            request.session['cached_version'] = -1
-            messages.success(request, "New session started. Simulation data reset to default values.")
-            return redirect(reverse('enter'))
         data = get_session_sim_data(request)
-        cpi_data = load_cpi_data()
-        context = dict(data, cpi_data_json=json.dumps(cpi_data))
+        context = dict(data, cpi_data=load_cpi_data())
         return render(request, 'enter.html', context)
 
 @require_http_methods(["GET"])
