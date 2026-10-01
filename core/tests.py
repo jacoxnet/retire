@@ -5728,4 +5728,47 @@ class OtherIncomeStartAgeTextTests(TestCase):
         self.assertEqual(annuity['adjust_type'], 'none')
 
 
+class HowToInstructionsTests(TestCase):
+    def test_how_to_markdown_content(self):
+        import os
+        from django.conf import settings
+        how_to_path = os.path.join(settings.BASE_DIR, 'static', 'how-to.md')
+        self.assertTrue(os.path.exists(how_to_path))
 
+        with open(how_to_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Check disclaimer
+        self.assertIn('> **Disclaimer:** This tool is made available for educational, informational, and entertainment purposes only.', content)
+        # Check two-part structure
+        self.assertIn('## Part 1: Basic Instructions (Quick Start)', content)
+        self.assertIn('## Part 2: Detailed Instructions', content)
+        # Check pre-retirement spending warning
+        self.assertIn('It typically should NOT include pre-retirement spending items unless they are expected to be paid with funds drawn from your Accounts for Retirement.', content)
+        # Check simple vs advanced mode
+        self.assertIn('Simple Mode vs. Advanced Mode', content)
+        # Check rebalancing
+        self.assertIn('Portfolio Rebalance', content)
+        # Check savings goals and modal
+        self.assertIn('Goal Funding Status Modal', content)
+        # Check withdrawal waterfall
+        self.assertIn('Order of Account Withdrawals (Cash Flow Waterfall)', content)
+
+    def test_how_to_modal_in_base_template(self):
+        resp = self.client.get(reverse('enter'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="howToLink"')
+        self.assertContains(resp, 'id="howToModal"')
+        self.assertContains(resp, 'id="howToBody"')
+        self.assertContains(resp, 'v=20261001-1')
+
+    def test_how_to_scrollbar_css(self):
+        import os
+        from django.conf import settings
+        css_path = os.path.join(settings.BASE_DIR, 'static', 'css', 'style.css')
+        with open(css_path, 'r', encoding='utf-8') as f:
+            css = f.read()
+
+        self.assertIn('#howToModal #howToBody', css)
+        self.assertIn('overflow-y: scroll;', css)
+        self.assertIn('#howToModal #howToBody::-webkit-scrollbar', css)

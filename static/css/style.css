@@ -489,19 +489,22 @@ tbody tr:hover {
   top: 0;
   width: 100%;
   height: 100%;
-  overflow: auto;
-  background-color: rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+  background-color: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
 }
 
 #howToModal .modal-content {
   background-color: var(--bg-secondary);
-  margin: 10% auto;
-  padding: 2rem;
+  margin: 3vh auto;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1.25rem 1.75rem 2rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  width: 80%;
-  max-width: 800px;
+  width: 90%;
+  max-width: 900px;
   box-shadow: var(--shadow-lg);
   position: relative;
   color: var(--text-primary);
@@ -513,19 +516,73 @@ tbody tr:hover {
   background-color: transparent !important;
 }
 
-.close-modal {
+#howToModal .close-modal {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  z-index: 20;
   color: var(--text-secondary);
-  float: right;
-  font-size: 28px;
+  font-size: 32px;
   font-weight: bold;
   cursor: pointer;
+  line-height: 1;
   transition: color var(--transition-fast);
 }
 
-.close-modal:hover,
-.close-modal:focus {
+#howToModal .close-modal:hover,
+#howToModal .close-modal:focus {
   color: var(--danger);
   text-decoration: none;
+}
+
+/* Vertical scrollable body with visible scrollbar for mouse users */
+#howToModal #howToBody {
+  overflow-y: scroll;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  max-height: calc(94vh - 4.5rem);
+  padding-right: 1rem;
+  margin-top: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b #f1f5f9;
+}
+
+/* WebKit scrollbar styling (Chrome, Safari, Edge) for prominent mouse interaction */
+#howToModal #howToBody::-webkit-scrollbar {
+  width: 12px;
+}
+
+#howToModal #howToBody::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+#howToModal #howToBody::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 6px;
+  border: 3px solid #f1f5f9;
+}
+
+#howToModal #howToBody::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
+}
+
+/* Dark mode scrollbar theme */
+[data-theme="dark"] #howToModal #howToBody {
+  scrollbar-color: #94a3b8 #1e293b;
+}
+
+[data-theme="dark"] #howToModal #howToBody::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+[data-theme="dark"] #howToModal #howToBody::-webkit-scrollbar-thumb {
+  background-color: #64748b;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] #howToModal #howToBody::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
 .how-to-link {
@@ -549,6 +606,26 @@ tbody tr:hover {
   margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.5rem;
+}
+
+.markdown-body h3 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+  color: var(--accent-primary);
+}
+
+.markdown-body h4 {
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
 }
 
 .markdown-body ul {
