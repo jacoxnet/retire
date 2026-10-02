@@ -1403,12 +1403,6 @@
                                                 <input type="text" inputmode="decimal" class="form-control text-center fw-bold percent-input inc-survivor-pct" name="income_survivor_benefit_pct[]" value="${formatPercent(survivorPct)}" min="0" max="100">
                                             </div>
                                         </div>
-                                        <div class="col-auto d-flex gap-1">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="100">100%</button>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="75">75%</button>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="66.7">66.7%</button>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-preset-survivor" data-pct="50">50%</button>
-                                        </div>
                                     </div>
                                     <div class="form-text small text-muted mt-1 inc-survivor-hint">
                                         Upon your death, your surviving spouse will receive ${survivorPct}% of the adjusted benefit until their death.
@@ -1488,18 +1482,6 @@
             card.querySelector('.inc-survivor-pct').addEventListener('input', function () {
                 updateCardSurvivorSection(card);
                 serializeCardAdjustments(card);
-            });
-
-            card.querySelectorAll('.btn-preset-survivor').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var pct = this.getAttribute('data-pct');
-                    var input = card.querySelector('.inc-survivor-pct');
-                    if (input) {
-                        input.value = pct + '%';
-                        updateCardSurvivorSection(card);
-                        serializeCardAdjustments(card);
-                    }
-                });
             });
 
             var periodsContainer = card.querySelector('.inc-adjustment-periods-list');
@@ -4408,24 +4390,73 @@
             serializeBalanceSheet();
         };
 
+        function latestBsPeriod() {
+            return (bsState.periods && bsState.periods.length) ? bsState.periods[bsState.periods.length - 1] : "2026-02-28";
+        }
+
+        function showAddPeriodError(msg) {
+            var el = document.getElementById('addPeriodError');
+            if (!el) return;
+            el.textContent = msg || '';
+            el.classList.toggle('d-none', !msg);
+        }
+
+        window.clearAddPeriodError = function() {
+            showAddPeriodError('');
+        };
+
         window.promptAddPeriodSnapshot = function() {
-            var latest = (bsState.periods && bsState.periods.length) ? bsState.periods[bsState.periods.length - 1] : "2026-02-28";
-            var parts = latest.split('-');
+            // Suggest the month-end following the latest column
+            var parts = latestBsPeriod().split('-');
             var y = parseInt(parts[0], 10);
             var m = parseInt(parts[1], 10) + 1;
+            if (isNaN(y) || isNaN(m)) {
+                var now = new Date();
+                y = now.getFullYear();
+                m = now.getMonth() + 1;
+            }
             if (m > 12) { m = 1; y += 1; }
             var mStr = (m < 10 ? '0' : '') + m;
             var d = new Date(y, m, 0).getDate();
             var dStr = (d < 10 ? '0' : '') + d;
-            var suggested = y + '-' + mStr + '-' + dStr;
 
-            var newDate = prompt("Enter new balance sheet column date (YYYY-MM-DD):", suggested);
-            if (!newDate || !newDate.trim()) return;
-            newDate = newDate.trim();
+            var input = document.getElementById('addPeriodDate');
+            if (input) input.value = y + '-' + mStr + '-' + dStr;
+            showAddPeriodError('');
+
+            var modalEl = document.getElementById('addPeriodModal');
+            if (modalEl) {
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modalEl.addEventListener('shown.bs.modal', function () {
+                    if (input) input.focus();
+                }, { once: true });
+                modal.show();
+            }
+        };
+
+        window.confirmAddPeriodSnapshot = function() {
+            var input = document.getElementById('addPeriodDate');
+            var newDate = input ? input.value.trim() : '';
+
+            // Column headings must be real calendar dates (YYYY-MM-DD)
+            var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(newDate);
+            var parsed = match ? new Date(+match[1], +match[2] - 1, +match[3]) : null;
+            if (!parsed || parsed.getFullYear() !== +match[1] || parsed.getMonth() !== +match[2] - 1 || parsed.getDate() !== +match[3]) {
+                showAddPeriodError("Please choose a valid date.");
+                return;
+            }
 
             if (bsState.periods.includes(newDate)) {
-                alert("A balance sheet column with date " + newDate + " already exists.");
+                showAddPeriodError("A balance sheet column with date " + newDate + " already exists.");
                 return;
+            }
+
+            var latest = latestBsPeriod();
+
+            var modalEl = document.getElementById('addPeriodModal');
+            if (modalEl) {
+                var modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
             }
 
             var cloneValues = function(vals) {
@@ -6037,6 +6068,13 @@
 
         // Initialize Rebalancing on initial load
         syncRebalanceFromBalanceSheet();
+
+        document.getElementById('addPeriodDate')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmAddPeriodSnapshot();
+            }
+        });
 
         document.getElementById('balanceSheetTable')?.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.target.tagName === 'INPUT') {

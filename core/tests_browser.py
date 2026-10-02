@@ -304,6 +304,26 @@ class EnterPageBrowserTests(StaticLiveServerTestCase):
         self.assertEqual((saved_bs.get('marginal_tax_rate_override'), shown), (31.5, '31.5'),
                          f'auto rate was {auto_rate}')
 
+    def test_add_balance_sheet_column_uses_date_picker(self):
+        self._seed_browser_session(self.plan)
+        self._open_enter()
+        self._open_tab('balance-sheet')
+        existing = self.plan['balance_sheet']['periods']
+        self.page.click('#btnAddPeriodSnapshot')
+        self.page.wait_for_selector('#addPeriodModal.show')
+        self.assertEqual(self.page.locator('#addPeriodDate').get_attribute('type'), 'date')
+        # A duplicate date is rejected inline and the modal stays open
+        self.page.fill('#addPeriodDate', existing[-1])
+        self.page.click('#addPeriodModal .btn-primary')
+        self.assertIn('already exists', self.page.locator('#addPeriodError').inner_text())
+        self.assertTrue(self.page.locator('#addPeriodModal').is_visible())
+        self.page.fill('#addPeriodDate', '2099-06-30')
+        self.page.press('#addPeriodDate', 'Enter')
+        self.page.wait_for_selector('#addPeriodModal', state='hidden')
+        self._leave_via_manage_data()
+        self._assert_no_js_errors()
+        self.assertEqual(self._saved_data()['balance_sheet']['periods'], sorted(existing + ['2099-06-30']))
+
     def test_unmarrying_does_not_drop_account_end_age(self):
         """Unchecking Married disables spouse-only end-age options; the row must still submit."""
         plan = self.plan
