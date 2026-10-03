@@ -1236,7 +1236,7 @@ const userStartAge = chartConfig.user_start_age ?? 60;
 
                 if (resultsRunsInputEl) {
                     const rVal = parseInt(resultsRunsInputEl.value, 10);
-                    if (isNaN(rVal) || rVal < 1 || rVal > 100000) {
+                    if (isNaN(rVal) || rVal < 1 || rVal > 1000000) {
                         e.preventDefault();
                         resultsRunsInputEl.classList.add('is-invalid');
                         resultsRunsInputEl.focus();

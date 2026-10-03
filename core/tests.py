@@ -603,12 +603,12 @@ class RetirementCalculationTests(TestCase):
             'user_age_death': '95',
             'desired_spending': '45000',
             'inflation_rate': '2.5',
-            'runs': '200000',
+            'runs': '2000000',
             'pretax_present_balance': '600000',
         }
         response = self.client.post('/', post_data)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Number of Simulations must be an integer between 1 and 100,000.")
+        self.assertContains(response, "Number of Simulations must be an integer between 1 and 1,000,000.")
 
     def test_enter_form_without_runs_preserves_loaded_session_runs(self):
         session = self.client.session

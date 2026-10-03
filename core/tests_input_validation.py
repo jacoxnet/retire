@@ -77,7 +77,7 @@ class ImportedPlanValidationTests(SessionTestCase):
     def test_excessive_runs_sent_to_enter_page(self):
         response = self.load(valid_plan(runs=50000000))
         self.assertRedirects(response, reverse('enter'), fetch_redirect_response=False)
-        self.assertIn("Number of Simulations must be an integer between 1 and 100,000.", self.messages_of(response))
+        self.assertIn("Number of Simulations must be an integer between 1 and 1,000,000.", self.messages_of(response))
 
     def test_out_of_range_ages_rejected_like_enter_page(self):
         response = self.load(valid_plan(user_age=10, user_age_death=200))

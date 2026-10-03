@@ -369,8 +369,8 @@ def plan_errors(data):
     ss = data.get('social_security') if isinstance(data.get('social_security'), dict) else {}
 
     errors = []
-    if runs < 1 or runs > 100000:
-        errors.append("Number of Simulations must be an integer between 1 and 100,000.")
+    if runs < 1 or runs > 1000000:
+        errors.append("Number of Simulations must be an integer between 1 and 1,000,000.")
     if is_goal_seeking and (target_success_rate < 1.0 or target_success_rate > 99.0):
         errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
 
@@ -478,9 +478,9 @@ def change_mode_view(request):
         data['inflation_rate'] = new_inflation
     if 'runs' in request.POST:
         runs_val = get_int(request.POST.get('runs'), data.get('runs', 10000))
-        if runs_val < 1 or runs_val > 100000:
-            messages.error(request, "Number of Simulations must be an integer between 1 and 100,000.")
-            data['runs'] = min(100000, max(1, runs_val))
+        if runs_val < 1 or runs_val > 1000000:
+            messages.error(request, "Number of Simulations must be an integer between 1 and 1,000,000.")
+            data['runs'] = min(1000000, max(1, runs_val))
         else:
             data['runs'] = runs_val
 
@@ -747,7 +747,7 @@ def enter_view(request):
             try:
                 int(raw_runs)
             except (TypeError, ValueError):
-                validation_errors.append("Number of Simulations must be a valid number between 1 and 100,000.")
+                validation_errors.append("Number of Simulations must be a valid number between 1 and 1,000,000.")
 
         # Store in JSON block
         data_block = {
@@ -806,7 +806,7 @@ def enter_view(request):
             for err in validation_errors:
                 messages.error(request, err)
             data_block['target_success_rate_error'] = is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0)
-            data_block['runs_error'] = (runs < 1 or runs > 100000)
+            data_block['runs_error'] = (runs < 1 or runs > 1000000)
             request.session['simulation_data'] = data_block
             context = dict(data_block, cpi_data=load_cpi_data())
             return render(request, 'enter.html', context)
