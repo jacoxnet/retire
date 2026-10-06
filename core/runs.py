@@ -1780,6 +1780,7 @@ def njit_simulate_path(
             y_cg_dist = max(0.0, taxable_before * (taxable_cg_dist_rate / 100.0))
         else:
             y_int = 0.0
+            tot_div = 0.0
             y_div_ord = 0.0
             y_div_qual = 0.0
             y_cg_dist = 0.0

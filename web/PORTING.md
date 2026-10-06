@@ -72,7 +72,7 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - `simulatePath(p, returns, trajectory?)` runs one path (6 per-year return series) and returns a **reused** `{terminalEstate, success}` object.
   - `simulateAllPaths` mirrors `njit_simulate_all_paths` over row-major `runs × years` matrices; it's used by the tests and is handy for C4's fixed-seed checks.
 - All 11 plans × 3 variants (regular, test_spending, custom_inflation) match `kernel.json` ending wealths, success flags and full trajectories within 1e-9.
-- **Python bug found and reproduced for parity.** In `njit_simulate_path` (`core/runs.py`, taxable yields block) `tot_div` is not assigned on the `taxable_before <= 0` branch. Numba keeps the variable across loop iterations, so a year with an empty taxable account re-adds the previous year's dividends to the cost basis. That lowers later realized gains and taxes slightly. The deterministic `simulate_step` sets `tot_div = 0.0` there, so MC and deterministic disagree. The TS kernel reproduces the Numba behaviour (marked `PYTHON QUIRK`) so fixtures match. To fix it, set `tot_div = 0.0` in both, regenerate fixtures, and drop the carry-over in `montecarlo.ts`.
+- **Python bug found in C3, since fixed.** `njit_simulate_path` didn't reset `tot_div` on the `taxable_before <= 0` branch, so Numba carried the previous year's dividends into the cost basis. C3 reproduced this for parity. It is now fixed in `core/runs.py` and `montecarlo.ts`, and the fixtures are regenerated; see "Post-C4 fixes".
 - Throughput (single thread, Node 22, this container): ~15k paths/s for a 63-year married plan. 1M paths ≈ 65 s on one core before RNG cost, so C4 needs the worker pool. Goal-seek (up to 25 iterations) at 1M runs will be slow; consider capping goal-seek runs or reusing a smaller CRN sample.
 - Possible speedups if needed: `njitCalcFedTaxDual`, `njitSolveOrdinaryWithdrawal`, `njitExtraOrdinaryTaxes` and `njitSpousalRollover` allocate small tuples per call; switching them to out-buffers would cut GC pressure.
 - Next (C4): seeded PRNG + correlated normal draws (`generate_correlated_returns`), worker pool, `generate_runs`, `binary_search`, stress test, streaming percentiles; statistical agreement with `mc.json` / `stress.json`.
@@ -101,5 +101,10 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 
 - Open items for later phases:
   - Goal-seek at 1M runs would take ~25 × 16 s. Phase 6b should either cap goal-seek runs (e.g. 100k for the search, then a full `generateRuns` at the solved spending) or warn the user.
-  - The Python `tot_div` bug from C3 is still reproduced in `montecarlo.ts`.
   - If more speed is needed, remove the small tuple allocations in `tax.ts`.
+
+## Post-C4 fixes
+- `tot_div` bug fixed in Python (`core/runs.py`, `njit_simulate_path`: `tot_div = 0.0` on the empty-taxable branch) and in TS (`montecarlo.ts`, reset every year). Fixtures were regenerated; only `kernel`/`mc`/`stress` changed, for the 9 plans whose taxable account empties.
+  - Effect on Python results: up to 9 of 16 kernel paths changed per plan, by ≤ 0.3% ending wealth (9% on one near-depleted `syn_spouse_first` path). Headline success rates moved ≤ 0.1 points and medians ≤ 0.07%.
+- New `test/crossEngine.test.ts`: the MC kernel at constant mean returns must reproduce `runDeterministic` year by year. That now holds bit-for-bit for 10 of 11 plans.
+- **Known remaining engine difference (pre-existing in Python, not fixed):** an "other tax" whose inflation adjustment starts *before* the current age (e.g. `sept3testplan`'s "Capital Gains Tax", started at 36, user now 38) is inflated retroactively by `simulate_step` (`(1+i)^(age − start)`, giving 8,034 in year 0) but not by `prepare_numba_inputs` (`inf_factors[t] / inf_factors[start_t]` with `start_t` clamped to 0, giving 7,500). Income streams use the retroactive rule, so the MC side looks like the odd one out. The test marks `sept3testplan` as `it.fails` so that fixing it (in Python first, then `inputs.ts`) flips the test.

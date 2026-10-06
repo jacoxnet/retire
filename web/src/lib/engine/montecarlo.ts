@@ -151,7 +151,6 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
   const qualPct = p.taxableQualPct / 100.0;
   const cgDistRate = p.taxableCgDistRate / 100.0;
 
-  let totDiv = 0.0;
   for (let t = 0; t < totalYears; t++) {
     const userAgeT = userAge + t;
     const spouseAgeT = isMarried ? spouseAge + t : userAgeT;
@@ -208,11 +207,8 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     const hsaUserMid = hsaUserBefore + hsaUserBefore * r.hsaUser[t];
     const hsaSpouseMid = hsaSpouseBefore + (isMarried ? hsaSpouseBefore * r.hsaSpouse[t] : 0.0);
 
-    // PYTHON QUIRK (kept for parity): Python never assigns tot_div on the else branch,
-    // and Numba keeps function-scoped variables across loop iterations, so a year with
-    // no taxable balance re-adds the previous year's dividends to the cost basis (0 if
-    // there was none yet). simulate_step resets it to 0. See PORTING.md.
     let yInt = 0.0;
+    let totDiv = 0.0;
     let yDivQual = 0.0;
     let yDivOrd = 0.0;
     let yCgDist = 0.0;
