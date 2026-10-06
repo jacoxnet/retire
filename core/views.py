@@ -180,9 +180,10 @@ def clear_data_view(request):
     messages.success(request, "All simulation data has been cleared.")
     return redirect(reverse(safe_redirect_target(request.POST.get('next'), 'enter')))
 
-def import_plan_data(data):
-    """Normalize and migrate an imported plan dict in place, the same way the
-    Manage page loads it. Returns the list of import/validation errors."""
+def normalize_plan_fields(data):
+    """Stage 1 of importing a plan: coerce field types and migrate older field
+    shapes (simulation type, Social Security flags, income adjustment schedules).
+    Modifies data in place and returns the list of import errors."""
     import_errors = normalize_imported_plan(data)
 
     if 'goal_seeking' not in data and 'simulation_type' in data:
@@ -214,6 +215,29 @@ def import_plan_data(data):
             ss['spouse_receiving'] = get_bool(ss.get('spouse_receiving'))
             ss['spouse_future_entitled'] = get_bool(ss.get('spouse_future_entitled'))
         ss['spouse_entitled'] = ss['spouse_receiving'] or ss['spouse_future_entitled']
+
+    if data.get('income_sources') and isinstance(data['income_sources'], list):
+        for inc in data['income_sources']:
+            if isinstance(inc, dict):
+                if 'adjustments' not in inc or not inc['adjustments']:
+                    inc['adjustments'] = [{
+                        'start_type': inc.get('adjust_start_age_type', 'start'),
+                        'start_spec': inc.get('adjust_start_age_specified', 65),
+                        'end_type': inc.get('end_age_type', 'death'),
+                        'end_spec': inc.get('end_age_specified', 90),
+                        'adjust_type': inc.get('adjust_type', 'inflation'),
+                        'adjust_val': inc.get('adjust_val', 0.0)
+                    }]
+                inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
+                inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
+
+    return import_errors
+
+
+def import_plan_data(data):
+    """Normalize and migrate an imported plan dict in place, the same way the
+    Manage page loads it. Returns the list of import/validation errors."""
+    import_errors = normalize_plan_fields(data)
 
     # Load or migrate balance sheet
     if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
@@ -277,21 +301,6 @@ def import_plan_data(data):
             data[k] = v
     else:
         data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
-
-    if data.get('income_sources') and isinstance(data['income_sources'], list):
-        for inc in data['income_sources']:
-            if isinstance(inc, dict):
-                if 'adjustments' not in inc or not inc['adjustments']:
-                    inc['adjustments'] = [{
-                        'start_type': inc.get('adjust_start_age_type', 'start'),
-                        'start_spec': inc.get('adjust_start_age_specified', 65),
-                        'end_type': inc.get('end_age_type', 'death'),
-                        'end_spec': inc.get('end_age_specified', 90),
-                        'adjust_type': inc.get('adjust_type', 'inflation'),
-                        'adjust_val': inc.get('adjust_val', 0.0)
-                    }]
-                inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
-                inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
 
     # Calculate marginal tax rate and attach balance sheet
     calc_tax_rate = calculate_marginal_tax_rate(data)
@@ -443,21 +452,20 @@ def plan_errors(data):
     return errors
 
 
-@require_http_methods(["POST"])
-def change_mode_view(request):
-    sim_type = request.POST.get('simulation_type', 'regular')
+def apply_mode_change(data, post):
+    """Apply the Results page's mode switch and Simulation Inputs edits (a POST-like
+    mapping) to a plan dict in place. Returns [(level, message), ...]."""
+    notes = []
+    sim_type = post.get('simulation_type', 'regular')
     is_goal = (sim_type == 'goal_seeking')
-    
-    session_data = get_session_sim_data(request)
-    data = session_data if isinstance(session_data, dict) else session_data.to_dict()
-        
+
     data['simulation_type'] = 'goal_seeking' if is_goal else 'regular'
     data['goal_seeking'] = is_goal
     
     if is_goal:
-        target_rate = get_float(request.POST.get('target_success_rate'), data.get('target_success_rate', 80.0))
+        target_rate = get_float(post.get('target_success_rate'), data.get('target_success_rate', 80.0))
         if target_rate < 1.0 or target_rate > 99.0:
-            messages.error(request, "Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
+            notes.append(('error', "Target Success Rate must be between 1% and 99% for Maximum Spending simulation."))
             data['target_success_rate'] = min(99.0, max(1.0, target_rate))
         else:
             data['target_success_rate'] = target_rate
@@ -466,9 +474,9 @@ def change_mode_view(request):
     # field, so an untouched field posts back a rounded copy of the saved value.
     # Only apply a field when the user actually changed what was displayed.
     def changed_value(key, current, decimals):
-        if key not in request.POST:
+        if key not in post:
             return None
-        posted = get_float(request.POST.get(key), None)
+        posted = get_float(post.get(key), None)
         if posted is None:
             return None
         if current is not None and round(posted, decimals) == round(get_float(current), decimals):
@@ -482,10 +490,10 @@ def change_mode_view(request):
     new_inflation = changed_value('inflation_rate', data.get('inflation_rate'), 1)
     if new_inflation is not None:
         data['inflation_rate'] = new_inflation
-    if 'runs' in request.POST:
-        runs_val = get_int(request.POST.get('runs'), data.get('runs', 10000))
+    if 'runs' in post:
+        runs_val = get_int(post.get('runs'), data.get('runs', 10000))
         if runs_val < 1 or runs_val > 1000000:
-            messages.error(request, "Number of Simulations must be an integer between 1 and 1,000,000.")
+            notes.append(('error', "Number of Simulations must be an integer between 1 and 1,000,000."))
             data['runs'] = min(1000000, max(1, runs_val))
         else:
             data['runs'] = runs_val
@@ -503,8 +511,8 @@ def change_mode_view(request):
         death_errors = death_age_errors(trial)
         if death_errors:
             for err in death_errors:
-                messages.error(request, err)
-            messages.error(request, "Age at Death was not changed.")
+                notes.append(('error', err))
+            notes.append(('error', "Age at Death was not changed."))
         else:
             data['user_age_death'] = trial['user_age_death']
             data['spouse_age_death'] = trial['spouse_age_death']
@@ -552,6 +560,16 @@ def change_mode_view(request):
 
     if updated_returns and 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
         data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data.get('accounts', []), current_year=data.get('current_year', 2026))
+
+    return notes
+
+
+@require_http_methods(["POST"])
+def change_mode_view(request):
+    session_data = get_session_sim_data(request)
+    data = session_data if isinstance(session_data, dict) else session_data.to_dict()
+    for level, message in apply_mode_change(data, request.POST):
+        getattr(messages, level)(request, message)
 
     request.session['simulation_data'] = data
     request.session['data_version'] = request.session.get('data_version', 0) + 1

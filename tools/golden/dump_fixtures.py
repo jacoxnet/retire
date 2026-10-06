@@ -15,6 +15,7 @@ and web/fixtures/functions/*.json with input/output grids for the pure helpers.
 Non-finite floats are written as the strings "NaN", "Infinity", "-Infinity"
 because JSON has no literal for them; the TS loader converts them back.
 """
+import copy
 import datetime
 import json
 import math
@@ -34,7 +35,10 @@ django.setup()
 
 from core import forms, runs  # noqa: E402
 from core import cpi_service, historical_data  # noqa: E402
-from core.views import import_plan_data  # noqa: E402
+from core.views import (  # noqa: E402
+    apply_mode_change, death_age_errors, get_default_data, import_plan_data, normalize_plan_fields, plan_errors,
+)
+from core.forms import build_default_rebalancing, normalize_imported_plan  # noqa: E402
 
 PLANS_DIR = ROOT / 'saved json files'
 OUT_DIR = ROOT / 'web' / 'fixtures'
@@ -193,6 +197,9 @@ def dump_stress(plan):
 
 def dump_plan(path):
     plan = load_plan(path)
+    staged = copy.deepcopy(plan)
+    stage_errors = normalize_plan_fields(staged)
+    write(OUT_DIR / 'plans' / path.stem / 'normalized.json', {'plan': staged, 'errors': stage_errors})
     errors = import_plan_data(plan)
     return dump_plan_data(path.stem, path.name, plan, errors)
 
@@ -456,6 +463,174 @@ def dump_income(fn):
                                'mult_items': mult_items, 'mult': mult})
 
 
+def valid_plan(**overrides):
+    """Same base plan as core/tests_input_validation.py."""
+    plan = {
+        'user_name': 'Pat', 'user_age': 60, 'user_retirement_age': 65, 'user_age_death': 90,
+        'is_married': False, 'runs': 100, 'desired_spending': 40000.0,
+        'accounts': [{
+            'name': 'IRA', 'type': 'pretax', 'owner': 'user', 'balance': 500000.0,
+            'contrib_amount': 0.0, 'contrib_start_age': 60, 'return_mean': 6.0, 'return_std': 10.0,
+        }],
+    }
+    plan.update(overrides)
+    return plan
+
+
+def married(**overrides):
+    base = {'is_married': True, 'spouse_age': 57, 'spouse_retirement_age': 62, 'spouse_age_death': 92}
+    base.update(overrides)
+    return valid_plan(**base)
+
+
+def _acc(**kw):
+    a = {'name': 'IRA', 'type': 'pretax', 'owner': 'user', 'balance': 500000.0, 'contrib_amount': 0.0,
+         'contrib_start_age': 60, 'return_mean': 6.0, 'return_std': 10.0}
+    a.update(kw)
+    return a
+
+
+def _income(**kw):
+    i = {'name': 'Pension', 'amount': 1000.0, 'frequency': 'monthly', 'start_age_type': 'retirement',
+         'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90}
+    i.update(kw)
+    return i
+
+
+def dump_plan_model(fn):
+    write(fn / 'plan_defaults.json', {
+        'default_data': {k: v for k, v in get_default_data().items() if k != 'balance_sheet'},
+        'rebalancing': build_default_rebalancing(),
+    })
+
+    # normalize_imported_plan on hostile / edge inputs
+    norm_inputs = [
+        valid_plan(),
+        valid_plan(user_age='61', runs='500', desired_spending='$45,000', inflation_rate='3.5%'),
+        valid_plan(user_age='sixty', desired_spending={'x': 1}, is_married='yes', goal_seeking='true'),
+        valid_plan(user_age=None, runs=None, social_security={'user_start_age': None, 'user_amount': '2,400'}),
+        valid_plan(user_age=True, runs=[1], user_name=42, filing_status=None, injected_key='<b>hi</b>'),
+        valid_plan(inflation_rate='inf', target_success_rate='nan', current_year='2026.9', runs=1e400),
+        {'accounts': 'nope', 'income_sources': [1, {'name': 'Pension', 'amount': '1200'}]},
+        {'social_security': 'x', 'pretax_assets': [1], 'balance_sheet': 5, 'rebalancing': None},
+        {'pretax_assets': {'present_balance': '1,000', 'contrib_start_age': '61.7', 'hsa_for_medical': 'on',
+                           'return_mean': 'abc', 'extra': 1}},
+        {'accounts': [_acc(balance='lots', contrib_adjust_inflation='True', is_community_property=1),
+                      _acc(name=None, contrib_end_age_specified='70', dividend_yield='2%')]},
+        {'income_sources': [_income(adjustments='bad'),
+                            _income(adjustments=[{'start_type': 'start', 'start_spec': '66', 'adjust_val': 'x'}, 3],
+                                    survivor_benefit_pct='150', has_survivor_benefit='true'),
+                            _income(amount=True, subject_to_tax='false')]},
+        {'other_taxes': [{'name': 'Tax', 'amount': '-5', 'frequency': 'annual', 'adjust_val': '1.5'}],
+         'additional_spending': [{'name': 'Trip', 'amount': '5000', 'start_age': '70.0', 'interval': '5',
+                                  'adjust_inflation': 'on'}, 'junk']},
+    ]
+    write(fn / 'normalize.json', [
+        {'input': inp, **dict(zip(('normalized', 'errors'), _normalize_case(inp)))} for inp in norm_inputs])
+
+    # plan_errors / death_age_errors: one mutation per rule
+    m = valid_plan
+    err_cases = [
+        m(), married(),
+        m(runs=0), m(runs=1000001), m(goal_seeking=True, target_success_rate=0.5),
+        m(goal_seeking=True, target_success_rate=99.5), m(user_age=17), m(user_age=121),
+        m(user_retirement_age=59), m(user_retirement_age=121), m(user_age_death=60), m(user_age_death=121),
+        married(spouse_age=17), married(spouse_retirement_age=50), married(spouse_age_death=57),
+        married(survivor_spending=-1.0), m(begin_spending_age_type='specified', begin_spending_age_specified=59),
+        m(begin_spending_age_type='specified', begin_spending_age_specified=91), m(desired_spending=-1.0),
+        m(state_tax_rate=-1.0), m(state_tax_rate=101.0),
+        m(social_security={'user_receiving': False, 'user_future_entitled': True, 'user_start_age': 61}),
+        m(social_security={'user_receiving': True, 'user_future_entitled': True, 'user_start_age': 75}),
+        married(social_security={'spouse_receiving': False, 'spouse_future_entitled': True, 'spouse_start_age': 71}),
+        m(user_life_insurance_amount=-1.0), m(user_life_insurance_type='term', user_life_insurance_term_age=17),
+        married(spouse_life_insurance_amount=-5.0),
+        married(spouse_life_insurance_type='term', spouse_life_insurance_term_age=130),
+        m(accounts=[_acc(), _acc(name=' ira ')]), m(accounts=[_acc(name='  ')]),
+        m(accounts=[_acc(balance=-5.0, contrib_amount=-1.0)]),
+        m(accounts=[_acc(contrib_start_age=59)]), m(accounts=[_acc(contrib_start_age=95.0)]),
+        m(accounts=[_acc(contrib_end_age_type='specified', contrib_end_age_specified=58)]),
+        married(accounts=[_acc(owner='spouse', contrib_start_age=55)]),
+        married(accounts=[_acc(owner='spouse', contrib_start_age=60, contrib_end_age_type='spouse_specified',
+                               contrib_end_age_specified=121.0)]),
+        m(additional_spending=[{'name': 'Trip', 'amount': -1.0, 'start_age': 59, 'interval': -1}]),
+        married(additional_spending=[{'name': 'Trip', 'amount': 5.0, 'start_age': 55, 'start_age_type': 'spouse'}]),
+        married(additional_spending=[{'name': None, 'amount': 5.0, 'start_age': 93.0, 'start_age_type': 'spouse'}]),
+        m(income_sources=[_income(amount=-1.0, start_age_type='specified', start_age_specified=17)]),
+        m(income_sources=[_income(end_age_type='specified', end_age_specified=64, start_age_type='specified',
+                                  start_age_specified=65)]),
+        m(income_sources=[_income(end_age_type='specified', end_age_specified=130)]),
+        m(income_sources=[_income(frequency='one_time', end_age_type='specified', end_age_specified=10)]),
+        m(income_sources=[_income(survivor_benefit_pct=101.0)]),
+        m(income_sources=[_income(adjust_type='fixed_pct', adjust_val=150.0, adjust_start_age_type='specified',
+                                  adjust_start_age_specified=10)]),
+        m(income_sources=[_income(adjust_type='none', adjust_start_age_type='specified', adjust_start_age_specified=10)]),
+        m(income_sources=[_income(adjustments=[
+            {'adjust_type': 'inflation_less_pct', 'adjust_val': -1.0, 'start_type': 'specified', 'start_spec': 10,
+             'end_type': 'spouse_specified', 'end_spec': 130},
+            {'adjust_type': 'inflation', 'adjust_val': 500.0}])]),
+        m(other_taxes=[{'name': 'Tax', 'amount': -2.0, 'start_age_type': 'user_specified', 'start_age_specified': 125}]),
+        m(balance_sheet={'categories': {
+            'pretax': {'accounts': [{'name': 'A'}, {'name': ''}]}, 'roth': {'accounts': [{'name': 'a '}]},
+            'goals': {'goal_groups': [{'accounts': [{'name': 'B'}, {'name': 'b'}]}]}}}),
+        m(balance_sheet={'no_categories': True}),
+    ]
+    for p in sorted(PLANS_DIR.glob('*.json')):
+        plan = load_plan(p)
+        import_plan_data(plan)
+        err_cases.append(plan)
+    write(fn / 'plan_errors.json', [
+        {'input': c, 'plan_errors': plan_errors(copy.deepcopy(c)), 'death_age_errors': death_age_errors(copy.deepcopy(c))}
+        for c in err_cases])
+
+    # apply_mode_change (cases that don't reach sync_accounts_to_balance_sheet)
+    base = get_default_data()
+    del base['balance_sheet']
+    with_accounts = valid_plan(pretax_assets={'return_mean': 6.0}, roth_assets={'return_mean': 6.0},
+                               accounts=[_acc(), _acc(name='Roth', type='roth'), _acc(name='Sp', owner='spouse')])
+    married_accounts = married(accounts=[_acc(), _acc(name='Sp IRA', owner='spouse'),
+                                         _acc(name='HSA', type='hsa', owner='spouse')],
+                               spouse_hsa_assets={'present_balance': 15000.0, 'return_mean': 5.0, 'return_std': 8.0})
+    mode_cases = [
+        (base, {'simulation_type': 'goal_seeking', 'target_success_rate': '85.0'}),
+        (base, {'simulation_type': 'goal_seeking', 'target_success_rate': '150.0'}),
+        (base, {'simulation_type': 'goal_seeking', 'target_success_rate': 'abc'}),
+        (base, {'simulation_type': 'goal_seeking'}),
+        (base, {'simulation_type': 'regular', 'runs': '20000'}),
+        (base, {'simulation_type': 'regular', 'runs': '0'}),
+        (base, {'simulation_type': 'regular', 'runs': '2000000'}),
+        (base, {'simulation_type': 'regular', 'runs': 'x'}),
+        (base, {'simulation_type': 'regular', 'desired_spending': '48000', 'inflation_rate': '3.2',
+                'user_age_death': '95', 'pretax_return_mean': '7.5', 'roth_return_mean': '8.0'}),
+        (dict(base, desired_spending=48000.4, inflation_rate=3.24), {'desired_spending': '48000', 'inflation_rate': '3.2'}),
+        (base, {'user_age_death': '55'}),
+        (base, {'user_age_death': '121'}),
+        (base, {'user_age_death': 'n/a', 'desired_spending': ''}),
+        (dict(base, begin_spending_age_type='specified', begin_spending_age_specified=88), {'user_age_death': '85'}),
+        (married(), {'spouse_age_death': '93', 'user_age_death': '91'}),
+        (married(), {'spouse_age_death': '50'}),
+        (valid_plan(), {'spouse_age_death': '93'}),
+        (with_accounts, {'pretax_return_mean': '7.0', 'roth_return_mean': '6.04', 'spouse_pretax_return_mean': '9'}),
+        (married_accounts, {'spouse_pretax_return_mean': '7.5', 'spouse_hsa_return_mean': '7.5',
+                            'taxable_return_mean': '4.0', 'hsa_return_mean': '3.0'}),
+        ({'is_married': True, 'user_age': 60, 'spouse_age': 58,
+          'spouse_hsa_assets': {'present_balance': 15000.0, 'return_mean': 5.0, 'return_std': 8.0}},
+         {'simulation_type': 'regular', 'spouse_hsa_return_mean': '7.5'}),
+        ({'user_age': 60, 'pretax_assets': None}, {'pretax_return_mean': '5.5'}),
+    ]
+    out = []
+    for plan, post in mode_cases:
+        data = copy.deepcopy(plan)
+        notes = apply_mode_change(data, post)
+        out.append({'plan': plan, 'post': post, 'result': data, 'messages': [list(n) for n in notes]})
+    write(fn / 'mode_change.json', out)
+
+
+def _normalize_case(inp):
+    data = copy.deepcopy(inp)
+    errors = normalize_imported_plan(data)
+    return data, errors
+
+
 def main():
     plans = sorted(PLANS_DIR.glob('*.json'))
     index = {
@@ -470,6 +645,7 @@ def main():
         print(f'dumping {name} ...', flush=True)
         index['plans'].append(dump_synthetic(name, source, override))
     dump_functions()
+    dump_plan_model(OUT_DIR / 'functions')
     write(OUT_DIR / 'index.json', index)
     print(f'wrote fixtures for {len(index["plans"])} plans to {OUT_DIR.relative_to(ROOT)}')
 
