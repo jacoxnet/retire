@@ -1,5 +1,6 @@
 <!-- Tab 1: Demographics & Plan Details (enter.html #demographics). -->
 <script lang="ts">
+  import { applyMarriageToAccounts } from '../../plan/accountCard';
   import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
   import { getFloat } from '../../plan/coerce';
   import type { Plan } from '../../plan/types';
@@ -20,6 +21,7 @@
     const checked = (e.currentTarget as HTMLInputElement).checked;
     plan.is_married = checked;
     plan.filing_status = checked ? 'joint' : 'single';
+    applyMarriageToAccounts(plan.accounts, checked);
   }
 
   interface PolicyStatus {
@@ -222,7 +224,8 @@
       <label for="filing_status" class="form-label">Tax Filing Status</label>
       <select class="form-select" id="filing_status" bind:value={plan.filing_status}>
         <option value="joint">Married Filing Jointly</option>
-        <option value="single">Single</option>
+        <!-- Married people can't file Single (the engine treats it as joint). -->
+        {#if !married}<option value="single">Single</option>{/if}
         <option value="hoh">Head of Household</option>
       </select>
     </div>

@@ -73,16 +73,29 @@ describe('commitEnterPlan', () => {
   });
 
   // Committing an unedited, already-imported plan must not change what the engine sees.
+  // Accounts gain the card's fields (and ids) but keep every value they had.
   // Synthetic plans get overrides after import, so their derived fields are stale by design.
   it.each(fixtureIndex().plans.map((p) => p.name).filter((n) => !n.startsWith('syn_')))('leaves imported plan %s unchanged', (name) => {
     const { plan } = loadPlanFixture<{ plan: Plan }>(name, 'imported');
     const before = structuredClone(plan);
-    commitEnterPlan(plan, TODAY);
+    let n = 0;
+    const makeId = (type: string) => `acc_${type}_test_${++n}`;
+    commitEnterPlan(plan, TODAY, makeId);
     expect(close(plan.marginal_tax_rate as number, before.marginal_tax_rate as number)).toBe(true);
     for (const k of ['pretax_assets', 'spouse_pretax_assets', 'roth_assets', 'taxable_assets', 'hsa_assets', 'spouse_hsa_assets']) {
-      expect(deepClose(plan[k], before[k], 1e-9, k)).toBeNull();
+      const { accounts: _a, ...after } = (plan[k] ?? {}) as Record<string, unknown>;
+      const { accounts: _b, ...was } = (before[k] ?? {}) as Record<string, unknown>;
+      expect(deepClose(after, was, 1e-9, k)).toBeNull();
     }
-    expect(plan.accounts).toEqual(before.accounts);
+    expect(plan.accounts!.length).toBe(before.accounts!.length);
+    plan.accounts!.forEach((acc, i) => {
+      const old = before.accounts![i];
+      expect(acc).toMatchObject(old.id ? old : { ...old, id: expect.stringMatching(/^acc_\w+_test_\d+$/) });
+      expect(Object.keys(acc)).toEqual(expect.arrayContaining(['dividend_yield', 'cost_basis_ratio', 'is_community_property']));
+    });
+    const once = structuredClone(plan);
+    commitEnterPlan(plan, TODAY, makeId);
+    expect(plan).toEqual(once);
   });
 });
 

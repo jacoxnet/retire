@@ -1,6 +1,7 @@
 // Saving the Enter page: the browser-side counterpart of enter_view's POST handling
 // in core/views.py. Inputs bind straight to the plan, so instead of parsing a form
 // this applies the same coercions and derived fields to the edited plan in place.
+import { commitAccounts, type IdMaker, newAccountId } from './accountCard';
 import { aggregateAccounts } from './accounts';
 import { syncAccountsToBalanceSheet } from './balanceSheet';
 import { getBool, getFloat, getInt } from './coerce';
@@ -90,7 +91,7 @@ export function demographicsFieldErrors(plan: Plan): string[] {
  * kept consistent with marital status, a taxable account for life-insurance proceeds,
  * account aggregates, the balance sheet's current column and the marginal tax rate.
  */
-export function commitEnterPlan(plan: Plan, today = todayIso()): void {
+export function commitEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker = newAccountId): void {
   plan.user_name = plan.user_name ?? 'User';
   plan.user_age = getInt(plan.user_age, 60);
   plan.user_retirement_age = getInt(plan.user_retirement_age, 65);
@@ -143,6 +144,7 @@ export function commitEnterPlan(plan: Plan, today = todayIso()): void {
     plan.spouse_life_insurance_term_age = 70;
   }
 
+  commitAccounts(plan, makeId);
   plan.accounts ??= [];
   ensureTaxableAccountForLifeInsurance(plan);
   // A missing balance sheet is rebuilt from the accounts.
@@ -161,9 +163,9 @@ export function commitEnterPlan(plan: Plan, today = todayIso()): void {
  * Validate and save the Enter page before a run (or navigating away from it). Returns
  * the error messages; when there are none the plan has been committed in place.
  */
-export function prepareEnterPlan(plan: Plan, today = todayIso()): string[] {
+export function prepareEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker = newAccountId): string[] {
   const fieldErrors = demographicsFieldErrors(plan);
   if (fieldErrors.length) return fieldErrors;
-  commitEnterPlan(plan, today);
+  commitEnterPlan(plan, today, makeId);
   return planErrors(plan);
 }

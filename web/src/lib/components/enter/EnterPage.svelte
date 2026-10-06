@@ -2,8 +2,10 @@
 <script lang="ts">
   import { tabBadges, type TabId } from '../../app/badges';
   import type { PlannerMode } from '../../app/ui.svelte';
+  import { duplicateAccountNames } from '../../plan/accountCard';
   import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
   import type { Plan } from '../../plan/types';
+  import AccountsTab from './AccountsTab.svelte';
   import DemographicsTab from './DemographicsTab.svelte';
   import ModeToggle from './ModeToggle.svelte';
   import PendingTab from './PendingTab.svelte';
@@ -42,6 +44,7 @@
   const visibleTabs = $derived(TABS.filter((t) => mode === 'advanced' || !t.advanced));
   const activeTab = $derived(TABS.find((t) => t.id === active) ?? TABS[0]);
   const badges = $derived(tabBadges(plan));
+  const duplicates = $derived(duplicateAccountNames(plan.accounts));
 
   // Simple mode hides the optional tabs; fall back to Accounts if one was open.
   $effect.pre(() => {
@@ -62,6 +65,15 @@
   </div>
 
   <div id="validationAlertContainer" class="mb-3">
+    {#if duplicates.length}
+      <div id="globalDuplicateNotice" class="alert alert-danger d-flex mb-3 py-2 px-3 align-items-center shadow-sm" role="alert">
+        <i class="fa-solid fa-triangle-exclamation me-2 fs-5"></i>
+        <div>
+          <strong class="notice-title">Duplicate Account Name:</strong>
+          <span class="notice-desc ms-1">Multiple accounts cannot have the same name ({duplicates.map((d) => `"${d}"`).join(', ')}). Please give each account a unique name.</span>
+        </div>
+      </div>
+    {/if}
     {#if errors.length}
       <div class="alert alert-danger alert-dismissible fade show text-center mb-3" role="alert">
         <div class="mb-1">
@@ -121,10 +133,7 @@
         {#if active === 'demographics'}
           <DemographicsTab bind:plan onNext={() => switchTab('assets')} />
         {:else if active === 'assets'}
-          <PendingTab title="Accounts for Retirement" phase="5b">
-            <TabFooter back={{ label: 'Back', to: 'demographics' }} next={{ label: 'Next: Spending', to: 'spending' }}
-              onSwitch={switchTab} />
-          </PendingTab>
+          <AccountsTab bind:plan onSwitch={switchTab} />
         {:else if active === 'spending'}
           <PendingTab title="Spending" phase="5c">
             <TabFooter back={{ label: 'Back', to: 'assets' }}

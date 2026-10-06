@@ -14,7 +14,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | 4a Plan model I | done | see below |
 | 4b Plan model II | done | see below |
 | 5a App shell | done | see below |
-| 5b Accounts tab | next | account cards; replaces the `assets` placeholder in `EnterPage.svelte` |
+| 5b Accounts tab | done | see below |
+| 5c Spending + Income tabs | next | replaces the `spending` / `income` placeholders in `EnterPage.svelte` |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (~20 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
@@ -205,3 +206,30 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - `test/components/enter.test.ts` (jsdom + `@testing-library/svelte`, via `EnterHarness.svelte`): edit → reload keeps values; simple mode hides the advanced tabs and remembers the mode; the married toggle; the term-policy status; adding the taxable account; the live badge; Run is blocked by errors and proceeds when the plan is valid; the how-to modal.
   - A Playwright check against `vite preview` confirmed edit → reload in Chromium. The CDN stylesheets are blocked in the cloud container, so the screenshot shows the page without Bootstrap.
 - Next (5b): Accounts tab. Read `enter.html` `#assets` (~lines 357–395) and the account-card code in `enter.js` (`addAccountCard`, around lines 600–1000). Replace the `assets` `PendingTab` in `EnterPage.svelte`.
+
+## 5b notes (Accounts tab)
+- `plan/accountCard.ts` (pure and tested):
+  - `personLabels(plan)` ports `getPersonLabels`: names fall back to You/Spouse, and ages use `parseInt(...) || default`.
+  - `cardAccount(data, people, priorNames, makeId)`: every field the card shows, filled with `addAccountCard`'s defaults. "cash" becomes taxable; the legacy `age` end type becomes `user_specified` / `spouse_specified`; default names are numbered ("… 2"); ids are generated. Unknown keys are kept.
+  - `newAccount` (Add Account), `setAccountOwner` (moves the end-age choice with the owner), `volatilityChoice` / `VOLATILITY_PRESETS` (8 and 10 show as Moderate), `duplicateAccountNames`, `yearAtAge` (the "Year N" hints).
+  - `applyMarriageToAccounts` ports `syncSpouseChoice`: unticking Married moves spouse-based end ages to "retirement" and ticking it again restores them, unless the user changed them meanwhile. The set-aside values live in a `WeakMap`, not in the plan.
+  - `commitAccounts` ports `parse_account_rows`, applied to each card's view of the account. A single person's owner becomes "user" and spouse end ages become "retirement". Blank names become "User Roth Account" and the like. Cleared fields take the per-type defaults. Start ages are raised to the owner's present age.
+  - `commitEnterPlan` now runs it first, then adds the life-insurance account, as `enter_view` does.
+- **Viewing doesn't rewrite the plan.** Cards bind through getter/setter pairs that read the account with defaults filled in (`cardAccount`) and write only the edited field. Defaults reach the plan on commit (Run, or leaving the page), as they did in Django, where accounts only changed on a POST. Committing a saved plan keeps every engine aggregate and the marginal rate identical. Accounts gain the card fields and ids but keep every value, and a second commit changes nothing (tested on all 8 saved plans).
+- **Deliberate differences from Django:**
+  - Extra account keys such as `institution` are kept on save. Django drops them, and gets `institution` back from the balance sheet in `sync_balance_sheet_to_accounts`, which isn't run on save until 5d.
+  - Typing an age on the Demographics tab doesn't raise contribution start ages live, as `updateSpouseDropdownOptions` did. The commit's `max(present age, start)` gives the same saved result.
+  - An unmarried plan whose account ends at `first_death` keeps that value. Django hid and disabled that option, which made the browser skip the field in the POST.
+- **Components** (`components/enter/`):
+  - `AccountsTab`: duplicate-name notice, cards, Add Account, Back / Next.
+  - `AccountCard`: all card fields. Owner select only when married ("or Joint" for taxable accounts). End-age-specified input with its year hint. Volatility select with a custom-std input (a local `customStd` flag, so choosing "User Specified" sticks even when the value matches a preset). Taxable drawer with the cost-basis estimate and community-property choice. HSA medical switch. Advanced-only fields keep the `advanced-only-field` class, which `style.css` hides in simple mode.
+  - `TaxAssumptionsModal`: the `#tier1TaxAssumptionsModal` body, copied from `enter.html`.
+  - `EnterPage` shows the page-level duplicate-name notice (`#globalDuplicateNotice`).
+- **Demographics follow-ups from `updateSpouseDropdownOptions`:** "Single" is hidden from Filing Status while married, and the married toggle calls `applyMarriageToAccounts`.
+- Tests:
+  - `test/plan/accountCard.test.ts`.
+  - `test/plan/commit.test.ts` (updated for account normalization).
+  - `test/components/accounts.test.ts`: every saved plan's cards show the right name, type, owner, balances, frequency, inflation switch, end age, start age, return, volatility and drawers, and viewing doesn't change the plan. Also add/edit/delete with default-name numbering, the type drawers and basis estimate, the assumptions modal, owner → end-age swap and year hints, volatility presets/custom, duplicate notices, simple-mode classes, and setting aside / restoring spouse end ages.
+  - A deliberately broken owner select fails the saved-plan test for every married plan.
+  - Playwright against `vite preview` with `aug_13_plan` in localStorage: 5 cards, and an edited balance survives a reload.
+- Next (5c): Spending tab (`enter.html` `#spending` ~396–498; `addSpendingRow` and other-tax rows in `enter.js` ~1024–1100 and ~1600–1730) and Income tab (`#income` ~499–636; SS toggles ~285–336; income-stream cards with adjustment periods ~1102–1600). `AgeSelect` belongs there. Remember `begin_spending_age_type` / `survivor_spending` from `updateSpouseDropdownOptions` and `toggleSpouseSection`.
