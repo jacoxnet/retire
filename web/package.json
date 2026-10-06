@@ -4,19 +4,29 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || true",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "svelte-kit sync && tsc --noEmit",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "bench": "vitest run --config vitest.bench.config.ts",
     "bench:browser": "node bench/browser-bench.mjs"
   },
   "devDependencies": {
+    "@sveltejs/adapter-static": "^4.0.0",
+    "@sveltejs/kit": "^3.0.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@testing-library/svelte": "^5.4.2",
     "@types/node": "^26.6.4",
     "jsdom": "^29.1.1",
+    "marked": "^18.1.0",
     "playwright-core": "1.56",
     "svelte": "^5.57.2",
-    "typescript": "^7.0.2",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
     "vite": "^8.3.3",
     "vitest": "^5.0.3"
   }

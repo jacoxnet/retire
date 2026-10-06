@@ -5,7 +5,7 @@ import { chromium } from 'playwright-core';
 import { createServer } from 'vite';
 
 const executablePath = process.argv[2] ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const server = await createServer({ root: new URL('..', import.meta.url).pathname, server: { port: 5199 }, logLevel: 'error' });
+const server = await createServer({ configFile: false, root: new URL('..', import.meta.url).pathname, server: { port: 5199 }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch({ executablePath });
 try {
