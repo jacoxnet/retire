@@ -1,11 +1,13 @@
 <!-- The Enter Data page (enter.html): mode bar, section tabs, tab panes, run buttons. -->
 <script lang="ts">
   import { tabBadges, type TabId } from '../../app/badges';
+  import { alertClass, type FlashMessage } from '../../app/flash.svelte';
   import type { PlannerMode } from '../../app/ui.svelte';
   import { applyMarriageToAccounts, duplicateAccountNames } from '../../plan/accountCard';
   import { syncAllTabs } from '../../plan/bsSync';
   import { duplicateSheetNames } from '../../plan/bsView';
   import BalanceSheetTab from './BalanceSheetTab.svelte';
+  import RebalanceTab from './RebalanceTab.svelte';
   import { applyMarriageToSchedules } from '../../plan/scheduleRows';
   import { onMount } from 'svelte';
   import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
@@ -15,19 +17,19 @@
   import IncomeTab from './IncomeTab.svelte';
   import SpendingTab from './SpendingTab.svelte';
   import ModeToggle from './ModeToggle.svelte';
-  import PendingTab from './PendingTab.svelte';
-  import TabFooter from './TabFooter.svelte';
 
   interface Props {
     plan: Plan;
     mode: PlannerMode;
     /** Errors from the last run attempt, shown above the form. */
     errors?: string[];
+    /** One-time messages (e.g. from an import), shown above the form. */
+    messages?: FlashMessage[];
     onModeChange: (mode: PlannerMode) => void;
     /** Validate, save and go to the results; the page shows any errors it returns. */
     onRun: () => void;
   }
-  let { plan = $bindable(), mode, errors = $bindable([]), onModeChange, onRun }: Props = $props();
+  let { plan = $bindable(), mode, errors = $bindable([]), messages = $bindable([]), onModeChange, onRun }: Props = $props();
 
   interface TabDef {
     id: TabId;
@@ -121,6 +123,12 @@
         </div>
       </div>
     {/if}
+    {#each messages as m, i (i)}
+      <div class="alert alert-{alertClass(m.level)} alert-dismissible fade show text-center flash-message" role="alert">
+        {m.text}
+        <button type="button" class="btn-close" aria-label="Close" onclick={() => messages.splice(i, 1)}></button>
+      </div>
+    {/each}
     {#if errors.length}
       <div class="alert alert-danger alert-dismissible fade show text-center mb-3" role="alert">
         <div class="mb-1">
@@ -188,9 +196,7 @@
         {:else if active === 'balance-sheet'}
           <BalanceSheetTab bind:plan onSwitch={switchTab} />
         {:else if active === 'rebalance'}
-          <PendingTab title="Rebalance" phase="5d">
-            <TabFooter back={{ label: 'Back: Balance Sheet', to: 'balance-sheet' }} run onSwitch={switchTab} />
-          </PendingTab>
+          <RebalanceTab bind:plan onSwitch={switchTab} />
         {/if}
       </div>
     </div>

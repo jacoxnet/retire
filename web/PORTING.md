@@ -16,7 +16,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | 5a App shell | done | see below |
 | 5b Accounts tab | done | see below |
 | 5c Spending + Income tabs | done | see below |
-| 5d Balance Sheet + Rebalance tabs, Manage page | in progress | Balance Sheet done (see 5d notes); Rebalance and Manage next |
+| 5d Balance Sheet + Rebalance tabs, Manage page | done | see 5d notes |
+| 6a Results display | next | `components/results/*`, driven from fixture results |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (~20 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
@@ -305,3 +306,33 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - Columns can be added (with invalid and duplicate dates rejected) and removed.
   - Sections collapse; column scope and frequency work; the tax override and its reset work.
   - The emergency target, the CPI-U modal and the goal status modal work; goals, property and debts can be added through prompts; duplicate names are flagged.
+
+### Rebalance
+- `plan/rebalance.ts` (pure and tested):
+  - Accounts: `latestSheetAccounts` (every sheet account at the **latest** column, as `getLatestBsAccounts` did, not `current_period`).
+  - Defaults: `seedRebalancing` (`syncRebalanceFromBalanceSheet`): with nothing selected or on "Refresh", select the investment accounts with a balance, else the first three. An account without an allocation gets 100% in one class: cash class for emergency/daily, international for Roth, otherwise the first class. Returns whether it changed anything.
+  - Selection and allocation edits: `selectAccounts`, `toggleAccount`, `applyPreset`, `setAllocation`, `assignRemaining`, `addAssetClass` / `deleteAssetClass` (not the last), `nextColor`.
+  - Calculations: `targetPortfolio` (selected + cash flow, floored at 0), `corridor`, `targetSum`, `accountAllocation`, `rebalanceResults` (drift and status with the page's ±0.05 slack), `tradePlan` (to target, or to the corridor edge in minimal mode; trades over $50).
+- **Seeding:** the page seeded on every load, so every Django save carried a seeded block. `commitEnterPlan` now seeds before `parse_rebalancing`, and the tab seeds on mount (writing only if something was missing). The simulation never reads rebalancing.
+- **Components:**
+  - `enter/RebalanceTab`: KPIs and steps 1–4; drift table, action plan, tax tip.
+  - `enter/RebChart`: Chart.js bars.
+  - `enter/AddAssetClassModal`.
+  - `shared/DecimalInput` (the plain `%` fields).
+  - `HelpPopover` gained an `html` option for static help text.
+- `PendingTab` is gone: every Enter tab is ported.
+
+### Manage page
+- `components/manage/ManagePage` + `routes/manage/+page.svelte`:
+  - **Save** downloads `exportText()` as `<user_name lowercased, spaces → _>_plan.json`.
+  - **Load** reads the file. The page's own check comes first: invalid JSON → alert "Error reading JSON file: …"; a non-object, non-string value → alert "Invalid JSON file format.". Then `PlanStore.importText`, and it goes to the Enter page with Django's messages: "Plan loaded successfully!", or each error plus "Plan loaded, but some values need to be corrected…", or "Error loading plan: …".
+  - **Clear** asks for confirmation, resets to the defaults and goes to Enter with "All simulation data has been cleared.".
+- `app/flash.svelte.ts` replaces Django's messages framework: `flash(level, text)` queues a message, and the Enter route shows it once (`EnterPage` `messages` prop, dismissible alerts).
+- Difference kept from 4a: a JSON-string-encoded plan (four saved files) is unwrapped and loaded. Django's page passed it through its client check, but its import then rejected it.
+- Tests:
+  - `test/plan/rebalance.test.ts`.
+  - `test/components/rebalance.test.ts`: seeding on entry, totals and trades, the allocation workflow down to "No trades needed", presets, tolerance/mode/targets/classes/cash flow.
+  - `test/components/manage.test.ts`: every file in `saved json files/` loads through the page to exactly Django's import (`imported.json`, dates frozen to 2026-01-15) with the right message, and round-trips through Save/Load (stable from the second export, per the 4b legacy-placeholder quirk). Also file naming, rejected files, a plan with errors, and Clear with and without confirming.
+  - `test/components/enter.test.ts`: flash messages render and dismiss.
+  - Playwright against `vite preview`: loading `saved json files/sept27.json` on /manage/ lands on Enter with "Plan loaded successfully!", the Balance Sheet shows its 11 accounts and real Chart.js canvas, and Rebalance shows its saved classes (Stocks/Bonds/REITs/Bitcoin, ±5%) with "Rebalance Needed" and the trade plan. No page errors.
+- Next (6a): results display (`templates/results.html`, `static/js/results.js`) driven from the fixture results (`mc.json`, `det_rows.json`, `stress.json`). Charts can follow `BsChart` (dynamic `chart.js/auto` import, skipped without a canvas context).

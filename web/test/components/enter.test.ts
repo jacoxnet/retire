@@ -152,6 +152,22 @@ describe('Enter page', () => {
   });
 });
 
+describe('flash messages', () => {
+  it('shows messages from the Manage page and lets them be dismissed', async () => {
+    const store = new PlanStore(memoryStorage());
+    const storage = memoryStorage();
+    render(EnterHarness, { store, ui: new UiPrefs(storage), onNavigate: vi.fn(), messages: [
+      { level: 'error', text: 'Bad value.' }, { level: 'warning', text: 'Plan loaded, but fix it.' },
+    ] });
+    const alerts = [...document.querySelectorAll('.flash-message')];
+    expect(alerts.map((a) => [a.className.match(/alert-(danger|warning)/)?.[1], a.textContent!.trim()])).toEqual([
+      ['danger', 'Bad value.'], ['warning', 'Plan loaded, but fix it.'],
+    ]);
+    await fireEvent.click(alerts[0].querySelector('.btn-close')!);
+    expect(document.querySelectorAll('.flash-message').length).toBe(1);
+  });
+});
+
 describe('InstructionsModal', () => {
   it('renders the how-to guide and closes on Escape', async () => {
     const r = render(InstructionsModal, { open: true });

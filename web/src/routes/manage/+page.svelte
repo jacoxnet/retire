@@ -1,6 +1,12 @@
-<svelte:head><title>Save/Load/Clear Data - Retirement Calculator</title></svelte:head>
+<script lang="ts">
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import { planStore } from '../../lib/app/context';
+  import ManagePage from '../../lib/components/manage/ManagePage.svelte';
 
-<div class="container main-content mt-4">
-  <h1 class="pageheading">Save, Load or Clear Data</h1>
-  <p class="text-center text-secondary">Import, export and clear are ported in phase 5d.</p>
-</div>
+  const store = planStore();
+</script>
+
+<svelte:head><title>Save / Load / Clear Data - Retirement Calculator</title></svelte:head>
+
+<ManagePage {store} onDone={() => goto(resolve('/'))} />

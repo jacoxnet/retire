@@ -5,10 +5,11 @@ import { cardAccount, commitAccounts, type IdMaker, newAccountId, personLabels }
 import { aggregateAccounts } from './accounts';
 import { syncAccountsToBalanceSheet } from './balanceSheet';
 import { commitBalanceSheet } from './bsSync';
+import { latestSheetAccounts, seedRebalancing } from './rebalance';
 import { buildDefaultRebalancing, parseRebalancing } from './defaults';
 import { getBool, getFloat, getInt } from './coerce';
 import { calculateMarginalTaxRate } from './marginal';
-import { isObj, todayIso } from './pyutil';
+import { isObj, type Obj, todayIso } from './pyutil';
 import type { Account, Plan } from './types';
 import { commitSchedules, rowNameErrors } from './scheduleRows';
 import { planErrors } from './validate';
@@ -173,7 +174,10 @@ export function commitEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker 
 
   commitAccounts(plan, makeId);
   commitBalanceSheet(plan, today);
-  plan.rebalancing = isObj(plan.rebalancing) ? parseRebalancing(plan.rebalancing) : buildDefaultRebalancing();
+  // The page seeded the rebalancing tool on every load, so a save always carried it.
+  const reb = isObj(plan.rebalancing) ? plan.rebalancing : buildDefaultRebalancing();
+  seedRebalancing(reb, latestSheetAccounts(plan.balance_sheet as Obj, today).accounts);
+  plan.rebalancing = parseRebalancing(reb);
   if (ensureTaxableAccountForLifeInsurance(plan)) {
     plan.balance_sheet = syncAccountsToBalanceSheet(plan.balance_sheet, plan.accounts ?? [], plan.current_year, today);
   }

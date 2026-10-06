@@ -4,10 +4,13 @@
   import { planStore, uiPrefs } from '../lib/app/context';
   import EnterPage from '../lib/components/enter/EnterPage.svelte';
   import { prepareEnterPlan } from '../lib/plan/commit';
+  import { takeFlash } from '../lib/app/flash.svelte';
 
   const store = planStore();
   const ui = uiPrefs();
   let errors: string[] = $state([]);
+  // Messages from the Manage page (import / clear), shown once.
+  let messages = $state(takeFlash());
   let page: ReturnType<typeof EnterPage> | undefined = $state();
 
   const resultsPath = resolve('/results');
@@ -38,4 +41,4 @@
 
 <svelte:head><title>Enter Data - Retirement Calculator</title></svelte:head>
 
-<EnterPage bind:this={page} bind:plan={store.plan} bind:errors mode={ui.mode} onModeChange={(m) => ui.setMode(m)} onRun={run} />
+<EnterPage bind:this={page} bind:plan={store.plan} bind:errors bind:messages mode={ui.mode} onModeChange={(m) => ui.setMode(m)} onRun={run} />

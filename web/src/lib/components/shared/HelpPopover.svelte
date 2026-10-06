@@ -3,8 +3,10 @@
   interface Props {
     title: string;
     content: string;
+    /** Render `content` as HTML (static, trusted help text only). */
+    html?: boolean;
   }
-  let { title, content }: Props = $props();
+  let { title, content, html = false }: Props = $props();
   let open = $state(false);
 </script>
 
@@ -23,7 +25,7 @@
   {#if open}
     <div class="popover bs-popover-top help-popover-box" role="tooltip">
       <h3 class="popover-header">{title}</h3>
-      <div class="popover-body">{content}</div>
+      <div class="popover-body">{#if html}{@html content}{:else}{content}{/if}</div>
     </div>
   {/if}
 </span>
