@@ -192,10 +192,52 @@ def dump_stress(plan):
 
 
 def dump_plan(path):
-    name = path.stem
-    out = OUT_DIR / 'plans' / name
     plan = load_plan(path)
     errors = import_plan_data(plan)
+    return dump_plan_data(path.stem, path.name, plan, errors)
+
+
+# Variants of saved plans that reach paths the saved plans don't: shortfalls,
+# early-withdrawal and HSA penalties, life-insurance deposits and estate payouts,
+# community-property step-up, HOH filing and non-exempt state SS. Overrides are
+# applied after import.
+def _syn_shortfall(p):
+    p.update(desired_spending=p['desired_spending'] * 8, user_retirement_age=40, filing_status='hoh',
+             state_tax_rate=5.0, state_ss_exempt=False, runs=2000)
+    if isinstance(p.get('hsa_assets'), dict):
+        p['hsa_assets']['hsa_for_medical'] = False
+
+
+def _syn_life_ins(p):
+    p.update(user_life_insurance_amount=500000.0, user_life_insurance_type='permanent',
+             spouse_life_insurance_amount=250000.0, spouse_life_insurance_type='term',
+             spouse_life_insurance_term_age=110, is_community_property=True, runs=2000)
+    if isinstance(p.get('hsa_assets'), dict):
+        p['hsa_assets']['hsa_for_medical'] = False
+
+
+def _syn_spouse_first(p):
+    p.update(spouse_age_death=70, spouse_life_insurance_amount=300000.0, spouse_life_insurance_type='permanent',
+             user_life_insurance_amount=400000.0, user_life_insurance_type='term', user_life_insurance_term_age=80,
+             filing_status='married_filing_jointly', desired_spending=p['desired_spending'] * 2, runs=2000)
+
+
+SYNTHETIC = [
+    ('syn_shortfall', 'early_suzie_plan.json', _syn_shortfall),
+    ('syn_life_ins', 'sept27.json', _syn_life_ins),
+    ('syn_spouse_first', 'aug_13_v2_plan.json', _syn_spouse_first),
+]
+
+
+def dump_synthetic(name, source, override):
+    plan = load_plan(PLANS_DIR / source)
+    errors = import_plan_data(plan)
+    override(plan)
+    return dump_plan_data(name, source, plan, errors)
+
+
+def dump_plan_data(name, source, plan, errors):
+    out = OUT_DIR / 'plans' / name
     write(out / 'imported.json', {'plan': plan, 'import_errors': errors})
 
     inputs = runs.extract_sim_inputs(plan)
@@ -205,7 +247,7 @@ def dump_plan(path):
     write(out / 'kernel.json', dump_kernel(inputs))
     write(out / 'mc.json', dump_mc(plan, inputs))
     write(out / 'stress.json', dump_stress(plan))
-    return {'name': name, 'source': path.name, 'import_errors': len(errors),
+    return {'name': name, 'source': source, 'import_errors': len(errors),
             'years': inputs['total_years'], 'runs': inputs['runs']}
 
 
@@ -414,9 +456,12 @@ def main():
     for p in plans:
         print(f'dumping {p.name} ...', flush=True)
         index['plans'].append(dump_plan(p))
+    for name, source, override in SYNTHETIC:
+        print(f'dumping {name} ...', flush=True)
+        index['plans'].append(dump_synthetic(name, source, override))
     dump_functions()
     write(OUT_DIR / 'index.json', index)
-    print(f'wrote fixtures for {len(plans)} plans to {OUT_DIR.relative_to(ROOT)}')
+    print(f'wrote fixtures for {len(index["plans"])} plans to {OUT_DIR.relative_to(ROOT)}')
 
 
 if __name__ == '__main__':

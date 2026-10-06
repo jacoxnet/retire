@@ -7,8 +7,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 |---|---|---|
 | C0 Scaffold + oracle | done | see below |
 | C1 Constants, tax, inputs | done | see below |
-| C2 Deterministic engine | next | |
-| C3 MC kernel | – | |
+| C2 Deterministic engine | done | see below |
+| C3 MC kernel | next | |
 | C4 RNG, workers, orchestration | – | |
 
 ## How to run
@@ -48,3 +48,18 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 - Gotcha: the root `.gitignore` (Python template) ignores every `lib/`; `web/.gitignore` re-includes `src/lib/`. Check `git status` shows new files under `src/lib`.
 - Tests: `test/tax.test.ts`, `test/constants.test.ts` (also covers misc, CPI and `pyRound`), `test/inputs.test.ts`. `deepClose()` in `test/fixtures.ts` reports the path of the first mismatch.
 - Next (C2): port `simulate_step` (`runs.py` ~751–1200), `run_simulation_path` (~1508), `run_deterministic` (~2466) and `get_life_insurance_routing` (done). Target: `det_rows.json` for every plan.
+
+## C2 notes
+- `web/src/lib/engine/deterministic.ts`: `simulateStep` (takes a `StepParams` object named after the Python keyword args), `runSimulationPath`, `runDeterministic(plan)` and `meanReturns(inputs)`. `runDeterministic` produces the rows for the projections and cash-flow tables, with Python's dict keys.
+- The deterministic path is *not* the same as the numba-input path, and the port keeps the differences:
+  - Inflation factors are `(1 + i)^t` here; `prepare_numba_inputs` uses the `inf_factors` ratio for other taxes.
+  - Spouse SS activity here doesn't check `sp_entitled`.
+  - `spouse_age_t` is `null` for single plans, which matters for `calculateIncomeBenefitMultiplier`.
+  - Income amounts go through `float()` here.
+- Milestone text uses Python's `f"{x:,.0f}"` (`fmtCommas0`: round half to even, comma grouping).
+- Synthetic fixture plans (in the dumper's `SYNTHETIC`; overrides applied after import, `runs=2000`) cover what the saved plans don't:
+  - `syn_shortfall` (early_suzie, 8× spending, retire at 40, HOH, non-medical HSA, 5% state tax on SS): shortfalls and early-withdrawal/HSA penalties.
+  - `syn_life_ins` (sept27): permanent + term policies, community property, deposit to the survivor and a terminal estate payout.
+  - `syn_spouse_first` (aug_13_v2): spouse dies at 70, `married_filing_jointly`, inactive term policy.
+- All 11 plans: `det_rows` deep-equal within 1e-9 (the C1 measurement suggests bit-exact apart from pow ulps).
+- Next (C3): port `njit_simulate_path` (`runs.py` ~1675–1850) over typed arrays and match `kernel.json` (3 variants × 11 plans, 16 fixed-return paths each), including trajectories and success flags.
