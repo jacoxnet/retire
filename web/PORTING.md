@@ -8,8 +8,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | C0 Scaffold + oracle | done | see below |
 | C1 Constants, tax, inputs | done | see below |
 | C2 Deterministic engine | done | see below |
-| C3 MC kernel | next | |
-| C4 RNG, workers, orchestration | – | |
+| C3 MC kernel | done | see below |
+| C4 RNG, workers, orchestration | next | |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (`npm run typecheck` for `tsc`).
@@ -63,3 +63,14 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - `syn_spouse_first` (aug_13_v2): spouse dies at 70, `married_filing_jointly`, inactive term policy.
 - All 11 plans: `det_rows` deep-equal within 1e-9 (the C1 measurement suggests bit-exact apart from pow ulps).
 - Next (C3): port `njit_simulate_path` (`runs.py` ~1675–1850) over typed arrays and match `kernel.json` (3 variants × 11 plans, 16 fixed-return paths each), including trajectories and success flags.
+
+## C3 notes
+- `web/src/lib/engine/montecarlo.ts`:
+  - `kernelParams(inputs, nb)` builds the per-plan constants once.
+  - `simulatePath(p, returns, trajectory?)` runs one path (6 per-year return series) and returns a **reused** `{terminalEstate, success}` object.
+  - `simulateAllPaths` mirrors `njit_simulate_all_paths` over row-major `runs × years` matrices; it's used by the tests and is handy for C4's fixed-seed checks.
+- All 11 plans × 3 variants (regular, test_spending, custom_inflation) match `kernel.json` ending wealths, success flags and full trajectories within 1e-9.
+- **Python bug found and reproduced for parity.** In `njit_simulate_path` (`core/runs.py`, taxable yields block) `tot_div` is not assigned on the `taxable_before <= 0` branch. Numba keeps the variable across loop iterations, so a year with an empty taxable account re-adds the previous year's dividends to the cost basis. That lowers later realized gains and taxes slightly. The deterministic `simulate_step` sets `tot_div = 0.0` there, so MC and deterministic disagree. The TS kernel reproduces the Numba behaviour (marked `PYTHON QUIRK`) so fixtures match. To fix it, set `tot_div = 0.0` in both, regenerate fixtures, and drop the carry-over in `montecarlo.ts`.
+- Throughput (single thread, Node 22, this container): ~15k paths/s for a 63-year married plan. 1M paths ≈ 65 s on one core before RNG cost, so C4 needs the worker pool. Goal-seek (up to 25 iterations) at 1M runs will be slow; consider capping goal-seek runs or reusing a smaller CRN sample.
+- Possible speedups if needed: `njitCalcFedTaxDual`, `njitSolveOrdinaryWithdrawal`, `njitExtraOrdinaryTaxes` and `njitSpousalRollover` allocate small tuples per call; switching them to out-buffers would cut GC pressure.
+- Next (C4): seeded PRNG + correlated normal draws (`generate_correlated_returns`), worker pool, `generate_runs`, `binary_search`, stress test, streaming percentiles; statistical agreement with `mc.json` / `stress.json`.
