@@ -1,5 +1,7 @@
 // Default plan and rebalancing settings (get_default_data in core/views.py,
 // build_default_rebalancing / parse_rebalancing in core/forms.py).
+import { buildDefaultBalanceSheet } from './balanceSheet';
+import { todayIso } from './pyutil';
 import type { FlatAssets, Plan, Rebalancing } from './types';
 
 export function buildDefaultRebalancing(): Rebalancing {
@@ -50,12 +52,9 @@ const assets = (over: Partial<FlatAssets> = {}): FlatAssets => ({
   ...over,
 });
 
-/**
- * The plan a new user starts with. The balance sheet is added by phase 4b
- * (build_default_balance_sheet).
- */
-export function getDefaultData(): Plan {
-  return {
+/** The plan a new user starts with; its balance sheet's single column is `today`. */
+export function getDefaultData(today = todayIso()): Plan {
+  const plan: Plan = {
     goal_seeking: false,
     user_name: 'John Doe',
     user_age: 60,
@@ -108,6 +107,8 @@ export function getDefaultData(): Plan {
     other_taxes: [],
     state_tax_rate: 0.0,
     state_ss_exempt: true,
-    rebalancing: buildDefaultRebalancing(),
   };
+  plan.balance_sheet = buildDefaultBalanceSheet(null, 2026, plan, today);
+  plan.rebalancing = buildDefaultRebalancing();
+  return plan;
 }

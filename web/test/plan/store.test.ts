@@ -57,13 +57,17 @@ describe('PlanStore', () => {
     expect(out.errors).toContain('Your Present Age must be an integer between 18 and 120.');
   });
 
-  it('round-trips through export', () => {
+  it('an exported plan imports back cleanly and is stable from the second round trip', () => {
+    // Like Django: the first re-import of a legacy plan can pick up the balance sheet's
+    // zero-balance placeholder accounts (early_suzie gains "Primary 401(k) / Traditional
+    // IRA"); after that, export -> import is a fixed point.
     const store = new PlanStore(memoryStorage());
-    store.importText(savedPlan('aug_13_plan.json'));
-    const before = JSON.parse(store.exportText());
-    const other = new PlanStore(memoryStorage());
-    expect(other.importText(store.exportText()).errors).toEqual([]);
-    expect(JSON.parse(other.exportText())).toEqual(before);
+    store.importText(savedPlan('early_suzie_plan.json'));
+    const second = new PlanStore(memoryStorage());
+    expect(second.importText(store.exportText()).errors).toEqual([]);
+    const third = new PlanStore(memoryStorage());
+    expect(third.importText(second.exportText()).errors).toEqual([]);
+    expect(JSON.parse(third.exportText())).toEqual(JSON.parse(second.exportText()));
   });
 
   it('applies mode changes and persists them', () => {

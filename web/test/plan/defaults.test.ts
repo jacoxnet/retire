@@ -4,8 +4,8 @@ import { deepClose, loadFixture } from '../fixtures';
 
 describe('defaults', () => {
   const f = loadFixture('functions', 'plan_defaults.json');
-  it('getDefaultData matches get_default_data (balance sheet comes in 4b)', () => {
-    expect(deepClose(getDefaultData(), f.default_data, 0)).toBeNull();
+  it('getDefaultData matches get_default_data, balance sheet included', () => {
+    expect(deepClose(getDefaultData('2026-01-15'), f.default_data_full, 0)).toBeNull();
   });
   it('rebalancing defaults and parsing', () => {
     expect(deepClose(buildDefaultRebalancing(), f.rebalancing, 0)).toBeNull();

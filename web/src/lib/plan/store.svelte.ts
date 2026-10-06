@@ -4,9 +4,9 @@
 import { untrack } from 'svelte';
 import { getDefaultData } from './defaults';
 import { applyModeChange as applyModeChangeTo, type ModeChangeInput, type ModeChangeMessage } from './modeChange';
-import { normalizePlanFields, parsePlanJson } from './normalize';
+import { ensurePlanBlocks, importPlanData } from './importPlan';
+import { parsePlanJson } from './normalize';
 import type { Plan } from './types';
-import { planErrors } from './validate';
 
 /** The subset of the Web Storage API the store uses (injectable for tests). */
 export interface KeyValueStorage {
@@ -53,15 +53,6 @@ function defaultStorage(): KeyValueStorage {
   return memoryStorage();
 }
 
-/**
- * Steps of the Django import that come after stage 1 (balance sheet, accounts,
- * rebalancing, life-insurance account, aggregates, marginal tax rate).
- * TODO(4b): port import_plan_data's remaining steps and call them here.
- */
-function completeImport(_plan: Plan): string[] {
-  return [];
-}
-
 export class PlanStore<R = unknown> {
   plan: Plan = $state(getDefaultData());
   dataVersion = $state(1);
@@ -84,7 +75,7 @@ export class PlanStore<R = unknown> {
   load(): void {
     const env = this.read<PlanEnvelope>(PLAN_KEY);
     if (env && env.plan && typeof env.plan === 'object' && Number.isInteger(env.dataVersion)) {
-      this.plan = env.plan;
+      this.plan = ensurePlanBlocks(env.plan);
       this.dataVersion = env.dataVersion;
     } else {
       this.plan = getDefaultData();
@@ -135,9 +126,7 @@ export class PlanStore<R = unknown> {
     } catch (e) {
       return { loaded: false, errors: [`Error loading plan: ${e instanceof Error ? e.message : String(e)}`] };
     }
-    const errors = normalizePlanFields(data);
-    errors.push(...completeImport(data));
-    errors.push(...planErrors(data));
+    const errors = importPlanData(data);
     this.replace(data);
     return { loaded: true, errors };
   }

@@ -38,6 +38,7 @@ from core import cpi_service, historical_data  # noqa: E402
 from core.views import (  # noqa: E402
     apply_mode_change, death_age_errors, get_default_data, import_plan_data, normalize_plan_fields, plan_errors,
 )
+from core import forms as F  # noqa: E402
 from core.forms import build_default_rebalancing, normalize_imported_plan  # noqa: E402
 
 PLANS_DIR = ROOT / 'saved json files'
@@ -500,6 +501,7 @@ def _income(**kw):
 def dump_plan_model(fn):
     write(fn / 'plan_defaults.json', {
         'default_data': {k: v for k, v in get_default_data().items() if k != 'balance_sheet'},
+        'default_data_full': get_default_data(),
         'rebalancing': build_default_rebalancing(),
     })
 
@@ -625,6 +627,190 @@ def dump_plan_model(fn):
     write(fn / 'mode_change.json', out)
 
 
+def _case(fn, *args, **kwargs):
+    """Run a forms function on deep copies of its arguments and record the result."""
+    args, kwargs = copy.deepcopy(args), copy.deepcopy(kwargs)  # snapshot: callers reuse and mutate inputs
+    out = getattr(F, fn)(*copy.deepcopy(args), **copy.deepcopy(kwargs))
+    return {'fn': fn, 'args': list(args), 'kwargs': kwargs, 'out': out}
+
+
+def dump_balance_sheet(fn):
+    """Phase 4b: accounts aggregation, marginal tax rate and balance sheet build/parse/sync."""
+    imported = []
+    raw_plans = []
+    for p in sorted(PLANS_DIR.glob('*.json')):
+        raw = load_plan(p)
+        normalize_plan_fields(raw)
+        raw_plans.append(raw)
+        plan = load_plan(p)
+        import_plan_data(plan)
+        imported.append(plan)
+
+    cases = []
+    # calculate_marginal_tax_rate
+    inc = lambda amt, freq='annual', tax=True: {'name': 'X', 'amount': amt, 'frequency': freq, 'subject_to_tax': tax}
+    ss = {'user_entitled': True, 'user_amount': 3000.0, 'user_freq': 'monthly',
+          'spouse_entitled': True, 'spouse_amount': 2000.0, 'spouse_freq': 'monthly'}
+    marginal_inputs = [
+        {'filing_status': 'single', 'state_tax_rate': 0.0, 'income_sources': [inc(100000.0)]},
+        {'filing_status': 'single', 'state_tax_rate': 5.0, 'income_sources': [inc(100000.0)]},
+        {'filing_status': 'single', 'state_tax_rate': 4.5, 'income_sources': [inc(300000.0)]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 60000.0, 'income_sources': [inc(2000.0, 'monthly')]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 60000.0, 'state_tax_rate': 5.0,
+         'income_sources': [inc(200000.0, 'monthly')]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 40000.0, 'social_security': ss,
+         'income_sources': [inc(50000.0)]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 40000.0, 'social_security': ss,
+         'income_sources': [inc(110000.0)]},
+        {'is_married': False, 'filing_status': 'single', 'desired_spending': 20000.0, 'income_sources': [inc(1e5, tax=False)]},
+        {'filing_status': 'single', 'desired_spending': 60000.0, 'state_tax_rate': 5.0, 'marginal_tax_rate_override': 18.5},
+        {'filing_status': 'single', 'desired_spending': 60000.0, 'balance_sheet': {'marginal_tax_rate_override': 28.0}},
+        {'marginal_tax_rate_override': '33.333'}, {'marginal_tax_rate_override': 150}, {'marginal_tax_rate_override': 'x'},
+        {'filing_status': 'married_filing_jointly', 'desired_spending': 250000.0},
+        {'filing_status': 'head_of_household', 'desired_spending': 90000.0},
+        {'filing_status': 'weird', 'is_married': True, 'desired_spending': 90000.0},
+        {'desired_spending': None, 'income_sources': [inc(5000.0, 'one_time'), inc(1000.0, 'monthly', 'false'), 'junk',
+                                                      {'amount': None, 'frequency': 'annual'}]},
+        {'social_security': {'user_receiving': True, 'user_amount': 4000.0, 'user_freq': 'annual',
+                             'spouse_entitled': True, 'spouse_amount': 9.0}, 'desired_spending': 30000.0},
+        {'desired_spending': 1e7, 'state_tax_rate': 9.3},
+        {},
+    ] + imported
+    for m in marginal_inputs:
+        cases.append(_case('calculate_marginal_tax_rate', m))
+    cases.append(_case('calculate_marginal_tax_rate', 'not a dict'))
+
+    # flat_assets_to_accounts / aggregate_accounts
+    for raw in raw_plans:
+        cases.append(_case('flat_assets_to_accounts', raw, bool(raw.get('is_married'))))
+    acct = lambda **kw: dict({'name': 'A', 'type': 'pretax', 'owner': 'user', 'balance': 1000.0, 'contrib_amount': 0.0}, **kw)
+    agg_lists = [p.get('accounts', []) for p in imported] + [
+        [],
+        [acct(contrib_amount=500.0, contrib_freq='monthly', return_mean=7.0),
+         acct(name='B', balance=3000.0, contrib_amount=1000.0, return_mean=5.0, return_std=12.0)],
+        [acct(balance=0.0, contrib_amount=100.0, contrib_freq='monthly', return_mean=8.0),
+         acct(name='B', balance=-50.0, contrib_amount=300.0, return_mean=4.0)],
+        [acct(balance=0.0, return_mean=8.0), acct(name='B', balance=0.0, return_mean=4.0, return_std=6.0)],
+        [acct(type='taxable', balance=1000.0, dividend_yield=3.0, cost_basis_ratio=50.0, is_community_property=True),
+         acct(name='B', type='taxable', balance=3000.0, qualified_dividend_pct=60.0, interest_yield=1.0),
+         acct(name='C', type='cash', balance=500.0), acct(name='D', type='weird', balance=0.0)],
+        [acct(type='taxable', balance=0.0, dividend_yield=3.0), acct(name='B', type='taxable', balance=0.0)],
+        [acct(type='hsa', owner='spouse', hsa_for_medical=False, contrib_start_age=55,
+              contrib_end_age_type='spouse_retirement'), acct(name='B', type='hsa', hsa_for_medical=False),
+         acct(name='C', type='pretax', owner='spouse', contrib_adjust_inflation='on'), acct(name='R', type='roth')],
+    ]
+    for accs in agg_lists:
+        for married in (False, True):
+            cases.append(_case('aggregate_accounts', accs, 60, 65, 90, married, 57, 62, 92))
+
+    # build_default_balance_sheet / parse_balance_sheet
+    for p in imported:
+        cases.append(_case('build_default_balance_sheet', p.get('accounts', []), data=p))
+    cases.append(_case('build_default_balance_sheet'))
+    cases.append(_case('build_default_balance_sheet', [acct(type='hsa', name='H'), acct(type='weird', name='W'),
+                                                       acct(type='taxable', name='T', institution='Bank')]))
+    bs0 = F.build_default_balance_sheet()
+    bs_no_targets = copy.deepcopy(bs0)
+    for k in ('target_auto_inflate', 'target_base_date'):
+        bs_no_targets['categories']['emergency'].pop(k, None)
+        for g in bs_no_targets['categories']['goals']['goal_groups']:
+            g.pop(k, None)
+    bs_no_targets['categories']['goals']['goal_groups'][1]['target_base_date'] = ''
+    bs_no_period = copy.deepcopy(bs_no_targets)
+    bs_no_period['current_period'] = None
+    bs_no_period['periods'] = ['2025-12-31', '2026-03-31']
+    for arg in [bs_no_targets, json.dumps(bs_no_targets), {'balance_sheet_json': json.dumps(bs0)},
+                {'balance_sheet_json': 'oops'}, 'not json', '[1]', {'x': 1}, None, bs_no_period]:
+        cases.append(_case('parse_balance_sheet', arg))
+    cases.append(_case('parse_balance_sheet', None, default_data=imported[0]))
+
+    # sync_balance_sheet_to_accounts
+    for p in imported:
+        args = dict(user_age=p.get('user_age', 60), user_retirement_age=p.get('user_retirement_age', 65),
+                    is_married=p.get('is_married', False), spouse_age=p.get('spouse_age', 60),
+                    spouse_retirement_age=p.get('spouse_retirement_age', 65))
+        cases.append(_case('sync_balance_sheet_to_accounts', p['balance_sheet'], existing_accounts=p.get('accounts'), **args))
+        cases.append(_case('sync_balance_sheet_to_accounts', p['balance_sheet'], **args))
+        by_name = [{k: v for k, v in a.items() if k != 'id'} for a in p.get('accounts', [])]
+        cases.append(_case('sync_balance_sheet_to_accounts', p['balance_sheet'], existing_accounts=by_name, **args))
+    bs1 = copy.deepcopy(bs0)
+    cp = bs1['current_period']
+    bs1['categories']['pretax']['accounts'].append({'name': 'New 401(k) Plan', 'type': 'pretax', 'owner': 'spouse',
+        'include_in_retirement': True, 'values': {cp: 350000.0}, 'contrib_amount': 22000.0, 'return_mean': 6.5})
+    bs1['categories']['emergency']['accounts'].append({'id': 'acc_emg_ret', 'name': 'Emergency HYSA',
+        'type': 'cash', 'include_in_retirement': True, 'values': {'2025-01-01': 1.0, '2025-06-01': 50000.0}})
+    bs1['categories']['goals']['goal_groups'][0]['accounts'].append({'name': 'Car Fund', 'type': 'cash',
+        'include_in_retirement': True, 'values': {}, 'balance': '1,234'})
+    bs1['categories']['daily']['accounts'].append({'name': 'Checking', 'include_in_retirement': True, 'values': 5,
+        'balance': 99.0, 'contrib_start_age': 40, 'hsa_for_medical': 'on'})
+    bs1['categories']['roth']['accounts'][0]['values'][cp] = 60000.0
+    existing = [{'id': 'acc_existing_1', 'name': 'roth ira', 'type': 'roth', 'owner': 'user', 'balance': 50000.0,
+                 'contrib_amount': 5000.0, 'contrib_adjust_inflation': None, 'institution': 'Old'},
+                {'id': 'acc_emg_ret', 'name': 'Other', 'type': 'cash', 'owner': 'spouse', 'contrib_start_age': 30}]
+    for married in (False, True):
+        cases.append(_case('sync_balance_sheet_to_accounts', bs1, existing_accounts=existing, is_married=married,
+                           spouse_age=55, spouse_retirement_age=60))
+        cases.append(_case('sync_balance_sheet_to_accounts', bs1, is_married=married, spouse_age=55))
+    bs_none = copy.deepcopy(bs0)
+    for k in ('pretax', 'roth', 'taxable'):
+        bs_none['categories'][k]['accounts'][0]['include_in_retirement'] = False
+    cases.append(_case('sync_balance_sheet_to_accounts', bs_none, existing_accounts=existing))
+    cases.append(_case('sync_balance_sheet_to_accounts', {'no': 'categories'}, existing_accounts=existing))
+    bs_np = copy.deepcopy(bs1)
+    bs_np['current_period'] = None
+    cases.append(_case('sync_balance_sheet_to_accounts', bs_np))
+
+    # sync_accounts_to_balance_sheet
+    for p in imported:
+        accs = copy.deepcopy(p.get('accounts', []))
+        cases.append(_case('sync_accounts_to_balance_sheet', p['balance_sheet'], accs))
+        if accs:
+            accs[0]['name'] = accs[0]['name'] + ' Renamed'
+            accs[0]['balance'] = 123456.0
+            accs[0]['return_mean'] = 7.25
+            accs[-1]['type'] = 'roth' if accs[-1].get('type') != 'roth' else 'pretax'
+            accs.append({'name': 'Brand New Brokerage', 'type': 'taxable', 'balance': 5000.0})
+            accs.append({'name': 'No Type', 'balance': 7.0, 'owner': 'spouse'})
+            cases.append(_case('sync_accounts_to_balance_sheet', p['balance_sheet'], accs, current_year=2026))
+            no_ids = [{k: v for k, v in a.items() if k != 'id'} for a in accs]
+            cases.append(_case('sync_accounts_to_balance_sheet', p['balance_sheet'], no_ids))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, [{'id': 'acc_card_new_1', 'name': 'Roth ira', 'type': 'roth',
+                                                              'owner': 'user', 'balance': 75000.0, 'contrib_amount': 7000.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, [
+        {'id': 'acc_pretax_100', 'name': 'Traditional 401(k) / IRA', 'type': 'pretax', 'balance': 50000.0},
+        {'id': 'acc_pretax_101', 'name': 'Roth ira', 'type': 'pretax', 'balance': 20000.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, [
+        {'id': 'acc_pretax_1', 'name': 'Primary 401(k) / Traditional IRA', 'type': 'hsa', 'balance': 1.0,
+         'hsa_for_medical': None, 'contrib_adjust_inflation': 'true', 'is_community_property': 'on'},
+        {'id': 'x9', 'name': 'Second Pretax', 'type': 'pretax', 'balance': 0.0, 'owner': 'spouse'}]))
+    bs_hist = copy.deepcopy(bs0)
+    bs_hist['periods'] = ['2025-06-30', bs_hist['current_period']]
+    bs_hist['categories']['pretax']['accounts'][0]['values'] = {'2025-06-30': 10.0, bs_hist['current_period']: 0.0}
+    bs_hist['categories']['taxable']['accounts'][0]['values'] = None
+    cases.append(_case('sync_accounts_to_balance_sheet', bs_hist, [
+        {'name': 'New IRA', 'type': 'pretax', 'balance': 5.0}, {'name': 'Taxable Brokerage Account', 'type': 'taxable'}]))
+    bs_nocat = copy.deepcopy(bs0)
+    del bs_nocat['categories']['hsa']
+    bs_nocat['current_period'] = None
+    cases.append(_case('sync_accounts_to_balance_sheet', bs_nocat, [{'name': 'H', 'type': 'hsa', 'balance': 2.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', {'nope': 1}, [{'name': 'Z', 'type': 'roth', 'balance': 3.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, []))
+    write(fn / 'balance_sheet.json', cases)
+
+    # apply_mode_change cases that do reach sync_accounts_to_balance_sheet
+    out = []
+    for p in imported:
+        for post in ({'pretax_return_mean': '8.5', 'roth_return_mean': '3.3'},
+                     {'spouse_pretax_return_mean': '7.1', 'taxable_return_mean': '4.4', 'hsa_return_mean': '2.0',
+                      'spouse_hsa_return_mean': '9.9'}):
+            # Through JSON, as Django's session store does between requests: an imported
+            # plan's aggregates share account dicts with data['accounts'] in memory only.
+            data = json.loads(json.dumps(p))
+            notes = apply_mode_change(data, post)
+            out.append({'plan': p, 'post': post, 'result': data, 'messages': [list(n) for n in notes]})
+    write(fn / 'mode_change_sync.json', out)
+
+
 def _normalize_case(inp):
     data = copy.deepcopy(inp)
     errors = normalize_imported_plan(data)
@@ -646,6 +832,7 @@ def main():
         index['plans'].append(dump_synthetic(name, source, override))
     dump_functions()
     dump_plan_model(OUT_DIR / 'functions')
+    dump_balance_sheet(OUT_DIR / 'functions')
     write(OUT_DIR / 'index.json', index)
     print(f'wrote fixtures for {len(index["plans"])} plans to {OUT_DIR.relative_to(ROOT)}')
 

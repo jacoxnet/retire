@@ -12,7 +12,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | C4 RNG, workers, orchestration | done | see below |
 | **Phase C (engine)** | **complete** | |
 | 4a Plan model I | done | see below |
-| 4b Plan model II | next | balance sheet, accounts aggregation, rebalancing, marginal tax rate |
+| 4b Plan model II | done | see below |
+| 5a App shell | next | SvelteKit layout, shared inputs, mode toggle, Demographics tab |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (~20 s; `npm run typecheck` for `tsc`).
@@ -136,3 +137,24 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 - Known JS/Python difference: JSON can't distinguish `95.0` from `95`. Python prints raw float inputs as `95.0` in messages and `str(42.0)` as `'42.0'`; TS prints `95` and `'42'`. After normalization these fields are ints, so real imports are unaffected; the test maps `(N.0)` → `(N)` for the raw-float grid cases.
 - Testing setup: `svelte` 5 + `@sveltejs/vite-plugin-svelte` + `jsdom`. **Rune code only compiles for the client (so `$effect` runs) in a DOM environment**, so files testing stores or components start with `// @vitest-environment jsdom`; engine tests stay on node. `vitest.config.ts` uses the Svelte plugin with the `browser` resolve condition.
 - Next (4b): port `build_default_balance_sheet` (then add it to `getDefaultData`), `parse_balance_sheet`, `sync_balance_sheet_to_accounts`, `sync_accounts_to_balance_sheet`, `aggregate_accounts`, `flat_assets_to_accounts`, `calculate_marginal_tax_rate` (+ `calculate_taxable_ss_forms`), then the rest of `import_plan_data` in `completeImport`. Target: `imported.json` for every plan, `get_default_data()` including the balance sheet (date frozen to 2026-01-15 in fixtures, so pass "today" in), and the mode-change cases that call the sync.
+
+## 4b notes (plan model II)
+- `web/src/lib/plan/`:
+  - `accounts.ts`: `flatAssetsToAccounts`, `aggregateAccounts` (balance-weighted returns; contribution-weighted if all balances are 0; plain average if both are).
+  - `marginal.ts`: `calculateMarginalTaxRate`, `calculateTaxableSsForms` (the engine's worksheet).
+  - `balanceSheet.ts`: `buildDefaultBalanceSheet`, `parseBalanceSheet`, `syncBalanceSheetToAccounts`, `syncAccountsToBalanceSheet` (replaces the 4a placeholder).
+  - `importPlan.ts`: `completeImport` (stage 2), `importPlanData` (the full Manage-page import), `ensurePlanBlocks` (adds a missing balance sheet / rebalancing, as `get_session_sim_data` does; the store applies it on load).
+  - `pyutil.ts`: `get`, `or`, `title`, `pyEqual` (Python `==`, used where Python's `in` / `list.remove` compare dicts by value), and `todayIso`.
+  - `getDefaultData(today)` now includes the balance sheet.
+- **Dates:** every function that calls `date.today()` in Python takes a trailing `today` (YYYY-MM-DD, default: the local date). Tests pass the fixtures' frozen `2026-01-15`.
+- New fixtures:
+  - `functions/balance_sheet.json` (149 cases, about 1.9 MB): marginal-rate inputs, aggregation, flat-asset migration, build/parse, and both sync directions. They cover rename/retype/new/no-id/no-type accounts, category moves, unlinked duplicates, placeholder clean-up, cash→taxable, multi-period values and missing categories.
+  - `functions/mode_change_sync.json`: return edits on every imported plan.
+  - `plan_defaults.json` gains `default_data_full`.
+  - Every saved plan's full import matches `imported.json`.
+- Fixture-generator pitfalls fixed along the way:
+  - `_case` now snapshots its arguments; callers mutate them afterwards.
+  - Mode-change cases now round-trip the plan through JSON first. In memory, an imported plan's `*_assets.accounts` are the *same* dicts as `data['accounts']`, so in-place return edits also changed the aggregates. Django never sees that sharing, because the session is JSON between requests; neither does the browser store.
+- **Python quirk kept for parity:** re-importing an exported legacy plan is not idempotent the first time. `early_suzie_plan` gains a zero-balance "Primary 401(k) / Traditional IRA" account, because its first import built a balance sheet with that placeholder marked `include_in_retirement`. It is stable from the second round trip on. Django does exactly the same; the store test asserts this.
+- Ported `BalanceSheetTests` cases (direct-call ones): marginal rate (incl. pensions/SS and overrides), build/parse, both sync directions, bidirectional sync, default zero amounts, multi-column JSON import, rename without clobbering, cash→taxable, duplicate-name validation, case-insensitive linking both ways, unlinked-duplicate removal.
+- Next (5a): SvelteKit + adapter-static app shell. The plan model is ready: `PlanStore` (`store.svelte.ts`) for state, `planErrors` for validation, `importPlanData` / `exportText` for Manage, `applyModeChange` for the Results card.
