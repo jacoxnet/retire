@@ -276,7 +276,132 @@ def dump_functions():
                           'out': cpi_service.calculate_cpi_inflation(base, ev, cpi_data=cpi_data)})
     for d in ['2026-01-01', '2026-03-15', '2000-12-31']:
         cpi_cases.append({'fn': 'get_prior_month_str', 'args': [d], 'out': cpi_service.get_prior_month_str(d)})
+    cpi_cases.append({'fn': '_interpolate_missing_months',
+                      'args': [{'2025-07': 320.0, '2025-08': None, '2025-12': 330.0, '2026-02': 331.5}],
+                      'out': cpi_service._interpolate_missing_months(
+                          {'2025-07': 320.0, '2025-08': None, '2025-12': 330.0, '2026-02': 331.5})})
     write(fn / 'cpi.json', cpi_cases)
+
+    dump_rmd_tax_withdraw(fn)
+    dump_rollover(fn)
+    dump_income(fn)
+
+
+def dump_rmd_tax_withdraw(fn):
+    rng = np.random.default_rng(777)
+    cases = []
+    for i in range(600):
+        # Cases 400+ drain taxable/Roth and use younger ages so the pretax and HSA
+        # penalty steps and shortfalls get exercised.
+        deep = i >= 400
+
+        def bal(p_zero=0.25, hi=2e6):
+            return 0.0 if rng.random() < p_zero else float(rng.uniform(0, hi))
+        user_age_t = int(rng.integers(40, 70)) if deep else int(rng.integers(30, 105))
+        spouse_age_t = int(rng.integers(40, 70)) if deep else int(rng.integers(30, 105))
+        is_married = bool(rng.random() < 0.6)
+        user_alive = bool(rng.random() < 0.85)
+        spouse_alive = is_married and bool(rng.random() < 0.85)
+        if not user_alive and not spouse_alive:
+            user_alive = True
+        pu_prior, ps_prior = bal(), (bal() if is_married else 0.0)
+        pu_mid = pu_prior * float(rng.uniform(0.8, 1.2))
+        ps_mid = ps_prior * float(rng.uniform(0.8, 1.2))
+        taxable_mid = bal(0.8 if deep else 0.3, 1.5e5 if deep else 1.5e6)
+        basis_mode = rng.integers(0, 3)
+        basis = taxable_mid if basis_mode == 0 else taxable_mid * float(rng.uniform(0, 1)) if basis_mode == 1 else 0.0
+        surplus = rng.random() < 0.25
+        spending = float(rng.uniform(0, 30000)) if surplus else float(rng.uniform(20000, 400000))
+        yields = rng.random() < 0.6
+        args = [
+            user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
+            pu_prior, ps_prior, pu_mid, ps_mid,
+            bal(0.8 if deep else 0.3, 1e6), taxable_mid, bal(0.4, 2e5), (bal(0.4, 2e5) if is_married else 0.0),
+            int(rng.choice([72, 73, 75])), (int(rng.choice([72, 73, 75])) if is_married else 150),
+            int(rng.integers(0, 3)), float(rng.uniform(1.0, 3.0)),
+            spending, float(rng.uniform(0, 150000)) * (rng.random() < 0.7),
+            float(rng.uniform(0, 70000)) * (rng.random() < 0.6), float(rng.uniform(0, 20000)) * (rng.random() < 0.3),
+            float(rng.uniform(0, 15000)) * (rng.random() < 0.3), float(rng.choice([0.0, 0.0, 4.5, 9.3])), int(rng.integers(0, 2)),
+            int(rng.random() < (0.2 if deep else 0.5)), int(rng.random() < (0.2 if deep else 0.5)),
+            basis,
+            float(rng.uniform(0, 3000)) if yields else 0.0,
+            float(rng.uniform(0, 3000)) if yields else 0.0,
+            float(rng.uniform(0, 20000)) if yields else 0.0,
+            float(rng.uniform(0, 8000)) if yields else 0.0,
+        ]
+        args = [float(a) if isinstance(a, np.floating) else a for a in args]
+        out = runs.njit_rmd_tax_withdraw(*args)
+        cases.append({'args': args, 'out': list(out)})
+    write(fn / 'rmd_tax_withdraw.json', cases)
+
+
+def dump_rollover(fn):
+    rng = np.random.default_rng(778)
+    cases = []
+    for i in range(60):
+        t = int(rng.integers(0, 40))
+        args = [t, int(rng.integers(0, 40)), bool(rng.random() < 0.8), bool(rng.random() < 0.6),
+                bool(rng.random() < 0.6), int(rng.integers(0, 3))]
+        args += [0.0 if rng.random() < 0.3 else float(rng.uniform(0, 1e6)) for _ in range(4)]
+        args += [float(rng.uniform(0, 20000)) for _ in range(4)]
+        cases.append({'args': args, 'out': list(runs.njit_spousal_rollover(*args))})
+    write(fn / 'spousal_rollover.json', cases)
+
+
+def dump_income(fn):
+    ctx = dict(user_age=55, user_ret_age=62, is_married=True, spouse_age=52, spouse_ret_age=60,
+               user_age_death=92, spouse_age_death=95)
+    ctx_single = dict(ctx, is_married=False)
+    items = []
+    for adj_type in ['inflation', 'fixed_pct', 'inflation_less_pct', 'none', 'bogus']:
+        for adj_start in ['start', 'current_age', 'specified', 'retirement', 'spouse_retirement']:
+            items.append({'start_age_type': 'retirement', 'end_age_type': 'death', 'adjust_type': adj_type,
+                          'adjust_val': 1.5, 'adjust_start_age_type': adj_start, 'adjust_start_age_specified': 66})
+    items.append({'start_age_type': 'specified', 'start_age_specified': 58, 'end_age_type': 'specified',
+                  'end_age_specified': 85, 'adjustments': [
+                      {'start_type': 'start', 'end_type': 'specified', 'end_spec': 65, 'adjust_type': 'inflation'},
+                      {'start_type': 'specified', 'start_spec': 68, 'end_type': 'specified', 'end_spec': 75,
+                       'adjust_type': 'fixed_pct', 'adjust_val': 3.0},
+                      {'start_type': 'specified', 'start_spec': 75, 'end_type': 'death',
+                       'adjust_type': 'inflation_less_pct', 'adjust_val': 1.0},
+                      {'start_type': 'current_age', 'end_type': 'spouse_death', 'adjust_type': 'zero'},
+                  ]})
+    items.append({'start_age_type': 'spouse_retirement', 'end_age_type': 'spouse_death', 'adjustments': [
+        {'start_type': 'spouse_retirement', 'end_type': 'first_death', 'adjust_type': 'inflation_less_pct',
+         'adjust_val': 4.0}]})
+    custom = [2.5 + 4.0 * math.cos(k) for k in range(30)]
+    growth = []
+    for i, item in enumerate(items):
+        for c, cx in [('married', ctx), ('single', ctx_single)]:
+            for t in [0, 1, 7, 15, 40]:
+                for ci in [None, custom]:
+                    out = runs.calculate_income_growth_factor(item, t, cx['user_age'], cx['user_ret_age'],
+                                                              cx['is_married'], cx['spouse_age'], cx['spouse_ret_age'],
+                                                              cx['user_age_death'], cx['spouse_age_death'], 2.8,
+                                                              custom_inflation_rates=ci)
+                    growth.append({'item': i, 'ctx': c, 't': t, 'custom': ci is not None, 'out': out})
+
+    mult_items = [
+        {'frequency': 'one_time'},
+        {'frequency': 'monthly', 'end_age_type': 'death', 'has_survivor_benefit': True, 'survivor_benefit_pct': 55.0},
+        {'frequency': 'monthly', 'end_age_type': 'retirement'},
+        {'frequency': 'annual', 'end_age_type': 'spouse_death', 'has_survivor_benefit': True},
+        {'frequency': 'annual', 'end_age_type': 'spouse_retirement', 'has_survivor_benefit': False},
+        {'frequency': 'monthly', 'end_age_type': 'specified'},
+    ]
+    mult = []
+    for i, item in enumerate(mult_items):
+        for married in [False, True]:
+            for user_age_t in [60, 70, 80, 93, 97]:
+                for spouse_age_t in [None, 70, 96]:
+                    for start, end in [(62, 90), (70, 70)]:
+                        out = runs.calculate_income_benefit_multiplier(item, user_age_t, 92, spouse_age_t, 95,
+                                                                       married, start, end)
+                        mult.append({'item': i, 'args': [user_age_t, 92, spouse_age_t, 95, married, start, end],
+                                     'out': out})
+    write(fn / 'income.json', {'ctx': {'married': ctx, 'single': ctx_single}, 'inflation_rate': 2.8,
+                               'custom_inflation_rates': custom, 'growth_items': items, 'growth': growth,
+                               'mult_items': mult_items, 'mult': mult})
 
 
 def main():

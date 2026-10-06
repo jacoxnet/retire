@@ -44,3 +44,39 @@ export function close(a: number, b: number, tol = 1e-9): boolean {
   if (a === b) return true;
   return Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
 }
+
+/**
+ * Recursively compare `actual` against `expected` (fixture JSON). Numbers use close();
+ * typed arrays compare against plain arrays. Returns null on match, otherwise the
+ * path and values of the first mismatch.
+ */
+export function deepClose(actual: any, expected: any, tol = 1e-9, path = '$'): string | null {
+  if (typeof expected === 'number') {
+    if (typeof actual === 'boolean' && (expected === 0 || expected === 1)) actual = Number(actual);
+    return typeof actual === 'number' && close(actual, expected, tol) ? null : `${path}: ${actual} != ${expected}`;
+  }
+  if (expected === null || typeof expected !== 'object') {
+    return actual === expected ? null : `${path}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`;
+  }
+  if (Array.isArray(expected)) {
+    if (!(Array.isArray(actual) || ArrayBuffer.isView(actual))) return `${path}: expected array, got ${typeof actual}`;
+    const a = actual as ArrayLike<any>;
+    if (a.length !== expected.length) return `${path}: length ${a.length} != ${expected.length}`;
+    for (let i = 0; i < expected.length; i++) {
+      const r = deepClose(a[i], expected[i], tol, `${path}[${i}]`);
+      if (r) return r;
+    }
+    return null;
+  }
+  if (actual === null || typeof actual !== 'object') return `${path}: expected object, got ${JSON.stringify(actual)}`;
+  const ek = Object.keys(expected).sort();
+  const ak = Object.keys(actual).filter((k) => actual[k] !== undefined).sort();
+  const missing = ek.filter((k) => !ak.includes(k));
+  const extra = ak.filter((k) => !ek.includes(k));
+  if (missing.length || extra.length) return `${path}: keys missing [${missing}] extra [${extra}]`;
+  for (const k of ek) {
+    const r = deepClose(actual[k], expected[k], tol, `${path}.${k}`);
+    if (r) return r;
+  }
+  return null;
+}
