@@ -4,6 +4,8 @@
 import { cardAccount, commitAccounts, type IdMaker, newAccountId, personLabels } from './accountCard';
 import { aggregateAccounts } from './accounts';
 import { syncAccountsToBalanceSheet } from './balanceSheet';
+import { commitBalanceSheet } from './bsSync';
+import { buildDefaultRebalancing, parseRebalancing } from './defaults';
 import { getBool, getFloat, getInt } from './coerce';
 import { calculateMarginalTaxRate } from './marginal';
 import { isObj, todayIso } from './pyutil';
@@ -170,12 +172,13 @@ export function commitEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker 
   }
 
   commitAccounts(plan, makeId);
-  plan.accounts ??= [];
-  ensureTaxableAccountForLifeInsurance(plan);
-  // A missing balance sheet is rebuilt from the accounts.
-  plan.balance_sheet = syncAccountsToBalanceSheet(plan.balance_sheet, plan.accounts, plan.current_year, today);
+  commitBalanceSheet(plan, today);
+  plan.rebalancing = isObj(plan.rebalancing) ? parseRebalancing(plan.rebalancing) : buildDefaultRebalancing();
+  if (ensureTaxableAccountForLifeInsurance(plan)) {
+    plan.balance_sheet = syncAccountsToBalanceSheet(plan.balance_sheet, plan.accounts ?? [], plan.current_year, today);
+  }
   Object.assign(plan, aggregateAccounts(
-    plan.accounts, plan.user_age, plan.user_retirement_age, plan.user_age_death,
+    plan.accounts ?? [], plan.user_age, plan.user_retirement_age, plan.user_age_death,
     married, plan.spouse_age, plan.spouse_retirement_age, plan.spouse_age_death,
   ));
 

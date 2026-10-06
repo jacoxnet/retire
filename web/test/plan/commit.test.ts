@@ -94,7 +94,8 @@ describe('commitEnterPlan', () => {
     expect(plan.accounts!.length).toBe(before.accounts!.length);
     plan.accounts!.forEach((acc, i) => {
       const old = before.accounts![i];
-      expect(acc).toMatchObject(old.id ? old : { ...old, id: expect.stringMatching(/^acc_\w+_test_\d+$/) });
+      // An account without an id takes its balance-sheet entry's id, as Django's save does.
+      expect(acc).toMatchObject(old.id ? old : { ...old, id: expect.stringMatching(/^acc_\w+$/) });
       expect(Object.keys(acc)).toEqual(expect.arrayContaining(['dividend_yield', 'cost_basis_ratio', 'is_community_property']));
     });
     const once = structuredClone(plan);

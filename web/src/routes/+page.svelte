@@ -8,11 +8,13 @@
   const store = planStore();
   const ui = uiPrefs();
   let errors: string[] = $state([]);
+  let page: ReturnType<typeof EnterPage> | undefined = $state();
 
   const resultsPath = resolve('/results');
 
   /** Save the plan as the Django Enter form did; returns the errors, if any. */
   function prepare(): string[] {
+    page?.syncTabs();
     errors = prepareEnterPlan(store.plan);
     if (errors.length) window.scrollTo(0, 0);
     return errors;
@@ -28,6 +30,7 @@
     if (nav.to && nav.to.url.pathname.replace(/\/+$/, '') === resultsPath) {
       if (nav.type !== 'goto' && prepare().length) nav.cancel();
     } else if (nav.to) {
+      page?.syncTabs();
       prepareEnterPlan(store.plan);
     }
   });
@@ -35,4 +38,4 @@
 
 <svelte:head><title>Enter Data - Retirement Calculator</title></svelte:head>
 
-<EnterPage bind:plan={store.plan} bind:errors mode={ui.mode} onModeChange={(m) => ui.setMode(m)} onRun={run} />
+<EnterPage bind:this={page} bind:plan={store.plan} bind:errors mode={ui.mode} onModeChange={(m) => ui.setMode(m)} onRun={run} />

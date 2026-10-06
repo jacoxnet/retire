@@ -16,7 +16,7 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | 5a App shell | done | see below |
 | 5b Accounts tab | done | see below |
 | 5c Spending + Income tabs | done | see below |
-| 5d Balance Sheet + Rebalance tabs, Manage page | next | replaces the last two placeholders; `/manage/` |
+| 5d Balance Sheet + Rebalance tabs, Manage page | in progress | Balance Sheet done (see 5d notes); Rebalance and Manage next |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (~20 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
@@ -269,3 +269,39 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - `test/components/spendingIncome.test.ts`: both tabs of every saved plan display field by field and viewing doesn't change the plan. Also add/edit/remove spending items, the specified start age and its year, other-tax reveal rules, the SS question flow, an income stream's survivor box and periods, the intro phrase, unmarry/remarry, and row validation messages blocking Run until fixed.
   - Playwright against `vite preview` with `sept27`: 2 income cards, an added period survives a reload, Run reaches `/results/`.
 - Next (5d): Balance Sheet tab (`enter.html` `#balance-sheet` ~638–789; `enter.js` balance-sheet engine from ~1790, plus `syncBsStateToAccountCards` / `syncAccountCardsToBsState` ~2455), Rebalance tab (`#rebalance` ~790–1060), and the Manage page (`templates/manage_data.html`, `static/js/manage_data.js`; `PlanStore.importText` / `exportText` / `clear` are ready). On save, Django also ran `parse_balance_sheet` + `sync_balance_sheet_to_accounts` before the account rules (see `enter_view`); add that to `commitEnterPlan` with the tab. 5d is the largest phase; split Balance Sheet / Rebalance+Manage if it runs long.
+
+## 5d notes (Balance Sheet, Rebalance, Manage)
+### Balance Sheet
+- `plan/bsView.ts` (pure and tested):
+  - Columns: `filterPeriodsByFrequency`, `visiblePeriods`, `periodLimit` (default 3; 0 = full history), `periodLabel`, `chartLabel`, `suggestNextPeriod`, `addPeriod` (validates the date and copies the latest column; returns an error message), `removePeriod`.
+  - Totals: `periodTotals(bs, p, taxRatePct)` gives every row the table, KPIs and chart show. Also `kpis` (current column against the previous column of the full history, as `updateBsKpis` did) and `chartSeries`.
+  - Tax rate: `effectiveTaxRate` (override, else the automatic rate, which is `calculateMarginalTaxRate(plan)` live; the JS version was a copy of that Python function).
+  - CPI-U: `cpiPriorMonth`, `effectiveTarget` (`getEffectiveTarget`), `emergencyTargetBase`, `emergencyStatus` / `goalGroupStatus`.
+  - Edits: `add*` for category accounts (unique "New … Account" names), goals, goal accounts, property, mortgage and debt.
+  - View state, stored in the sheet as Django did: `toggleCategory`, `toggleGoalGroup`, `setViewMode`, `viewModeState`.
+  - `duplicateSheetNames`.
+- `app/cpiData.ts` bundles `core/data/cpi_u_historical.json` (imported from `core/data` until phase 7) with missing months interpolated, as `load_cpi_data` does from the seed file.
+- **Sync with the account cards** (`plan/bsSync.ts`):
+  - `syncCardsToBalanceSheet` = `sync_accounts_to_balance_sheet`, plus two rules only the page's JS had: untick "For Retirement?" on sheet accounts no card links to, and drop an empty `acc_<cat>_1` placeholder no card uses.
+  - `syncBalanceSheetToCards` = `sync_balance_sheet_to_accounts`; when no sheet account is marked for retirement, there are no cards.
+  - `syncAllTabs(plan, fromBalanceSheet)`.
+  - The live JS sync is replaced by the Python ports, run when you leave a tab. The cards aren't visible while you're on the sheet, so this is equivalent in practice. New cards created from the sheet get the Python defaults rather than the card defaults.
+  - `EnterPage.syncTabs()` runs on every tab switch, mode change and Run, and from the route before saving or leaving. It only syncs when the accounts or the sheet's content changed since the last sync. View keys (`collapsed_*`, `view_mode`, `period_view_*`, `chart_metric`, `marginal_tax_rate_override`) don't count, so viewing or collapsing never rewrites the accounts. It starts from the sheet when that was edited on its tab.
+- **Save** (`commitBalanceSheet`, called by `commitEnterPlan`) now follows `enter_view` exactly: the page's last cards → sheet sync, then `parse_balance_sheet`, `sync_balance_sheet_to_accounts` (replacing the accounts when any are marked), and `sync_accounts_to_balance_sheet`. Then `parse_rebalancing` on the plan's rebalancing block, then the life-insurance account. Saved plans keep their engine inputs; accounts without ids take their sheet entry's id, as in Django.
+- **Components:**
+  - `enter/BalanceSheetTab`: toolbar, KPI cards, duplicate notice, table, chart, modals.
+  - `enter/BsTable`: every section of `renderBalanceSheetTable` as snippets, all values derived; the editable deferred-tax rate with its reset button.
+  - `enter/BsChart`: Chart.js, loaded with a dynamic `import('chart.js/auto')`; skipped without a 2D context.
+  - `enter/AddPeriodModal`, `enter/TargetCpiModal`, `enter/GoalStatusModal`, `shared/Modal` (Bootstrap markup, no Bootstrap JS).
+  - Goals, property and debt names still come from `window.prompt`, and removals ask `window.confirm`, as in Django.
+  - `EnterPage`'s global duplicate notice now includes sheet duplicates.
+- **Notes for later phases:**
+  - Collapsing a section or changing the column scope edits the plan (the view state lives in the sheet, as in Django), so it bumps `dataVersion` and invalidates cached results. Phase 6b could key the results cache on a hash of the engine inputs instead.
+  - After `npm install <pkg>`, run `npx svelte-kit sync` (or any of the `npm run check`/`typecheck` scripts), because `npm install` removes the generated `$app` tsconfig.
+- Tests:
+  - `test/plan/bsView.test.ts`, including `syncAllTabs` both ways.
+  - `test/components/balanceSheet.test.ts`: every saved plan's KPIs, rows and gross net worth per column. Viewing, Summary/Detailed and tab switches leave the plan unchanged.
+  - Editing a retirement balance reaches its card and the saved plan on Run. Unticking or ticking "For Retirement?" removes or adds the card.
+  - Columns can be added (with invalid and duplicate dates rejected) and removed.
+  - Sections collapse; column scope and frequency work; the tax override and its reset work.
+  - The emergency target, the CPI-U modal and the goal status modal work; goals, property and debts can be added through prompts; duplicate names are flagged.

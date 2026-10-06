@@ -3,6 +3,9 @@
   import { tabBadges, type TabId } from '../../app/badges';
   import type { PlannerMode } from '../../app/ui.svelte';
   import { applyMarriageToAccounts, duplicateAccountNames } from '../../plan/accountCard';
+  import { syncAllTabs } from '../../plan/bsSync';
+  import { duplicateSheetNames } from '../../plan/bsView';
+  import BalanceSheetTab from './BalanceSheetTab.svelte';
   import { applyMarriageToSchedules } from '../../plan/scheduleRows';
   import { onMount } from 'svelte';
   import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
@@ -51,13 +54,43 @@
       applyMarriageToAccounts(plan.accounts, false);
       applyMarriageToSchedules(plan, false);
     }
+    synced = snapshot();
   });
+
+  // The balance sheet and the account cards are reconciled when you leave a tab (and
+  // before a run), as the page's syncAllTabs did, but only after one of them was
+  // edited, so viewing a plan never rewrites it. View settings on the sheet don't count.
+  const VIEW_KEYS = ['collapsed_categories', 'collapsed_goals', 'view_mode', 'period_view_limit', 'period_view_frequency',
+    'chart_metric', 'marginal_tax_rate_override'];
+  function snapshot() {
+    const bs = $state.snapshot(plan.balance_sheet) as Record<string, unknown> | undefined;
+    const content = bs && typeof bs === 'object' ? Object.fromEntries(Object.entries(bs).filter(([k]) => !VIEW_KEYS.includes(k))) : bs;
+    return { accounts: JSON.stringify($state.snapshot(plan.accounts) ?? null), bs: JSON.stringify(content ?? null) };
+  }
+  let synced = { accounts: '', bs: '' };
+
+  /** Reconcile the balance sheet and the account cards if either changed. */
+  export function syncTabs(): void {
+    const now = snapshot();
+    const accountsEdited = now.accounts !== synced.accounts;
+    const sheetEdited = now.bs !== synced.bs;
+    if (accountsEdited || sheetEdited) {
+      const copy = $state.snapshot(plan) as Plan;
+      syncAllTabs(copy, sheetEdited && (active === 'balance-sheet' || !accountsEdited));
+      plan.accounts = copy.accounts;
+      plan.balance_sheet = copy.balance_sheet;
+    }
+    synced = snapshot();
+  }
   let subnavOpen = $state(false);
 
   const visibleTabs = $derived(TABS.filter((t) => mode === 'advanced' || !t.advanced));
   const activeTab = $derived(TABS.find((t) => t.id === active) ?? TABS[0]);
   const badges = $derived(tabBadges(plan));
-  const duplicates = $derived(duplicateAccountNames(plan.accounts));
+  const duplicates = $derived.by(() => {
+    const names = [...duplicateAccountNames(plan.accounts), ...duplicateSheetNames(plan.balance_sheet as Record<string, unknown>)];
+    return [...new Map(names.map((n) => [n.toLowerCase(), n])).values()];
+  });
 
   // Simple mode hides the optional tabs; fall back to Accounts if one was open.
   $effect.pre(() => {
@@ -65,6 +98,7 @@
   });
 
   function switchTab(id: TabId) {
+    syncTabs();
     if (id === 'assets') ensureTaxableAccountForLifeInsurance(plan);
     active = id;
     subnavOpen = false;
@@ -101,8 +135,8 @@
   </div>
 
   <form id="enterDataForm" class={[mode === 'simple' && 'planner-simple-mode']} novalidate
-    onsubmit={(e) => { e.preventDefault(); onRun(); }}>
-    <ModeToggle {mode} onchange={onModeChange} />
+    onsubmit={(e) => { e.preventDefault(); syncTabs(); onRun(); }}>
+    <ModeToggle {mode} onchange={(m) => { syncTabs(); onModeChange(m); }} />
 
     <div class="subnav-container mb-4" id="dataEntrySubNav">
       <div class="subnav-mobile-bar d-flex justify-content-between align-items-center">
@@ -152,10 +186,7 @@
         {:else if active === 'income'}
           <IncomeTab bind:plan {mode} onSwitch={switchTab} />
         {:else if active === 'balance-sheet'}
-          <PendingTab title="Balance Sheet" phase="5d">
-            <TabFooter back={{ label: 'Back: Social Security & Income Streams', to: 'income' }}
-              next={{ label: 'Next: Rebalance (optional)', to: 'rebalance' }} run onSwitch={switchTab} />
-          </PendingTab>
+          <BalanceSheetTab bind:plan onSwitch={switchTab} />
         {:else if active === 'rebalance'}
           <PendingTab title="Rebalance" phase="5d">
             <TabFooter back={{ label: 'Back: Balance Sheet', to: 'balance-sheet' }} run onSwitch={switchTab} />
