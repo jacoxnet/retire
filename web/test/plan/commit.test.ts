@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  commitEnterPlan, demographicsFieldErrors, ensureTaxableAccountForLifeInsurance, prepareEnterPlan,
+  commitEnterPlan, clientFieldErrors, ensureTaxableAccountForLifeInsurance, prepareEnterPlan,
 } from '../../src/lib/plan/commit';
 import { getDefaultData } from '../../src/lib/plan/defaults';
 import type { Plan } from '../../src/lib/plan/types';
@@ -87,6 +87,10 @@ describe('commitEnterPlan', () => {
       const { accounts: _b, ...was } = (before[k] ?? {}) as Record<string, unknown>;
       expect(deepClose(after, was, 1e-9, k)).toBeNull();
     }
+    // A missing state exemption shows as checked on the Django page, so it saves as exempt.
+    expect(plan.state_ss_exempt).toBe(before.state_ss_exempt ?? true);
+    expect(plan.filing_status).toBe(before.filing_status);
+    expect(plan.income_sources!.map((s) => s.is_social_security)).toEqual(before.income_sources!.map((s) => !!s.is_social_security));
     expect(plan.accounts!.length).toBe(before.accounts!.length);
     plan.accounts!.forEach((acc, i) => {
       const old = before.accounts![i];
@@ -117,9 +121,9 @@ describe('prepareEnterPlan', () => {
     plan.is_married = true;
     plan.spouse_age = 50;
     plan.spouse_retirement_age = undefined;
-    expect(demographicsFieldErrors(plan)).toEqual(["Spouse's Retirement Age must be between Spouse's Present Age (50) and 120."]);
+    expect(clientFieldErrors(plan)).toEqual(["Spouse's Retirement Age must be between Spouse's Present Age (50) and 120."]);
     plan.is_married = false;
-    expect(demographicsFieldErrors(plan)).toEqual([]);
+    expect(clientFieldErrors(plan)).toEqual([]);
   });
 
   it('returns plan errors after committing', () => {

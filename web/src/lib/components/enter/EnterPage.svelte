@@ -2,11 +2,15 @@
 <script lang="ts">
   import { tabBadges, type TabId } from '../../app/badges';
   import type { PlannerMode } from '../../app/ui.svelte';
-  import { duplicateAccountNames } from '../../plan/accountCard';
+  import { applyMarriageToAccounts, duplicateAccountNames } from '../../plan/accountCard';
+  import { applyMarriageToSchedules } from '../../plan/scheduleRows';
+  import { onMount } from 'svelte';
   import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
   import type { Plan } from '../../plan/types';
   import AccountsTab from './AccountsTab.svelte';
   import DemographicsTab from './DemographicsTab.svelte';
+  import IncomeTab from './IncomeTab.svelte';
+  import SpendingTab from './SpendingTab.svelte';
   import ModeToggle from './ModeToggle.svelte';
   import PendingTab from './PendingTab.svelte';
   import TabFooter from './TabFooter.svelte';
@@ -39,6 +43,15 @@
   ];
 
   let active: TabId = $state('demographics');
+
+  // As the Django page did on load: a single person's spouse-based choices show as
+  // their single-person equivalents (a no-op for almost every plan).
+  onMount(() => {
+    if (!plan.is_married) {
+      applyMarriageToAccounts(plan.accounts, false);
+      applyMarriageToSchedules(plan, false);
+    }
+  });
   let subnavOpen = $state(false);
 
   const visibleTabs = $derived(TABS.filter((t) => mode === 'advanced' || !t.advanced));
@@ -135,16 +148,9 @@
         {:else if active === 'assets'}
           <AccountsTab bind:plan onSwitch={switchTab} />
         {:else if active === 'spending'}
-          <PendingTab title="Spending" phase="5c">
-            <TabFooter back={{ label: 'Back', to: 'assets' }}
-              next={{ label: 'Next: Social Security & Income Streams', to: 'income' }} onSwitch={switchTab} />
-          </PendingTab>
+          <SpendingTab bind:plan onSwitch={switchTab} />
         {:else if active === 'income'}
-          <PendingTab title="Social Security & Income Streams" phase="5c">
-            <TabFooter back={{ label: 'Back', to: 'spending' }}
-              next={mode === 'advanced' ? { label: 'Next: Balance Sheet (optional)', to: 'balance-sheet' } : undefined}
-              run onSwitch={switchTab} />
-          </PendingTab>
+          <IncomeTab bind:plan {mode} onSwitch={switchTab} />
         {:else if active === 'balance-sheet'}
           <PendingTab title="Balance Sheet" phase="5d">
             <TabFooter back={{ label: 'Back: Social Security & Income Streams', to: 'income' }}

@@ -3,6 +3,7 @@
 // parse_account_rows (core/forms.py).
 import { getBool, getFloat, getInt } from './coerce';
 import { title } from './pyutil';
+import { singleChoice, syncSpouseChoice } from './spouseChoice';
 import type { Account, Plan } from './types';
 
 /** Names and ages as the page labels them (enter.js getPersonLabels). */
@@ -138,27 +139,12 @@ export function setAccountOwner(acc: Account, owner: string): void {
   }
 }
 
-// Spouse-based end-age choices set aside when Married was unticked, so ticking it
-// again restores them (enter.js syncSpouseChoice).
-const setAside = new WeakMap<object, { married: string; single: string }>();
-
 /**
  * Unticking Married moves each spouse-based end-age choice to "retirement";
  * ticking it again restores the original unless the user has since changed it.
  */
 export function applyMarriageToAccounts(accounts: Account[] | undefined, married: boolean): void {
-  for (const acc of accounts ?? []) {
-    if (!acc || typeof acc !== 'object') continue;
-    const value = String(acc.contrib_end_age_type ?? '');
-    const memo = setAside.get(acc);
-    if (!married && value.includes('spouse')) {
-      setAside.set(acc, { married: value, single: 'retirement' });
-      acc.contrib_end_age_type = 'retirement';
-    } else if (married && memo) {
-      if (value === memo.single) acc.contrib_end_age_type = memo.married;
-      setAside.delete(acc);
-    }
-  }
+  for (const acc of accounts ?? []) syncSpouseChoice(acc, 'contrib_end_age_type', married, 'retirement');
 }
 
 export type Volatility = 'low' | 'moderate' | 'high' | 'custom';
@@ -221,8 +207,7 @@ export function commitAccounts(plan: Plan, makeId: IdMaker = newAccountId): void
     const owner = married ? (card.owner as string) : 'user';
     const spouse = owner === 'spouse' && married;
     // A single person's spouse-based end-age choices were moved to "retirement" on the page.
-    let endType = card.contrib_end_age_type as string;
-    if (!married && endType.includes('spouse')) endType = 'retirement';
+    const endType = singleChoice(card.contrib_end_age_type as string, married, 'retirement');
     const defStart = spouse ? spouseAge : userAge;
     const defRet = spouse ? spouseRet : userRet;
     const taxable = type === 'taxable';

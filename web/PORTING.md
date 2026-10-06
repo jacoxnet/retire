@@ -15,7 +15,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | 4b Plan model II | done | see below |
 | 5a App shell | done | see below |
 | 5b Accounts tab | done | see below |
-| 5c Spending + Income tabs | next | replaces the `spending` / `income` placeholders in `EnterPage.svelte` |
+| 5c Spending + Income tabs | done | see below |
+| 5d Balance Sheet + Rebalance tabs, Manage page | next | replaces the last two placeholders; `/manage/` |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (~20 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
@@ -233,3 +234,38 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - A deliberately broken owner select fails the saved-plan test for every married plan.
   - Playwright against `vite preview` with `aug_13_plan` in localStorage: 5 cards, and an edited balance survives a reload.
 - Next (5c): Spending tab (`enter.html` `#spending` ~396–498; `addSpendingRow` and other-tax rows in `enter.js` ~1024–1100 and ~1600–1730) and Income tab (`#income` ~499–636; SS toggles ~285–336; income-stream cards with adjustment periods ~1102–1600). `AgeSelect` belongs there. Remember `begin_spending_age_type` / `survivor_spending` from `updateSpouseDropdownOptions` and `toggleSpouseSection`.
+
+## 5c notes (Spending and Income tabs)
+- `plan/spouseChoice.ts`: `syncSpouseChoice(obj, key, married, singleValue)`, the generic `syncSpouseChoice` port. Set-aside values live in a `WeakMap` keyed by object and field. `singleChoice` is the commit-time equivalent. `applyMarriageToAccounts` now uses it.
+- `plan/scheduleRows.ts` (pure and tested):
+  - `CHOICES` + `pick`: each select's option values in page order. A value without an option shows (and submits) as the first option; legacy aliases `specified` → `user_specified` and `one-time` → `one_time`.
+  - Views with the page's defaults: `spendingItemView`, `incomeView` (with `periods`), `periodView`, `otherTaxView`, `ssView`.
+  - Income schedules: `incomeSchedule` is the card's starting schedule (its `adjustments`, else one period from the legacy flat fields, else one default period). `editableSchedule` writes that into `item.adjustments` before the first period edit.
+  - Other helpers: `showsSurvivor`, the `new*` rows, `applyMarriageToSchedules` (spending start, item person, income start/end, period start/end, tax start/end/adjust-start), and `rowNameErrors`.
+  - `commitSchedules(plan, married)` applies `parse_additional_spending` / `parse_income_sources` / `parse_other_taxes` and the `enter_view` Social Security rules to each row's view. Income keeps the flat `adjust_type` / `adjust_val` in step with period 1 and sets `adjust_start_age_*` to `start` / 65, as Django does; the engine ignores those fields when `adjustments` is present.
+- `commit.ts`:
+  - `demographicsFieldErrors` → `clientFieldErrors`, now with all of `handleCustomValidation`'s client-only checks: current year 2020–2100, inflation 0–50%, account name required, return −100…100%, std 0…100%, and the row name/description checks.
+  - Calls `commitSchedules`.
+- **Bug fixed from 5a.** Svelte writes a select's or checkbox's shown value back into the plan when the bound field is missing. So just viewing Demographics added `user_life_insurance_type`, `spouse_life_insurance_type` and `state_ss_exempt: false`.
+  - The last one was a real error. Django shows a missing exemption as checked (the template's `is None`) and saves it as exempt, and 4 saved plans have no `state_ss_exempt`. Their first Run would have saved SS as state-taxable.
+  - Fixed in two places: (a) those fields, plus filing status and `adjust_spending_inflation`, bind through getter/setter pairs carrying the template's display defaults, and (b) `commitEnterPlan` saves a missing `state_ss_exempt` as true, an unknown or legacy filing status as the select shows it (Joint, then the marriage rule), and `adjust_spending_inflation` as a bool.
+  - The component tests now check that viewing each saved plan's Spending or Income tab (Demographics renders first) leaves the whole plan unchanged. **Rule for later tabs: never `bind:` a raw plan field that may be missing; bind a getter/setter over a view.**
+- **Deliberate differences from Django:**
+  - `is_social_security` on an income stream is kept on save. The page never submitted it, so Django reset it to false. `aug_5_smith_plan` enters Social Security this way, and Django's first save would quietly tax it as ordinary income.
+  - Unknown row keys are kept, as with accounts.
+  - The Income tab badge counts the user's SS plus every income stream. Django's badge counted SS plus `#incomeSourcesTable tbody tr`, a selector that matches nothing.
+  - A single person's plan that still holds spouse-based choices gets them moved on Enter-page mount (`EnterPage` `onMount`), as Django's `updateSpouseDropdownOptions` did on page load. For almost every plan this changes nothing.
+- **Components:**
+  - `shared/AgeSelect` (select + specified-age input + "Year N" hint) with `app/ageOptions.ts` (option labels with names and ages, spouse options only when married).
+  - `app/spendingStartText.ts` (the Other Income intro phrase).
+  - `enter/SpendingTab`: spending start + specified age, desired / survivor spending, inflation switch, additional-spending table rows, Other Taxes card (`advanced-only-card`).
+  - `enter/OtherTaxCard`.
+  - `enter/IncomeTab`: Social Security for each person, as a snippet with the receiving → future → fields → claiming-age reveal logic; the income stream list.
+  - `enter/IncomeCard`: fields, survivor box (married and ending at a death; title and hint name the survivor), adjustment periods (add; remove except period 1), subject-to-tax.
+  - The Demographics married toggle also calls `applyMarriageToSchedules`.
+- Tests:
+  - `test/plan/scheduleRows.test.ts`.
+  - `test/plan/commit.test.ts`, which now also checks `state_ss_exempt`, filing status and `is_social_security` on every saved plan. With the 5b `commit.ts` it fails, as it should.
+  - `test/components/spendingIncome.test.ts`: both tabs of every saved plan display field by field and viewing doesn't change the plan. Also add/edit/remove spending items, the specified start age and its year, other-tax reveal rules, the SS question flow, an income stream's survivor box and periods, the intro phrase, unmarry/remarry, and row validation messages blocking Run until fixed.
+  - Playwright against `vite preview` with `sept27`: 2 income cards, an added period survives a reload, Run reaches `/results/`.
+- Next (5d): Balance Sheet tab (`enter.html` `#balance-sheet` ~638–789; `enter.js` balance-sheet engine from ~1790, plus `syncBsStateToAccountCards` / `syncAccountCardsToBsState` ~2455), Rebalance tab (`#rebalance` ~790–1060), and the Manage page (`templates/manage_data.html`, `static/js/manage_data.js`; `PlanStore.importText` / `exportText` / `clear` are ready). On save, Django also ran `parse_balance_sheet` + `sync_balance_sheet_to_accounts` before the account rules (see `enter_view`); add that to `commitEnterPlan` with the tab. 5d is the largest phase; split Balance Sheet / Rebalance+Manage if it runs long.

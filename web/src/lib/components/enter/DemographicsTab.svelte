@@ -1,6 +1,7 @@
 <!-- Tab 1: Demographics & Plan Details (enter.html #demographics). -->
 <script lang="ts">
   import { applyMarriageToAccounts } from '../../plan/accountCard';
+  import { applyMarriageToSchedules } from '../../plan/scheduleRows';
   import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
   import { getFloat } from '../../plan/coerce';
   import type { Plan } from '../../plan/types';
@@ -22,6 +23,7 @@
     plan.is_married = checked;
     plan.filing_status = checked ? 'joint' : 'single';
     applyMarriageToAccounts(plan.accounts, checked);
+    applyMarriageToSchedules(plan, checked);
   }
 
   interface PolicyStatus {
@@ -45,6 +47,16 @@
     plan.spouse_life_insurance_amount, plan.spouse_life_insurance_type, plan.spouse_life_insurance_term_age, plan.spouse_age_death) : null);
 
   const ensureTaxable = () => ensureTaxableAccountForLifeInsurance(plan);
+
+  // What the selects show for missing or legacy values (the Django template's
+  // selection rules); binding these instead of the raw fields keeps a missing
+  // value from being written back just by viewing the tab.
+  const policyType = (t: unknown) => (t === 'term' ? 'term' : 'permanent');
+  const filingShown = $derived.by(() => {
+    const f = String(plan.filing_status ?? '');
+    if (married && f === 'single') return 'joint';
+    return ['joint', 'single', 'hoh'].includes(f) ? f : 'joint';
+  });
 </script>
 
 {#snippet policyBadge(status: PolicyStatus | null, whose: string)}
@@ -163,7 +175,7 @@
         </div>
         <div class="col-md-3 mb-3">
           <label for="user_life_insurance_type" class="form-label">Policy Type</label>
-          <select class="form-select" id="user_life_insurance_type" bind:value={plan.user_life_insurance_type}>
+          <select class="form-select" id="user_life_insurance_type" bind:value={() => policyType(plan.user_life_insurance_type), (v) => (plan.user_life_insurance_type = v)}>
             <option value="permanent">Permanent / Whole Life</option>
             <option value="term">Term Life</option>
           </select>
@@ -197,7 +209,7 @@
           </div>
           <div class="col-md-3 mb-3">
             <label for="spouse_life_insurance_type" class="form-label">Policy Type</label>
-            <select class="form-select" id="spouse_life_insurance_type" bind:value={plan.spouse_life_insurance_type}>
+            <select class="form-select" id="spouse_life_insurance_type" bind:value={() => policyType(plan.spouse_life_insurance_type), (v) => (plan.spouse_life_insurance_type = v)}>
               <option value="permanent">Permanent / Whole Life</option>
               <option value="term">Term Life</option>
             </select>
@@ -222,7 +234,7 @@
   <div class="row">
     <div class="col-md-4 mb-3">
       <label for="filing_status" class="form-label">Tax Filing Status</label>
-      <select class="form-select" id="filing_status" bind:value={plan.filing_status}>
+      <select class="form-select" id="filing_status" bind:value={() => filingShown, (v) => (plan.filing_status = v)}>
         <option value="joint">Married Filing Jointly</option>
         <!-- Married people can't file Single (the engine treats it as joint). -->
         {#if !married}<option value="single">Single</option>{/if}
@@ -239,7 +251,7 @@
     </div>
     <div class="col-md-4 mb-3 d-flex align-items-center">
       <div class="form-check form-switch ps-5 pt-3">
-        <input class="form-check-input" type="checkbox" id="state_ss_exempt" bind:checked={plan.state_ss_exempt} />
+        <input class="form-check-input" type="checkbox" id="state_ss_exempt" bind:checked={() => plan.state_ss_exempt ?? true, (v) => (plan.state_ss_exempt = v)} />
         <label class="form-check-label font-weight-bold" for="state_ss_exempt">
           Exempt Social Security from State Income Tax
           <HelpPopover title="Social Security State Exemption"

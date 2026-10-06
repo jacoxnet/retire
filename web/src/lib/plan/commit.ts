@@ -1,13 +1,14 @@
 // Saving the Enter page: the browser-side counterpart of enter_view's POST handling
 // in core/views.py. Inputs bind straight to the plan, so instead of parsing a form
 // this applies the same coercions and derived fields to the edited plan in place.
-import { commitAccounts, type IdMaker, newAccountId } from './accountCard';
+import { cardAccount, commitAccounts, type IdMaker, newAccountId, personLabels } from './accountCard';
 import { aggregateAccounts } from './accounts';
 import { syncAccountsToBalanceSheet } from './balanceSheet';
 import { getBool, getFloat, getInt } from './coerce';
 import { calculateMarginalTaxRate } from './marginal';
 import { isObj, todayIso } from './pyutil';
 import type { Account, Plan } from './types';
+import { commitSchedules, rowNameErrors } from './scheduleRows';
 import { planErrors } from './validate';
 
 const LIFE_INSURANCE_TYPES = ['permanent', 'term'];
@@ -57,11 +58,12 @@ export function ensureTaxableAccountForLifeInsurance(plan: Plan): boolean {
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /**
- * The Enter page's client-side checks on the Demographics fields that the server
- * can't see once a value has fallen back to its default (enter.js
- * handleCustomValidation): a blank name or an empty / non-numeric age.
+ * The Enter page's client-side checks that the server doesn't repeat, because a
+ * value has fallen back to its default by then or the server never checks it
+ * (enter.js handleCustomValidation): blank names, empty or non-numeric ages, the
+ * current year and inflation ranges, and account return ranges.
  */
-export function demographicsFieldErrors(plan: Plan): string[] {
+export function clientFieldErrors(plan: Plan): string[] {
   const errors: string[] = [];
   if (!String(plan.user_name ?? '').trim()) errors.push('Name is required.');
   const uAge = plan.user_age;
@@ -82,6 +84,26 @@ export function demographicsFieldErrors(plan: Plan): string[] {
       errors.push(`Spouse's Age at Death must be an integer greater than Spouse's Present Age (${shownS}) up to 120.`);
     }
   }
+
+  const year = parseInt(String(plan.current_year ?? ''), 10);
+  if (Number.isNaN(year) || year < 2020 || year > 2100) errors.push('Current Year must be between 2020 and 2100.');
+  const inflation = getFloat(plan.inflation_rate, 0);
+  if (inflation < 0.0 || inflation > 50.0) errors.push('Inflation Rate % must be between 0% and 50%.');
+
+  const people = personLabels(plan);
+  const priorNames: string[] = [];
+  for (const acc of plan.accounts ?? []) {
+    const view = cardAccount(acc ?? {}, people, priorNames, () => '');
+    priorNames.push(String(view.name ?? ''));
+    const name = String(view.name ?? '').trim();
+    if (!name) errors.push('Account Name is required.');
+    const mean = view.return_mean as number | null;
+    if (mean !== null && (mean < -100.0 || mean > 100.0)) errors.push(`Account "${name}" Average Return % must be between -100% and 100%.`);
+    const std = view.return_std as number | null;
+    if (std !== null && (std < 0.0 || std > 100.0)) errors.push(`Account "${name}" Return Std Dev % must be between 0% and 100%.`);
+  }
+
+  errors.push(...rowNameErrors(plan));
   return errors;
 }
 
@@ -111,21 +133,24 @@ export function commitEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker 
     plan.spouse_age_death = 0;
   }
 
-  let filing = plan.filing_status ?? 'single';
+  // The select shows an unknown or legacy value as its first option, Joint.
+  let filing = ['joint', 'single', 'hoh'].includes(plan.filing_status as string) ? (plan.filing_status as string) : 'joint';
   if (!married && filing === 'joint') filing = 'single';
   else if (married && filing === 'single') filing = 'joint';
   plan.filing_status = filing;
 
   plan.current_year = getInt(plan.current_year, 2026);
-  if (!married && plan.begin_spending_age_type === 'spouse_retirement') plan.begin_spending_age_type = 'retirement';
   plan.desired_spending = getFloat(plan.desired_spending, 0.0);
   plan.survivor_spending = married ? getFloat(plan.survivor_spending, plan.desired_spending) : 0.0;
   plan.inflation_rate = getFloat(plan.inflation_rate, 2.5);
   plan.state_tax_rate = getFloat(plan.state_tax_rate, 0.0);
-  plan.state_ss_exempt = getBool(plan.state_ss_exempt);
+  // A missing exemption shows as checked on the page (the template's `is None` case).
+  plan.state_ss_exempt = plan.state_ss_exempt === undefined || plan.state_ss_exempt === null || getBool(plan.state_ss_exempt);
+  plan.adjust_spending_inflation = getBool(plan.adjust_spending_inflation);
 
-  if (!married && isObj(plan.social_security)) {
-    Object.assign(plan.social_security, {
+  commitSchedules(plan, married);
+  if (!married) {
+    Object.assign(plan.social_security!, {
       spouse_receiving: false, spouse_future_entitled: false, spouse_entitled: false,
       spouse_amount: 0.0, spouse_freq: 'monthly', spouse_start_age: 67,
     });
@@ -164,7 +189,7 @@ export function commitEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker 
  * the error messages; when there are none the plan has been committed in place.
  */
 export function prepareEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker = newAccountId): string[] {
-  const fieldErrors = demographicsFieldErrors(plan);
+  const fieldErrors = clientFieldErrors(plan);
   if (fieldErrors.length) return fieldErrors;
   commitEnterPlan(plan, today, makeId);
   return planErrors(plan);
