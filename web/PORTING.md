@@ -9,10 +9,12 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | C1 Constants, tax, inputs | done | see below |
 | C2 Deterministic engine | done | see below |
 | C3 MC kernel | done | see below |
-| C4 RNG, workers, orchestration | next | |
+| C4 RNG, workers, orchestration | done | see below |
+| **Phase C (engine)** | **complete** | next: phase 4a (plan model I), one 5-hour window |
 
 ## How to run
-- TS tests: `cd web && npm install && npm test` (`npm run typecheck` for `tsc`).
+- TS tests: `cd web && npm install && npm test` (~20 s; `npm run typecheck` for `tsc`).
+- Benchmarks: `npm run bench` (single thread, Node; ~100 s) and `npm run bench:browser` (worker pool in headless Chromium via the Vite dev server; pass a Chromium path if not `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). Results are committed in `bench/results-*.json`.
 - Regenerate fixtures: `uv run tools/golden/dump_fixtures.py` from the repo root (~90 s; deterministic, so a re-run should produce no git diff unless the Python engine changed).
 - Django: `uv run manage.py test --keepdb`. In the cloud container `core.tests_browser` fails to launch Chromium (Playwright/browser version mismatch); that's environmental, not a regression.
 
@@ -74,3 +76,30 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 - Throughput (single thread, Node 22, this container): ~15k paths/s for a 63-year married plan. 1M paths ≈ 65 s on one core before RNG cost, so C4 needs the worker pool. Goal-seek (up to 25 iterations) at 1M runs will be slow; consider capping goal-seek runs or reusing a smaller CRN sample.
 - Possible speedups if needed: `njitCalcFedTaxDual`, `njitSolveOrdinaryWithdrawal`, `njitExtraOrdinaryTaxes` and `njitSpousalRollover` allocate small tuples per call; switching them to out-buffers would cut GC pressure.
 - Next (C4): seeded PRNG + correlated normal draws (`generate_correlated_returns`), worker pool, `generate_runs`, `binary_search`, stress test, streaming percentiles; statistical agreement with `mc.json` / `stress.json`.
+
+## C4 notes
+- `engine/rng.ts`: xoshiro128** + Box-Muller. Each path is seeded from `(seed, pathIndex)` via splitmix32, so results don't depend on how runs are split across workers or chunks (tested), and goal-seek reuses the same seed every iteration (common random numbers, like Python's reused matrices). `returnModels` + `generatePathReturns` port `generate_correlated_returns` one path at a time: Cholesky stock/bond/cash factors with allocation weights normalized to unit variance.
+- `engine/mc.ts`: `McJob` (serializable), `prepareJob`, `runChunk`, `summarize`, `ChunkRunner`, `localRunner`, `splitRanges`, `generateRuns`, `binarySearch`, `percentileSorted` (numpy linear method).
+  - Streaming: no `runs × years` arrays. Kept per job: every ending wealth (Float64, 8 MB at 1M, so ending percentiles are exact), Float32 trajectories for the first `trajCap` = 100k paths (`mc_p10/50/90` are exact up to 100k runs; above that they come from those 100k paths, error well under 1%), and Float64 trajectories for the first 500 paths (spaghetti).
+  - Seeds: `opts.seed`, or random. Python is unseeded, so results are compared statistically.
+- `engine/crisis.ts` + `engine/stress.ts`: `runHistoricalStressTest(plan, {scenarioKey, assetAllocation, crisisTiming, regularMcResults, seed, runner})`. Crisis years override the generated returns per path, with per-year historical inflation through `prepareNumbaInputs(…, customInflationRates)`. When `regularMcResults` isn't passed, the regular run uses `seed + 1`.
+- `workers/`: `protocol.ts` (messages and a pure `createHandler`), `mcWorker.ts` (entry), `pool.ts` (`McPool`: `runner` is a `ChunkRunner`, `chunks` = 4 × workers for load balancing, progress events, error propagation). Use it like: `generateRuns(plan, { runner: pool.runner, chunks: pool.chunks, onProgress })`. The pool runs one job at a time.
+- Tests (`test/rng.test.ts`, `test/mc.test.ts`, `test/pool.test.ts`):
+  - RNG moments, per-bucket mean/σ and the implied cross-bucket correlation.
+  - Every plan agrees with `mc.json`: success rate within 3σ binomial; mean and median within 4 combined SEs.
+  - Goal-seek for `aug_13_plan` within 5% of Python's spending.
+  - Stress tests: scenario, crisis rows and labels exact; success rates within 3σ.
+  - The pool (via an in-process fake worker) gives results identical to the local runner.
+  - The tests can catch real errors: a +3% spending change moves success by 4–6 points, which the binomial check detects.
+- Benchmarks (63-year married plan, this 4-core container):
+
+  | runs | Node, 1 thread | Chromium, 4 workers |
+  |---|---|---|
+  | 10k | 1.1 s | 0.8 s |
+  | 100k | 9.9 s | 2.6 s |
+  | 1M | 85 s, peak RSS 133 MB | 16 s, main heap 47 MB |
+
+- Open items for later phases:
+  - Goal-seek at 1M runs would take ~25 × 16 s. Phase 6b should either cap goal-seek runs (e.g. 100k for the search, then a full `generateRuns` at the solved spending) or warn the user.
+  - The Python `tot_div` bug from C3 is still reproduced in `montecarlo.ts`.
+  - If more speed is needed, remove the small tuple allocations in `tax.ts`.
