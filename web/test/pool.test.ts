@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateRuns, localRunner } from '../src/lib/engine/mc';
-import { McPool, type WorkerLike } from '../src/lib/workers/pool';
+import { McPool, PoolTerminated, type WorkerLike } from '../src/lib/workers/pool';
 import { createHandler, type FromWorker, type ToWorker } from '../src/lib/workers/protocol';
 import { deepClose, loadPlanFixture } from './fixtures';
 
@@ -38,5 +38,13 @@ describe('McPool', () => {
     const stats = await generateRuns({ ...plan, runs: 200 }, { seed: 1, runner: pool.runner, chunks: 4 });
     expect(stats.run_success).toBe(100);
     pool.terminate();
+  });
+
+  it('rejects a running job when terminated', async () => {
+    const pool = new McPool(2, fakeWorker);
+    const { plan } = loadPlanFixture('sept27', 'imported');
+    const running = generateRuns({ ...plan, runs: 50_000 }, { seed: 1, runner: pool.runner, chunks: pool.chunks });
+    pool.terminate();
+    await expect(running).rejects.toBeInstanceOf(PoolTerminated);
   });
 });

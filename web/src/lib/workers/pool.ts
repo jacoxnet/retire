@@ -19,6 +19,14 @@ export const createBrowserWorker = (): WorkerLike =>
 const defaultSize = () =>
   Math.max(1, Math.min(16, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4));
 
+/** The error a running job rejects with when its pool is terminated (a cancelled run). */
+export class PoolTerminated extends Error {
+  constructor() {
+    super('The simulation was cancelled.');
+    this.name = 'PoolTerminated';
+  }
+}
+
 export class McPool {
   readonly size: number;
   /** Suggested chunk count: several per worker so faster workers pick up more. */
@@ -26,6 +34,8 @@ export class McPool {
   private workers: WorkerLike[];
   private nextJobId = 1;
   private busy = false;
+  /** Rejects the running job (set while one runs). */
+  private abort: ((err: Error) => void) | null = null;
 
   constructor(size = defaultSize(), factory: () => WorkerLike = createBrowserWorker) {
     this.size = size;
@@ -47,9 +57,11 @@ export class McPool {
     return new Promise<ChunkResult[]>((resolve, reject) => {
       const fail = (err: Error) => {
         this.busy = false;
+        this.abort = null;
         for (const w of this.workers) w.onmessage = null;
         reject(err);
       };
+      this.abort = fail;
       const dispatch = (w: WorkerLike) => {
         if (next >= ranges.length) return;
         const chunkId = next++;
@@ -70,6 +82,7 @@ export class McPool {
             finished++;
             if (finished === ranges.length) {
               this.busy = false;
+              this.abort = null;
               resolve(results);
             } else {
               dispatch(w);
@@ -81,6 +94,7 @@ export class McPool {
       }
       if (ranges.length === 0) {
         this.busy = false;
+        this.abort = null;
         resolve([]);
         return;
       }
@@ -88,7 +102,9 @@ export class McPool {
     });
   }
 
+  /** Stop the workers; a job still running rejects with PoolTerminated. */
   terminate(): void {
+    this.abort?.(new PoolTerminated());
     for (const w of this.workers) w.terminate();
     this.workers = [];
   }

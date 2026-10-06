@@ -89,7 +89,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
       <h2 class="mb-1 fw-bold text-dark"><i class="fa-solid fa-chart-line text-primary me-2"></i>Retirement Simulation Executive Report</h2>
-      <p class="text-secondary mb-0 small">Prepared for: <strong>{results.user_name}{#if results.is_married} &amp; {results.spouse_name}{/if}</strong> | Current Year: {results.current_year}</p>
+      <p class="text-secondary mb-0 small">Prepared for: <strong>{results.user_name}{#if results.is_married}{` & ${results.spouse_name}`}{/if}</strong> | Current Year: {results.current_year}</p>
     </div>
     <div class="text-end">
       <span class="badge bg-primary fs-6 px-3 py-2">

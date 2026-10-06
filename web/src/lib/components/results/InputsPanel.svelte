@@ -59,11 +59,11 @@
   let runsInvalid = $state(false);
   let targetInvalid = $state(false);
 
-  // New results (after a re-run) reset the form.
-  let shownFor = untrack(() => r);
+  // Results for a new plan (after a re-run) reset the form; a new stress test doesn't.
+  let shownFor = untrack(() => r.plan_data_json);
   $effect.pre(() => {
-    if (r !== shownFor) {
-      shownFor = r;
+    if (r.plan_data_json !== shownFor) {
+      shownFor = r.plan_data_json;
       values = { ...initialValues() };
       runsInvalid = targetInvalid = false;
     }

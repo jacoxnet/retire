@@ -56,8 +56,9 @@ function defaultStorage(): KeyValueStorage {
 export class PlanStore<R = unknown> {
   plan: Plan = $state(getDefaultData());
   dataVersion = $state(1);
-  cachedResults: R | null = $state(null);
-  cachedVersion = $state(-1);
+  /** The most recent results and the data version they were computed for. */
+  private lastResults: R | null = $state.raw(null);
+  private lastVersion = $state(-1);
 
   private readonly storage: KeyValueStorage;
 
@@ -66,9 +67,31 @@ export class PlanStore<R = unknown> {
     this.load();
   }
 
+  /** Results computed for the current data version, if any. */
+  get cachedResults(): R | null {
+    return this.lastVersion === this.dataVersion ? this.lastResults : null;
+  }
+
+  get cachedVersion(): number {
+    return this.lastResults === null ? -1 : this.lastVersion;
+  }
+
   /** True when the cached results were computed from the current plan. */
   get resultsAreCurrent(): boolean {
-    return this.cachedResults !== null && this.cachedVersion === this.dataVersion;
+    return this.cachedResults !== null;
+  }
+
+  /**
+   * The last results, even if the plan has changed since. The Results page reuses
+   * them (via adoptResults) when the change can't affect them.
+   */
+  get previousResults(): R | null {
+    return this.lastResults;
+  }
+
+  /** Mark the previous results as current for this data version. */
+  adoptResults(): void {
+    if (this.lastResults !== null) this.setCachedResults(this.dataVersion, this.lastResults);
   }
 
   /** Read the plan (and cached results) from storage; anything unreadable falls back to defaults. */
@@ -82,12 +105,12 @@ export class PlanStore<R = unknown> {
       this.dataVersion = 1;
     }
     const res = this.read<ResultsEnvelope<R>>(RESULTS_KEY);
-    if (res && res.version === this.dataVersion) {
-      this.cachedResults = res.results;
-      this.cachedVersion = res.version;
+    if (res && Number.isInteger(res.version) && res.results !== undefined && res.results !== null) {
+      this.lastResults = res.results;
+      this.lastVersion = res.version;
     } else {
-      this.cachedResults = null;
-      this.cachedVersion = -1;
+      this.lastResults = null;
+      this.lastVersion = -1;
     }
   }
 
@@ -97,12 +120,9 @@ export class PlanStore<R = unknown> {
     this.write(PLAN_KEY, JSON.stringify(env));
   }
 
-  /** Record that the plan changed: bump the data version, drop cached results, save. */
+  /** Record that the plan changed: bump the data version (the cached results go stale), save. */
   markChanged(): void {
     this.dataVersion += 1;
-    this.cachedResults = null;
-    this.cachedVersion = -1;
-    this.storage.removeItem(RESULTS_KEY);
     this.save();
   }
 
@@ -147,8 +167,8 @@ export class PlanStore<R = unknown> {
   /** Cache results computed for `version` (ignored if the plan has changed since). */
   setCachedResults(version: number, results: R): void {
     if (version !== this.dataVersion) return;
-    this.cachedResults = results;
-    this.cachedVersion = version;
+    this.lastResults = results;
+    this.lastVersion = version;
     // Large results can exceed the storage quota; caching is best-effort.
     this.write(RESULTS_KEY, JSON.stringify({ version, results } satisfies ResultsEnvelope<R>));
   }

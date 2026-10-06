@@ -87,8 +87,23 @@ describe('PlanStore', () => {
     expect(store.cachedResults).toBeNull();
     store.setCachedResults(store.dataVersion, 'fresh');
     expect(new PlanStore(storage).cachedResults).toBe('fresh');
+    expect(JSON.parse(storage.getItem(RESULTS_KEY)!).version).toBe(store.dataVersion);
+  });
+
+  it('keeps the last results after an edit, for adoption when they still apply', () => {
+    const storage = memoryStorage();
+    const store = new PlanStore(storage);
+    store.setCachedResults(store.dataVersion, 'r1');
     store.markChanged();
-    expect(storage.getItem(RESULTS_KEY)).toBeNull();
+    expect(store.cachedResults).toBeNull();
+    expect(store.cachedVersion).toBe(store.dataVersion - 1);
+    expect(store.previousResults).toBe('r1');
+    const reloaded = new PlanStore(storage);
+    expect(reloaded.cachedResults).toBeNull();
+    expect(reloaded.previousResults).toBe('r1');
+    reloaded.adoptResults();
+    expect(reloaded.cachedResults).toBe('r1');
+    expect(new PlanStore(storage).resultsAreCurrent).toBe(true);
   });
 
   it('autosave bumps the version on in-place edits and is reactive', () => {

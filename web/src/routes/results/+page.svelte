@@ -1,6 +1,14 @@
+<script lang="ts">
+  import { resolve } from '$app/paths';
+  import { cancelMc, mcEngine, planStore } from '../../lib/app/context';
+  import ResultsView from '../../lib/components/results/ResultsView.svelte';
+
+  const store = planStore();
+</script>
+
 <svelte:head><title>Simulation Results - Retirement Calculator</title></svelte:head>
 
-<div class="container main-content mt-4">
-  <h1 class="pageheading">Simulation Results</h1>
-  <p class="text-center text-secondary">The results page is ported in phase 6.</p>
+<!-- Full width, as in Django (results.html has no container). -->
+<div class="main-content">
+  <ResultsView {store} engine={mcEngine} cancel={cancelMc} enterHref={resolve('/')} />
 </div>

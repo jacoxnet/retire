@@ -93,6 +93,8 @@ describe.each(plans)('%s', (name) => {
       .toBe(squash(django.querySelector('#stats .col-md-7 .card')?.textContent));
     expect(squash(page.container.querySelector('.print-only-header')?.textContent))
       .toBe(squash(django.querySelector('.print-only-header')?.textContent));
+    expect(page.container.querySelector('.print-only-header strong')?.textContent)
+      .toBe(django.querySelector('.print-only-header strong')?.textContent);
     expect([...page.container.querySelectorAll('#resultsTabs button')].map((b) => squash(b.textContent)))
       .toEqual([...django.querySelectorAll('#resultsTabs button')].map((b) => squash(b.textContent)));
 

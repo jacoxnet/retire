@@ -18,7 +18,8 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | 5c Spending + Income tabs | done | see below |
 | 5d Balance Sheet + Rebalance tabs, Manage page | done | see 5d notes |
 | 6a Results display | done | see 6a notes |
-| 6b Results wiring | next | worker pool run, progress, cache, stress selector, input edits |
+| 6b Results wiring | done | see 6b notes |
+| 7 Ship | next | Playwright smoke tests, Pages deploy, CPI refresh action, retire Django |
 
 ## How to run
 - TS tests: `cd web && npm install && npm test` (~20 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
@@ -366,3 +367,40 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - `test/components/results.test.ts`: for every plan, Django's HTML is run through `results.js`'s formatting rules in jsdom. Every projection and cash-flow cell (all tooltip lines included) must then match ours, in nominal dollars and, for 4 plans, real dollars. So must the results card, the print header, the tab labels, every input's value and the balances. The stress tab is checked against `stress.json`. Also tabs, help and chart modals, the stale banner, validation, `onApply`'s payload, the stress selector callback, print mode, and the goal-seek card.
   - Shared helper: `test/resultsFixture.ts`.
   - The file takes ~35 s: a full Results page is slow to build in jsdom (~0.9 s). Avoid `getByLabelText` there (~1.4 s per call on this DOM), and note that `&` in an attribute selector trips nwsapi.
+
+## 6b notes (Results wiring)
+- `app/runResults.ts`:
+  - `computeResults(plan, {runner, chunks, seed?, onProgress?, goalSeekRunsCap?})` does `results_view`'s work on any `ChunkRunner`. Regular plan: `mc` → `stress` (2 stages). Goal-seeking plan: `search` → `mc` (at the solved spending) → `baseline` (at the plan's spending) → `stress` (4 stages).
+  - Progress is `{stage, step, steps, fraction}`; each stage reports 1 when it ends, since a search can stop before its 25 steps.
+  - `runStressTest(plan, spec, regular, opts)` replaces `/api/stress_test/`.
+- **Deliberate differences from Django:**
+  - The stress test's "Regular Simulation" column reuses a run already made. A regular plan uses the page's own Monte Carlo, so both tabs show the same success rate; a goal-seeking plan uses the baseline run at the plan's spending. Django ran a fresh, independent regular simulation for every stress test, so its two numbers differed by sampling noise and each scenario change cost twice the work.
+  - Goal-seek searches with at most `GOAL_SEEK_RUNS_CAP` = 100,000 paths per step (PORTING C4 open item), then runs the full count once at the solved spending. `achieved_success_rate` is the search's rate, as in Python.
+  - A new stress-test selection is saved with the cached results, so it is still shown on the next visit. Django's API didn't touch its cache.
+  - Seeds are random per run, as Python's `default_rng()` was. `ResultsView` takes a `seed` for tests.
+- **Cache** (`PlanStore`):
+  - The store keeps the last results after an edit (`previousResults`). `markChanged` no longer deletes them; `cachedResults` / `resultsAreCurrent` still mean "computed for this data version", and `adoptResults()` re-tags them.
+  - The Results page shows the cached results when they are current, or adopts the previous ones when `engineKey` (the plan minus `balance_sheet` / `rebalancing`) is unchanged. That fixes the 5d note: collapsing a balance-sheet section no longer forces a re-run.
+  - After a run, results are cached only if the plan's engine key still matches. They are compared by content because autosave bumps the version just after an edit, possibly after the run started.
+  - Results are held in `$state.raw` (500 spaghetti paths would be slow to proxy).
+- `workers/pool.ts`: `terminate()` now rejects a running job with `PoolTerminated`. `app/context.ts` adds `mcEngine()` (a lazy pool singleton) and `cancelMc()` (terminate; the next run starts a new pool).
+- **Components:**
+  - `results/ResultsView` (the route's logic):
+    - `planErrors` first, listed with a link to Enter instead of running.
+    - Then cached or adopted results; otherwise it runs with `RunProgressCard` (step, bar, Cancel). After a cancel or failure it offers Run Again / Try Again.
+    - Inputs-card edits go through `store.applyModeChange`, show its messages plus "Simulation inputs updated and simulation re-run.", and re-run.
+    - Stress selections run on the pool, with progress in the stress tab.
+  - `InputsPanel` now resets only when the plan behind the results changes, not when a new stress test arrives.
+  - `routes/results/+page.svelte` mounts it full width (results.html has no container) with the pool.
+- Tests:
+  - `test/app/runResults.test.ts`: stages, jobs and path counts (a capped search, then the full runs), progress, baseline reuse, and agreement with Python's success rate.
+  - `test/components/resultsView.test.ts`: run → cache → no re-run on revisit or after a balance-sheet view change, re-run after a spending change, inputs card re-run with messages (including a rejected death age), switching to goal seeking, stress selection kept in the cache, invalid plan, cancel and run again, failure.
+  - `test/pool.test.ts`: terminate rejects a running job.
+- Playwright against `vite preview` (Chromium, 4 workers): load `sept27.json` on Manage, then follow the nav link to Results.
+  - The progress card shows, and 20,000 paths finish in 1.8 s (79.8% vs Python's 79.96%).
+  - 51 projection rows; all five charts and the enlarged chart are drawn.
+  - The Great Depression stress test reruns with the regular column unchanged.
+  - Editing spending shows the stale banner; Update & Re-Run gives 95.5% with the success message.
+  - A reload shows the cached results with the edited input. No page errors.
+  - The screenshot exposed "Jack& Diane": Svelte trims the space at the start of an `{#if}` block. It is fixed, and the test now compares that header exactly.
+- Next (7): port the Playwright smoke tests to `vite preview`, add the GH Pages deploy workflow and the scheduled CPI refresh, move the Django app to `legacy/` (or remove it), update the README and how-to. Bootstrap/Font Awesome come from CDNs (blocked in the cloud container, so screenshots there are unstyled); `style.css`, `how-to.md` and the CPI JSON are still imported from the Django tree.

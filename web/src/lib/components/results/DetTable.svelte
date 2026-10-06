@@ -67,23 +67,23 @@
 {/snippet}
 
 {#snippet incomeCell(row: DetRow, t: number)}
-  {#snippet total()}{@render amount(row.income, t, 'text-success font-weight-bold')}{/snippet}
-  {#snippet body()}{@render breakdown(items(row.income_breakdown), t, 'No income streams active')}{/snippet}
-  {@render tip('Income Breakdown', total, body)}
+  {#snippet incomeTotal()}{@render amount(row.income, t, 'text-success font-weight-bold')}{/snippet}
+  {#snippet incomeBody()}{@render breakdown(items(row.income_breakdown), t, 'No income streams active')}{/snippet}
+  {@render tip('Income Breakdown', incomeTotal, incomeBody)}
 {/snippet}
 
 {#snippet additionalCell(row: DetRow, t: number)}
-  {#snippet total()}{@render amount(row.additional_spending, t, kind === 'projection' ? 'font-weight-bold text-danger' : 'text-danger font-weight-bold')}{/snippet}
-  {#snippet body()}{@render breakdown(items(row.additional_spending_breakdown), t, 'No additional spending this year')}{/snippet}
-  {@render tip('Additional Spending', total, body)}
+  {#snippet additionalTotal()}{@render amount(row.additional_spending, t, kind === 'projection' ? 'font-weight-bold text-danger' : 'text-danger font-weight-bold')}{/snippet}
+  {#snippet additionalBody()}{@render breakdown(items(row.additional_spending_breakdown), t, 'No additional spending this year')}{/snippet}
+  {@render tip('Additional Spending', additionalTotal, additionalBody)}
 {/snippet}
 
 {#snippet taxesCell(row: DetRow, t: number)}
   {#if row.is_spending_active}
     {@const tb = row.tax_breakdown ?? {}}
     {@const inv = row.investment_income ?? {}}
-    {#snippet total()}{@render amount(row.taxes, t, 'text-danger font-weight-bold')}{/snippet}
-    {#snippet body()}
+    {#snippet taxesTotal()}{@render amount(row.taxes, t, 'text-danger font-weight-bold')}{/snippet}
+    {#snippet taxesBody()}
       {@render line('Federal Income Tax:', tb.fed_tax || 0, t, { amt: 'text-danger font-weight-bold' })}
       {#if tb.fed_ltcg_tax > 0}
         {@render line('• Ordinary Tax:', tb.fed_ordinary_tax || 0, t, { cls: 'text-muted ps-2', sub: true })}
@@ -116,7 +116,7 @@
         {@render line('Ending Taxable Basis:', row.ending_assets.taxable_basis, t, { last: true, cls: 'text-muted ps-2 border-top pt-1 mt-1', sub: true })}
       {/if}
     {/snippet}
-    {@render tip('Tax Breakdown', total, body)}
+    {@render tip('Tax Breakdown', taxesTotal, taxesBody)}
   {:else}
     <span class="text-muted small">N/A</span>
   {/if}
@@ -194,19 +194,19 @@
             <td>{row.spouse_age || '-'}</td>
             {#if kind === 'projection'}
               <td>
-                {#snippet total()}{@render amount(row.beg_assets.total, t, 'text-primary font-weight-bold')}{/snippet}
-                {#snippet body()}{@render accounts(row.beg_assets, t)}{/snippet}
-                {@render tip('Asset Breakdown', total, body)}
+                {#snippet begTotal()}{@render amount(row.beg_assets.total, t, 'text-primary font-weight-bold')}{/snippet}
+                {#snippet begBody()}{@render accounts(row.beg_assets, t)}{/snippet}
+                {@render tip('Asset Breakdown', begTotal, begBody)}
               </td>
               <td>
-                {#snippet total()}{@render amount(row.contribs.total, t)}{/snippet}
-                {#snippet body()}{@render accounts(row.contribs, t)}{/snippet}
-                {@render tip('Contributions Breakdown', total, body)}
+                {#snippet contribTotal()}{@render amount(row.contribs.total, t)}{/snippet}
+                {#snippet contribBody()}{@render accounts(row.contribs, t)}{/snippet}
+                {@render tip('Contributions Breakdown', contribTotal, contribBody)}
               </td>
               <td>
-                {#snippet total()}{@render amount(row.growth.total, t, signCls(row.growth.total))}{/snippet}
-                {#snippet body()}{@render accounts(row.growth, t, true)}{/snippet}
-                {@render tip('Asset Growth Breakdown', total, body)}
+                {#snippet growthTotal()}{@render amount(row.growth.total, t, signCls(row.growth.total))}{/snippet}
+                {#snippet growthBody()}{@render accounts(row.growth, t, true)}{/snippet}
+                {@render tip('Asset Growth Breakdown', growthTotal, growthBody)}
               </td>
               <td>{@render incomeCell(row, t)}</td>
               <td>{@render taxesCell(row, t)}</td>
@@ -214,9 +214,9 @@
               <td>{@render additionalCell(row, t)}</td>
               <td>
                 <!-- End-of-year balances deflate one more year. -->
-                {#snippet total()}{@render amount(row.ending_assets.total, t + 1, 'text-primary font-weight-bold')}{/snippet}
-                {#snippet body()}{@render accounts(row.ending_assets, t + 1)}{/snippet}
-                {@render tip('Asset Breakdown', total, body, true)}
+                {#snippet endingTotal()}{@render amount(row.ending_assets.total, t + 1, 'text-primary font-weight-bold')}{/snippet}
+                {#snippet endingBody()}{@render accounts(row.ending_assets, t + 1)}{/snippet}
+                {@render tip('Asset Breakdown', endingTotal, endingBody, true)}
               </td>
             {:else}
               <td>{@render amount(row.desired_spending, t, 'text-danger')}</td>
@@ -224,8 +224,8 @@
               <td>{@render taxesCell(row, t)}</td>
               <td>{@render incomeCell(row, t)}</td>
               <td>
-                {#snippet total()}{@render amount(row.withdrawals.total, t, 'text-primary font-weight-bold')}{/snippet}
-                {#snippet body()}
+                {#snippet withdrawalsTotal()}{@render amount(row.withdrawals.total, t, 'text-primary font-weight-bold')}{/snippet}
+                {#snippet withdrawalsBody()}
                   {@render line('Taxable:', row.withdrawals.taxable, t)}
                   {#if row.withdrawals.user_pretax_rmd > 0 || row.withdrawals.spouse_pretax_rmd > 0}
                     {@render line('Your RMD:', row.withdrawals.user_pretax_rmd, t, { cls: 'text-muted ps-2' })}
@@ -236,7 +236,7 @@
                   {@render line('Roth:', row.withdrawals.roth, t)}
                   {@render line('HSA:', row.withdrawals.hsa, t, { last: true })}
                 {/snippet}
-                {@render tip('Withdrawal Sources', total, body)}
+                {@render tip('Withdrawal Sources', withdrawalsTotal, withdrawalsBody)}
               </td>
             {/if}
             <td>{@render milestones(row)}</td>
