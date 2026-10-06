@@ -220,6 +220,16 @@ def _syn_spouse_first(p):
     p.update(spouse_age_death=70, spouse_life_insurance_amount=300000.0, spouse_life_insurance_type='permanent',
              user_life_insurance_amount=400000.0, user_life_insurance_type='term', user_life_insurance_term_age=80,
              filing_status='married_filing_jointly', desired_spending=p['desired_spending'] * 2, runs=2000)
+    # Other taxes whose inflation adjustment starts after the plan start, and one that
+    # started before it (applied retroactively), including inflation_less_pct.
+    p['other_taxes'] = [
+        {'name': 'Future-indexed', 'amount': 6000.0, 'frequency': 'annual', 'start_age_type': 'user_specified',
+         'start_age_specified': 62, 'end_age_type': 'death', 'adjust_type': 'inflation',
+         'adjust_start_age_type': 'specified', 'adjust_start_age_specified': 70},
+        {'name': 'Past-indexed', 'amount': 400.0, 'frequency': 'monthly', 'start_age_type': 'user_specified',
+         'start_age_specified': 55, 'end_age_type': 'spouse_death', 'adjust_type': 'inflation_less_pct',
+         'adjust_val': 1.0, 'adjust_start_age_type': 'start'},
+    ]
 
 
 SYNTHETIC = [

@@ -1,16 +1,11 @@
 // The Monte Carlo kernel run at constant mean returns must reproduce the deterministic
-// projection year by year. This is what exposed the tot_div bug in njit_simulate_path.
+// projection year by year. This exposed the tot_div bug in njit_simulate_path and the
+// other-tax inflation mismatch in prepare_numba_inputs (both fixed).
 import { describe, expect, it } from 'vitest';
 import { meanReturns, runDeterministic } from '../src/lib/engine/deterministic';
 import { extractSimInputs, prepareNumbaInputs } from '../src/lib/engine/inputs';
 import { kernelParams, simulatePath } from '../src/lib/engine/montecarlo';
 import { fixtureIndex, loadPlanFixture } from './fixtures';
-
-// Known pre-existing difference between the Python engines (and so the ports): an
-// "other tax" whose inflation adjustment starts before the current age is inflated
-// retroactively by simulate_step ((1+i)^(age - start)) but not by prepare_numba_inputs
-// (inf_factors ratio with start_t clamped to 0). sept3testplan has such an item.
-const KNOWN_DIFFERENT = new Set(['sept3testplan']);
 
 function maxRelDiff(name: string): number {
   const { plan } = loadPlanFixture(name, 'imported');
@@ -33,8 +28,7 @@ function maxRelDiff(name: string): number {
 
 describe('MC kernel at mean returns == deterministic projection', () => {
   for (const { name } of fixtureIndex().plans) {
-    const test = KNOWN_DIFFERENT.has(name) ? it.fails : it;
-    test(name, () => {
+    it(name, () => {
       expect(maxRelDiff(name)).toBeLessThan(1e-12);
     });
   }

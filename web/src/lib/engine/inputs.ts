@@ -694,23 +694,33 @@ export function prepareNumbaInputs(
       } else adjStartAge = resolve(adjStartType, adjStartSpec, startAge);
 
       const yearsSinceAdj = Math.max(0, userAgeT - adjStartAge);
-      const startT = Math.max(0, Math.min(totalYears - 1, adjStartAge - userAge));
+
+      // Same rule as simulateStep: grow for every year since the adjustment start,
+      // including years before the plan starts (an adjustment that began in the past is
+      // applied retroactively; one that hasn't begun yet gives 1.0). With custom
+      // (stress-test) inflation, pre-plan years use the base rate and plan years use the
+      // per-year rates.
+      const compound = (rateFn: (r: number) => number) => {
+        if (yearsSinceAdj <= 0) return 1.0;
+        let f = (1.0 + rateFn(inflationRate) / 100.0) ** Math.max(0, userAge - adjStartAge);
+        for (let k = Math.max(0, adjStartAge - userAge); k < t; k++) {
+          const infK = k < customInflationRates!.length ? customInflationRates![k] : inflationRate;
+          f *= 1.0 + rateFn(infK) / 100.0;
+        }
+        return f;
+      };
 
       let factor: number;
       if (adjType === 'inflation') {
-        factor = infFactors[startT] > 0 ? infFactors[t] / infFactors[startT] : infFactors[t];
+        factor = customInflationRates !== null
+          ? compound((r) => r)
+          : (1.0 + inflationRate / 100.0) ** yearsSinceAdj;
       } else if (adjType === 'fixed_pct') {
         factor = (1.0 + adjVal / 100.0) ** yearsSinceAdj;
       } else if (adjType === 'inflation_less_pct') {
-        if (customInflationRates !== null) {
-          factor = 1.0;
-          for (let k = startT; k < t; k++) {
-            const infK = k < customInflationRates.length ? customInflationRates[k] : inflationRate;
-            factor *= 1.0 + Math.max(0.0, infK - adjVal) / 100.0;
-          }
-        } else {
-          factor = (1.0 + Math.max(0.0, inflationRate - adjVal) / 100.0) ** yearsSinceAdj;
-        }
+        factor = customInflationRates !== null
+          ? compound((r) => Math.max(0.0, r - adjVal))
+          : (1.0 + Math.max(0.0, inflationRate - adjVal) / 100.0) ** yearsSinceAdj;
       } else {
         factor = 1.0;
       }

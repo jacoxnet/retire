@@ -2047,18 +2047,33 @@ def prepare_numba_inputs(inputs, test_spending=None, custom_inflation_rates=None
                     adj_start_age = resolve_age(adj_start_type, adj_start_spec, user_age, inputs['user_ret_age'], is_married, spouse_age, inputs['spouse_ret_age'], user_age_death, spouse_age_death, default_val=start_age)
 
                 years_since_adj = max(0, user_age_t - adj_start_age)
-                start_t = max(0, min(total_years - 1, adj_start_age - user_age))
+                # Same rule as simulate_step: grow for every year since the adjustment
+                # start, including years before the plan starts (an adjustment that began
+                # in the past is applied retroactively; one that hasn't begun yet gives 1.0).
+                # With custom (stress-test) inflation, pre-plan years use the base rate and
+                # plan years use the per-year rates.
+                pre_years = max(0, user_age - adj_start_age)
+                start_t = max(0, adj_start_age - user_age)
+
+                def compound(rate_fn):
+                    if years_since_adj <= 0:
+                        return 1.0
+                    f = (1.0 + rate_fn(inflation_rate) / 100.0) ** pre_years
+                    for k in range(start_t, t):
+                        inf_k = float(custom_inflation_rates[k]) if k < len(custom_inflation_rates) else inflation_rate
+                        f *= (1.0 + rate_fn(inf_k) / 100.0)
+                    return f
 
                 if adj_type == 'inflation':
-                    factor = (inf_factors[t] / inf_factors[start_t]) if inf_factors[start_t] > 0 else inf_factors[t]
+                    if custom_inflation_rates is not None:
+                        factor = compound(lambda r: r)
+                    else:
+                        factor = (1.0 + inflation_rate / 100.0) ** years_since_adj
                 elif adj_type == 'fixed_pct':
                     factor = (1.0 + adj_val / 100.0) ** years_since_adj
                 elif adj_type == 'inflation_less_pct':
                     if custom_inflation_rates is not None:
-                        factor = 1.0
-                        for k in range(start_t, t):
-                            inf_k = float(custom_inflation_rates[k]) if k < len(custom_inflation_rates) else inflation_rate
-                            factor *= (1.0 + max(0.0, inf_k - adj_val) / 100.0)
+                        factor = compound(lambda r: max(0.0, r - adj_val))
                     else:
                         rate = max(0.0, inflation_rate - adj_val)
                         factor = (1.0 + rate / 100.0) ** years_since_adj
