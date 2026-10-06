@@ -1,5 +1,6 @@
 <!-- A Bootstrap-styled modal without Bootstrap's JS: shown while `open`, closed by
-     the close button, Escape or a click on the backdrop. -->
+     the close button, Escape or a click on the backdrop. Enter in a field doesn't
+     submit a form the modal sits in (Django rendered modals outside the Enter form). -->
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
@@ -21,7 +22,8 @@
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="modal fade show" {id} tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="{id}Label"
-    style="display: block; z-index: 1065;" onclick={(e) => e.target === e.currentTarget && close()}>
+    style="display: block; z-index: 1065;" onclick={(e) => e.target === e.currentTarget && close()}
+    onkeydown={(e) => e.key === 'Enter' && e.target instanceof HTMLInputElement && e.preventDefault()}>
     <div class={['modal-dialog modal-dialog-centered', size && `modal-${size}`, scrollable && 'modal-dialog-scrollable']}>
       <div class="modal-content shadow-lg border-0 rounded-4">
         <div class="modal-header border-0 pb-0">

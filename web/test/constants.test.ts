@@ -50,7 +50,7 @@ describe('misc helper grid', () => {
 });
 
 describe('cpi', () => {
-  const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, '..', '..', 'core', 'data', 'cpi_u_historical.json'), 'utf8'));
+  const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, '..', 'src', 'lib', 'data', 'cpi_u_historical.json'), 'utf8'));
   const data = interpolateMissingMonths(raw);
   const cases = loadFixture<any[]>('functions', 'cpi.json');
   it(`matches ${cases.length} cases`, () => {

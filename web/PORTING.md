@@ -19,14 +19,19 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 | 5d Balance Sheet + Rebalance tabs, Manage page | done | see 5d notes |
 | 6a Results display | done | see 6a notes |
 | 6b Results wiring | done | see 6b notes |
-| 7 Ship | next | Playwright smoke tests, Pages deploy, CPI refresh action, retire Django |
+| 7 Ship | done | see 7 notes |
+| **Conversion** | **complete** | Django kept in `legacy/` as the fixture oracle |
 
 ## How to run
-- TS tests: `cd web && npm install && npm test` (~20 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
+- TS tests: `cd web && npm install && npm test` (~40 s). `npm run typecheck` (`tsc`) and `npm run check` (`svelte-check`, which covers `.svelte` files) both run `svelte-kit sync` first.
+- **Also run `npm run build` before committing UI work.** The SSR compile catches template errors that the tests (client compile) and svelte-check miss, e.g. two snippets with the same name in sibling elements.
+- Browser tests: `npm run e2e` (Playwright; builds, then serves with `vite preview` on port 4173; 1–2.5 min). `@playwright/test` is pinned to 1.56.1 to match the Chromium in `/opt/pw-browsers` here; elsewhere run `npx playwright install chromium` once.
+- CPI data: `node scripts/update-cpi.ts` (Node 22.18+ runs TypeScript directly; FRED is blocked in the cloud container).
 - App: `npm run dev` (dev server), `npm run build` (static site in `web/build/`), `npm run preview` (serves the build). `BASE_PATH=/retire npm run build` builds for a GitHub Pages project site.
 - Benchmarks: `npm run bench` (single thread, Node; ~100 s) and `npm run bench:browser` (worker pool in headless Chromium via the Vite dev server; pass a Chromium path if not `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). Results are committed in `bench/results-*.json`.
-- Regenerate fixtures: `uv run tools/golden/dump_fixtures.py` from the repo root (~90 s; deterministic, so a re-run should produce no git diff unless the Python engine changed).
-- Django: `uv run manage.py test --keepdb`. In the cloud container `core.tests_browser` fails to launch Chromium (Playwright/browser version mismatch); that's environmental, not a regression.
+- Regenerate fixtures: `cd legacy && uv run tools/golden/dump_fixtures.py` (~2 min; deterministic, so a re-run should produce no git diff unless the Python engine changed). It reads the sample plans from `web/fixtures/saved-plans/`.
+- Django: `cd legacy && uv run manage.py test --keepdb`. In the cloud container `core.tests_browser` fails to launch Chromium (Playwright/browser version mismatch); that's environmental, not a regression. Its tests are ported to `web/e2e/`.
+- **Paths since phase 7:** the Django app (`core/`, `retire/`, `templates/`, `static/`, `manage.py`, `pyproject.toml`, `saved json files/`) and `tools/golden/` moved into `legacy/`. Notes below written before then use the old paths.
 
 ## C0 notes
 - `web/` started as plain Vite + TS + Vitest; SvelteKit/adapter-static was added in phase 5a. The engine lives in `web/src/lib/engine/`.
@@ -223,7 +228,7 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
 - **Deliberate differences from Django:**
   - Extra account keys such as `institution` are kept on save. Django drops them, and gets `institution` back from the balance sheet in `sync_balance_sheet_to_accounts`, which isn't run on save until 5d.
   - Typing an age on the Demographics tab doesn't raise contribution start ages live, as `updateSpouseDropdownOptions` did. The commit's `max(present age, start)` gives the same saved result.
-  - An unmarried plan whose account ends at `first_death` keeps that value. Django hid and disabled that option, which made the browser skip the field in the POST.
+  - ~~An unmarried plan whose account ends at `first_death` keeps that value.~~ Reverted in phase 7: the single person's card can't show that option, so it now moves to "retirement" like the spouse-based choices (Django's saved result), and returns on remarrying (`isCoupleEndAge`).
 - **Components** (`components/enter/`):
   - `AccountsTab`: duplicate-name notice, cards, Add Account, Back / Next.
   - `AccountCard`: all card fields. Owner select only when married ("or Joint" for taxable accounts). End-age-specified input with its year hint. Volatility select with a custom-std input (a local `customStd` flag, so choosing "User Specified" sticks even when the value matches a preset). Taxable drawer with the cost-basis estimate and community-property choice. HSA medical switch. Advanced-only fields keep the `advanced-only-field` class, which `style.css` hides in simple mode.
@@ -404,3 +409,42 @@ Plan: `docs/static-conversion-plan.md`. Update this file at the end of every che
   - A reload shows the cached results with the edited input. No page errors.
   - The screenshot exposed "Jack& Diane": Svelte trims the space at the start of an `{#if}` block. It is fixed, and the test now compares that header exactly.
 - Next (7): port the Playwright smoke tests to `vite preview`, add the GH Pages deploy workflow and the scheduled CPI refresh, move the Django app to `legacy/` (or remove it), update the README and how-to. Bootstrap/Font Awesome come from CDNs (blocked in the cloud container, so screenshots there are unstyled); `style.css`, `how-to.md` and the CPI JSON are still imported from the Django tree.
+
+## 7 notes (Ship)
+- **Layout.** The Django app moved into `legacy/` (`git mv`, so history follows), and so did the fixture dumper (`legacy/tools/golden/`). Django kept working unchanged: its `BASE_DIR` and the tests' relative paths move with it, and all fixtures regenerate byte-identical.
+  - The sample plans the web tests and the dumper use are a copy in `web/fixtures/saved-plans/` (`SAVED_DIR` in `test/fixtures.ts`). `legacy/saved json files/` stays as the Django tests' copy.
+  - The web app no longer imports anything from outside `web/`:
+    - `style.css` → `src/styles/style.css`.
+    - `how-to.md` → `src/lib/content/how-to.md`.
+    - The CPI series → `src/lib/data/cpi_u_historical.json`.
+    - The Vite `fs.allow: ['..']` is gone.
+  - The legacy copies of `style.css` and `how-to.md` are frozen.
+- **Bootstrap 5.3.8 and Font Awesome 6.5.1 are bundled** from npm (pinned to the CDN versions `base.html` used) and imported in `+layout.svelte`. No CDN requests, so the app works offline after loading, and screenshots in the cloud container are styled.
+- **How-to** updated for the static app: the plan persists in this browser's local storage (not a session), there is no server, simulations run in parallel with progress and Cancel, the goal-seek search cap, and the stress test's shared baseline.
+- **Bugs found by the browser tests, fixed:**
+  - *Enter in a modal or a balance-sheet cell ran the simulation.* The modals render inside the Enter page's `<form>`; Django rendered them outside. `Modal` now stops Enter in its inputs from submitting the form. The Add Column date field confirms on Enter, and Enter in a balance-sheet cell blurs it. Both are `enter.js` handlers that 5d hadn't ported.
+  - *Unmarrying left accounts ending at "First Death".* The single person's card can't show that option, so the card showed one value while the plan kept another, and the engine read it as the user's death. It now moves to "retirement" like the spouse-based choices (Django's saved result), and is restored on remarrying (`isCoupleEndAge` in `accountCard.ts`). This reverses the 5b "deliberate difference".
+- **Browser tests** (`e2e/`, Playwright against the production build):
+  - `helpers.ts` seeds plans into localStorage after the Manage page's import (`importPlanData`). It ports `_rich_plan` from `core/tests_navigation.py`, and fails any test with a page error or console error.
+  - `enter.spec.ts` ports `core/tests_browser.py`:
+    - Every tab builds from the plan.
+    - Leaving without edits saves exactly `prepareEnterPlan` of the plan (computed in Node).
+    - Per-tab sweeps: every visible control is edited and must survive leaving and returning.
+    - Tax-rate override (committed with Enter, which must not navigate).
+    - Add Column (duplicate date rejected, Enter confirms).
+    - Unmarry, single filing for married couples, account type and owner changes reaching the sheet and the aggregates, married off/on.
+    - New: "For Retirement?" adds and removes cards, and cash marked for retirement moves to Taxable. The sweep skips those checkboxes because they restructure the sheet. Django's sweep toggled them, but it had not run in this container since C0, so it isn't evidence either way.
+    - The CSP test was dropped: there is no server-set policy any more.
+  - `pages.spec.ts`:
+    - Every page loads; the theme persists; Bootstrap and Font Awesome are bundled.
+    - How-to modal; simple mode.
+    - Save / Load / Clear (the download equals the stored plan).
+    - Enter → Results on the worker pool (success rate near Python's, five charts drawn, stress selector, re-run after an edit, cached on reload).
+    - Results lists an invalid plan's errors.
+  - 24 tests, 1–2.5 min here.
+- **Workflows** (`.github/workflows/`):
+  - `ci.yml`: web check, Vitest and Playwright (installs Chromium; uploads the report on failure), plus the legacy Django tests except `tests_browser`.
+  - `deploy.yml`: on push to `main`, manual, or called. Runs `npm test`, builds with `BASE_PATH=/<repo>`, then deploys with `actions/deploy-pages`. **The repository's Pages source must be set to "GitHub Actions" once.**
+  - `update-cpi.yml`: every Monday, runs `scripts/update-cpi.ts`, which fetches FRED `CPIAUCNS`, merges it (new months added; months FRED lacks, such as the October 2025 Treasury contingency value, are kept) and refuses a truncated or older download. Then it runs the CPI-related tests and commits to `main` if the file changed. A `GITHUB_TOKEN` push doesn't trigger other workflows, so it calls `deploy.yml` itself with `ref: main`.
+  - The script writes the file exactly as Python's `json.dump(indent=2)` did (whole numbers keep ".0"), so the first refresh diff shows only real changes; `test/updateCpi.test.ts` checks this on the bundled file.
+- **Not verified here:** the workflows themselves (they need GitHub) and the live FRED download (blocked by the container's proxy; the parser and merge are unit-tested on FRED's CSV format).

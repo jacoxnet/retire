@@ -241,7 +241,10 @@
   </tr>
 {/snippet}
 
-<table class="bs-table align-middle" id="balanceSheetTable">
+<!-- Enter in a cell only commits that cell (it doesn't run the simulation). -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<table class="bs-table align-middle" id="balanceSheetTable"
+  onkeydown={(e) => { if (e.key === 'Enter' && e.target instanceof HTMLInputElement) { e.preventDefault(); e.target.blur(); } }}>
   <thead id="bsTableHead">
     <tr>
       <th class="bs-sticky-col">Account / Category Name</th>

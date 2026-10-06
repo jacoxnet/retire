@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { flushSync } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { memoryStorage, PLAN_KEY, PlanStore, RESULTS_KEY } from '../../src/lib/plan/store.svelte';
-import { FIXTURES_DIR } from '../fixtures';
+import { SAVED_DIR } from '../fixtures';
 
-const savedPlan = (file: string) => readFileSync(join(FIXTURES_DIR, '..', '..', 'saved json files', file), 'utf8');
+const savedPlan = (file: string) => readFileSync(join(SAVED_DIR, file), 'utf8');
 
 describe('PlanStore', () => {
   it('starts from defaults and persists edits across instances', () => {

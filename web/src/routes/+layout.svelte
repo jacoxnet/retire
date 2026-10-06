@@ -1,5 +1,7 @@
 <script lang="ts">
-  import '../../../static/css/style.css';
+  import 'bootstrap/dist/css/bootstrap.min.css';
+  import '@fortawesome/fontawesome-free/css/all.min.css';
+  import '../styles/style.css';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { uiPrefs } from '../lib/app/context';

@@ -9,11 +9,13 @@ const setAside = new WeakMap<object, Map<string, { married: string; single: stri
 export const isSpouseChoice = (value: unknown): boolean => String(value ?? '').includes('spouse');
 
 /** Apply the marital status to `obj[key]`; returns true if the value changed. */
-export function syncSpouseChoice(obj: Record<string, any>, key: string, married: boolean, singleValue: string): boolean {
+export function syncSpouseChoice(
+  obj: Record<string, any>, key: string, married: boolean, singleValue: string, isCouple: (v: unknown) => boolean = isSpouseChoice,
+): boolean {
   if (!obj || typeof obj !== 'object') return false;
   const value = obj[key];
   let memo = setAside.get(obj);
-  if (!married && isSpouseChoice(value)) {
+  if (!married && isCouple(value)) {
     if (!memo) setAside.set(obj, (memo = new Map()));
     memo.set(key, { married: String(value), single: singleValue });
     obj[key] = singleValue;
@@ -31,5 +33,6 @@ export function syncSpouseChoice(obj: Record<string, any>, key: string, married:
 }
 
 /** The value a single person's form would submit for a spouse-based choice. */
-export const singleChoice = (value: string, married: boolean, singleValue: string): string =>
-  !married && isSpouseChoice(value) ? singleValue : value;
+export const singleChoice = (
+  value: string, married: boolean, singleValue: string, isCouple: (v: unknown) => boolean = isSpouseChoice,
+): string => (!married && isCouple(value) ? singleValue : value);

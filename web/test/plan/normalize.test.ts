@@ -3,9 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getFloat, getInt } from '../../src/lib/plan/coerce';
 import { normalizeImportedPlan, normalizePlanFields, parsePlanJson } from '../../src/lib/plan/normalize';
-import { deepClose, FIXTURES_DIR, fixtureIndex, loadFixture, loadPlanFixture } from '../fixtures';
+import { deepClose, fixtureIndex, loadFixture, loadPlanFixture, SAVED_DIR } from '../fixtures';
 
-const SAVED_DIR = join(FIXTURES_DIR, '..', '..', 'saved json files');
 
 describe('normalize_imported_plan grid', () => {
   const cases = loadFixture<any[]>('functions', 'normalize.json');

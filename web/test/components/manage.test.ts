@@ -7,9 +7,8 @@ import { takeFlash } from '../../src/lib/app/flash.svelte';
 import ManagePage from '../../src/lib/components/manage/ManagePage.svelte';
 import { getDefaultData } from '../../src/lib/plan/defaults';
 import { memoryStorage, PlanStore } from '../../src/lib/plan/store.svelte';
-import { FIXTURES_DIR, fixtureIndex, loadPlanFixture } from '../fixtures';
+import { fixtureIndex, loadPlanFixture, SAVED_DIR } from '../fixtures';
 
-const SAVED_DIR = join(FIXTURES_DIR, '..', '..', 'saved json files');
 const savedFiles = readdirSync(SAVED_DIR).filter((f) => f.endsWith('.json')).sort();
 
 beforeEach(() => {

@@ -1,8 +1,8 @@
 """Dump golden fixtures from the Python engine for the TypeScript port.
 
-Run from the repo root:  uv run tools/golden/dump_fixtures.py
+Run from legacy/:  uv run tools/golden/dump_fixtures.py
 
-For every plan in `saved json files/` it writes web/fixtures/plans/<name>/:
+For every plan in web/fixtures/saved-plans/ it writes web/fixtures/plans/<name>/:
   imported.json      plan after import_plan_data() (the Manage-page import), plus import errors
   inputs.json        extract_sim_inputs(plan)
   numba_inputs.json  prepare_numba_inputs(inputs)
@@ -29,7 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]  # legacy/ (the Django app)
+REPO = ROOT.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'retire.settings')
 
@@ -47,8 +48,8 @@ from django.template.loader import render_to_string  # noqa: E402
 from core import forms as F  # noqa: E402
 from core.forms import build_default_rebalancing, normalize_imported_plan  # noqa: E402
 
-PLANS_DIR = ROOT / 'saved json files'
-OUT_DIR = ROOT / 'web' / 'fixtures'
+OUT_DIR = REPO / 'web' / 'fixtures'
+PLANS_DIR = OUT_DIR / 'saved-plans'
 
 # Import code fills missing balance-sheet dates from date.today(); freeze it so
 # fixtures don't change with the day they were generated.
@@ -884,7 +885,7 @@ def main():
     dump_plan_model(OUT_DIR / 'functions')
     dump_balance_sheet(OUT_DIR / 'functions')
     write(OUT_DIR / 'index.json', index)
-    print(f'wrote fixtures for {len(index["plans"])} plans to {OUT_DIR.relative_to(ROOT)}')
+    print(f'wrote fixtures for {len(index["plans"])} plans to {OUT_DIR.relative_to(REPO)}')
 
 
 if __name__ == '__main__':

@@ -7,6 +7,6 @@
     "noUncheckedIndexedAccess": false,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "bench", "*.ts"],
+  "include": ["src", "test", "bench", "e2e", "scripts", "*.ts"],
   "exclude": ["src/service-worker"]
 }

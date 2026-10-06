@@ -31,7 +31,8 @@
   <label for="addPeriodDate" class="form-label small fw-bold text-secondary text-uppercase mb-1">Column Date</label>
   <!-- svelte-ignore a11y_autofocus -->
   <input type="date" class="form-control fw-semibold" id="addPeriodDate" min="1900-01-01" max="2200-12-31" required autofocus
-    bind:value={date} oninput={() => (error = '')} />
+    bind:value={date} oninput={() => (error = '')}
+    onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirm(); } }} />
   <div class="form-text small">Balances from the latest column are copied into the new column.</div>
   {#if error}<div class="small text-danger mt-1" id="addPeriodError">{error}</div>{/if}
   {#snippet footer()}

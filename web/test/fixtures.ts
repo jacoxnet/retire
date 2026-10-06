@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
+/** The sample plan files (the Manage page's input; the fixture dumper reads the same files). */
+export const SAVED_DIR = join(FIXTURES_DIR, 'saved-plans');
 
 const NON_FINITE: Record<string, number> = {
   NaN: NaN,

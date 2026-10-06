@@ -1,0 +1,60 @@
+name: Update CPI-U data
+
+# The app bundles the CPI-U series used by the balance sheet's inflation-adjusted
+# targets. FRED doesn't allow browser fetches (no CORS), so this job refreshes the
+# bundled file weekly (BLS publishes CPI mid-month) and redeploys when it changes.
+on:
+  schedule:
+    - cron: '23 14 * * 1'
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Fetch CPIAUCNS from FRED and merge
+        run: node scripts/update-cpi.ts
+      - name: Check the data still loads
+        run: npx vitest run test/updateCpi.test.ts test/constants.test.ts test/components/balanceSheet.test.ts
+      - name: Commit if changed
+        id: commit
+        run: |
+          if git diff --quiet -- src/lib/data/cpi_u_historical.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "CPI data unchanged."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/lib/data/cpi_u_historical.json
+            git commit -m "Update CPI-U data from FRED"
+            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # A push made with GITHUB_TOKEN doesn't trigger other workflows, so deploy here.
+  deploy:
+    needs: refresh
+    if: needs.refresh.outputs.changed == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      ref: main

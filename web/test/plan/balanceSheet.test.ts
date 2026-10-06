@@ -14,10 +14,9 @@ import { calculateMarginalTaxRate } from '../../src/lib/plan/marginal';
 import { applyModeChange } from '../../src/lib/plan/modeChange';
 import { parsePlanJson } from '../../src/lib/plan/normalize';
 import { validateBalanceSheetAccounts } from '../../src/lib/plan/validate';
-import { deepClose, FIXTURES_DIR, fixtureIndex, loadFixture, loadPlanFixture } from '../fixtures';
+import { deepClose, fixtureIndex, loadFixture, loadPlanFixture, SAVED_DIR } from '../fixtures';
 
 const TODAY = '2026-01-15'; // the date the fixture generator freezes
-const SAVED_DIR = join(FIXTURES_DIR, '..', '..', 'saved json files');
 
 type Case = { fn: string; args: any[]; kwargs: Record<string, any>; out: unknown };
 

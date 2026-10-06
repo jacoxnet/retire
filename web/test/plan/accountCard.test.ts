@@ -91,7 +91,8 @@ describe('owner and marriage', () => {
     const b: Account = { contrib_end_age_type: 'spouse_specified' };
     const c: Account = { contrib_end_age_type: 'first_death' };
     applyMarriageToAccounts([a, b, c], false);
-    expect([a, b, c].map((x) => x.contrib_end_age_type)).toEqual(['retirement', 'retirement', 'first_death']);
+    // "First Death" is couple-only too: the single person's card can't show it.
+    expect([a, b, c].map((x) => x.contrib_end_age_type)).toEqual(['retirement', 'retirement', 'retirement']);
     b.contrib_end_age_type = 'user_specified'; // changed while single: kept
     applyMarriageToAccounts([a, b, c], true);
     expect([a, b, c].map((x) => x.contrib_end_age_type)).toEqual(['spouse_retirement', 'user_specified', 'first_death']);

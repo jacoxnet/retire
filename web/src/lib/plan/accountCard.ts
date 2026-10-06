@@ -3,7 +3,7 @@
 // parse_account_rows (core/forms.py).
 import { getBool, getFloat, getInt } from './coerce';
 import { title } from './pyutil';
-import { singleChoice, syncSpouseChoice } from './spouseChoice';
+import { isSpouseChoice, singleChoice, syncSpouseChoice } from './spouseChoice';
 import type { Account, Plan } from './types';
 
 /** Names and ages as the page labels them (enter.js getPersonLabels). */
@@ -143,8 +143,15 @@ export function setAccountOwner(acc: Account, owner: string): void {
  * Unticking Married moves each spouse-based end-age choice to "retirement";
  * ticking it again restores the original unless the user has since changed it.
  */
+/**
+ * Contribution end ages only a couple has: the spouse-based ones and "First Death".
+ * The single person's card doesn't offer them (Django's form then saved the default,
+ * "retirement").
+ */
+export const isCoupleEndAge = (v: unknown): boolean => isSpouseChoice(v) || v === 'first_death';
+
 export function applyMarriageToAccounts(accounts: Account[] | undefined, married: boolean): void {
-  for (const acc of accounts ?? []) syncSpouseChoice(acc, 'contrib_end_age_type', married, 'retirement');
+  for (const acc of accounts ?? []) syncSpouseChoice(acc, 'contrib_end_age_type', married, 'retirement', isCoupleEndAge);
 }
 
 export type Volatility = 'low' | 'moderate' | 'high' | 'custom';
@@ -206,8 +213,8 @@ export function commitAccounts(plan: Plan, makeId: IdMaker = newAccountId): void
     const type = card.type as string;
     const owner = married ? (card.owner as string) : 'user';
     const spouse = owner === 'spouse' && married;
-    // A single person's spouse-based end-age choices were moved to "retirement" on the page.
-    const endType = singleChoice(card.contrib_end_age_type as string, married, 'retirement');
+    // A single person's couple-only end-age choices were moved to "retirement" on the page.
+    const endType = singleChoice(card.contrib_end_age_type as string, married, 'retirement', isCoupleEndAge);
     const defStart = spouse ? spouseAge : userAge;
     const defRet = spouse ? spouseRet : userRet;
     const taxable = type === 'taxable';

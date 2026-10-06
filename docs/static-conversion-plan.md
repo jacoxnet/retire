@@ -1,5 +1,7 @@
 # Convert the retire app from Django to a static, client-side app
 
+> **Status: complete.** All phases are done; `web/PORTING.md` has the per-phase notes. The Django app is kept in `legacy/` as the reference engine for the golden fixtures.
+
 ## Context
 Right now the retirement calculator is a Django app. The server holds each plan in the session (`SimulationData` JSONField and session keys). It parses and validates form POSTs in `core/forms.py` and `core/views.py`, runs the Monte Carlo, binary-search and stress-test engines in `core/runs.py` (numpy + Numba `prange`), and renders results through Django templates.
 

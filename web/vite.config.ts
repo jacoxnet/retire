@@ -12,9 +12,4 @@ export default defineConfig({
       paths: { base },
     }),
   ],
-  server: {
-    // The shared stylesheet and how-to guide still live in the Django app's static/
-    // folder (imported from ../static) until Django is removed in phase 7.
-    fs: { allow: ['..'] },
-  },
 });
