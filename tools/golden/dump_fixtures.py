@@ -10,6 +10,8 @@ For every plan in `saved json files/` it writes web/fixtures/plans/<name>/:
   kernel.json        njit_simulate_all_paths over FIXED seeded return matrices, for exact comparison
   mc.json            seeded generate_runs / binary_search, for statistical comparison
   stress.json        seeded run_historical_stress_test (default scenario), statistical + exact crisis rows
+  results.json       results_context() built from det_rows / mc / stress above (bulky keys dropped)
+  results.html.gz    the Results page body Django renders from that context
 and web/fixtures/functions/*.json with input/output grids for the pure helpers.
 
 Non-finite floats are written as the strings "NaN", "Infinity", "-Infinity"
@@ -17,9 +19,11 @@ because JSON has no literal for them; the TS loader converts them back.
 """
 import copy
 import datetime
+import gzip
 import json
 import math
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -37,7 +41,9 @@ from core import forms, runs  # noqa: E402
 from core import cpi_service, historical_data  # noqa: E402
 from core.views import (  # noqa: E402
     apply_mode_change, death_age_errors, get_default_data, import_plan_data, normalize_plan_fields, plan_errors,
+    results_context,
 )
+from django.template.loader import render_to_string  # noqa: E402
 from core import forms as F  # noqa: E402
 from core.forms import build_default_rebalancing, normalize_imported_plan  # noqa: E402
 
@@ -196,6 +202,27 @@ def dump_stress(plan):
     return res
 
 
+# Keys of the results context that repeat other fixtures (det_rows, the plan, the
+# mc / stress statistics) are left out of results.json.
+RESULTS_BULKY = ('det_rows', 'plan_data_json', 'stress_test', 'scenarios_list',
+                 'mc_p10', 'mc_p50', 'mc_p90', 'mc_spaghetti_paths')
+
+
+def dump_results(out, plan, det_rows, mc, stress):
+    """The Results page for the fixture's seeded numbers: the template context and
+    the page body Django renders from it (before results.js runs)."""
+    goal = mc.get('binary_search') if mc['goal_seeking'] else None
+    ctx = results_context(copy.deepcopy(plan), det_rows, dict(mc['generate_runs']), goal, stress)
+    write(out / 'results.json', {k: v for k, v in ctx.items() if k not in RESULTS_BULKY})
+    html = render_to_string('results.html', ctx)
+    start = html.index('<div class="mb-4 text-center">')
+    end = html.index('<script id="chart-config-json"')
+    body = re.sub(r'\s+', ' ', html[start:end]).strip()
+    # ~500 KB of repetitive markup per plan; gzip (mtime 0, so re-runs are byte-identical).
+    with open(out / 'results.html.gz', 'wb') as f:
+        f.write(gzip.compress((body + '\n').encode(), mtime=0))
+
+
 def dump_plan(path):
     plan = load_plan(path)
     staged = copy.deepcopy(plan)
@@ -261,16 +288,39 @@ def dump_plan_data(name, source, plan, errors):
     inputs = runs.extract_sim_inputs(plan)
     write(out / 'inputs.json', inputs)
     write(out / 'numba_inputs.json', runs.prepare_numba_inputs(inputs))
-    write(out / 'det_rows.json', runs.run_deterministic(plan))
+    det_rows = runs.run_deterministic(plan)
+    write(out / 'det_rows.json', det_rows)
     write(out / 'kernel.json', dump_kernel(inputs))
-    write(out / 'mc.json', dump_mc(plan, inputs))
-    write(out / 'stress.json', dump_stress(plan))
+    mc = dump_mc(plan, inputs)
+    write(out / 'mc.json', mc)
+    stress = dump_stress(plan)
+    write(out / 'stress.json', stress)
+    dump_results(out, plan, det_rows, mc, stress)
     return {'name': name, 'source': source, 'import_errors': len(errors),
             'years': inputs['total_years'], 'runs': inputs['runs']}
 
 
+def dump_template_filters(fn):
+    """Django's floatformat / intcomma on values the Results page formats."""
+    from django.contrib.humanize.templatetags.humanize import intcomma
+    from django.template.defaultfilters import floatformat
+    rng = np.random.default_rng(7)
+    values = [0.0, -0.0, 0.5, 1.5, 2.5, -0.5, -0.4, 0.05, 0.15, 1.25, 2.675, 79.96, 99.95, 99.995, 80.0, 85.5,
+              3.456, 1234.5, -1234.4, 1234567.5, 2400000.0, 24796630.873864252, -20767971.253303915, 1e16,
+              1.5e16, 123456789012.345, 1e-7, 0.000949, 1e21, 7.0000000000000001]
+    values += [float(v) for v in rng.normal(0, 1e6, 40)] + [float(v) for v in rng.uniform(-100, 100, 40)]
+    values += [round(float(v), 1) + 0.05 for v in rng.uniform(0, 100, 20)]
+    cases = []
+    for v in values:
+        for arg in (0, 1, 2, -1, -2):
+            cases.append({'value': v, 'arg': arg, 'out': str(floatformat(v, arg))})
+        cases.append({'value': v, 'arg': 'money', 'out': str(intcomma(floatformat(v, '0')))})
+    write(fn / 'template_filters.json', cases)
+
+
 def dump_functions():
     fn = OUT_DIR / 'functions'
+    dump_template_filters(fn)
     incomes = [-100.0, 0.0, 1.0, 12400.0, 30000.0, 50400.0, 75000.0, 105700.5, 150000.0,
                256225.0, 400000.0, 640600.0, 1000000.0, 5000000.0]
     statuses = {

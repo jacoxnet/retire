@@ -843,21 +843,11 @@ def enter_view(request):
         context = dict(data, cpi_data=load_cpi_data())
         return render(request, 'enter.html', context)
 
-@require_http_methods(["GET"])
-def results_view(request):
-    sim_input = get_session_sim_data(request)
-    data = sim_input if isinstance(sim_input, dict) else sim_input.to_dict()
-    
-    data_ver = request.session.get('data_version', 1)
-    cached_ver = request.session.get('cached_version', -1)
-    cached_res = request.session.get('cached_results')
-    
-    if cached_ver == data_ver and cached_res is not None:
-        return render(request, 'results.html', cached_res)
-
+def results_context(data, det_rows, mc_stats, goal, stress_test_data):
+    """The Results page's template context, from the engine outputs: the
+    deterministic rows, generate_runs' statistics, the goal-seek result (None for a
+    regular simulation) and the default stress test."""
     is_goal_seeking = data.get('goal_seeking', False)
-    det_rows = run_deterministic(sim_input)
-    
     pretax_bal = data.get('pretax_assets', {}).get('present_balance', 0.0)
     spouse_pretax_bal = data.get('spouse_pretax_assets', {}).get('present_balance', 0.0) if data.get('is_married') else 0.0
     roth_bal = data.get('roth_assets', {}).get('present_balance', 0.0)
@@ -895,26 +885,13 @@ def results_view(request):
         "spouse_hsa_assets": data.get('spouse_hsa_assets', {}),
         "plan_data_json": data
     }
-    
-    if not is_goal_seeking:
-        mc_stats = generate_runs(sim_input)
-        results.update(mc_stats)
-    else:
-        achieved_spending, achieved_success_rate, searches, achieved_spending_y1 = binary_search(sim_input)
-        mc_stats = generate_runs(sim_input, test_spending=achieved_spending)
-        results.update(mc_stats)
-        results.update({
-            "target_success_rate": data.get('target_success_rate', 80.0),
-            "achieved_spending": achieved_spending,
-            "achieved_success_rate": achieved_success_rate,
-            "searches": searches,
-            "achieved_spending_y1": achieved_spending_y1
-        })
 
-    from core.runs import run_historical_stress_test
+    results.update(mc_stats)
+    if is_goal_seeking:
+        results.update({"target_success_rate": data.get('target_success_rate', 80.0)})
+        results.update(goal)
+
     from core.historical_data import CRISIS_SCENARIOS
-
-    stress_test_data = run_historical_stress_test(sim_input, scenario_key='2000_dotcom')
     results['stress_test'] = stress_test_data
     results['scenarios_list'] = CRISIS_SCENARIOS
 
@@ -923,6 +900,38 @@ def results_view(request):
     results['terminal_life_insurance'] = routing.get('terminal_life_ins_estate', 0.0)
     results['taxable_deposit_amt'] = routing.get('taxable_deposit_amt', 0.0)
     results['taxable_deposit_t'] = routing.get('taxable_deposit_t', -1)
+    return results
+
+
+@require_http_methods(["GET"])
+def results_view(request):
+    sim_input = get_session_sim_data(request)
+    data = sim_input if isinstance(sim_input, dict) else sim_input.to_dict()
+    
+    data_ver = request.session.get('data_version', 1)
+    cached_ver = request.session.get('cached_version', -1)
+    cached_res = request.session.get('cached_results')
+    
+    if cached_ver == data_ver and cached_res is not None:
+        return render(request, 'results.html', cached_res)
+
+    det_rows = run_deterministic(sim_input)
+    if not data.get('goal_seeking', False):
+        mc_stats = generate_runs(sim_input)
+        goal = None
+    else:
+        achieved_spending, achieved_success_rate, searches, achieved_spending_y1 = binary_search(sim_input)
+        mc_stats = generate_runs(sim_input, test_spending=achieved_spending)
+        goal = {
+            "achieved_spending": achieved_spending,
+            "achieved_success_rate": achieved_success_rate,
+            "searches": searches,
+            "achieved_spending_y1": achieved_spending_y1,
+        }
+
+    from core.runs import run_historical_stress_test
+    stress_test_data = run_historical_stress_test(sim_input, scenario_key='2000_dotcom')
+    results = results_context(data, det_rows, mc_stats, goal, stress_test_data)
 
     request.session['cached_results'] = results
     request.session['cached_version'] = data_ver

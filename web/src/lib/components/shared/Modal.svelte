@@ -6,7 +6,7 @@
   interface Props {
     open: boolean;
     id: string;
-    size?: 'sm' | 'lg' | '';
+    size?: 'sm' | 'lg' | 'xl' | '';
     scrollable?: boolean;
     title: Snippet;
     children: Snippet;
