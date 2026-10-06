@@ -1,0 +1,892 @@
+"""Dump golden fixtures from the Python engine for the TypeScript port.
+
+Run from legacy/:  uv run tools/golden/dump_fixtures.py
+
+For every plan in web/fixtures/saved-plans/ it writes web/fixtures/plans/<name>/:
+  imported.json      plan after import_plan_data() (the Manage-page import), plus import errors
+  inputs.json        extract_sim_inputs(plan)
+  numba_inputs.json  prepare_numba_inputs(inputs)
+  det_rows.json      run_deterministic(plan)
+  kernel.json        njit_simulate_all_paths over FIXED seeded return matrices, for exact comparison
+  mc.json            seeded generate_runs / binary_search, for statistical comparison
+  stress.json        seeded run_historical_stress_test (default scenario), statistical + exact crisis rows
+  results.json       results_context() built from det_rows / mc / stress above (bulky keys dropped)
+  results.html.gz    the Results page body Django renders from that context
+and web/fixtures/functions/*.json with input/output grids for the pure helpers.
+
+Non-finite floats are written as the strings "NaN", "Infinity", "-Infinity"
+because JSON has no literal for them; the TS loader converts them back.
+"""
+import copy
+import datetime
+import gzip
+import json
+import math
+import os
+import re
+import sys
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]  # legacy/ (the Django app)
+REPO = ROOT.parent
+sys.path.insert(0, str(ROOT))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'retire.settings')
+
+import django  # noqa: E402
+
+django.setup()
+
+from core import forms, runs  # noqa: E402
+from core import cpi_service, historical_data  # noqa: E402
+from core.views import (  # noqa: E402
+    apply_mode_change, death_age_errors, get_default_data, import_plan_data, normalize_plan_fields, plan_errors,
+    results_context,
+)
+from django.template.loader import render_to_string  # noqa: E402
+from core import forms as F  # noqa: E402
+from core.forms import build_default_rebalancing, normalize_imported_plan  # noqa: E402
+
+OUT_DIR = REPO / 'web' / 'fixtures'
+PLANS_DIR = OUT_DIR / 'saved-plans'
+
+# Import code fills missing balance-sheet dates from date.today(); freeze it so
+# fixtures don't change with the day they were generated.
+FIXTURE_TODAY = datetime.date(2026, 1, 15)
+KERNEL_RUNS = 16
+KERNEL_SEED = 12345
+MC_SEED = 20260115
+
+
+class _FrozenDate(datetime.date):
+    @classmethod
+    def today(cls):
+        return FIXTURE_TODAY
+
+
+class _FrozenDatetimeModule:
+    date = _FrozenDate
+
+    def __getattr__(self, name):
+        return getattr(datetime, name)
+
+
+forms.datetime = _FrozenDatetimeModule()
+
+
+def to_jsonable(obj):
+    if isinstance(obj, dict):
+        return {str(k): to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [to_jsonable(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return to_jsonable(obj.tolist())
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, (int, np.integer)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        f = float(obj)
+        if math.isnan(f):
+            return 'NaN'
+        if math.isinf(f):
+            return 'Infinity' if f > 0 else '-Infinity'
+        return f
+    return obj
+
+
+def write(path, obj):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(to_jsonable(obj), f, separators=(',', ':'), allow_nan=False)
+        f.write('\n')
+
+
+def load_plan(path):
+    with open(path) as f:
+        data = json.load(f)
+    # Some older saved files are a JSON-encoded string of the plan.
+    if isinstance(data, str):
+        data = json.loads(data)
+    return data
+
+
+def kernel_case(inputs, nb, returns, with_trajectories=True):
+    """Run njit_simulate_all_paths on given return matrices; mirrors generate_runs' call."""
+    k, years = returns[0].shape
+    ending = np.empty(k, dtype=np.float64)
+    traj = np.empty((k, years + 1), dtype=np.float64) if with_trajectories else None
+    flags = np.empty(k, dtype=np.float64)
+    runs.njit_simulate_all_paths(
+        k, years, inputs['user_age'], inputs['is_married'], inputs['spouse_age'], inputs['user_age_death'], inputs['spouse_age_death'],
+        nb['filing_status_code'], inputs['desired_spending_start_age'], nb['desired_spending'], nb['survivor_spending'],
+        inputs['adjust_spending_inflation'], inputs['inflation_rate'], nb['hsa_user_for_medical_code'], nb['user_rmd_start_age'], nb['spouse_rmd_start_age'],
+        nb['pretax_user_init'], nb['pretax_spouse_init'], nb['roth_init'], nb['taxable_init'], nb['hsa_user_init'],
+        nb['c_pre_user'], nb['c_pre_spouse'], nb['c_roth'], nb['c_tax'], nb['c_hsa_user'],
+        nb['add_spending_arr'], nb['inc_taxable_arr'], nb['inc_ss_arr'], nb['inc_nontaxable_arr'],
+        *returns,
+        nb['state_tax_rate'], nb['state_ss_exempt_code'], nb['other_taxes_arr'],
+        nb['hsa_spouse_init'], nb['c_hsa_spouse'], nb['hsa_spouse_for_medical_code'],
+        ending,
+        traj,
+        nb['inf_factors'],
+        nb['taxable_deposit_t'],
+        nb['taxable_deposit_amt'],
+        nb['terminal_life_ins_estate'],
+        flags,
+        nb['taxable_div_yield'],
+        nb['taxable_qual_pct'],
+        nb['taxable_int_yield'],
+        nb['taxable_cg_dist_rate'],
+        nb['taxable_basis_init'],
+        nb['is_community_property_code'],
+    )
+    return {
+        'ending_wealths': ending,
+        'trajectories': traj,
+        'success_flags': flags,
+    }
+
+
+RETURN_KEYS = ['pre_user', 'pre_spouse', 'roth', 'taxable', 'hsa_user', 'hsa_spouse']
+
+
+def dump_kernel(inputs):
+    years = inputs['total_years']
+    rng = np.random.default_rng(KERNEL_SEED)
+    returns = runs.generate_correlated_returns(inputs, KERNEL_RUNS, years, rng=rng)
+    variants = {}
+
+    nb = runs.prepare_numba_inputs(inputs)
+    variants['regular'] = {'numba_inputs': nb, **kernel_case(inputs, nb, returns)}
+
+    test_spending = float(inputs['desired_spending']) * 0.8
+    nb = runs.prepare_numba_inputs(inputs, test_spending=test_spending)
+    variants['test_spending'] = {'test_spending': test_spending, 'numba_inputs': nb,
+                                 **kernel_case(inputs, nb, returns, with_trajectories=False)}
+
+    # Varying per-year inflation, as the stress test feeds in.
+    infl = np.array([float(inputs['inflation_rate']) + 3.0 * math.sin(t) for t in range(years)], dtype=np.float64)
+    nb = runs.prepare_numba_inputs(inputs, custom_inflation_rates=infl)
+    variants['custom_inflation'] = {'custom_inflation_rates': infl, 'numba_inputs': nb,
+                                    **kernel_case(inputs, nb, returns)}
+
+    return {
+        'runs': KERNEL_RUNS,
+        'years': years,
+        'seed': KERNEL_SEED,
+        'returns': dict(zip(RETURN_KEYS, returns)),
+        'variants': variants,
+    }
+
+
+def dump_mc(plan, inputs):
+    out = {'seed': MC_SEED, 'runs': inputs['runs'], 'goal_seeking': bool(plan.get('goal_seeking', False))}
+    stats = runs.generate_runs(plan, rng=np.random.default_rng(MC_SEED))
+    stats['mc_spaghetti_paths'] = stats['mc_spaghetti_paths'][:5]
+    out['generate_runs'] = stats
+    if out['goal_seeking']:
+        spending, srate, searches, y1 = runs.binary_search(plan, rng=np.random.default_rng(MC_SEED))
+        out['binary_search'] = {
+            'achieved_spending': spending,
+            'achieved_success_rate': srate,
+            'searches': searches,
+            'achieved_spending_y1': y1,
+        }
+    return out
+
+
+def dump_stress(plan):
+    res = runs.run_historical_stress_test(plan, scenario_key='2000_dotcom', rng=np.random.default_rng(MC_SEED))
+    res.pop('scenarios_list', None)
+    return res
+
+
+# Keys of the results context that repeat other fixtures (det_rows, the plan, the
+# mc / stress statistics) are left out of results.json.
+RESULTS_BULKY = ('det_rows', 'plan_data_json', 'stress_test', 'scenarios_list',
+                 'mc_p10', 'mc_p50', 'mc_p90', 'mc_spaghetti_paths')
+
+
+def dump_results(out, plan, det_rows, mc, stress):
+    """The Results page for the fixture's seeded numbers: the template context and
+    the page body Django renders from it (before results.js runs)."""
+    goal = mc.get('binary_search') if mc['goal_seeking'] else None
+    ctx = results_context(copy.deepcopy(plan), det_rows, dict(mc['generate_runs']), goal, stress)
+    write(out / 'results.json', {k: v for k, v in ctx.items() if k not in RESULTS_BULKY})
+    html = render_to_string('results.html', ctx)
+    start = html.index('<div class="mb-4 text-center">')
+    end = html.index('<script id="chart-config-json"')
+    body = re.sub(r'\s+', ' ', html[start:end]).strip()
+    # ~500 KB of repetitive markup per plan; gzip (mtime 0, so re-runs are byte-identical).
+    with open(out / 'results.html.gz', 'wb') as f:
+        f.write(gzip.compress((body + '\n').encode(), mtime=0))
+
+
+def dump_plan(path):
+    plan = load_plan(path)
+    staged = copy.deepcopy(plan)
+    stage_errors = normalize_plan_fields(staged)
+    write(OUT_DIR / 'plans' / path.stem / 'normalized.json', {'plan': staged, 'errors': stage_errors})
+    errors = import_plan_data(plan)
+    return dump_plan_data(path.stem, path.name, plan, errors)
+
+
+# Variants of saved plans that reach paths the saved plans don't: shortfalls,
+# early-withdrawal and HSA penalties, life-insurance deposits and estate payouts,
+# community-property step-up, HOH filing and non-exempt state SS. Overrides are
+# applied after import.
+def _syn_shortfall(p):
+    p.update(desired_spending=p['desired_spending'] * 8, user_retirement_age=40, filing_status='hoh',
+             state_tax_rate=5.0, state_ss_exempt=False, runs=2000)
+    if isinstance(p.get('hsa_assets'), dict):
+        p['hsa_assets']['hsa_for_medical'] = False
+
+
+def _syn_life_ins(p):
+    p.update(user_life_insurance_amount=500000.0, user_life_insurance_type='permanent',
+             spouse_life_insurance_amount=250000.0, spouse_life_insurance_type='term',
+             spouse_life_insurance_term_age=110, is_community_property=True, runs=2000)
+    if isinstance(p.get('hsa_assets'), dict):
+        p['hsa_assets']['hsa_for_medical'] = False
+
+
+def _syn_spouse_first(p):
+    p.update(spouse_age_death=70, spouse_life_insurance_amount=300000.0, spouse_life_insurance_type='permanent',
+             user_life_insurance_amount=400000.0, user_life_insurance_type='term', user_life_insurance_term_age=80,
+             filing_status='married_filing_jointly', desired_spending=p['desired_spending'] * 2, runs=2000)
+    # Other taxes whose inflation adjustment starts after the plan start, and one that
+    # started before it (applied retroactively), including inflation_less_pct.
+    p['other_taxes'] = [
+        {'name': 'Future-indexed', 'amount': 6000.0, 'frequency': 'annual', 'start_age_type': 'user_specified',
+         'start_age_specified': 62, 'end_age_type': 'death', 'adjust_type': 'inflation',
+         'adjust_start_age_type': 'specified', 'adjust_start_age_specified': 70},
+        {'name': 'Past-indexed', 'amount': 400.0, 'frequency': 'monthly', 'start_age_type': 'user_specified',
+         'start_age_specified': 55, 'end_age_type': 'spouse_death', 'adjust_type': 'inflation_less_pct',
+         'adjust_val': 1.0, 'adjust_start_age_type': 'start'},
+    ]
+
+
+SYNTHETIC = [
+    ('syn_shortfall', 'early_suzie_plan.json', _syn_shortfall),
+    ('syn_life_ins', 'sept27.json', _syn_life_ins),
+    ('syn_spouse_first', 'aug_13_v2_plan.json', _syn_spouse_first),
+]
+
+
+def dump_synthetic(name, source, override):
+    plan = load_plan(PLANS_DIR / source)
+    errors = import_plan_data(plan)
+    override(plan)
+    return dump_plan_data(name, source, plan, errors)
+
+
+def dump_plan_data(name, source, plan, errors):
+    out = OUT_DIR / 'plans' / name
+    write(out / 'imported.json', {'plan': plan, 'import_errors': errors})
+
+    inputs = runs.extract_sim_inputs(plan)
+    write(out / 'inputs.json', inputs)
+    write(out / 'numba_inputs.json', runs.prepare_numba_inputs(inputs))
+    det_rows = runs.run_deterministic(plan)
+    write(out / 'det_rows.json', det_rows)
+    write(out / 'kernel.json', dump_kernel(inputs))
+    mc = dump_mc(plan, inputs)
+    write(out / 'mc.json', mc)
+    stress = dump_stress(plan)
+    write(out / 'stress.json', stress)
+    dump_results(out, plan, det_rows, mc, stress)
+    return {'name': name, 'source': source, 'import_errors': len(errors),
+            'years': inputs['total_years'], 'runs': inputs['runs']}
+
+
+def dump_template_filters(fn):
+    """Django's floatformat / intcomma on values the Results page formats."""
+    from django.contrib.humanize.templatetags.humanize import intcomma
+    from django.template.defaultfilters import floatformat
+    rng = np.random.default_rng(7)
+    values = [0.0, -0.0, 0.5, 1.5, 2.5, -0.5, -0.4, 0.05, 0.15, 1.25, 2.675, 79.96, 99.95, 99.995, 80.0, 85.5,
+              3.456, 1234.5, -1234.4, 1234567.5, 2400000.0, 24796630.873864252, -20767971.253303915, 1e16,
+              1.5e16, 123456789012.345, 1e-7, 0.000949, 1e21, 7.0000000000000001]
+    values += [float(v) for v in rng.normal(0, 1e6, 40)] + [float(v) for v in rng.uniform(-100, 100, 40)]
+    values += [round(float(v), 1) + 0.05 for v in rng.uniform(0, 100, 20)]
+    cases = []
+    for v in values:
+        for arg in (0, 1, 2, -1, -2):
+            cases.append({'value': v, 'arg': arg, 'out': str(floatformat(v, arg))})
+        cases.append({'value': v, 'arg': 'money', 'out': str(intcomma(floatformat(v, '0')))})
+    write(fn / 'template_filters.json', cases)
+
+
+def dump_functions():
+    fn = OUT_DIR / 'functions'
+    dump_template_filters(fn)
+    incomes = [-100.0, 0.0, 1.0, 12400.0, 30000.0, 50400.0, 75000.0, 105700.5, 150000.0,
+               256225.0, 400000.0, 640600.0, 1000000.0, 5000000.0]
+    statuses = {
+        'single': (runs.THRESHOLDS_SINGLE_ARR, runs.LTCG_THRESHOLDS_SINGLE_ARR),
+        'joint': (runs.THRESHOLDS_JOINT_ARR, runs.LTCG_THRESHOLDS_JOINT_ARR),
+        'hoh': (runs.THRESHOLDS_HOH_ARR, runs.LTCG_THRESHOLDS_HOH_ARR),
+    }
+    tax_cases = []
+    for st, (ord_t, ltcg_t) in statuses.items():
+        for inc in incomes:
+            tax_cases.append({'fn': 'calculate_tax', 'status': st, 'args': [inc],
+                              'out': runs.calculate_tax(inc, ord_t, runs.TAX_RATES_ARR)})
+            for pref in [0.0, 5000.0, 60000.0, 700000.0]:
+                tax_cases.append({'fn': 'calculate_preferential_tax', 'status': st, 'args': [inc, pref],
+                                  'out': runs.calculate_preferential_tax(inc, pref, ltcg_t, runs.LTCG_RATES_ARR)})
+                for std in [0.0, 16100.0, 32200.0]:
+                    tax_cases.append({'fn': 'njit_calc_fed_tax_dual', 'status': st, 'args': [inc, pref, std],
+                                      'out': list(runs.njit_calc_fed_tax_dual(inc, pref, std, ord_t, runs.TAX_RATES_ARR,
+                                                                              ltcg_t, runs.LTCG_RATES_ARR))})
+        for agi in [0.0, 10000.0, 25000.0, 40000.0, 90000.0, 300000.0]:
+            for ss in [0.0, 12000.0, 30000.0, 60000.0]:
+                tax_cases.append({'fn': 'calculate_taxable_ss', 'status': st, 'args': [agi, ss],
+                                  'out': runs.calculate_taxable_ss(agi, ss, st)})
+                code = runs.FILING_STATUS_MAP[st]
+                tax_cases.append({'fn': 'njit_calculate_taxable_ss', 'status': st, 'args': [agi, ss, code],
+                                  'out': runs.njit_calculate_taxable_ss(agi, ss, code)})
+    write(fn / 'tax.json', tax_cases)
+
+    misc = []
+    for by in [1940, 1950, 1951, 1955, 1959, 1960, 1990]:
+        misc.append({'fn': 'get_rmd_start_age', 'args': [by], 'out': runs.get_rmd_start_age(by)})
+    for m in [-1.0, 0.0, 2.5, 3.0, 4.0, 5.5, 7.0, 9.0]:
+        misc.append({'fn': 'infer_asset_allocation', 'args': [m], 'out': list(runs.infer_asset_allocation(m))})
+    age_types = ['specified', 'age', 'user_specified', 'spouse_specified', 'retirement', 'spouse_retirement',
+                 'death', 'spouse_death', 'first_death', 'bogus']
+    for at in age_types:
+        for married in [False, True]:
+            for spec in [70, '72', 'x', None]:
+                kw = dict(user_age=60, user_ret_age=65, is_married=married, spouse_age=57, spouse_ret_age=62,
+                          user_age_death=90, spouse_age_death=95, default_val=100)
+                misc.append({'fn': 'resolve_age', 'args': [at, spec], 'kwargs': kw,
+                             'out': runs.resolve_age(at, spec, **kw)})
+    for start, n in [(1929, 5), (2000, 10), (2020, 10)]:
+        misc.append({'fn': 'get_historical_sequence', 'args': [start, n],
+                     'out': historical_data.get_historical_sequence(start, n)})
+    write(fn / 'misc.json', misc)
+
+    constants = {
+        'RMD_TABLE_ARR': runs.RMD_TABLE_ARR,
+        'ASSET_CLASS_CORRELATION': runs.ASSET_CLASS_CORRELATION,
+        'ASSET_CLASS_CHOLESKY': runs._ASSET_CLASS_CHOLESKY,
+        'HISTORICAL_RETURNS': historical_data.HISTORICAL_RETURNS,
+        'CRISIS_SCENARIOS': historical_data.CRISIS_SCENARIOS,
+    }
+    write(fn / 'constants.json', constants)
+
+    with open(cpi_service.SEED_FILE) as f:
+        cpi_data = cpi_service._interpolate_missing_months(json.load(f))
+    cpi_cases = []
+    for base, ev in [('2020-01-15', '2025-06-01'), ('1913-01-01', None), ('1900-05-01', '2000-01-01'),
+                     ('2026-03-10', None), ('2030-01-01', None), ('2024-01-01', '2024-01-31')]:
+        cpi_cases.append({'fn': 'calculate_cpi_inflation', 'args': [base, ev],
+                          'out': cpi_service.calculate_cpi_inflation(base, ev, cpi_data=cpi_data)})
+    for d in ['2026-01-01', '2026-03-15', '2000-12-31']:
+        cpi_cases.append({'fn': 'get_prior_month_str', 'args': [d], 'out': cpi_service.get_prior_month_str(d)})
+    cpi_cases.append({'fn': '_interpolate_missing_months',
+                      'args': [{'2025-07': 320.0, '2025-08': None, '2025-12': 330.0, '2026-02': 331.5}],
+                      'out': cpi_service._interpolate_missing_months(
+                          {'2025-07': 320.0, '2025-08': None, '2025-12': 330.0, '2026-02': 331.5})})
+    write(fn / 'cpi.json', cpi_cases)
+
+    dump_rmd_tax_withdraw(fn)
+    dump_rollover(fn)
+    dump_income(fn)
+
+
+def dump_rmd_tax_withdraw(fn):
+    rng = np.random.default_rng(777)
+    cases = []
+    for i in range(600):
+        # Cases 400+ drain taxable/Roth and use younger ages so the pretax and HSA
+        # penalty steps and shortfalls get exercised.
+        deep = i >= 400
+
+        def bal(p_zero=0.25, hi=2e6):
+            return 0.0 if rng.random() < p_zero else float(rng.uniform(0, hi))
+        user_age_t = int(rng.integers(40, 70)) if deep else int(rng.integers(30, 105))
+        spouse_age_t = int(rng.integers(40, 70)) if deep else int(rng.integers(30, 105))
+        is_married = bool(rng.random() < 0.6)
+        user_alive = bool(rng.random() < 0.85)
+        spouse_alive = is_married and bool(rng.random() < 0.85)
+        if not user_alive and not spouse_alive:
+            user_alive = True
+        pu_prior, ps_prior = bal(), (bal() if is_married else 0.0)
+        pu_mid = pu_prior * float(rng.uniform(0.8, 1.2))
+        ps_mid = ps_prior * float(rng.uniform(0.8, 1.2))
+        taxable_mid = bal(0.8 if deep else 0.3, 1.5e5 if deep else 1.5e6)
+        basis_mode = rng.integers(0, 3)
+        basis = taxable_mid if basis_mode == 0 else taxable_mid * float(rng.uniform(0, 1)) if basis_mode == 1 else 0.0
+        surplus = rng.random() < 0.25
+        spending = float(rng.uniform(0, 30000)) if surplus else float(rng.uniform(20000, 400000))
+        yields = rng.random() < 0.6
+        args = [
+            user_age_t, spouse_age_t, user_alive, spouse_alive, is_married,
+            pu_prior, ps_prior, pu_mid, ps_mid,
+            bal(0.8 if deep else 0.3, 1e6), taxable_mid, bal(0.4, 2e5), (bal(0.4, 2e5) if is_married else 0.0),
+            int(rng.choice([72, 73, 75])), (int(rng.choice([72, 73, 75])) if is_married else 150),
+            int(rng.integers(0, 3)), float(rng.uniform(1.0, 3.0)),
+            spending, float(rng.uniform(0, 150000)) * (rng.random() < 0.7),
+            float(rng.uniform(0, 70000)) * (rng.random() < 0.6), float(rng.uniform(0, 20000)) * (rng.random() < 0.3),
+            float(rng.uniform(0, 15000)) * (rng.random() < 0.3), float(rng.choice([0.0, 0.0, 4.5, 9.3])), int(rng.integers(0, 2)),
+            int(rng.random() < (0.2 if deep else 0.5)), int(rng.random() < (0.2 if deep else 0.5)),
+            basis,
+            float(rng.uniform(0, 3000)) if yields else 0.0,
+            float(rng.uniform(0, 3000)) if yields else 0.0,
+            float(rng.uniform(0, 20000)) if yields else 0.0,
+            float(rng.uniform(0, 8000)) if yields else 0.0,
+        ]
+        args = [float(a) if isinstance(a, np.floating) else a for a in args]
+        out = runs.njit_rmd_tax_withdraw(*args)
+        cases.append({'args': args, 'out': list(out)})
+    write(fn / 'rmd_tax_withdraw.json', cases)
+
+
+def dump_rollover(fn):
+    rng = np.random.default_rng(778)
+    cases = []
+    for i in range(60):
+        t = int(rng.integers(0, 40))
+        args = [t, int(rng.integers(0, 40)), bool(rng.random() < 0.8), bool(rng.random() < 0.6),
+                bool(rng.random() < 0.6), int(rng.integers(0, 3))]
+        args += [0.0 if rng.random() < 0.3 else float(rng.uniform(0, 1e6)) for _ in range(4)]
+        args += [float(rng.uniform(0, 20000)) for _ in range(4)]
+        cases.append({'args': args, 'out': list(runs.njit_spousal_rollover(*args))})
+    write(fn / 'spousal_rollover.json', cases)
+
+
+def dump_income(fn):
+    ctx = dict(user_age=55, user_ret_age=62, is_married=True, spouse_age=52, spouse_ret_age=60,
+               user_age_death=92, spouse_age_death=95)
+    ctx_single = dict(ctx, is_married=False)
+    items = []
+    for adj_type in ['inflation', 'fixed_pct', 'inflation_less_pct', 'none', 'bogus']:
+        for adj_start in ['start', 'current_age', 'specified', 'retirement', 'spouse_retirement']:
+            items.append({'start_age_type': 'retirement', 'end_age_type': 'death', 'adjust_type': adj_type,
+                          'adjust_val': 1.5, 'adjust_start_age_type': adj_start, 'adjust_start_age_specified': 66})
+    items.append({'start_age_type': 'specified', 'start_age_specified': 58, 'end_age_type': 'specified',
+                  'end_age_specified': 85, 'adjustments': [
+                      {'start_type': 'start', 'end_type': 'specified', 'end_spec': 65, 'adjust_type': 'inflation'},
+                      {'start_type': 'specified', 'start_spec': 68, 'end_type': 'specified', 'end_spec': 75,
+                       'adjust_type': 'fixed_pct', 'adjust_val': 3.0},
+                      {'start_type': 'specified', 'start_spec': 75, 'end_type': 'death',
+                       'adjust_type': 'inflation_less_pct', 'adjust_val': 1.0},
+                      {'start_type': 'current_age', 'end_type': 'spouse_death', 'adjust_type': 'zero'},
+                  ]})
+    items.append({'start_age_type': 'spouse_retirement', 'end_age_type': 'spouse_death', 'adjustments': [
+        {'start_type': 'spouse_retirement', 'end_type': 'first_death', 'adjust_type': 'inflation_less_pct',
+         'adjust_val': 4.0}]})
+    custom = [2.5 + 4.0 * math.cos(k) for k in range(30)]
+    growth = []
+    for i, item in enumerate(items):
+        for c, cx in [('married', ctx), ('single', ctx_single)]:
+            for t in [0, 1, 7, 15, 40]:
+                for ci in [None, custom]:
+                    out = runs.calculate_income_growth_factor(item, t, cx['user_age'], cx['user_ret_age'],
+                                                              cx['is_married'], cx['spouse_age'], cx['spouse_ret_age'],
+                                                              cx['user_age_death'], cx['spouse_age_death'], 2.8,
+                                                              custom_inflation_rates=ci)
+                    growth.append({'item': i, 'ctx': c, 't': t, 'custom': ci is not None, 'out': out})
+
+    mult_items = [
+        {'frequency': 'one_time'},
+        {'frequency': 'monthly', 'end_age_type': 'death', 'has_survivor_benefit': True, 'survivor_benefit_pct': 55.0},
+        {'frequency': 'monthly', 'end_age_type': 'retirement'},
+        {'frequency': 'annual', 'end_age_type': 'spouse_death', 'has_survivor_benefit': True},
+        {'frequency': 'annual', 'end_age_type': 'spouse_retirement', 'has_survivor_benefit': False},
+        {'frequency': 'monthly', 'end_age_type': 'specified'},
+    ]
+    mult = []
+    for i, item in enumerate(mult_items):
+        for married in [False, True]:
+            for user_age_t in [60, 70, 80, 93, 97]:
+                for spouse_age_t in [None, 70, 96]:
+                    for start, end in [(62, 90), (70, 70)]:
+                        out = runs.calculate_income_benefit_multiplier(item, user_age_t, 92, spouse_age_t, 95,
+                                                                       married, start, end)
+                        mult.append({'item': i, 'args': [user_age_t, 92, spouse_age_t, 95, married, start, end],
+                                     'out': out})
+    write(fn / 'income.json', {'ctx': {'married': ctx, 'single': ctx_single}, 'inflation_rate': 2.8,
+                               'custom_inflation_rates': custom, 'growth_items': items, 'growth': growth,
+                               'mult_items': mult_items, 'mult': mult})
+
+
+def valid_plan(**overrides):
+    """Same base plan as core/tests_input_validation.py."""
+    plan = {
+        'user_name': 'Pat', 'user_age': 60, 'user_retirement_age': 65, 'user_age_death': 90,
+        'is_married': False, 'runs': 100, 'desired_spending': 40000.0,
+        'accounts': [{
+            'name': 'IRA', 'type': 'pretax', 'owner': 'user', 'balance': 500000.0,
+            'contrib_amount': 0.0, 'contrib_start_age': 60, 'return_mean': 6.0, 'return_std': 10.0,
+        }],
+    }
+    plan.update(overrides)
+    return plan
+
+
+def married(**overrides):
+    base = {'is_married': True, 'spouse_age': 57, 'spouse_retirement_age': 62, 'spouse_age_death': 92}
+    base.update(overrides)
+    return valid_plan(**base)
+
+
+def _acc(**kw):
+    a = {'name': 'IRA', 'type': 'pretax', 'owner': 'user', 'balance': 500000.0, 'contrib_amount': 0.0,
+         'contrib_start_age': 60, 'return_mean': 6.0, 'return_std': 10.0}
+    a.update(kw)
+    return a
+
+
+def _income(**kw):
+    i = {'name': 'Pension', 'amount': 1000.0, 'frequency': 'monthly', 'start_age_type': 'retirement',
+         'start_age_specified': 65, 'end_age_type': 'death', 'end_age_specified': 90}
+    i.update(kw)
+    return i
+
+
+def dump_plan_model(fn):
+    write(fn / 'plan_defaults.json', {
+        'default_data': {k: v for k, v in get_default_data().items() if k != 'balance_sheet'},
+        'default_data_full': get_default_data(),
+        'rebalancing': build_default_rebalancing(),
+    })
+
+    # normalize_imported_plan on hostile / edge inputs
+    norm_inputs = [
+        valid_plan(),
+        valid_plan(user_age='61', runs='500', desired_spending='$45,000', inflation_rate='3.5%'),
+        valid_plan(user_age='sixty', desired_spending={'x': 1}, is_married='yes', goal_seeking='true'),
+        valid_plan(user_age=None, runs=None, social_security={'user_start_age': None, 'user_amount': '2,400'}),
+        valid_plan(user_age=True, runs=[1], user_name=42, filing_status=None, injected_key='<b>hi</b>'),
+        valid_plan(inflation_rate='inf', target_success_rate='nan', current_year='2026.9', runs=1e400),
+        {'accounts': 'nope', 'income_sources': [1, {'name': 'Pension', 'amount': '1200'}]},
+        {'social_security': 'x', 'pretax_assets': [1], 'balance_sheet': 5, 'rebalancing': None},
+        {'pretax_assets': {'present_balance': '1,000', 'contrib_start_age': '61.7', 'hsa_for_medical': 'on',
+                           'return_mean': 'abc', 'extra': 1}},
+        {'accounts': [_acc(balance='lots', contrib_adjust_inflation='True', is_community_property=1),
+                      _acc(name=None, contrib_end_age_specified='70', dividend_yield='2%')]},
+        {'income_sources': [_income(adjustments='bad'),
+                            _income(adjustments=[{'start_type': 'start', 'start_spec': '66', 'adjust_val': 'x'}, 3],
+                                    survivor_benefit_pct='150', has_survivor_benefit='true'),
+                            _income(amount=True, subject_to_tax='false')]},
+        {'other_taxes': [{'name': 'Tax', 'amount': '-5', 'frequency': 'annual', 'adjust_val': '1.5'}],
+         'additional_spending': [{'name': 'Trip', 'amount': '5000', 'start_age': '70.0', 'interval': '5',
+                                  'adjust_inflation': 'on'}, 'junk']},
+    ]
+    write(fn / 'normalize.json', [
+        {'input': inp, **dict(zip(('normalized', 'errors'), _normalize_case(inp)))} for inp in norm_inputs])
+
+    # plan_errors / death_age_errors: one mutation per rule
+    m = valid_plan
+    err_cases = [
+        m(), married(),
+        m(runs=0), m(runs=1000001), m(goal_seeking=True, target_success_rate=0.5),
+        m(goal_seeking=True, target_success_rate=99.5), m(user_age=17), m(user_age=121),
+        m(user_retirement_age=59), m(user_retirement_age=121), m(user_age_death=60), m(user_age_death=121),
+        married(spouse_age=17), married(spouse_retirement_age=50), married(spouse_age_death=57),
+        married(survivor_spending=-1.0), m(begin_spending_age_type='specified', begin_spending_age_specified=59),
+        m(begin_spending_age_type='specified', begin_spending_age_specified=91), m(desired_spending=-1.0),
+        m(state_tax_rate=-1.0), m(state_tax_rate=101.0),
+        m(social_security={'user_receiving': False, 'user_future_entitled': True, 'user_start_age': 61}),
+        m(social_security={'user_receiving': True, 'user_future_entitled': True, 'user_start_age': 75}),
+        married(social_security={'spouse_receiving': False, 'spouse_future_entitled': True, 'spouse_start_age': 71}),
+        m(user_life_insurance_amount=-1.0), m(user_life_insurance_type='term', user_life_insurance_term_age=17),
+        married(spouse_life_insurance_amount=-5.0),
+        married(spouse_life_insurance_type='term', spouse_life_insurance_term_age=130),
+        m(accounts=[_acc(), _acc(name=' ira ')]), m(accounts=[_acc(name='  ')]),
+        m(accounts=[_acc(balance=-5.0, contrib_amount=-1.0)]),
+        m(accounts=[_acc(contrib_start_age=59)]), m(accounts=[_acc(contrib_start_age=95.0)]),
+        m(accounts=[_acc(contrib_end_age_type='specified', contrib_end_age_specified=58)]),
+        married(accounts=[_acc(owner='spouse', contrib_start_age=55)]),
+        married(accounts=[_acc(owner='spouse', contrib_start_age=60, contrib_end_age_type='spouse_specified',
+                               contrib_end_age_specified=121.0)]),
+        m(additional_spending=[{'name': 'Trip', 'amount': -1.0, 'start_age': 59, 'interval': -1}]),
+        married(additional_spending=[{'name': 'Trip', 'amount': 5.0, 'start_age': 55, 'start_age_type': 'spouse'}]),
+        married(additional_spending=[{'name': None, 'amount': 5.0, 'start_age': 93.0, 'start_age_type': 'spouse'}]),
+        m(income_sources=[_income(amount=-1.0, start_age_type='specified', start_age_specified=17)]),
+        m(income_sources=[_income(end_age_type='specified', end_age_specified=64, start_age_type='specified',
+                                  start_age_specified=65)]),
+        m(income_sources=[_income(end_age_type='specified', end_age_specified=130)]),
+        m(income_sources=[_income(frequency='one_time', end_age_type='specified', end_age_specified=10)]),
+        m(income_sources=[_income(survivor_benefit_pct=101.0)]),
+        m(income_sources=[_income(adjust_type='fixed_pct', adjust_val=150.0, adjust_start_age_type='specified',
+                                  adjust_start_age_specified=10)]),
+        m(income_sources=[_income(adjust_type='none', adjust_start_age_type='specified', adjust_start_age_specified=10)]),
+        m(income_sources=[_income(adjustments=[
+            {'adjust_type': 'inflation_less_pct', 'adjust_val': -1.0, 'start_type': 'specified', 'start_spec': 10,
+             'end_type': 'spouse_specified', 'end_spec': 130},
+            {'adjust_type': 'inflation', 'adjust_val': 500.0}])]),
+        m(other_taxes=[{'name': 'Tax', 'amount': -2.0, 'start_age_type': 'user_specified', 'start_age_specified': 125}]),
+        m(balance_sheet={'categories': {
+            'pretax': {'accounts': [{'name': 'A'}, {'name': ''}]}, 'roth': {'accounts': [{'name': 'a '}]},
+            'goals': {'goal_groups': [{'accounts': [{'name': 'B'}, {'name': 'b'}]}]}}}),
+        m(balance_sheet={'no_categories': True}),
+    ]
+    for p in sorted(PLANS_DIR.glob('*.json')):
+        plan = load_plan(p)
+        import_plan_data(plan)
+        err_cases.append(plan)
+    write(fn / 'plan_errors.json', [
+        {'input': c, 'plan_errors': plan_errors(copy.deepcopy(c)), 'death_age_errors': death_age_errors(copy.deepcopy(c))}
+        for c in err_cases])
+
+    # apply_mode_change (cases that don't reach sync_accounts_to_balance_sheet)
+    base = get_default_data()
+    del base['balance_sheet']
+    with_accounts = valid_plan(pretax_assets={'return_mean': 6.0}, roth_assets={'return_mean': 6.0},
+                               accounts=[_acc(), _acc(name='Roth', type='roth'), _acc(name='Sp', owner='spouse')])
+    married_accounts = married(accounts=[_acc(), _acc(name='Sp IRA', owner='spouse'),
+                                         _acc(name='HSA', type='hsa', owner='spouse')],
+                               spouse_hsa_assets={'present_balance': 15000.0, 'return_mean': 5.0, 'return_std': 8.0})
+    mode_cases = [
+        (base, {'simulation_type': 'goal_seeking', 'target_success_rate': '85.0'}),
+        (base, {'simulation_type': 'goal_seeking', 'target_success_rate': '150.0'}),
+        (base, {'simulation_type': 'goal_seeking', 'target_success_rate': 'abc'}),
+        (base, {'simulation_type': 'goal_seeking'}),
+        (base, {'simulation_type': 'regular', 'runs': '20000'}),
+        (base, {'simulation_type': 'regular', 'runs': '0'}),
+        (base, {'simulation_type': 'regular', 'runs': '2000000'}),
+        (base, {'simulation_type': 'regular', 'runs': 'x'}),
+        (base, {'simulation_type': 'regular', 'desired_spending': '48000', 'inflation_rate': '3.2',
+                'user_age_death': '95', 'pretax_return_mean': '7.5', 'roth_return_mean': '8.0'}),
+        (dict(base, desired_spending=48000.4, inflation_rate=3.24), {'desired_spending': '48000', 'inflation_rate': '3.2'}),
+        (base, {'user_age_death': '55'}),
+        (base, {'user_age_death': '121'}),
+        (base, {'user_age_death': 'n/a', 'desired_spending': ''}),
+        (dict(base, begin_spending_age_type='specified', begin_spending_age_specified=88), {'user_age_death': '85'}),
+        (married(), {'spouse_age_death': '93', 'user_age_death': '91'}),
+        (married(), {'spouse_age_death': '50'}),
+        (valid_plan(), {'spouse_age_death': '93'}),
+        (with_accounts, {'pretax_return_mean': '7.0', 'roth_return_mean': '6.04', 'spouse_pretax_return_mean': '9'}),
+        (married_accounts, {'spouse_pretax_return_mean': '7.5', 'spouse_hsa_return_mean': '7.5',
+                            'taxable_return_mean': '4.0', 'hsa_return_mean': '3.0'}),
+        ({'is_married': True, 'user_age': 60, 'spouse_age': 58,
+          'spouse_hsa_assets': {'present_balance': 15000.0, 'return_mean': 5.0, 'return_std': 8.0}},
+         {'simulation_type': 'regular', 'spouse_hsa_return_mean': '7.5'}),
+        ({'user_age': 60, 'pretax_assets': None}, {'pretax_return_mean': '5.5'}),
+    ]
+    out = []
+    for plan, post in mode_cases:
+        data = copy.deepcopy(plan)
+        notes = apply_mode_change(data, post)
+        out.append({'plan': plan, 'post': post, 'result': data, 'messages': [list(n) for n in notes]})
+    write(fn / 'mode_change.json', out)
+
+
+def _case(fn, *args, **kwargs):
+    """Run a forms function on deep copies of its arguments and record the result."""
+    args, kwargs = copy.deepcopy(args), copy.deepcopy(kwargs)  # snapshot: callers reuse and mutate inputs
+    out = getattr(F, fn)(*copy.deepcopy(args), **copy.deepcopy(kwargs))
+    return {'fn': fn, 'args': list(args), 'kwargs': kwargs, 'out': out}
+
+
+def dump_balance_sheet(fn):
+    """Phase 4b: accounts aggregation, marginal tax rate and balance sheet build/parse/sync."""
+    imported = []
+    raw_plans = []
+    for p in sorted(PLANS_DIR.glob('*.json')):
+        raw = load_plan(p)
+        normalize_plan_fields(raw)
+        raw_plans.append(raw)
+        plan = load_plan(p)
+        import_plan_data(plan)
+        imported.append(plan)
+
+    cases = []
+    # calculate_marginal_tax_rate
+    inc = lambda amt, freq='annual', tax=True: {'name': 'X', 'amount': amt, 'frequency': freq, 'subject_to_tax': tax}
+    ss = {'user_entitled': True, 'user_amount': 3000.0, 'user_freq': 'monthly',
+          'spouse_entitled': True, 'spouse_amount': 2000.0, 'spouse_freq': 'monthly'}
+    marginal_inputs = [
+        {'filing_status': 'single', 'state_tax_rate': 0.0, 'income_sources': [inc(100000.0)]},
+        {'filing_status': 'single', 'state_tax_rate': 5.0, 'income_sources': [inc(100000.0)]},
+        {'filing_status': 'single', 'state_tax_rate': 4.5, 'income_sources': [inc(300000.0)]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 60000.0, 'income_sources': [inc(2000.0, 'monthly')]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 60000.0, 'state_tax_rate': 5.0,
+         'income_sources': [inc(200000.0, 'monthly')]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 40000.0, 'social_security': ss,
+         'income_sources': [inc(50000.0)]},
+        {'is_married': True, 'filing_status': 'joint', 'desired_spending': 40000.0, 'social_security': ss,
+         'income_sources': [inc(110000.0)]},
+        {'is_married': False, 'filing_status': 'single', 'desired_spending': 20000.0, 'income_sources': [inc(1e5, tax=False)]},
+        {'filing_status': 'single', 'desired_spending': 60000.0, 'state_tax_rate': 5.0, 'marginal_tax_rate_override': 18.5},
+        {'filing_status': 'single', 'desired_spending': 60000.0, 'balance_sheet': {'marginal_tax_rate_override': 28.0}},
+        {'marginal_tax_rate_override': '33.333'}, {'marginal_tax_rate_override': 150}, {'marginal_tax_rate_override': 'x'},
+        {'filing_status': 'married_filing_jointly', 'desired_spending': 250000.0},
+        {'filing_status': 'head_of_household', 'desired_spending': 90000.0},
+        {'filing_status': 'weird', 'is_married': True, 'desired_spending': 90000.0},
+        {'desired_spending': None, 'income_sources': [inc(5000.0, 'one_time'), inc(1000.0, 'monthly', 'false'), 'junk',
+                                                      {'amount': None, 'frequency': 'annual'}]},
+        {'social_security': {'user_receiving': True, 'user_amount': 4000.0, 'user_freq': 'annual',
+                             'spouse_entitled': True, 'spouse_amount': 9.0}, 'desired_spending': 30000.0},
+        {'desired_spending': 1e7, 'state_tax_rate': 9.3},
+        {},
+    ] + imported
+    for m in marginal_inputs:
+        cases.append(_case('calculate_marginal_tax_rate', m))
+    cases.append(_case('calculate_marginal_tax_rate', 'not a dict'))
+
+    # flat_assets_to_accounts / aggregate_accounts
+    for raw in raw_plans:
+        cases.append(_case('flat_assets_to_accounts', raw, bool(raw.get('is_married'))))
+    acct = lambda **kw: dict({'name': 'A', 'type': 'pretax', 'owner': 'user', 'balance': 1000.0, 'contrib_amount': 0.0}, **kw)
+    agg_lists = [p.get('accounts', []) for p in imported] + [
+        [],
+        [acct(contrib_amount=500.0, contrib_freq='monthly', return_mean=7.0),
+         acct(name='B', balance=3000.0, contrib_amount=1000.0, return_mean=5.0, return_std=12.0)],
+        [acct(balance=0.0, contrib_amount=100.0, contrib_freq='monthly', return_mean=8.0),
+         acct(name='B', balance=-50.0, contrib_amount=300.0, return_mean=4.0)],
+        [acct(balance=0.0, return_mean=8.0), acct(name='B', balance=0.0, return_mean=4.0, return_std=6.0)],
+        [acct(type='taxable', balance=1000.0, dividend_yield=3.0, cost_basis_ratio=50.0, is_community_property=True),
+         acct(name='B', type='taxable', balance=3000.0, qualified_dividend_pct=60.0, interest_yield=1.0),
+         acct(name='C', type='cash', balance=500.0), acct(name='D', type='weird', balance=0.0)],
+        [acct(type='taxable', balance=0.0, dividend_yield=3.0), acct(name='B', type='taxable', balance=0.0)],
+        [acct(type='hsa', owner='spouse', hsa_for_medical=False, contrib_start_age=55,
+              contrib_end_age_type='spouse_retirement'), acct(name='B', type='hsa', hsa_for_medical=False),
+         acct(name='C', type='pretax', owner='spouse', contrib_adjust_inflation='on'), acct(name='R', type='roth')],
+    ]
+    for accs in agg_lists:
+        for married in (False, True):
+            cases.append(_case('aggregate_accounts', accs, 60, 65, 90, married, 57, 62, 92))
+
+    # build_default_balance_sheet / parse_balance_sheet
+    for p in imported:
+        cases.append(_case('build_default_balance_sheet', p.get('accounts', []), data=p))
+    cases.append(_case('build_default_balance_sheet'))
+    cases.append(_case('build_default_balance_sheet', [acct(type='hsa', name='H'), acct(type='weird', name='W'),
+                                                       acct(type='taxable', name='T', institution='Bank')]))
+    bs0 = F.build_default_balance_sheet()
+    bs_no_targets = copy.deepcopy(bs0)
+    for k in ('target_auto_inflate', 'target_base_date'):
+        bs_no_targets['categories']['emergency'].pop(k, None)
+        for g in bs_no_targets['categories']['goals']['goal_groups']:
+            g.pop(k, None)
+    bs_no_targets['categories']['goals']['goal_groups'][1]['target_base_date'] = ''
+    bs_no_period = copy.deepcopy(bs_no_targets)
+    bs_no_period['current_period'] = None
+    bs_no_period['periods'] = ['2025-12-31', '2026-03-31']
+    for arg in [bs_no_targets, json.dumps(bs_no_targets), {'balance_sheet_json': json.dumps(bs0)},
+                {'balance_sheet_json': 'oops'}, 'not json', '[1]', {'x': 1}, None, bs_no_period]:
+        cases.append(_case('parse_balance_sheet', arg))
+    cases.append(_case('parse_balance_sheet', None, default_data=imported[0]))
+
+    # sync_balance_sheet_to_accounts
+    for p in imported:
+        args = dict(user_age=p.get('user_age', 60), user_retirement_age=p.get('user_retirement_age', 65),
+                    is_married=p.get('is_married', False), spouse_age=p.get('spouse_age', 60),
+                    spouse_retirement_age=p.get('spouse_retirement_age', 65))
+        cases.append(_case('sync_balance_sheet_to_accounts', p['balance_sheet'], existing_accounts=p.get('accounts'), **args))
+        cases.append(_case('sync_balance_sheet_to_accounts', p['balance_sheet'], **args))
+        by_name = [{k: v for k, v in a.items() if k != 'id'} for a in p.get('accounts', [])]
+        cases.append(_case('sync_balance_sheet_to_accounts', p['balance_sheet'], existing_accounts=by_name, **args))
+    bs1 = copy.deepcopy(bs0)
+    cp = bs1['current_period']
+    bs1['categories']['pretax']['accounts'].append({'name': 'New 401(k) Plan', 'type': 'pretax', 'owner': 'spouse',
+        'include_in_retirement': True, 'values': {cp: 350000.0}, 'contrib_amount': 22000.0, 'return_mean': 6.5})
+    bs1['categories']['emergency']['accounts'].append({'id': 'acc_emg_ret', 'name': 'Emergency HYSA',
+        'type': 'cash', 'include_in_retirement': True, 'values': {'2025-01-01': 1.0, '2025-06-01': 50000.0}})
+    bs1['categories']['goals']['goal_groups'][0]['accounts'].append({'name': 'Car Fund', 'type': 'cash',
+        'include_in_retirement': True, 'values': {}, 'balance': '1,234'})
+    bs1['categories']['daily']['accounts'].append({'name': 'Checking', 'include_in_retirement': True, 'values': 5,
+        'balance': 99.0, 'contrib_start_age': 40, 'hsa_for_medical': 'on'})
+    bs1['categories']['roth']['accounts'][0]['values'][cp] = 60000.0
+    existing = [{'id': 'acc_existing_1', 'name': 'roth ira', 'type': 'roth', 'owner': 'user', 'balance': 50000.0,
+                 'contrib_amount': 5000.0, 'contrib_adjust_inflation': None, 'institution': 'Old'},
+                {'id': 'acc_emg_ret', 'name': 'Other', 'type': 'cash', 'owner': 'spouse', 'contrib_start_age': 30}]
+    for married in (False, True):
+        cases.append(_case('sync_balance_sheet_to_accounts', bs1, existing_accounts=existing, is_married=married,
+                           spouse_age=55, spouse_retirement_age=60))
+        cases.append(_case('sync_balance_sheet_to_accounts', bs1, is_married=married, spouse_age=55))
+    bs_none = copy.deepcopy(bs0)
+    for k in ('pretax', 'roth', 'taxable'):
+        bs_none['categories'][k]['accounts'][0]['include_in_retirement'] = False
+    cases.append(_case('sync_balance_sheet_to_accounts', bs_none, existing_accounts=existing))
+    cases.append(_case('sync_balance_sheet_to_accounts', {'no': 'categories'}, existing_accounts=existing))
+    bs_np = copy.deepcopy(bs1)
+    bs_np['current_period'] = None
+    cases.append(_case('sync_balance_sheet_to_accounts', bs_np))
+
+    # sync_accounts_to_balance_sheet
+    for p in imported:
+        accs = copy.deepcopy(p.get('accounts', []))
+        cases.append(_case('sync_accounts_to_balance_sheet', p['balance_sheet'], accs))
+        if accs:
+            accs[0]['name'] = accs[0]['name'] + ' Renamed'
+            accs[0]['balance'] = 123456.0
+            accs[0]['return_mean'] = 7.25
+            accs[-1]['type'] = 'roth' if accs[-1].get('type') != 'roth' else 'pretax'
+            accs.append({'name': 'Brand New Brokerage', 'type': 'taxable', 'balance': 5000.0})
+            accs.append({'name': 'No Type', 'balance': 7.0, 'owner': 'spouse'})
+            cases.append(_case('sync_accounts_to_balance_sheet', p['balance_sheet'], accs, current_year=2026))
+            no_ids = [{k: v for k, v in a.items() if k != 'id'} for a in accs]
+            cases.append(_case('sync_accounts_to_balance_sheet', p['balance_sheet'], no_ids))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, [{'id': 'acc_card_new_1', 'name': 'Roth ira', 'type': 'roth',
+                                                              'owner': 'user', 'balance': 75000.0, 'contrib_amount': 7000.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, [
+        {'id': 'acc_pretax_100', 'name': 'Traditional 401(k) / IRA', 'type': 'pretax', 'balance': 50000.0},
+        {'id': 'acc_pretax_101', 'name': 'Roth ira', 'type': 'pretax', 'balance': 20000.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, [
+        {'id': 'acc_pretax_1', 'name': 'Primary 401(k) / Traditional IRA', 'type': 'hsa', 'balance': 1.0,
+         'hsa_for_medical': None, 'contrib_adjust_inflation': 'true', 'is_community_property': 'on'},
+        {'id': 'x9', 'name': 'Second Pretax', 'type': 'pretax', 'balance': 0.0, 'owner': 'spouse'}]))
+    bs_hist = copy.deepcopy(bs0)
+    bs_hist['periods'] = ['2025-06-30', bs_hist['current_period']]
+    bs_hist['categories']['pretax']['accounts'][0]['values'] = {'2025-06-30': 10.0, bs_hist['current_period']: 0.0}
+    bs_hist['categories']['taxable']['accounts'][0]['values'] = None
+    cases.append(_case('sync_accounts_to_balance_sheet', bs_hist, [
+        {'name': 'New IRA', 'type': 'pretax', 'balance': 5.0}, {'name': 'Taxable Brokerage Account', 'type': 'taxable'}]))
+    bs_nocat = copy.deepcopy(bs0)
+    del bs_nocat['categories']['hsa']
+    bs_nocat['current_period'] = None
+    cases.append(_case('sync_accounts_to_balance_sheet', bs_nocat, [{'name': 'H', 'type': 'hsa', 'balance': 2.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', {'nope': 1}, [{'name': 'Z', 'type': 'roth', 'balance': 3.0}]))
+    cases.append(_case('sync_accounts_to_balance_sheet', bs0, []))
+    write(fn / 'balance_sheet.json', cases)
+
+    # apply_mode_change cases that do reach sync_accounts_to_balance_sheet
+    out = []
+    for p in imported:
+        for post in ({'pretax_return_mean': '8.5', 'roth_return_mean': '3.3'},
+                     {'spouse_pretax_return_mean': '7.1', 'taxable_return_mean': '4.4', 'hsa_return_mean': '2.0',
+                      'spouse_hsa_return_mean': '9.9'}):
+            # Through JSON, as Django's session store does between requests: an imported
+            # plan's aggregates share account dicts with data['accounts'] in memory only.
+            data = json.loads(json.dumps(p))
+            notes = apply_mode_change(data, post)
+            out.append({'plan': p, 'post': post, 'result': data, 'messages': [list(n) for n in notes]})
+    write(fn / 'mode_change_sync.json', out)
+
+
+def _normalize_case(inp):
+    data = copy.deepcopy(inp)
+    errors = normalize_imported_plan(data)
+    return data, errors
+
+
+def main():
+    plans = sorted(PLANS_DIR.glob('*.json'))
+    index = {
+        'generated_with': {'numpy': np.__version__, 'fixture_today': FIXTURE_TODAY.isoformat(),
+                           'kernel_seed': KERNEL_SEED, 'mc_seed': MC_SEED, 'kernel_runs': KERNEL_RUNS},
+        'plans': [],
+    }
+    for p in plans:
+        print(f'dumping {p.name} ...', flush=True)
+        index['plans'].append(dump_plan(p))
+    for name, source, override in SYNTHETIC:
+        print(f'dumping {name} ...', flush=True)
+        index['plans'].append(dump_synthetic(name, source, override))
+    dump_functions()
+    dump_plan_model(OUT_DIR / 'functions')
+    dump_balance_sheet(OUT_DIR / 'functions')
+    write(OUT_DIR / 'index.json', index)
+    print(f'wrote fixtures for {len(index["plans"])} plans to {OUT_DIR.relative_to(REPO)}')
+
+
+if __name__ == '__main__':
+    main()

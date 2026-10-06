@@ -1,0 +1,29 @@
+[
+  {
+    "runs": 10000,
+    "seconds": 1.08,
+    "pathsPerSec": 9247,
+    "peakRssMB": 86,
+    "rssGrowthMB": 18,
+    "success": 94.69,
+    "median": 34910360
+  },
+  {
+    "runs": 100000,
+    "seconds": 9.93,
+    "pathsPerSec": 10075,
+    "peakRssMB": 115,
+    "rssGrowthMB": 28,
+    "success": 94.825,
+    "median": 35409859
+  },
+  {
+    "runs": 1000000,
+    "seconds": 85.18,
+    "pathsPerSec": 11739,
+    "peakRssMB": 133,
+    "rssGrowthMB": 18,
+    "success": 94.8309,
+    "median": 35429620
+  }
+]

@@ -1,0 +1,29 @@
+[
+  {
+    "runs": 10000,
+    "workers": 4,
+    "seconds": 0.83,
+    "pathsPerSec": 12057,
+    "success": 94.69,
+    "median": 34910360,
+    "mainHeapMB": 7
+  },
+  {
+    "runs": 100000,
+    "workers": 4,
+    "seconds": 2.61,
+    "pathsPerSec": 38354,
+    "success": 94.825,
+    "median": 35409859,
+    "mainHeapMB": 35
+  },
+  {
+    "runs": 1000000,
+    "workers": 4,
+    "seconds": 16.24,
+    "pathsPerSec": 61558,
+    "success": 94.8309,
+    "median": 35429620,
+    "mainHeapMB": 47
+  }
+]

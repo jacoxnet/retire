@@ -1,0 +1,962 @@
+import json
+from core.runs import generate_runs, binary_search, run_deterministic
+from core.forms import (
+    get_float, get_int, get_bool,
+    aggregate_accounts, flat_assets_to_accounts,
+    parse_account_rows, parse_legacy_accounts,
+    parse_additional_spending, parse_income_sources, parse_other_taxes,
+    validate_accounts, validate_additional_spending, validate_scheduled_items,
+    validate_balance_sheet_accounts,
+    calculate_marginal_tax_rate, build_default_balance_sheet,
+    parse_balance_sheet, sync_balance_sheet_to_accounts,
+    sync_accounts_to_balance_sheet,
+    build_default_rebalancing, parse_rebalancing,
+    normalize_imported_plan,
+)
+from django.shortcuts import render, redirect
+from django.views.decorators.http import require_http_methods
+from django.contrib import messages
+from django.urls import reverse
+from core.cpi_service import load_cpi_data
+
+import numpy as np
+
+def get_default_data():
+    default_dict = {
+        'goal_seeking': False,
+        'user_name': 'John Doe',
+        'user_age': 60,
+        'user_retirement_age': 65,
+        'user_age_death': 90,
+        'is_married': False,
+        'spouse_name': 'Jane Doe',
+        'spouse_age': 60,
+        'spouse_retirement_age': 65,
+        'spouse_age_death': 90,
+        'filing_status': 'single',
+        'current_year': 2026,
+        'begin_spending_age_type': 'retirement',
+        'begin_spending_age_specified': 65,
+        'desired_spending': 0.0,
+        'survivor_spending': 0.0,
+        'adjust_spending_inflation': True,
+        'inflation_rate': 3.5,
+        'runs': 10000,
+        'target_success_rate': 80.0,
+        'user_life_insurance_amount': 0.0,
+        'user_life_insurance_type': 'permanent',
+        'user_life_insurance_term_age': 70,
+        'spouse_life_insurance_amount': 0.0,
+        'spouse_life_insurance_type': 'permanent',
+        'spouse_life_insurance_term_age': 70,
+        'social_security': {
+            'user_receiving': False,
+            'user_future_entitled': True,
+            'user_entitled': True,
+            'user_amount': 0.0,
+            'user_freq': 'monthly',
+            'user_start_age': 67,
+            'spouse_receiving': False,
+            'spouse_future_entitled': False,
+            'spouse_entitled': False,
+            'spouse_amount': 0.0,
+            'spouse_freq': 'monthly',
+            'spouse_start_age': 67,
+        },
+        'accounts': [],
+        'pretax_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        },
+        'spouse_pretax_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'spouse_retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        },
+        'roth_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 6.0,
+            'return_std': 10.0
+        },
+        'taxable_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0
+        },
+        'hsa_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+            'hsa_for_medical': True
+        },
+        'spouse_hsa_assets': {
+            'present_balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': 60,
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': 65,
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+            'hsa_for_medical': True
+        },
+        'additional_spending': [],
+        'income_sources': [],
+        'other_taxes': [],
+        'state_tax_rate': 0.0,
+        'state_ss_exempt': True
+    }
+    default_dict['balance_sheet'] = build_default_balance_sheet(data=default_dict)
+    default_dict['rebalancing'] = build_default_rebalancing()
+    return default_dict
+
+def get_session_sim_data(request):
+    if 'simulation_data' not in request.session or not request.session['simulation_data']:
+        request.session['simulation_data'] = get_default_data()
+        request.session['data_version'] = 1
+        request.session['cached_results'] = None
+        request.session['cached_version'] = -1
+    else:
+        sim_data = request.session['simulation_data']
+        if 'balance_sheet' not in sim_data:
+            sim_data['balance_sheet'] = build_default_balance_sheet(sim_data.get('accounts', []), data=sim_data)
+            request.session['simulation_data'] = sim_data
+        if 'rebalancing' not in sim_data:
+            sim_data['rebalancing'] = build_default_rebalancing()
+            request.session['simulation_data'] = sim_data
+    return request.session['simulation_data']
+
+@require_http_methods(["GET"])
+def manage_data_view(request):
+    data = get_session_sim_data(request)
+    return render(request, 'manage_data.html', {
+        'plan_data_json': data
+    })
+
+REDIRECT_TARGETS = ('results', 'manage_data', 'enter')
+
+def safe_redirect_target(name, default):
+    """Limit a posted 'next' value to the app's own pages."""
+    return name if name in REDIRECT_TARGETS else default
+
+@require_http_methods(["POST"])
+def clear_data_view(request):
+    request.session['simulation_data'] = get_default_data()
+    request.session['data_version'] = request.session.get('data_version', 0) + 1
+    request.session['cached_results'] = None
+    request.session['cached_version'] = -1
+    messages.success(request, "All simulation data has been cleared.")
+    return redirect(reverse(safe_redirect_target(request.POST.get('next'), 'enter')))
+
+def normalize_plan_fields(data):
+    """Stage 1 of importing a plan: coerce field types and migrate older field
+    shapes (simulation type, Social Security flags, income adjustment schedules).
+    Modifies data in place and returns the list of import errors."""
+    import_errors = normalize_imported_plan(data)
+
+    if 'goal_seeking' not in data and 'simulation_type' in data:
+        data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
+    elif 'simulation_type' not in data and 'goal_seeking' in data:
+        data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
+
+    # Normalize / migrate social_security
+    if 'social_security' in data and isinstance(data['social_security'], dict):
+        ss = data['social_security']
+        if 'user_receiving' not in ss:
+            u_ent = get_bool(ss.get('user_entitled', True))
+            u_age = get_int(data.get('user_age'), 60)
+            u_start = get_int(ss.get('user_start_age'), 67)
+            ss['user_receiving'] = bool(u_ent and u_age >= u_start)
+            ss['user_future_entitled'] = bool(u_ent and u_age < u_start)
+        else:
+            ss['user_receiving'] = get_bool(ss.get('user_receiving'))
+            ss['user_future_entitled'] = get_bool(ss.get('user_future_entitled'))
+        ss['user_entitled'] = ss['user_receiving'] or ss['user_future_entitled']
+
+        if 'spouse_receiving' not in ss:
+            sp_ent = get_bool(ss.get('spouse_entitled', False))
+            sp_age = get_int(data.get('spouse_age'), 60)
+            sp_start = get_int(ss.get('spouse_start_age'), 67)
+            ss['spouse_receiving'] = bool(sp_ent and sp_age >= sp_start)
+            ss['spouse_future_entitled'] = bool(sp_ent and sp_age < sp_start)
+        else:
+            ss['spouse_receiving'] = get_bool(ss.get('spouse_receiving'))
+            ss['spouse_future_entitled'] = get_bool(ss.get('spouse_future_entitled'))
+        ss['spouse_entitled'] = ss['spouse_receiving'] or ss['spouse_future_entitled']
+
+    if data.get('income_sources') and isinstance(data['income_sources'], list):
+        for inc in data['income_sources']:
+            if isinstance(inc, dict):
+                if 'adjustments' not in inc or not inc['adjustments']:
+                    inc['adjustments'] = [{
+                        'start_type': inc.get('adjust_start_age_type', 'start'),
+                        'start_spec': inc.get('adjust_start_age_specified', 65),
+                        'end_type': inc.get('end_age_type', 'death'),
+                        'end_spec': inc.get('end_age_specified', 90),
+                        'adjust_type': inc.get('adjust_type', 'inflation'),
+                        'adjust_val': inc.get('adjust_val', 0.0)
+                    }]
+                inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
+                inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
+
+    return import_errors
+
+
+def import_plan_data(data):
+    """Normalize and migrate an imported plan dict in place, the same way the
+    Manage page loads it. Returns the list of import/validation errors."""
+    import_errors = normalize_plan_fields(data)
+
+    # Load or migrate balance sheet
+    if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+        data['balance_sheet'] = parse_balance_sheet(data['balance_sheet'], default_data=data)
+        synced_accs = sync_balance_sheet_to_accounts(
+            data['balance_sheet'],
+            existing_accounts=data.get('accounts', []),
+            user_age=data.get('user_age', 60),
+            user_retirement_age=data.get('user_retirement_age', 65),
+            is_married=data.get('is_married', False),
+            spouse_age=data.get('spouse_age', 60),
+            spouse_retirement_age=data.get('spouse_retirement_age', 65)
+        )
+        if synced_accs:
+            data['accounts'] = synced_accs
+    elif data.get('accounts') and isinstance(data['accounts'], list):
+        data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+    else:
+        data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
+        data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+
+    # Load or initialize rebalancing
+    if 'rebalancing' in data and isinstance(data['rebalancing'], dict):
+        data['rebalancing'] = parse_rebalancing(data['rebalancing'])
+    else:
+        data['rebalancing'] = build_default_rebalancing()
+
+    # Auto-create taxable account if life insurance > 0 and no taxable account exists
+    has_taxable = any(acc.get('type') == 'taxable' for acc in data.get('accounts', []))
+    if not has_taxable and (float(data.get('user_life_insurance_amount', 0.0)) > 0 or float(data.get('spouse_life_insurance_amount', 0.0)) > 0):
+        new_acc = {
+            'name': 'Taxable Brokerage (Life Insurance Proceeds)',
+            'type': 'taxable',
+            'owner': 'user',
+            'balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': data.get('user_age', 60),
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': data.get('user_retirement_age', 65),
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+        }
+        data.setdefault('accounts', []).append(new_acc)
+        if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+            data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data['accounts'], current_year=data.get('current_year', 2026))
+
+    if data.get('accounts') and isinstance(data['accounts'], list):
+        agg = aggregate_accounts(
+            data['accounts'],
+            data.get('user_age', 60),
+            data.get('user_retirement_age', 65),
+            data.get('user_age_death', 90),
+            data.get('is_married', False),
+            data.get('spouse_age', 60),
+            data.get('spouse_retirement_age', 65),
+            data.get('spouse_age_death', 90)
+        )
+        for k, v in agg.items():
+            data[k] = v
+    else:
+        data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
+
+    # Calculate marginal tax rate and attach balance sheet
+    calc_tax_rate = calculate_marginal_tax_rate(data)
+    if isinstance(data.get('balance_sheet'), dict):
+        data['balance_sheet']['marginal_tax_rate'] = calc_tax_rate
+    data['marginal_tax_rate'] = calc_tax_rate
+
+    # Hold the file to the same rules as the Enter page. A plan with
+    # problems is still loaded, but opens on the Enter page to be fixed.
+    import_errors.extend(plan_errors(data))
+    return import_errors
+
+@require_http_methods(["POST"])
+def load_plan_view(request):
+    raw_json = request.POST.get('json_data')
+    redirect_target = safe_redirect_target(request.POST.get('next'), 'results')
+    if not raw_json:
+        messages.error(request, "No plan data provided.")
+        return redirect(reverse(redirect_target))
+    
+    try:
+        data = json.loads(raw_json, parse_constant=reject_json_constant)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid JSON format")
+
+        import_errors = import_plan_data(data)
+
+        request.session['simulation_data'] = data
+        request.session['data_version'] = request.session.get('data_version', 0) + 1
+        request.session['cached_results'] = None
+        request.session['cached_version'] = -1
+        if import_errors:
+            for err in import_errors:
+                messages.error(request, err)
+            messages.warning(request, "Plan loaded, but some values need to be corrected before running the simulation.")
+            return redirect(reverse('enter'))
+        messages.success(request, "Plan loaded successfully!")
+    except Exception as e:
+        messages.error(request, f"Error loading plan: {str(e)}")
+        
+    return redirect(reverse(redirect_target))
+
+def reject_json_constant(name):
+    raise ValueError(f"Invalid number in plan file: {name}")
+
+def death_age_errors(data):
+    """The Enter page's checks that depend on age of death, for edits made elsewhere."""
+    user_age = get_int(data.get('user_age'), 60)
+    user_age_death = get_int(data.get('user_age_death'), 90)
+    is_married = get_bool(data.get('is_married'))
+    spouse_age = get_int(data.get('spouse_age'), 60)
+    spouse_age_death = get_int(data.get('spouse_age_death'), 92)
+
+    errors = []
+    if user_age_death <= user_age or user_age_death > 120:
+        errors.append(f"Your Age at Death must be an integer greater than Your Present Age ({user_age}) up to 120.")
+    if is_married and (spouse_age_death <= spouse_age or spouse_age_death > 120):
+        errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
+    if data.get('begin_spending_age_type') == 'specified':
+        begin_age = get_int(data.get('begin_spending_age_specified'), 65)
+        if begin_age < user_age or begin_age > user_age_death:
+            errors.append(f"Specified Spending Start Age ({begin_age}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
+    errors.extend(validate_accounts(data.get('accounts', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    errors.extend(validate_additional_spending(data.get('additional_spending', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    return errors
+
+
+def plan_errors(data):
+    """Every check the Enter page applies to a submission, run against a plan
+    dict so a submitted form and an imported file are held to the same rules."""
+    is_goal_seeking = get_bool(data.get('goal_seeking'))
+    runs = get_int(data.get('runs'), 10000)
+    target_success_rate = get_float(data.get('target_success_rate'), 80.0)
+    user_age = get_int(data.get('user_age'), 60)
+    user_retirement_age = get_int(data.get('user_retirement_age'), 65)
+    user_age_death = get_int(data.get('user_age_death'), 90)
+    is_married = get_bool(data.get('is_married'))
+    spouse_age = get_int(data.get('spouse_age'), 60)
+    spouse_retirement_age = get_int(data.get('spouse_retirement_age'), 65)
+    spouse_age_death = get_int(data.get('spouse_age_death'), 92)
+    ss = data.get('social_security') if isinstance(data.get('social_security'), dict) else {}
+
+    errors = []
+    if runs < 1 or runs > 1000000:
+        errors.append("Number of Simulations must be an integer between 1 and 1,000,000.")
+    if is_goal_seeking and (target_success_rate < 1.0 or target_success_rate > 99.0):
+        errors.append("Target Success Rate must be between 1% and 99% for Maximum Spending simulation.")
+
+    if user_age < 18 or user_age > 120:
+        errors.append("Your Present Age must be an integer between 18 and 120.")
+    if user_retirement_age < user_age or user_retirement_age > 120:
+        errors.append(f"Your Retirement Age must be between Your Present Age ({user_age}) and 120.")
+    if user_age_death <= user_age or user_age_death > 120:
+        errors.append(f"Your Age at Death must be an integer greater than Your Present Age ({user_age}) up to 120.")
+
+    if is_married:
+        if spouse_age < 18 or spouse_age > 120:
+            errors.append("Spouse's Present Age must be an integer between 18 and 120.")
+        if spouse_retirement_age < spouse_age or spouse_retirement_age > 120:
+            errors.append(f"Spouse's Retirement Age must be between Spouse's Present Age ({spouse_age}) and 120.")
+        if spouse_age_death <= spouse_age or spouse_age_death > 120:
+            errors.append(f"Spouse's Age at Death must be an integer greater than Spouse's Present Age ({spouse_age}) up to 120.")
+        if get_float(data.get('survivor_spending'), 0.0) < 0:
+            errors.append("Amount of Regular Retirement Spending for Surviving Spouse must be a valid non-negative number.")
+
+    if data.get('begin_spending_age_type') == 'specified':
+        begin_age = get_int(data.get('begin_spending_age_specified'), 65)
+        if begin_age < user_age or begin_age > user_age_death:
+            errors.append(f"Specified Spending Start Age ({begin_age}) must be between Your Present Age ({user_age}) and Your Age at Death ({user_age_death}).")
+
+    if get_float(data.get('desired_spending'), 0.0) < 0:
+        errors.append("Desired Annual Spending must be a valid non-negative number.")
+
+    state_tax_rate = get_float(data.get('state_tax_rate'), 0.0)
+    if state_tax_rate < 0.0 or state_tax_rate > 100.0:
+        errors.append("State Income Tax Rate must be between 0% and 100%.")
+
+    if not get_bool(ss.get('user_receiving')) and get_bool(ss.get('user_future_entitled')):
+        user_ss_start_age = get_int(ss.get('user_start_age'), 67)
+        if user_ss_start_age < 62 or user_ss_start_age > 70:
+            errors.append("Your Social Security Claiming Age must be between 62 and 70.")
+    if is_married and not get_bool(ss.get('spouse_receiving')) and get_bool(ss.get('spouse_future_entitled')):
+        spouse_ss_start_age = get_int(ss.get('spouse_start_age'), 67)
+        if spouse_ss_start_age < 62 or spouse_ss_start_age > 70:
+            errors.append("Spouse's Social Security Claiming Age must be between 62 and 70.")
+
+    if get_float(data.get('user_life_insurance_amount'), 0.0) < 0:
+        errors.append("Your Life Insurance Death Benefit must be a non-negative number.")
+    if data.get('user_life_insurance_type') == 'term':
+        term_age = get_int(data.get('user_life_insurance_term_age'), 70)
+        if term_age < 18 or term_age > 120:
+            errors.append("Your Term Life Policy Expiration Age must be between 18 and 120.")
+    if is_married:
+        if get_float(data.get('spouse_life_insurance_amount'), 0.0) < 0:
+            errors.append("Spouse's Life Insurance Death Benefit must be a non-negative number.")
+        if data.get('spouse_life_insurance_type') == 'term':
+            term_age = get_int(data.get('spouse_life_insurance_term_age'), 70)
+            if term_age < 18 or term_age > 120:
+                errors.append("Spouse's Term Life Policy Expiration Age must be between 18 and 120.")
+
+    # Accounts are validated once, whichever path (dynamic or legacy fields)
+    # produced them; the derived pretax/roth/taxable/hsa aggregates are views
+    # over the same accounts, so they don't need a second validation pass.
+    errors.extend(validate_accounts(data.get('accounts', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    errors.extend(validate_balance_sheet_accounts(data.get('balance_sheet')))
+    errors.extend(validate_additional_spending(data.get('additional_spending', []), user_age, user_age_death, is_married, spouse_age, spouse_age_death))
+    errors.extend(validate_scheduled_items("Income Source", data.get('income_sources', [])))
+    errors.extend(validate_scheduled_items("Other Tax item", data.get('other_taxes', [])))
+    return errors
+
+
+def apply_mode_change(data, post):
+    """Apply the Results page's mode switch and Simulation Inputs edits (a POST-like
+    mapping) to a plan dict in place. Returns [(level, message), ...]."""
+    notes = []
+    sim_type = post.get('simulation_type', 'regular')
+    is_goal = (sim_type == 'goal_seeking')
+
+    data['simulation_type'] = 'goal_seeking' if is_goal else 'regular'
+    data['goal_seeking'] = is_goal
+    
+    if is_goal:
+        target_rate = get_float(post.get('target_success_rate'), data.get('target_success_rate', 80.0))
+        if target_rate < 1.0 or target_rate > 99.0:
+            notes.append(('error', "Target Success Rate must be between 1% and 99% for Maximum Spending simulation."))
+            data['target_success_rate'] = min(99.0, max(1.0, target_rate))
+        else:
+            data['target_success_rate'] = target_rate
+
+    # The Simulation Inputs card shows rounded values and always submits every
+    # field, so an untouched field posts back a rounded copy of the saved value.
+    # Only apply a field when the user actually changed what was displayed.
+    def changed_value(key, current, decimals):
+        if key not in post:
+            return None
+        posted = get_float(post.get(key), None)
+        if posted is None:
+            return None
+        if current is not None and round(posted, decimals) == round(get_float(current), decimals):
+            return None
+        return posted
+
+    # Input adjustments from Simulation Inputs card sliders/steppers
+    new_spending = changed_value('desired_spending', data.get('desired_spending'), 0)
+    if new_spending is not None:
+        data['desired_spending'] = new_spending
+    new_inflation = changed_value('inflation_rate', data.get('inflation_rate'), 1)
+    if new_inflation is not None:
+        data['inflation_rate'] = new_inflation
+    if 'runs' in post:
+        runs_val = get_int(post.get('runs'), data.get('runs', 10000))
+        if runs_val < 1 or runs_val > 1000000:
+            notes.append(('error', "Number of Simulations must be an integer between 1 and 1,000,000."))
+            data['runs'] = min(1000000, max(1, runs_val))
+        else:
+            data['runs'] = runs_val
+
+    # Age of death drives every age-based schedule, so apply the same checks the
+    # Enter page runs; an invalid change is rejected rather than saved.
+    new_user_death = changed_value('user_age_death', data.get('user_age_death'), 0)
+    new_spouse_death = changed_value('spouse_age_death', data.get('spouse_age_death'), 0) if data.get('is_married') else None
+    if new_user_death is not None or new_spouse_death is not None:
+        trial = dict(data)
+        if new_user_death is not None:
+            trial['user_age_death'] = int(new_user_death)
+        if new_spouse_death is not None:
+            trial['spouse_age_death'] = int(new_spouse_death)
+        death_errors = death_age_errors(trial)
+        if death_errors:
+            for err in death_errors:
+                notes.append(('error', err))
+            notes.append(('error', "Age at Death was not changed."))
+        else:
+            data['user_age_death'] = trial['user_age_death']
+            data['spouse_age_death'] = trial['spouse_age_death']
+
+    # Asset return updates
+    updated_returns = False
+    for prefix in ['pretax', 'spouse_pretax', 'roth', 'taxable', 'hsa', 'spouse_hsa']:
+        key = f'{prefix}_return_mean'
+        current_return = (data.get(prefix + '_assets') or {}).get('return_mean')
+        val = changed_value(key, current_return, 1)
+        if val is not None:
+            if prefix + '_assets' not in data or not isinstance(data[prefix + '_assets'], dict):
+                data[prefix + '_assets'] = {}
+            data[prefix + '_assets']['return_mean'] = val
+
+            # Update accounts matching this category
+            target_type = prefix
+            target_owner = 'user'
+            if prefix == 'spouse_pretax':
+                target_type = 'pretax'
+                target_owner = 'spouse'
+            elif prefix == 'spouse_hsa':
+                target_type = 'hsa'
+                target_owner = 'spouse'
+
+            if 'accounts' in data and isinstance(data['accounts'], list):
+                for acc in data['accounts']:
+                    a_type = acc.get('type', 'pretax')
+                    a_owner = acc.get('owner', 'user')
+                    if not data.get('is_married'):
+                        a_owner = 'user'
+                    if a_type == target_type and (target_type in ['roth', 'taxable'] or a_owner == target_owner):
+                        acc['return_mean'] = val
+                        updated_returns = True
+
+            if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+                cat_key = target_type if target_type in ['pretax', 'roth', 'taxable', 'hsa'] else 'taxable'
+                cat_data = data['balance_sheet'].get('categories', {}).get(cat_key, {})
+                for b_acc in cat_data.get('accounts', []):
+                    b_owner = b_acc.get('owner', 'user')
+                    if not data.get('is_married'):
+                        b_owner = 'user'
+                    if target_type in ['roth', 'taxable'] or b_owner == target_owner:
+                        b_acc['return_mean'] = val
+
+    if updated_returns and 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+        data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data.get('accounts', []), current_year=data.get('current_year', 2026))
+
+    return notes
+
+
+@require_http_methods(["POST"])
+def change_mode_view(request):
+    session_data = get_session_sim_data(request)
+    data = session_data if isinstance(session_data, dict) else session_data.to_dict()
+    for level, message in apply_mode_change(data, request.POST):
+        getattr(messages, level)(request, message)
+
+    request.session['simulation_data'] = data
+    request.session['data_version'] = request.session.get('data_version', 0) + 1
+    request.session['cached_results'] = None
+    request.session['cached_version'] = -1
+    
+    messages.success(request, "Simulation inputs updated and simulation re-run.")
+    return redirect(reverse('results'))
+
+@require_http_methods(["GET", "POST"])
+def enter_view(request):
+    if request.method == "POST":
+        session_data = get_session_sim_data(request)
+        prev_sim_type = 'goal_seeking' if (isinstance(session_data, dict) and session_data.get('goal_seeking')) else (getattr(session_data, 'simulation_type', 'regular') if not isinstance(session_data, dict) else session_data.get('simulation_type', 'regular'))
+        simulation_type = request.POST.get('simulation_type', prev_sim_type)
+        
+        # Demographics
+        user_name = request.POST.get('user_name', 'User')
+        user_age = get_int(request.POST.get('user_age'), 60)
+        user_retirement_age = get_int(request.POST.get('user_retirement_age'), 65)
+        user_age_death = get_int(request.POST.get('user_age_death'), 90)
+        
+        is_married = get_bool(request.POST.get('is_married'))
+        spouse_name = request.POST.get('spouse_name', 'Spouse') if is_married else ""
+        spouse_age = get_int(request.POST.get('spouse_age'), 60) if is_married else 0
+        spouse_retirement_age = get_int(request.POST.get('spouse_retirement_age'), 65) if is_married else 0
+        spouse_age_death = get_int(request.POST.get('spouse_age_death'), 92) if is_married else 0
+        
+        min_start_age = min(user_age, spouse_age) if is_married else user_age
+        
+        filing_status = request.POST.get('filing_status', 'single')
+        if not is_married and filing_status == 'joint':
+            filing_status = 'single'
+        elif is_married and filing_status == 'single':
+            filing_status = 'joint'
+            
+        current_year = get_int(request.POST.get('current_year'), 2026)
+        
+        begin_spending_age_type = request.POST.get('begin_spending_age_type', 'retirement')
+        if not is_married and begin_spending_age_type == 'spouse_retirement':
+            begin_spending_age_type = 'retirement'
+        begin_spending_age_specified = get_int(request.POST.get('begin_spending_age_specified'), 65)
+        
+        desired_spending = get_float(request.POST.get('desired_spending'), 0.0)
+        survivor_spending = get_float(request.POST.get('survivor_spending'), desired_spending) if is_married else 0.0
+        adjust_spending_inflation = get_bool(request.POST.get('adjust_spending_inflation'))
+        
+        inflation_rate = get_float(request.POST.get('inflation_rate'), 2.5)
+        runs = get_int(request.POST.get('runs'), session_data.get('runs', 10000) if isinstance(session_data, dict) else getattr(session_data, 'runs', 10000))
+        curr_target_srate = session_data.get('target_success_rate', 80.0) if isinstance(session_data, dict) else getattr(session_data, 'target_success_rate', 80.0)
+        raw_target_srate = get_float(request.POST.get('target_success_rate'), curr_target_srate)
+        target_success_rate = min(99.0, max(1.0, raw_target_srate))
+        state_tax_rate = get_float(request.POST.get('state_tax_rate'), 0.0)
+        state_ss_exempt = get_bool(request.POST.get('state_ss_exempt'))
+
+        # Dedicated Social Security
+        if 'user_ss_receiving' in request.POST:
+            user_ss_receiving = request.POST.get('user_ss_receiving') == 'true'
+            user_ss_future_entitled = request.POST.get('user_ss_future_entitled') == 'true' if not user_ss_receiving else False
+        else:
+            user_ss_receiving = False
+            user_ss_future_entitled = request.POST.get('user_ss_entitled') == 'true' if request.POST.get('user_ss_entitled') is not None else True
+        user_ss_entitled = user_ss_receiving or user_ss_future_entitled
+
+        user_ss_amount = get_float(request.POST.get('user_ss_amount'), 0.0)
+        user_ss_freq = request.POST.get('user_ss_freq', 'monthly')
+        user_ss_start_age = get_int(request.POST.get('user_ss_start_age'), 67)
+
+        if is_married:
+            if 'spouse_ss_receiving' in request.POST:
+                spouse_ss_receiving = request.POST.get('spouse_ss_receiving') == 'true'
+                spouse_ss_future_entitled = request.POST.get('spouse_ss_future_entitled') == 'true' if not spouse_ss_receiving else False
+            else:
+                spouse_ss_receiving = False
+                spouse_ss_future_entitled = request.POST.get('spouse_ss_entitled') == 'true'
+            spouse_ss_entitled = spouse_ss_receiving or spouse_ss_future_entitled
+            spouse_ss_amount = get_float(request.POST.get('spouse_ss_amount'), 0.0)
+            spouse_ss_freq = request.POST.get('spouse_ss_freq', 'monthly')
+            spouse_ss_start_age = get_int(request.POST.get('spouse_ss_start_age'), 67)
+        else:
+            spouse_ss_receiving = False
+            spouse_ss_future_entitled = False
+            spouse_ss_entitled = False
+            spouse_ss_amount = 0.0
+            spouse_ss_freq = 'monthly'
+            spouse_ss_start_age = 67
+
+        social_security = {
+            'user_receiving': user_ss_receiving,
+            'user_future_entitled': user_ss_future_entitled,
+            'user_entitled': user_ss_entitled,
+            'user_amount': user_ss_amount,
+            'user_freq': user_ss_freq,
+            'user_start_age': user_ss_start_age,
+            'spouse_receiving': spouse_ss_receiving,
+            'spouse_future_entitled': spouse_ss_future_entitled,
+            'spouse_entitled': spouse_ss_entitled,
+            'spouse_amount': spouse_ss_amount,
+            'spouse_freq': spouse_ss_freq,
+            'spouse_start_age': spouse_ss_start_age,
+        }
+
+        # Life Insurance
+        user_life_insurance_amount = get_float(request.POST.get('user_life_insurance_amount'), 0.0)
+        user_life_insurance_type = request.POST.get('user_life_insurance_type', 'permanent')
+        if user_life_insurance_type not in ['permanent', 'term']:
+            user_life_insurance_type = 'permanent'
+        user_life_insurance_term_age = get_int(request.POST.get('user_life_insurance_term_age'), 70)
+
+        spouse_life_insurance_amount = get_float(request.POST.get('spouse_life_insurance_amount'), 0.0) if is_married else 0.0
+        spouse_life_insurance_type = request.POST.get('spouse_life_insurance_type', 'permanent') if is_married else 'permanent'
+        if spouse_life_insurance_type not in ['permanent', 'term']:
+            spouse_life_insurance_type = 'permanent'
+        spouse_life_insurance_term_age = get_int(request.POST.get('spouse_life_insurance_term_age'), 70) if is_married else 70
+        
+        # Accounts: dynamic account_name[] rows, falling back to the older flat
+        # per-category fields (pretax_present_balance, roth_contrib_amount, ...).
+        if request.POST.getlist('account_name[]'):
+            accounts = parse_account_rows(
+                request.POST, user_age, user_retirement_age, is_married,
+                spouse_age, spouse_retirement_age, min_start_age
+            )
+        else:
+            accounts = parse_legacy_accounts(
+                request.POST, user_age, user_retirement_age, is_married,
+                spouse_age, spouse_retirement_age, min_start_age
+            )
+
+        # Balance Sheet Parsing & Sync
+        raw_bs_json = request.POST.get('balance_sheet_json')
+        if raw_bs_json:
+            balance_sheet = parse_balance_sheet(raw_bs_json, default_data=session_data)
+            synced_accs = sync_balance_sheet_to_accounts(
+                balance_sheet, accounts, user_age, user_retirement_age,
+                is_married, spouse_age, spouse_retirement_age, min_start_age
+            )
+            if synced_accs:
+                accounts = synced_accs
+            balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
+        elif isinstance(session_data, dict) and 'balance_sheet' in session_data:
+            balance_sheet = session_data['balance_sheet']
+            balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
+        else:
+            balance_sheet = build_default_balance_sheet(accounts, current_year=current_year)
+
+        # Rebalancing Parsing
+        raw_reb_json = request.POST.get('rebalancing_json')
+        if raw_reb_json:
+            rebalancing = parse_rebalancing(raw_reb_json)
+        elif isinstance(session_data, dict) and 'rebalancing' in session_data:
+            rebalancing = session_data['rebalancing']
+        else:
+            rebalancing = build_default_rebalancing()
+
+        # Auto-create taxable account if life insurance > 0 and no taxable account exists
+        has_taxable = any(acc.get('type') == 'taxable' for acc in accounts)
+        if not has_taxable and (user_life_insurance_amount > 0 or spouse_life_insurance_amount > 0):
+            new_acc = {
+                'name': 'Taxable Brokerage (Life Insurance Proceeds)',
+                'type': 'taxable',
+                'owner': 'user',
+                'balance': 0.0,
+                'contrib_amount': 0.0,
+                'contrib_freq': 'annual',
+                'contrib_start_age': user_age,
+                'contrib_end_age_type': 'retirement',
+                'contrib_end_age_specified': user_retirement_age,
+                'contrib_adjust_inflation': True,
+                'return_mean': 5.0,
+                'return_std': 8.0,
+                'dividend_yield': 2.0,
+                'qualified_dividend_pct': 85.0,
+                'interest_yield': 0.0,
+                'capital_gains_dist_rate': 0.5,
+                'cost_basis_ratio': 70.0,
+            }
+            accounts.append(new_acc)
+            balance_sheet = sync_accounts_to_balance_sheet(balance_sheet, accounts, current_year=current_year)
+
+        agg = aggregate_accounts(accounts, user_age, user_retirement_age, user_age_death, is_married, spouse_age, spouse_retirement_age, spouse_age_death)
+        pretax_assets = agg['pretax_assets']
+        spouse_pretax_assets = agg['spouse_pretax_assets']
+        roth_assets = agg['roth_assets']
+        taxable_assets = agg['taxable_assets']
+        hsa_assets = agg['hsa_assets']
+        spouse_hsa_assets = agg['spouse_hsa_assets']
+
+        additional_spending = parse_additional_spending(request.POST)
+        income_sources = parse_income_sources(request.POST)
+        other_taxes = parse_other_taxes(request.POST)
+
+        is_goal_seeking = (simulation_type == 'goal_seeking')
+        
+        # A non-numeric Number of Simulations falls back to the saved value
+        # above, so catch it here; plan_errors() checks the range.
+        validation_errors = []
+        raw_runs = request.POST.get('runs')
+        if raw_runs is not None:
+            try:
+                int(raw_runs)
+            except (TypeError, ValueError):
+                validation_errors.append("Number of Simulations must be a valid number between 1 and 1,000,000.")
+
+        # Store in JSON block
+        data_block = {
+            'goal_seeking': is_goal_seeking,
+            'user_name': user_name,
+            'user_age': user_age,
+            'user_retirement_age': user_retirement_age,
+            'user_age_death': user_age_death,
+            'is_married': is_married,
+            'spouse_name': spouse_name,
+            'spouse_age': spouse_age,
+            'spouse_retirement_age': spouse_retirement_age,
+            'spouse_age_death': spouse_age_death,
+            'filing_status': filing_status,
+            'current_year': current_year,
+            'begin_spending_age_type': begin_spending_age_type,
+            'begin_spending_age_specified': begin_spending_age_specified,
+            'desired_spending': desired_spending,
+            'survivor_spending': survivor_spending,
+            'adjust_spending_inflation': adjust_spending_inflation,
+            'inflation_rate': inflation_rate,
+            'runs': runs,
+            'target_success_rate': raw_target_srate if is_goal_seeking else target_success_rate,
+            'state_tax_rate': state_tax_rate,
+            'state_ss_exempt': state_ss_exempt,
+            'social_security': social_security,
+            'accounts': accounts,
+            'user_life_insurance_amount': user_life_insurance_amount,
+            'user_life_insurance_type': user_life_insurance_type,
+            'user_life_insurance_term_age': user_life_insurance_term_age,
+            'spouse_life_insurance_amount': spouse_life_insurance_amount,
+            'spouse_life_insurance_type': spouse_life_insurance_type,
+            'spouse_life_insurance_term_age': spouse_life_insurance_term_age,
+            'pretax_assets': pretax_assets,
+            'spouse_pretax_assets': spouse_pretax_assets,
+            'roth_assets': roth_assets,
+            'taxable_assets': taxable_assets,
+            'hsa_assets': hsa_assets,
+            'spouse_hsa_assets': spouse_hsa_assets,
+            'additional_spending': additional_spending,
+            'income_sources': income_sources,
+            'other_taxes': other_taxes
+        }
+
+        # Calculate marginal tax rate and attach balance sheet
+        calc_tax_rate = calculate_marginal_tax_rate(data_block)
+        if isinstance(balance_sheet, dict):
+            balance_sheet['marginal_tax_rate'] = calc_tax_rate
+        data_block['balance_sheet'] = balance_sheet
+        data_block['marginal_tax_rate'] = calc_tax_rate
+        data_block['rebalancing'] = rebalancing
+
+        validation_errors.extend(plan_errors(data_block))
+
+        if validation_errors:
+            for err in validation_errors:
+                messages.error(request, err)
+            data_block['target_success_rate_error'] = is_goal_seeking and (raw_target_srate < 1.0 or raw_target_srate > 99.0)
+            data_block['runs_error'] = (runs < 1 or runs > 1000000)
+            request.session['simulation_data'] = data_block
+            context = dict(data_block, cpi_data=load_cpi_data())
+            return render(request, 'enter.html', context)
+            
+        request.session['simulation_data'] = data_block
+        request.session['data_version'] = request.session.get('data_version', 0) + 1
+        return redirect(reverse(safe_redirect_target(request.POST.get('next'), 'results')))
+    else:
+        data = get_session_sim_data(request)
+        context = dict(data, cpi_data=load_cpi_data())
+        return render(request, 'enter.html', context)
+
+def results_context(data, det_rows, mc_stats, goal, stress_test_data):
+    """The Results page's template context, from the engine outputs: the
+    deterministic rows, generate_runs' statistics, the goal-seek result (None for a
+    regular simulation) and the default stress test."""
+    is_goal_seeking = data.get('goal_seeking', False)
+    pretax_bal = data.get('pretax_assets', {}).get('present_balance', 0.0)
+    spouse_pretax_bal = data.get('spouse_pretax_assets', {}).get('present_balance', 0.0) if data.get('is_married') else 0.0
+    roth_bal = data.get('roth_assets', {}).get('present_balance', 0.0)
+    taxable_bal = data.get('taxable_assets', {}).get('present_balance', 0.0)
+    hsa_bal = data.get('hsa_assets', {}).get('present_balance', 0.0)
+    spouse_hsa_bal = data.get('spouse_hsa_assets', {}).get('present_balance', 0.0) if data.get('is_married') else 0.0
+    total_initial_wealth = pretax_bal + spouse_pretax_bal + roth_bal + taxable_bal + hsa_bal + spouse_hsa_bal
+    
+    results = {
+        "goal_seeking": is_goal_seeking,
+        "initial_wealth": total_initial_wealth,
+        "years": len(det_rows),
+        "runs": data.get('runs', 10000),
+        "inflation_rate": data.get('inflation_rate', 2.5),
+        "desired_spending": data.get('desired_spending', 0.0),
+        "target_success_rate": data.get('target_success_rate', 80.0),
+        "user_name": data.get('user_name', 'You'),
+        "user_age": data.get('user_age', 60),
+        "user_retirement_age": data.get('user_retirement_age', 65),
+        "user_age_death": data.get('user_age_death', 90),
+        "is_married": data.get('is_married', False),
+        "spouse_name": data.get('spouse_name', 'Spouse'),
+        "spouse_age": data.get('spouse_age', 60),
+        "spouse_retirement_age": data.get('spouse_retirement_age', 65),
+        "spouse_age_death": data.get('spouse_age_death', 90),
+        "current_year": data.get('current_year', 2026),
+        "social_security": data.get('social_security', {}),
+        "desired_spending_start_age": det_rows[0].get('desired_spending_start_age', data.get('user_retirement_age', 65)) if det_rows else data.get('user_retirement_age', 65),
+        "det_rows": det_rows,
+        "pretax_assets": data.get('pretax_assets', {}),
+        "spouse_pretax_assets": data.get('spouse_pretax_assets', {}),
+        "roth_assets": data.get('roth_assets', {}),
+        "taxable_assets": data.get('taxable_assets', {}),
+        "hsa_assets": data.get('hsa_assets', {}),
+        "spouse_hsa_assets": data.get('spouse_hsa_assets', {}),
+        "plan_data_json": data
+    }
+
+    results.update(mc_stats)
+    if is_goal_seeking:
+        results.update({"target_success_rate": data.get('target_success_rate', 80.0)})
+        results.update(goal)
+
+    from core.historical_data import CRISIS_SCENARIOS
+    results['stress_test'] = stress_test_data
+    results['scenarios_list'] = CRISIS_SCENARIOS
+
+    from core.runs import get_life_insurance_routing
+    routing = get_life_insurance_routing(data)
+    results['terminal_life_insurance'] = routing.get('terminal_life_ins_estate', 0.0)
+    results['taxable_deposit_amt'] = routing.get('taxable_deposit_amt', 0.0)
+    results['taxable_deposit_t'] = routing.get('taxable_deposit_t', -1)
+    return results
+
+
+@require_http_methods(["GET"])
+def results_view(request):
+    sim_input = get_session_sim_data(request)
+    data = sim_input if isinstance(sim_input, dict) else sim_input.to_dict()
+    
+    data_ver = request.session.get('data_version', 1)
+    cached_ver = request.session.get('cached_version', -1)
+    cached_res = request.session.get('cached_results')
+    
+    if cached_ver == data_ver and cached_res is not None:
+        return render(request, 'results.html', cached_res)
+
+    det_rows = run_deterministic(sim_input)
+    if not data.get('goal_seeking', False):
+        mc_stats = generate_runs(sim_input)
+        goal = None
+    else:
+        achieved_spending, achieved_success_rate, searches, achieved_spending_y1 = binary_search(sim_input)
+        mc_stats = generate_runs(sim_input, test_spending=achieved_spending)
+        goal = {
+            "achieved_spending": achieved_spending,
+            "achieved_success_rate": achieved_success_rate,
+            "searches": searches,
+            "achieved_spending_y1": achieved_spending_y1,
+        }
+
+    from core.runs import run_historical_stress_test
+    stress_test_data = run_historical_stress_test(sim_input, scenario_key='2000_dotcom')
+    results = results_context(data, det_rows, mc_stats, goal, stress_test_data)
+
+    request.session['cached_results'] = results
+    request.session['cached_version'] = data_ver
+    return render(request, 'results.html', results)
+
+
+@require_http_methods(["GET", "POST"])
+def stress_test_api(request):
+    from django.http import JsonResponse
+    from core.runs import run_historical_stress_test
+
+    sim_input = get_session_sim_data(request)
+    params = request.POST if request.method == "POST" else request.GET
+
+    scenario_key = params.get('scenario_key', '2000_dotcom')
+    allocation = params.get('asset_allocation', 'matched')
+    timing = params.get('crisis_timing', 'retirement')
+
+    res = run_historical_stress_test(sim_input, scenario_key=scenario_key, asset_allocation=allocation, crisis_timing=timing)
+    return JsonResponse(res)
+
+
+@require_http_methods(["GET"])
+def cpi_data_api(request):
+    from django.http import JsonResponse
+    force = request.GET.get('refresh') == '1'
+    data = load_cpi_data(force_refresh=force)
+    return JsonResponse(data)

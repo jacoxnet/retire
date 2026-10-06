@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+.svelte-kit/
+# The root .gitignore (Python template) ignores lib/; SvelteKit needs src/lib.
+!src/lib/
+test-results/
+playwright-report/
