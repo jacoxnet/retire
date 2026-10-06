@@ -2285,10 +2285,11 @@ def generate_correlated_returns(inputs, runs, years, rng=None):
     )
 
 
-def generate_runs(sim_input, test_spending=None):
+def generate_runs(sim_input, test_spending=None, rng=None):
     inputs = extract_sim_inputs(sim_input)
     
-    rng = np.random.default_rng()
+    if rng is None:
+        rng = np.random.default_rng()
     runs = inputs['runs']
     years = inputs['total_years']
     
@@ -2355,10 +2356,11 @@ def generate_runs(sim_input, test_spending=None):
         'mc_spaghetti_paths': spaghetti_paths
     }
 
-def binary_search(sim_input):
+def binary_search(sim_input, rng=None):
     inputs = extract_sim_inputs(sim_input)
     
-    rng = np.random.default_rng()
+    if rng is None:
+        rng = np.random.default_rng()
     pretax_m = inputs['pretax_data'].get('return_mean', 6.0) / 100.0
     pretax_sp_m = inputs['spouse_pretax_data'].get('return_mean', 6.0) / 100.0 if inputs['is_married'] else pretax_m
     roth_m = inputs['roth_data'].get('return_mean', 6.0) / 100.0
@@ -2590,7 +2592,7 @@ def infer_asset_allocation(mean_return):
         return 0.0, 0.0, 100.0
 
 
-def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allocation='matched', crisis_timing='retirement', regular_mc_results=None):
+def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allocation='matched', crisis_timing='retirement', regular_mc_results=None, rng=None):
     """
     Conducts a Monte Carlo simulation applying historical returns & inflation for the specified crisis duration,
     and regular Monte Carlo stochastic draws for all other years of the plan.
@@ -2625,7 +2627,8 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
         crisis_start_t = 0
     crisis_end_t = min(years, crisis_start_t + crisis_length)
 
-    rng = np.random.default_rng()
+    if rng is None:
+        rng = np.random.default_rng()
     (
         returns_pre_user,
         returns_pre_spouse,
@@ -2745,7 +2748,7 @@ def run_historical_stress_test(sim_input, scenario_key='2000_dotcom', asset_allo
     }
 
     if regular_mc_results is None:
-        regular_mc_results = generate_runs(sim_input)
+        regular_mc_results = generate_runs(sim_input, rng=rng)
 
     deltas = {
         'delta_success': stress_stats['run_success'] - regular_mc_results['run_success'],

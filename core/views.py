@@ -180,6 +180,130 @@ def clear_data_view(request):
     messages.success(request, "All simulation data has been cleared.")
     return redirect(reverse(safe_redirect_target(request.POST.get('next'), 'enter')))
 
+def import_plan_data(data):
+    """Normalize and migrate an imported plan dict in place, the same way the
+    Manage page loads it. Returns the list of import/validation errors."""
+    import_errors = normalize_imported_plan(data)
+
+    if 'goal_seeking' not in data and 'simulation_type' in data:
+        data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
+    elif 'simulation_type' not in data and 'goal_seeking' in data:
+        data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
+
+    # Normalize / migrate social_security
+    if 'social_security' in data and isinstance(data['social_security'], dict):
+        ss = data['social_security']
+        if 'user_receiving' not in ss:
+            u_ent = get_bool(ss.get('user_entitled', True))
+            u_age = get_int(data.get('user_age'), 60)
+            u_start = get_int(ss.get('user_start_age'), 67)
+            ss['user_receiving'] = bool(u_ent and u_age >= u_start)
+            ss['user_future_entitled'] = bool(u_ent and u_age < u_start)
+        else:
+            ss['user_receiving'] = get_bool(ss.get('user_receiving'))
+            ss['user_future_entitled'] = get_bool(ss.get('user_future_entitled'))
+        ss['user_entitled'] = ss['user_receiving'] or ss['user_future_entitled']
+
+        if 'spouse_receiving' not in ss:
+            sp_ent = get_bool(ss.get('spouse_entitled', False))
+            sp_age = get_int(data.get('spouse_age'), 60)
+            sp_start = get_int(ss.get('spouse_start_age'), 67)
+            ss['spouse_receiving'] = bool(sp_ent and sp_age >= sp_start)
+            ss['spouse_future_entitled'] = bool(sp_ent and sp_age < sp_start)
+        else:
+            ss['spouse_receiving'] = get_bool(ss.get('spouse_receiving'))
+            ss['spouse_future_entitled'] = get_bool(ss.get('spouse_future_entitled'))
+        ss['spouse_entitled'] = ss['spouse_receiving'] or ss['spouse_future_entitled']
+
+    # Load or migrate balance sheet
+    if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+        data['balance_sheet'] = parse_balance_sheet(data['balance_sheet'], default_data=data)
+        synced_accs = sync_balance_sheet_to_accounts(
+            data['balance_sheet'],
+            existing_accounts=data.get('accounts', []),
+            user_age=data.get('user_age', 60),
+            user_retirement_age=data.get('user_retirement_age', 65),
+            is_married=data.get('is_married', False),
+            spouse_age=data.get('spouse_age', 60),
+            spouse_retirement_age=data.get('spouse_retirement_age', 65)
+        )
+        if synced_accs:
+            data['accounts'] = synced_accs
+    elif data.get('accounts') and isinstance(data['accounts'], list):
+        data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+    else:
+        data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
+        data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
+
+    # Load or initialize rebalancing
+    if 'rebalancing' in data and isinstance(data['rebalancing'], dict):
+        data['rebalancing'] = parse_rebalancing(data['rebalancing'])
+    else:
+        data['rebalancing'] = build_default_rebalancing()
+
+    # Auto-create taxable account if life insurance > 0 and no taxable account exists
+    has_taxable = any(acc.get('type') == 'taxable' for acc in data.get('accounts', []))
+    if not has_taxable and (float(data.get('user_life_insurance_amount', 0.0)) > 0 or float(data.get('spouse_life_insurance_amount', 0.0)) > 0):
+        new_acc = {
+            'name': 'Taxable Brokerage (Life Insurance Proceeds)',
+            'type': 'taxable',
+            'owner': 'user',
+            'balance': 0.0,
+            'contrib_amount': 0.0,
+            'contrib_freq': 'annual',
+            'contrib_start_age': data.get('user_age', 60),
+            'contrib_end_age_type': 'retirement',
+            'contrib_end_age_specified': data.get('user_retirement_age', 65),
+            'contrib_adjust_inflation': True,
+            'return_mean': 5.0,
+            'return_std': 8.0,
+        }
+        data.setdefault('accounts', []).append(new_acc)
+        if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
+            data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data['accounts'], current_year=data.get('current_year', 2026))
+
+    if data.get('accounts') and isinstance(data['accounts'], list):
+        agg = aggregate_accounts(
+            data['accounts'],
+            data.get('user_age', 60),
+            data.get('user_retirement_age', 65),
+            data.get('user_age_death', 90),
+            data.get('is_married', False),
+            data.get('spouse_age', 60),
+            data.get('spouse_retirement_age', 65),
+            data.get('spouse_age_death', 90)
+        )
+        for k, v in agg.items():
+            data[k] = v
+    else:
+        data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
+
+    if data.get('income_sources') and isinstance(data['income_sources'], list):
+        for inc in data['income_sources']:
+            if isinstance(inc, dict):
+                if 'adjustments' not in inc or not inc['adjustments']:
+                    inc['adjustments'] = [{
+                        'start_type': inc.get('adjust_start_age_type', 'start'),
+                        'start_spec': inc.get('adjust_start_age_specified', 65),
+                        'end_type': inc.get('end_age_type', 'death'),
+                        'end_spec': inc.get('end_age_specified', 90),
+                        'adjust_type': inc.get('adjust_type', 'inflation'),
+                        'adjust_val': inc.get('adjust_val', 0.0)
+                    }]
+                inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
+                inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
+
+    # Calculate marginal tax rate and attach balance sheet
+    calc_tax_rate = calculate_marginal_tax_rate(data)
+    if isinstance(data.get('balance_sheet'), dict):
+        data['balance_sheet']['marginal_tax_rate'] = calc_tax_rate
+    data['marginal_tax_rate'] = calc_tax_rate
+
+    # Hold the file to the same rules as the Enter page. A plan with
+    # problems is still loaded, but opens on the Enter page to be fixed.
+    import_errors.extend(plan_errors(data))
+    return import_errors
+
 @require_http_methods(["POST"])
 def load_plan_view(request):
     raw_json = request.POST.get('json_data')
@@ -193,125 +317,7 @@ def load_plan_view(request):
         if not isinstance(data, dict):
             raise ValueError("Invalid JSON format")
 
-        import_errors = normalize_imported_plan(data)
-
-        if 'goal_seeking' not in data and 'simulation_type' in data:
-            data['goal_seeking'] = (data['simulation_type'] == 'goal_seeking')
-        elif 'simulation_type' not in data and 'goal_seeking' in data:
-            data['simulation_type'] = 'goal_seeking' if data['goal_seeking'] else 'regular'
-
-        # Normalize / migrate social_security
-        if 'social_security' in data and isinstance(data['social_security'], dict):
-            ss = data['social_security']
-            if 'user_receiving' not in ss:
-                u_ent = get_bool(ss.get('user_entitled', True))
-                u_age = get_int(data.get('user_age'), 60)
-                u_start = get_int(ss.get('user_start_age'), 67)
-                ss['user_receiving'] = bool(u_ent and u_age >= u_start)
-                ss['user_future_entitled'] = bool(u_ent and u_age < u_start)
-            else:
-                ss['user_receiving'] = get_bool(ss.get('user_receiving'))
-                ss['user_future_entitled'] = get_bool(ss.get('user_future_entitled'))
-            ss['user_entitled'] = ss['user_receiving'] or ss['user_future_entitled']
-
-            if 'spouse_receiving' not in ss:
-                sp_ent = get_bool(ss.get('spouse_entitled', False))
-                sp_age = get_int(data.get('spouse_age'), 60)
-                sp_start = get_int(ss.get('spouse_start_age'), 67)
-                ss['spouse_receiving'] = bool(sp_ent and sp_age >= sp_start)
-                ss['spouse_future_entitled'] = bool(sp_ent and sp_age < sp_start)
-            else:
-                ss['spouse_receiving'] = get_bool(ss.get('spouse_receiving'))
-                ss['spouse_future_entitled'] = get_bool(ss.get('spouse_future_entitled'))
-            ss['spouse_entitled'] = ss['spouse_receiving'] or ss['spouse_future_entitled']
-
-        # Load or migrate balance sheet
-        if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
-            data['balance_sheet'] = parse_balance_sheet(data['balance_sheet'], default_data=data)
-            synced_accs = sync_balance_sheet_to_accounts(
-                data['balance_sheet'],
-                existing_accounts=data.get('accounts', []),
-                user_age=data.get('user_age', 60),
-                user_retirement_age=data.get('user_retirement_age', 65),
-                is_married=data.get('is_married', False),
-                spouse_age=data.get('spouse_age', 60),
-                spouse_retirement_age=data.get('spouse_retirement_age', 65)
-            )
-            if synced_accs:
-                data['accounts'] = synced_accs
-        elif data.get('accounts') and isinstance(data['accounts'], list):
-            data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
-        else:
-            data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
-            data['balance_sheet'] = build_default_balance_sheet(data['accounts'], data=data)
-
-        # Load or initialize rebalancing
-        if 'rebalancing' in data and isinstance(data['rebalancing'], dict):
-            data['rebalancing'] = parse_rebalancing(data['rebalancing'])
-        else:
-            data['rebalancing'] = build_default_rebalancing()
-
-        # Auto-create taxable account if life insurance > 0 and no taxable account exists
-        has_taxable = any(acc.get('type') == 'taxable' for acc in data.get('accounts', []))
-        if not has_taxable and (float(data.get('user_life_insurance_amount', 0.0)) > 0 or float(data.get('spouse_life_insurance_amount', 0.0)) > 0):
-            new_acc = {
-                'name': 'Taxable Brokerage (Life Insurance Proceeds)',
-                'type': 'taxable',
-                'owner': 'user',
-                'balance': 0.0,
-                'contrib_amount': 0.0,
-                'contrib_freq': 'annual',
-                'contrib_start_age': data.get('user_age', 60),
-                'contrib_end_age_type': 'retirement',
-                'contrib_end_age_specified': data.get('user_retirement_age', 65),
-                'contrib_adjust_inflation': True,
-                'return_mean': 5.0,
-                'return_std': 8.0,
-            }
-            data.setdefault('accounts', []).append(new_acc)
-            if 'balance_sheet' in data and isinstance(data['balance_sheet'], dict):
-                data['balance_sheet'] = sync_accounts_to_balance_sheet(data['balance_sheet'], data['accounts'], current_year=data.get('current_year', 2026))
-
-        if data.get('accounts') and isinstance(data['accounts'], list):
-            agg = aggregate_accounts(
-                data['accounts'],
-                data.get('user_age', 60),
-                data.get('user_retirement_age', 65),
-                data.get('user_age_death', 90),
-                data.get('is_married', False),
-                data.get('spouse_age', 60),
-                data.get('spouse_retirement_age', 65),
-                data.get('spouse_age_death', 90)
-            )
-            for k, v in agg.items():
-                data[k] = v
-        else:
-            data['accounts'] = flat_assets_to_accounts(data, data.get('is_married', False))
-
-        if data.get('income_sources') and isinstance(data['income_sources'], list):
-            for inc in data['income_sources']:
-                if isinstance(inc, dict):
-                    if 'adjustments' not in inc or not inc['adjustments']:
-                        inc['adjustments'] = [{
-                            'start_type': inc.get('adjust_start_age_type', 'start'),
-                            'start_spec': inc.get('adjust_start_age_specified', 65),
-                            'end_type': inc.get('end_age_type', 'death'),
-                            'end_spec': inc.get('end_age_specified', 90),
-                            'adjust_type': inc.get('adjust_type', 'inflation'),
-                            'adjust_val': inc.get('adjust_val', 0.0)
-                        }]
-                    inc['has_survivor_benefit'] = bool(inc.get('has_survivor_benefit', False))
-                    inc['survivor_benefit_pct'] = min(100.0, max(0.0, float(inc.get('survivor_benefit_pct', 100.0))))
-
-        # Calculate marginal tax rate and attach balance sheet
-        calc_tax_rate = calculate_marginal_tax_rate(data)
-        if isinstance(data.get('balance_sheet'), dict):
-            data['balance_sheet']['marginal_tax_rate'] = calc_tax_rate
-        data['marginal_tax_rate'] = calc_tax_rate
-
-        # Hold the file to the same rules as the Enter page. A plan with
-        # problems is still loaded, but opens on the Enter page to be fixed.
-        import_errors.extend(plan_errors(data))
+        import_errors = import_plan_data(data)
 
         request.session['simulation_data'] = data
         request.session['data_version'] = request.session.get('data_version', 0) + 1
