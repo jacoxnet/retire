@@ -11,7 +11,7 @@ from core.runs import run_deterministic, generate_runs
 from core.views import load_plan_view, get_default_data
 
 def populate_database_and_sessions():
-    with open('/Users/Mike/Documents/GitHub/retire/saved json files/jack_and_diane_plan.json', 'r') as f:
+    with open('saved json files/fitzwilliam_and_elizabeth.json', 'r') as f:
         plan_data = json.load(f)
 
     # 1. Update/Create SimulationData record
@@ -32,10 +32,10 @@ def populate_database_and_sessions():
         session_count += 1
     print(f"Updated {session_count} existing active user session(s).")
 
-    # 3. Verify Deterministic and Monte Carlo simulation runs cleanly on Jack & Diane's data
+    # 3. Verify Deterministic and Monte Carlo simulation runs cleanly on Fitzwilliam & Elizabeth's data
     print("Testing deterministic simulation execution...")
     det_rows = run_deterministic(plan_data)
-    print(f"Deterministic simulation produced {len(det_rows)} yearly projection rows (Jack age 56 -> 95).")
+    print(f"Deterministic simulation produced {len(det_rows)} yearly projection rows (Fitzwilliam age 61 -> 95).")
     
     print("Testing Monte Carlo simulation execution (100 runs fast test)...")
     test_plan = dict(plan_data, runs=100)
