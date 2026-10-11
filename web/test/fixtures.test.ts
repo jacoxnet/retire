@@ -21,7 +21,7 @@ describe('golden fixtures', () => {
   const index = fixtureIndex();
 
   it('cover every saved plan', () => {
-    expect(index.plans.length).toBe(11);
+    expect(index.plans.length).toBe(12);
   });
 
   for (const plan of index.plans) {
