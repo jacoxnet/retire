@@ -15,7 +15,7 @@ describe('apply_mode_change grid', () => {
   });
 });
 
-// Ports of the change_mode tests in core/tests.py
+// Mode-change cases
 describe('change_mode tests', () => {
   it('switches to goal seeking and back, changing runs', () => {
     const plan = getDefaultData();

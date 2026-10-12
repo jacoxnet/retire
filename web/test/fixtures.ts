@@ -1,5 +1,10 @@
-// Loads the golden fixtures written by tools/golden/dump_fixtures.py.
-import { readFileSync } from 'node:fs';
+// Regression fixtures: the engine's and pages' outputs for the sample plans, checked
+// by the tests and rewritten by them under `npm run fixtures:update` (UPDATE_FIXTURES=1).
+// After an intended change, regenerate and review the diff of web/fixtures/. The update
+// runs in stages because later fixtures are computed from earlier ones: imported.json
+// (test/plan) -> engine outputs (det_rows, inputs, kernel, mc, stress) -> Results page.
+// The functions/*.json grids are hand-maintained tables of cases and expected outputs.
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +17,38 @@ const NON_FINITE: Record<string, number> = {
   Infinity: Infinity,
   '-Infinity': -Infinity,
 };
+
+/** True under `npm run fixtures:update`: snapshot checks rewrite their files instead of comparing. */
+export const UPDATING = process.env.UPDATE_FIXTURES === '1';
+
+/** Fixture JSON: compact, typed arrays as arrays, non-finite numbers as the strings parseFixture reads. */
+export function stringifyFixture(value: unknown): string {
+  return JSON.stringify(value, (_k, v) => {
+    if (ArrayBuffer.isView(v) && !(v instanceof DataView)) return Array.from(v as unknown as ArrayLike<number>);
+    if (typeof v === 'number' && !Number.isFinite(v)) return Number.isNaN(v) ? 'NaN' : v > 0 ? 'Infinity' : '-Infinity';
+    return v;
+  }) + '\n';
+}
+
+/**
+ * Snapshot check: `actual` must match fixtures/<parts> (numbers within `tol`, see
+ * deepClose). Under UPDATE_FIXTURES=1 the file is rewritten from `actual` instead.
+ */
+export function expectFixture(actual: unknown, parts: string[], tol = 1e-9): void {
+  const path = join(FIXTURES_DIR, ...parts);
+  if (UPDATING) {
+    mkdirSync(dirname(path), { recursive: true });
+    // Atomic, so tests in other workers reading the file never see half of it.
+    writeFileSync(`${path}.${process.pid}.tmp`, stringifyFixture(actual));
+    renameSync(`${path}.${process.pid}.tmp`, path);
+    return;
+  }
+  const diff = deepClose(actual, loadFixture(...parts), tol);
+  if (diff) throw new Error(`${parts.join('/')} differs at ${diff} (run \`npm run fixtures:update\` if the change is intended)`);
+}
+
+export const expectPlanFixture = (actual: unknown, plan: string, file: string, tol = 1e-9) =>
+  expectFixture(actual, ['plans', plan, `${file}.json`], tol);
 
 /** Parse fixture JSON, turning the "NaN"/"Infinity" sentinels back into numbers. */
 export function parseFixture<T = unknown>(text: string): T {
@@ -31,7 +68,8 @@ export interface FixturePlan {
 }
 
 export interface FixtureIndex {
-  generated_with: Record<string, string | number>;
+  /** The frozen "today" for imports, the seed of kernel.json's return matrices, and the Monte Carlo seed. */
+  generated_with: { fixture_today: string; kernel_seed: number; mc_seed: number };
   plans: FixturePlan[];
 }
 

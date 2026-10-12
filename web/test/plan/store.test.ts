@@ -58,7 +58,7 @@ describe('PlanStore', () => {
   });
 
   it('an exported plan imports back cleanly and is stable from the second round trip', () => {
-    // Like Django: the first re-import of a legacy plan can pick up the balance sheet's
+    // As in the original app: the first re-import of a legacy plan can pick up the balance sheet's
     // zero-balance placeholder accounts (early_suzie gains "Primary 401(k) / Traditional
     // IRA"); after that, export -> import is a fixed point.
     const store = new PlanStore(memoryStorage());

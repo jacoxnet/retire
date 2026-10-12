@@ -4,7 +4,7 @@ import { deathAgeErrors, planErrors, validateAccounts, validateAdditionalSpendin
 import { loadFixture } from '../fixtures';
 
 // JSON can't tell 95.0 from 95, and imported plans hold these fields as ints after
-// normalization, so Python's "(95.0)" for raw float inputs is compared as "(95)".
+// normalization, so the original app's "(95.0)" for raw float inputs is compared as "(95)".
 const asInts = (msgs: string[]) => msgs.map((m) => m.replace(/\((\d+)\.0\)/g, '($1)'));
 
 describe('plan_errors / death_age_errors grid', () => {
@@ -17,7 +17,7 @@ describe('plan_errors / death_age_errors grid', () => {
   });
 });
 
-describe('core/tests.py validator cases', () => {
+describe('validator cases', () => {
   it('rejects duplicate (case-insensitive) and blank account names', () => {
     const acc = (name: string) => ({ name, balance: 100000.0, contrib_amount: 0, contrib_start_age: 60, owner: 'user' });
     expect(validateAccounts([acc('Primary 401(k)'), acc('Roth IRA')], 60, 90, false, 60, 90)).toEqual([]);

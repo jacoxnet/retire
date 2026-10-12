@@ -14,10 +14,9 @@ There is no server. The site is static files on GitHub Pages; the simulations ru
 | `web/src/lib/workers/` | The Monte Carlo worker pool. |
 | `web/src/lib/components/`, `web/src/routes/` | The Enter Data, Results and Save/Load/Clear pages. |
 | `web/src/lib/data/cpi_u_historical.json` | The bundled CPI-U series, refreshed weekly from FRED by `.github/workflows/update-cpi.yml`. |
-| `web/fixtures/` | Golden fixtures from the reference Python engine; the TS port is tested against them. |
+| `web/fixtures/` | Regression fixtures: sample plans (`saved-plans/`), the engine's and Results page's outputs for each (`plans/`), and hand-maintained input/output tables for the pure helpers (`functions/`). |
 | `web/e2e/` | Playwright browser tests against the production build. |
-| `legacy/` | The original Django app, kept as the reference engine that generates the fixtures. Not deployed. See `legacy/README.md`. |
-| `docs/static-conversion-plan.md`, `web/PORTING.md` | How the Django app was converted, phase by phase. |
+| `docs/static-conversion-plan.md`, `web/PORTING.md` | How the original Django app was converted, phase by phase (history; the Django code has since been removed). |
 
 ## Development
 
@@ -28,6 +27,7 @@ cd web
 npm install
 npm run dev          # http://localhost:5173
 npm test             # unit, fixture and component tests (Vitest)
+npm run fixtures:update  # regenerate web/fixtures/plans after an intended change
 npm run check        # svelte-check / TypeScript
 npm run build        # static site in web/build
 npm run e2e          # builds, then runs the Playwright tests against vite preview
@@ -35,11 +35,15 @@ npm run e2e          # builds, then runs the Playwright tests against vite previ
 
 The first `npm run e2e` on a new machine needs `npx playwright install chromium`.
 
+### Regression fixtures
+
+The tests compare the engine (imports, deterministic projection, kernel, seeded Monte Carlo, goal seek and stress test) and the Results page against the files in `web/fixtures/plans/<plan>/`. Monte Carlo uses a fixed seed (`fixtures/index.json`), so its results are exact. When you change behaviour on purpose, run `npm run fixtures:update` (it rewrites the files from the current code, in dependency order), review `git diff web/fixtures`, and commit the result with the change. The tables in `web/fixtures/functions/` are edited by hand.
+
 ## Deployment
 
 `.github/workflows/deploy.yml` builds `web/` with `BASE_PATH=/<repository name>` and publishes it to GitHub Pages on every push to `main`. In the repository's **Settings → Pages**, set **Source** to **GitHub Actions** once.
 
-`.github/workflows/ci.yml` runs the checks, unit tests and browser tests on pushes and pull requests, plus the legacy Django tests.
+`.github/workflows/ci.yml` runs the checks, unit tests and browser tests on pushes and pull requests.
 
 ## CPI data
 

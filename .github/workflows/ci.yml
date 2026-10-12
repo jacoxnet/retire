@@ -38,15 +38,3 @@ jobs:
           name: playwright-report
           path: web/playwright-report
           retention-days: 14
-
-  legacy:
-    name: Legacy Django app (reference engine)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: legacy
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Django tests (the browser suite is replaced by web/e2e)
-        run: uv run manage.py test core.tests core.tests_cpi core.tests_input_validation core.tests_navigation core.tests_sensitivity

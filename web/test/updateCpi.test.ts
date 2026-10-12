@@ -14,7 +14,7 @@ function fredCsv(extra: Record<string, number | '.'> = {}) {
 }
 
 describe('update-cpi script', () => {
-  it('writes the bundled file byte for byte as Python did', () => {
+  it('rewrites the bundled file byte for byte', () => {
     expect(formatCpiJson(bundled)).toBe(bundledText);
   });
 

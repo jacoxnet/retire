@@ -87,14 +87,14 @@ describe('commitEnterPlan', () => {
       const { accounts: _b, ...was } = (before[k] ?? {}) as Record<string, unknown>;
       expect(deepClose(after, was, 1e-9, k)).toBeNull();
     }
-    // A missing state exemption shows as checked on the Django page, so it saves as exempt.
+    // A missing state exemption shows as checked on the Enter page, so it saves as exempt.
     expect(plan.state_ss_exempt).toBe(before.state_ss_exempt ?? true);
     expect(plan.filing_status).toBe(before.filing_status);
     expect(plan.income_sources!.map((s) => s.is_social_security)).toEqual(before.income_sources!.map((s) => !!s.is_social_security));
     expect(plan.accounts!.length).toBe(before.accounts!.length);
     plan.accounts!.forEach((acc, i) => {
       const old = before.accounts![i];
-      // An account without an id takes its balance-sheet entry's id, as Django's save does.
+      // An account without an id takes its balance-sheet entry's id, as the original app's save did.
       expect(acc).toMatchObject(old.id ? old : { ...old, id: expect.stringMatching(/^acc_\w+$/) });
       expect(Object.keys(acc)).toEqual(expect.arrayContaining(['dividend_yield', 'cost_basis_ratio', 'is_community_property']));
     });

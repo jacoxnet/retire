@@ -1,9 +1,9 @@
 # Testing & Verification Guidelines
 
 ## Fast Automated Testing First
-- The app is the static site in `web/`. Its Vitest suite (`cd web && npm test`, ~40 s) covers the engine (against golden fixtures from the Python engine), the plan model, and the pages' components in jsdom. Run `npm run check` (types) and `npm run build` as well; the SSR build catches template errors the tests miss.
+- The app is the static site in `web/`. Its Vitest suite (`cd web && npm test`, ~40 s) covers the engine (against regression fixtures in `web/fixtures/`), the plan model, and the pages' components in jsdom. Run `npm run check` (types) and `npm run build` as well; the SSR build catches template errors the tests miss.
 - Browser behaviour is covered by Playwright against the production build: `npm run e2e`.
-- `legacy/` holds the old Django app, used only to regenerate fixtures (`cd legacy && uv run tools/golden/dump_fixtures.py`) and as a reference; `uv run manage.py test --keepdb` there.
+- After an intended change to engine or Results-page output, run `npm run fixtures:update` and review the fixture diff before committing it.
 
 ## Implementation Planning
 - Keep verification sections in implementation plans focused on automated tests (Vitest, then `npm run e2e`).

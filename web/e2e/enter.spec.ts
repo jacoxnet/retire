@@ -1,4 +1,4 @@
-// The Enter page in a real browser (port of legacy/core/tests_browser.py): the page
+// The Enter page in a real browser: the page
 // builds from saved data without errors, leaving it saves what the save rules give,
 // and every control's edit survives leaving and coming back.
 import { type Page } from '@playwright/test';

@@ -3,7 +3,7 @@
 ## Testing & Verification Workflow
 
 ### 1. Fast Automated Testing First
-- The app is the static SvelteKit site in `web/` (the Django app in `legacy/` is kept only as the reference engine for fixtures). Its Vitest suite (`cd web && npm test`) is deterministic and comprehensive; also run `npm run check` and `npm run build`.
+- The app is the static SvelteKit site in `web/`. Its Vitest suite (`cd web && npm test`) is deterministic and comprehensive; also run `npm run check` and `npm run build`.
 - **Always verify logic, calculations, the plan model and page behaviour with Vitest tests** in `web/test/`, and browser flows with Playwright tests in `web/e2e/` (`npm run e2e`).
 - When introducing new behavior or fixing bugs, add or update tests there.
 

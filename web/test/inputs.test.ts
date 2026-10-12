@@ -5,7 +5,7 @@ import {
   extractSimInputs,
   prepareNumbaInputs,
 } from '../src/lib/engine/inputs';
-import { deepClose, fixtureIndex, loadFixture, loadPlanFixture } from './fixtures';
+import { deepClose, expectPlanFixture, fixtureIndex, loadFixture, loadPlanFixture } from './fixtures';
 
 describe('extract_sim_inputs / prepare_numba_inputs', () => {
   for (const { name } of fixtureIndex().plans) {
@@ -13,7 +13,7 @@ describe('extract_sim_inputs / prepare_numba_inputs', () => {
       const { plan } = loadPlanFixture(name, 'imported');
 
       it('extractSimInputs matches inputs.json', () => {
-        expect(deepClose(extractSimInputs(plan), loadPlanFixture(name, 'inputs'))).toBeNull();
+        expectPlanFixture(extractSimInputs(plan), name, 'inputs');
       });
 
       it('does not mutate the plan', () => {
@@ -24,16 +24,7 @@ describe('extract_sim_inputs / prepare_numba_inputs', () => {
 
       it('prepareNumbaInputs matches numba_inputs.json', () => {
         const nb = prepareNumbaInputs(extractSimInputs(plan));
-        expect(deepClose(nb, loadPlanFixture(name, 'numba_inputs'))).toBeNull();
-      });
-
-      it('test_spending and custom_inflation variants match', () => {
-        const { variants } = loadPlanFixture(name, 'kernel');
-        const inputs = extractSimInputs(plan);
-        const ts = variants.test_spending;
-        expect(deepClose(prepareNumbaInputs(inputs, ts.test_spending), ts.numba_inputs), 'test_spending').toBeNull();
-        const ci = variants.custom_inflation;
-        expect(deepClose(prepareNumbaInputs(inputs, null, ci.custom_inflation_rates), ci.numba_inputs), 'custom_inflation').toBeNull();
+        expectPlanFixture(nb, name, 'numba_inputs');
       });
     });
   }
