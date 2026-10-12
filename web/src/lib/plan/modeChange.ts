@@ -60,7 +60,7 @@ export function applyModeChange(plan: Plan, input: ModeChangeInput): ModeChangeM
   const inflation = changedValue('inflation_rate', data.inflation_rate, 1);
   if (inflation !== null) data.inflation_rate = inflation;
   if (has('runs')) {
-    const runs = getInt(input.runs, data.runs ?? 10000);
+    const runs = getInt(input.runs, data.runs ?? 50000);
     if (runs < 1 || runs > 1000000) {
       error('Number of Simulations must be an integer between 1 and 1,000,000.');
       data.runs = Math.min(1000000, Math.max(1, runs));

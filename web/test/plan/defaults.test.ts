@@ -18,6 +18,7 @@ describe('defaults', () => {
   });
   it('returns independent copies', () => {
     const a = getDefaultData();
+    expect(a.runs).toBe(50000);
     a.pretax_assets!.return_mean = 9;
     expect(getDefaultData().pretax_assets!.return_mean).toBe(6.0);
   });

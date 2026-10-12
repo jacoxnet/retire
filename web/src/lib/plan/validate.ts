@@ -193,7 +193,7 @@ export function deathAgeErrors(data: Plan | Obj): string[] {
 export function planErrors(data: Plan | Obj): string[] {
   const { userAge, userAgeDeath, isMarried, spouseAge, spouseAgeDeath } = people(data);
   const isGoalSeeking = getBool(data.goal_seeking);
-  const runs = getInt(data.runs, 10000);
+  const runs = getInt(data.runs, 50000);
   const target = getFloat(data.target_success_rate, 80.0);
   const userRetirementAge = getInt(data.user_retirement_age, 65);
   const spouseRetirementAge = getInt(data.spouse_retirement_age, 65);

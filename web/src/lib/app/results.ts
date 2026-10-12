@@ -67,7 +67,7 @@ export function resultsContext(
     goal_seeking: isGoal,
     initial_wealth: initialWealth,
     years: detRows.length,
-    runs: get(data, 'runs', 10000),
+    runs: get(data, 'runs', 50000),
     inflation_rate: get(data, 'inflation_rate', 2.5),
     desired_spending: get(data, 'desired_spending', 0.0),
     target_success_rate: get(data, 'target_success_rate', 80.0),

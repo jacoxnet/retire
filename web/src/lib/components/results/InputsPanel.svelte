@@ -47,7 +47,7 @@
       roth_return_mean: floatformat(r.roth_assets?.return_mean, 1),
       taxable_return_mean: floatformat(r.taxable_assets?.return_mean, 1),
       hsa_return_mean: floatformat(r.hsa_assets?.return_mean, 1),
-      runs: pyStr(r.runs || 10000),
+      runs: pyStr(r.runs || 50000),
     };
     if (!r.goal_seeking) v.desired_spending = floatformat(r.desired_spending, 0);
     if (r.is_married) v.spouse_age_death = pyStr(r.spouse_age_death);

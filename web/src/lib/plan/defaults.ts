@@ -73,7 +73,7 @@ export function getDefaultData(today = todayIso()): Plan {
     survivor_spending: 0.0,
     adjust_spending_inflation: true,
     inflation_rate: 3.5,
-    runs: 10000,
+    runs: 50000,
     target_success_rate: 80.0,
     user_life_insurance_amount: 0.0,
     user_life_insurance_type: 'permanent',

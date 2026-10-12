@@ -194,6 +194,6 @@ Each modeled year, the app balances inflows and outflows in the following specif
 ### Helpful Tips
 
 - **Start in Regular Mode:** Enter your realistic spending expectations to check your baseline success rate. If your success rate is far above or below your target, switch to **Maximum Spending Simulation** on the Results page to find the spending level that matches your preferred confidence level.
-- **Simulation Runs for Accuracy:** Use 5,000 to 10,000 runs for final evaluations. Lower run counts can be used for quick interactive experiments.
+- **Simulation Runs for Accuracy:** Use 10,000 to 50,000 runs for final evaluations. Lower run counts can be used for quick interactive experiments.
 - **Export Your Data:** Download your plan (`.json`) from the Save / Load / Clear Data page before clearing your browser data or switching devices, and keep it as a backup.
 - **Check the Stress Test:** Before finalizing your plan, inspect the Historical Stress Test tab to see how your portfolio behaves during historical market crises.

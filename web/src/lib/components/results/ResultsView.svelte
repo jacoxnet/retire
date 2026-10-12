@@ -147,7 +147,7 @@
     {#each messages as m, i (i)}
       <div class="alert alert-{m.level === 'error' ? 'danger' : m.level} text-center" role="alert">{m.text}</div>
     {/each}
-    <RunProgressCard progress={view.progress} runs={Number(store.plan.runs) || 10000} goalSeeking={Boolean(store.plan.goal_seeking)} onCancel={stop} />
+    <RunProgressCard progress={view.progress} runs={Number(store.plan.runs) || 50000} goalSeeking={Boolean(store.plan.goal_seeking)} onCancel={stop} />
   {:else if view.kind === 'invalid'}
     <div class="alert alert-danger" role="alert" id="resultsPlanErrors">
       <p class="mb-2 fw-semibold">The plan needs a few corrections before it can be simulated:</p>
