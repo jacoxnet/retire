@@ -42,6 +42,9 @@ export class UiPrefs {
     this.mode = safeGet(storage, MODE_KEY) === 'simple' ? 'simple' : 'advanced';
     const attr = typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null;
     this.theme = (attr ?? safeGet(storage, THEME_KEY)) === 'dark' ? 'dark' : 'light';
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-bs-theme', this.theme);
+    }
   }
 
   setMode(mode: PlannerMode): void {
@@ -51,7 +54,10 @@ export class UiPrefs {
 
   toggleTheme(): void {
     this.theme = this.theme === 'dark' ? 'light' : 'dark';
-    if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', this.theme);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', this.theme);
+      document.documentElement.setAttribute('data-bs-theme', this.theme);
+    }
     safeSet(this.storage, THEME_KEY, this.theme);
   }
 }
