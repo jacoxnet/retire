@@ -7,12 +7,12 @@ import { engineKey } from '../../src/lib/app/results';
 import {
   chartMoney, djangoMoney, floatformat, intcomma, realValue, stressDeltaMoney, stressDeltaPercent, stressMoney, usd,
 } from '../../src/lib/app/resultsFormat';
-import { fixtureIndex, loadFixture, loadPlanFixture } from '../fixtures';
+import { expectPlanFixture, fixtureIndex, loadFixture, loadPlanFixture } from '../fixtures';
 import { fixtureResults } from '../resultsFixture';
 
 const plans = fixtureIndex().plans.map((p) => p.name);
 
-describe('Django template filters', () => {
+describe('template filters', () => {
   const cases = loadFixture<Array<{ value: number; arg: number | 'money'; out: string }>>('functions', 'template_filters.json');
 
   it.each(cases.map((c) => [c.value, c.arg, c.out] as const))('floatformat(%s, %s) = %s', (value, arg, out) => {
@@ -25,7 +25,7 @@ describe('Django template filters', () => {
   });
 });
 
-describe('results.js formatting', () => {
+describe('results formatting', () => {
   it('formats table, chart and stress-test amounts', () => {
     expect(usd(1234.5)).toBe('$1,235');
     expect(usd(-1234.4)).toBe('-$1,234');
@@ -42,7 +42,7 @@ describe('results.js formatting', () => {
     expect(stressDeltaPercent(1)).toBe('+1.0%');
   });
 
-  it('deflates real values to cents as results.js did', () => {
+  it('deflates real values to cents', () => {
     expect(realValue(1000, 0, 3)).toBe(1000);
     expect(realValue(1000, 2, 3)).toBe(942.6);
     expect(realValue(123456.789, 1, 2.5)).toBe(120445.65);
@@ -50,20 +50,12 @@ describe('results.js formatting', () => {
 });
 
 describe('resultsContext', () => {
-  it.each(plans)('%s matches Django results_context', (name) => {
+  // Keys that repeat other fixtures (det_rows, the plan, the mc / stress statistics) are left out of results.json.
+  const BULKY = ['det_rows', 'plan_data_json', 'stress_test', 'scenarios_list', 'mc_p10', 'mc_p50', 'mc_p90', 'mc_spaghetti_paths'];
+
+  it.each(plans)('%s matches results.json', (name) => {
     const r = fixtureResults(name) as Record<string, any>;
-    const expected = loadPlanFixture(name, 'results');
-    // The engine adds bookkeeping keys to the plan's asset blocks in Python; the
-    // page reads only balances and returns from them.
-    const assetKeys = ['pretax_assets', 'spouse_pretax_assets', 'roth_assets', 'taxable_assets', 'hsa_assets', 'spouse_hsa_assets'];
-    for (const [k, v] of Object.entries(expected)) {
-      if (assetKeys.includes(k)) {
-        expect(r[k]?.present_balance, k).toBe((v as any)?.present_balance);
-        expect(r[k]?.return_mean, k).toBe((v as any)?.return_mean);
-      } else {
-        expect(r[k], k).toEqual(v);
-      }
-    }
+    expectPlanFixture(Object.fromEntries(Object.entries(r).filter(([k]) => !BULKY.includes(k))), name, 'results', 0);
     expect(r.det_rows).toEqual(loadPlanFixture(name, 'det_rows'));
     expect(r.mc_p50).toEqual(loadPlanFixture(name, 'mc').generate_runs.mc_p50);
     expect(Object.keys(r.scenarios_list)).toContain('2000_dotcom');
@@ -116,7 +108,7 @@ describe('chart data', () => {
   it('counts named Social Security streams and "ss" names as Social Security', () => {
     const plan = { income_sources: [{ name: 'Benefit A ', is_social_security: true }] };
     expect(splitIncome({ income_breakdown: { 'benefit a': 100, 'Jack SS': 50, Pension: 25, Classes: 5 } }, plan))
-      .toEqual({ ss: 155, other: 25 }); // "Classes" contains "ss", as in results.js
+      .toEqual({ ss: 155, other: 25 }); // "Classes" contains "ss": a substring match, by design
   });
 
   it('lists milestones in order, from the rows and the plan', () => {

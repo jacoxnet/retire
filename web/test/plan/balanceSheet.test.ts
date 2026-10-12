@@ -14,13 +14,13 @@ import { calculateMarginalTaxRate } from '../../src/lib/plan/marginal';
 import { applyModeChange } from '../../src/lib/plan/modeChange';
 import { parsePlanJson } from '../../src/lib/plan/normalize';
 import { validateBalanceSheetAccounts } from '../../src/lib/plan/validate';
-import { deepClose, fixtureIndex, loadFixture, loadPlanFixture, SAVED_DIR } from '../fixtures';
+import { deepClose, expectPlanFixture, fixtureIndex, loadFixture, SAVED_DIR } from '../fixtures';
 
-const TODAY = '2026-01-15'; // the date the fixture generator freezes
+const TODAY = fixtureIndex().generated_with.fixture_today; // imports date missing columns "today"
 
 type Case = { fn: string; args: any[]; kwargs: Record<string, any>; out: unknown };
 
-/** Call the TS port of a forms.py function with Python-style args/kwargs. */
+/** Call a balance-sheet function with a case's positional args and keyword args. */
 function call(c: Case): unknown {
   const a = structuredClone(c.args);
   const k = structuredClone(c.kwargs);
@@ -71,14 +71,12 @@ describe('full import of every saved plan', () => {
     it(p.name, () => {
       const data = parsePlanJson(readFileSync(join(SAVED_DIR, p.source), 'utf8'));
       const errors = importPlanData(data, TODAY);
-      const expected = loadPlanFixture(p.name, 'imported');
-      expect(errors).toEqual(expected.import_errors);
-      expect(deepClose(data, expected.plan, 1e-12)).toBeNull();
+      expectPlanFixture({ plan: data, import_errors: errors }, p.name, 'imported', 1e-12);
     });
   }
 });
 
-// Ports of the BalanceSheetTests in core/tests.py that call the functions directly.
+// Balance-sheet cases that call the functions directly.
 describe('BalanceSheetTests', () => {
   const inc = (amount: number, frequency = 'annual', subject_to_tax = true) => ({ name: 'X', amount, frequency, subject_to_tax });
 

@@ -1,7 +1,7 @@
 import { resultsContext, type Results } from '../src/lib/app/results';
 import { loadPlanFixture } from './fixtures';
 
-/** The page's results for a fixture plan, from the same engine outputs Django rendered. */
+/** The page's results for a fixture plan, from its det_rows, mc and stress fixtures. */
 export function fixtureResults(name: string): Results {
   const { plan } = loadPlanFixture(name, 'imported');
   const mc = loadPlanFixture(name, 'mc');

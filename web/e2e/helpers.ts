@@ -23,7 +23,7 @@ export function importedPlan(file: string, edit?: (plan: any) => void): Plan {
 }
 
 /**
- * The browser tests' plan (core/tests_navigation.py _rich_plan): sept23 with
+ * The browser tests' plan: sept23 with
  * non-default values and mixed booleans across rows, and a second income stream.
  */
 export function richPlan(): Plan {

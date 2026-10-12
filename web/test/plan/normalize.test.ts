@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getFloat, getInt } from '../../src/lib/plan/coerce';
 import { normalizeImportedPlan, normalizePlanFields, parsePlanJson } from '../../src/lib/plan/normalize';
-import { deepClose, fixtureIndex, loadFixture, loadPlanFixture, SAVED_DIR } from '../fixtures';
+import { deepClose, expectPlanFixture, fixtureIndex, loadFixture, SAVED_DIR } from '../fixtures';
 
 
 describe('normalize_imported_plan grid', () => {
@@ -23,14 +23,12 @@ describe('stage-1 import of every saved plan', () => {
     it(p.name, () => {
       const data = parsePlanJson(readFileSync(join(SAVED_DIR, p.source), 'utf8'));
       const errors = normalizePlanFields(data);
-      const expected = loadPlanFixture(p.name, 'normalized');
-      expect(errors).toEqual(expected.errors);
-      expect(deepClose(data, expected.plan, 0)).toBeNull();
+      expectPlanFixture({ plan: data, errors }, p.name, 'normalized', 0);
     });
   }
 });
 
-// Ports of core/tests_input_validation.py
+// Input-validation cases
 describe('NormalizeImportedPlanTests', () => {
   it('non-list rows and non-dict items', () => {
     const data: any = { accounts: 'nope', income_sources: [1, { name: 'Pension', amount: '1200' }] };

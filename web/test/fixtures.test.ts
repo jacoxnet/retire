@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { close, fixtureIndex, loadFixture, loadPlanFixture, parseFixture } from './fixtures';
+import { close, fixtureIndex, loadFixture, loadPlanFixture, parseFixture, stringifyFixture } from './fixtures';
 
-const PLAN_FILES = ['imported', 'inputs', 'numba_inputs', 'det_rows', 'kernel', 'mc', 'stress'];
+const PLAN_FILES = ['imported', 'inputs', 'numba_inputs', 'det_rows', 'kernel', 'mc', 'stress', 'results', 'results-page'];
 
 describe('fixture loader', () => {
   it('decodes non-finite sentinels', () => {
@@ -17,11 +17,16 @@ describe('fixture loader', () => {
   });
 });
 
-describe('golden fixtures', () => {
+describe('regression fixtures', () => {
   const index = fixtureIndex();
 
   it('cover every saved plan', () => {
     expect(index.plans.length).toBe(12);
+  });
+
+  it('round-trip through stringifyFixture', () => {
+    const v = { a: Float64Array.of(1.5, NaN), b: [Infinity, -Infinity], c: 'x' };
+    expect(parseFixture(stringifyFixture(v))).toEqual({ a: [1.5, NaN], b: [Infinity, -Infinity], c: 'x' });
   });
 
   for (const plan of index.plans) {

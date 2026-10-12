@@ -83,7 +83,7 @@ describe('Married toggle', () => {
   });
 });
 
-describe('commitSchedules (forms.py parsers)', () => {
+describe('commitSchedules', () => {
   it('saves rows as the page submits them', () => {
     const p = plan({
       begin_spending_age_type: 'specified',

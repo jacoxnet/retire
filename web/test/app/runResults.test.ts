@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeResults, runStressTest, type RunProgress } from '../../src/lib/app/runResults';
 import { resultsContext } from '../../src/lib/app/results';
 import { type ChunkRunner, localRunner } from '../../src/lib/engine/mc';
-import { deepClose, loadPlanFixture } from '../fixtures';
+import { deepClose, fixtureIndex, loadPlanFixture } from '../fixtures';
 
 /** The local runner, recording how many paths each job ran. */
 function countingRunner() {
@@ -27,17 +27,20 @@ function checkProgress(seen: RunProgress[], stages: string[]) {
 describe('computeResults', () => {
   it('a regular plan: deterministic rows, Monte Carlo and the default stress test against the same baseline', async () => {
     const { plan } = loadPlanFixture('syn_life_ins', 'imported');
-    const fixtureMc = loadPlanFixture('syn_life_ins', 'mc').generate_runs;
     const { runner, jobs } = countingRunner();
     const seen: RunProgress[] = [];
-    const r = await computeResults(plan, { runner, chunks: 4, seed: 11, onProgress: (p) => seen.push(p) });
+    const r = await computeResults(plan, { runner, chunks: 4, seed: fixtureIndex().generated_with.mc_seed, onProgress: (p) => seen.push(p) });
 
     expect(deepClose(r.det_rows, loadPlanFixture('syn_life_ins', 'det_rows'))).toBeNull();
     expect(r.goal_seeking).toBe(false);
     expect(r.mc_spaghetti_paths).toHaveLength(500);
-    // Same plan, different random paths: agrees with Python within sampling error.
-    const p = fixtureMc.run_success / 100;
-    expect(Math.abs(r.run_success - fixtureMc.run_success) / 100).toBeLessThan(3 * Math.sqrt((2 * p * (1 - p)) / plan.runs) + 1e-9);
+    // The fixtures' seed gives mc.json's statistics, however the runs are chunked.
+    const { mc_spaghetti_paths, ...stats } = loadPlanFixture('syn_life_ins', 'mc').generate_runs;
+    for (const [k, v] of Object.entries(stats)) expect(deepClose(r[k as keyof typeof r], v, 0), k).toBeNull();
+    expect(deepClose(r.mc_spaghetti_paths.slice(0, 5), mc_spaghetti_paths, 0)).toBeNull();
+    // The stress stage runs on its own derived seed; its scenario set-up matches stress.json.
+    const { regular_results: _r, stress_results: _s, deltas: _d, ...stress } = loadPlanFixture('syn_life_ins', 'stress');
+    for (const [k, v] of Object.entries(stress)) expect(deepClose(r.stress_test[k as keyof typeof r.stress_test], v, 0), k).toBeNull();
     // The stress test's baseline is this run, not a second one.
     expect(jobs.map((j) => [j.paths, j.stress])).toEqual([[plan.runs, false], [plan.runs, true]]);
     expect(r.stress_test.regular_results.run_success).toBe(r.run_success);

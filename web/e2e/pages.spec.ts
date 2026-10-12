@@ -70,9 +70,10 @@ test('Enter -> Results: runs on the workers, re-runs, and caches', async ({ page
   await page.click('#viewResultsNav');
   await page.waitForURL('**/results/');
   await expect(page.locator('#mcResultsCard')).toBeVisible({ timeout: 60_000 });
-  // Python's seeded run of this plan gives 79.96%; 20,000 paths put us within ~1 point.
+  // The fixtures' seeded run of this plan; 20,000 random paths put us within ~1 point.
+  const expected = JSON.parse(readFileSync(join(SAVED_DIR, '..', 'plans', 'sept27', 'mc.json'), 'utf8')).generate_runs.run_success;
   const rate = parseFloat((await page.locator('#mcResultsCard .display-5').textContent())!);
-  expect(Math.abs(rate - 79.96)).toBeLessThan(1.5);
+  expect(Math.abs(rate - expected)).toBeLessThan(1.5);
   await expect(page.locator('#projection tbody tr')).toHaveCount(51);
 
   await page.click('#charts-tab');

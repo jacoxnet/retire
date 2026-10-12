@@ -43,7 +43,7 @@ async function upload(text: string, name = 'plan.json') {
 const fixtureFor = (file: string) => fixtureIndex().plans.find((p) => p.source === file);
 
 describe('Load Plan', () => {
-  it.each(savedFiles)('imports %s as Django did', async (file) => {
+  it.each(savedFiles)('imports %s to imported.json', async (file) => {
     const { store, onDone } = setup();
     await upload(readFileSync(join(SAVED_DIR, file), 'utf8'), file);
     await vi.waitFor(() => expect(onDone).toHaveBeenCalled());
@@ -61,7 +61,7 @@ describe('Load Plan', () => {
   it.each(savedFiles)('round-trips %s through Save and Load', async (file) => {
     const { store, download } = setup();
     await upload(readFileSync(join(SAVED_DIR, file), 'utf8'), file);
-    // A legacy plan's first re-import can add a placeholder account (a Django quirk, see 4b);
+    // A legacy plan's first re-import can add a placeholder account (kept from the original app, see 4b);
     // from then on export and import are exact.
     await fireEvent.click(document.getElementById('btnSaveJSON')!);
     await upload(download.mock.calls[0][1]);

@@ -1,18 +1,16 @@
 // @vitest-environment jsdom
-// The Results page against the page Django renders for the same numbers
-// (fixtures/plans/<plan>/results.html.gz, generated from results_context with the
-// fixtures' seeded Monte Carlo and stress results).
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { gunzipSync } from 'node:zlib';
+// The Results page for each fixture plan (its seeded Monte Carlo and stress results):
+// what the page shows (the results card, print header, tabs, inputs, and the projection
+// and cash-flow tables in nominal and real dollars) is snapshotted in
+// fixtures/plans/<plan>/results-page.json.
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Results } from '../../src/lib/app/results';
-import { realValue, stressDeltaMoney, stressMoney, usd } from '../../src/lib/app/resultsFormat';
+import { stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
 import ResultsPage from '../../src/lib/components/results/ResultsPage.svelte';
 import { fixtureResults } from '../resultsFixture';
-import { FIXTURES_DIR, fixtureIndex } from '../fixtures';
+import { expectPlanFixture, fixtureIndex } from '../fixtures';
 
 const plans = fixtureIndex().plans.map((p) => p.name);
 // Real dollars are checked on a few plans; re-rendering every cell is slow in jsdom.
@@ -23,33 +21,10 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-function djangoPage(name: string): Document {
-  const html = gunzipSync(readFileSync(join(FIXTURES_DIR, 'plans', name, 'results.html.gz'))).toString('utf8');
-  return new DOMParser().parseFromString(`<!doctype html><body>${html}</body>`, 'text/html');
-}
-
-/**
- * What the browser showed after results.js ran: every `.dollar-amount` rewritten
- * from its data-nominal value, or deflated to real dollars by the row's year
- * (one more year inside an ending-assets group).
- */
-function applyResultsJs(doc: Document, mode: 'nominal' | 'real', inflation: number, startYear: number): void {
-  for (const el of doc.querySelectorAll<HTMLElement>('.dollar-amount')) {
-    const nominal = parseFloat(el.getAttribute('data-nominal')!);
-    let value = nominal;
-    if (mode === 'real') {
-      const tr = el.closest('tr');
-      const year = parseInt(tr?.querySelector('td')?.textContent ?? '2026');
-      const t = Math.max(0, year - startYear);
-      value = realValue(nominal, el.closest('.ending-assets-group') ? t + 1 : t, inflation);
-    }
-    el.textContent = usd(value);
-  }
-}
-
 const squash = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, '');
 const cellTexts = (root: ParentNode, sel: string) =>
   [...root.querySelectorAll(`${sel} tbody tr`)].map((tr) => [...tr.querySelectorAll(':scope > td')].map((td) => squash(td.textContent)));
+const tables = (root: ParentNode) => ({ projection: cellTexts(root, '#projection'), cashflow: cellTexts(root, '#cashflow') });
 
 function show(r: Results) {
   return render(ResultsPage, { results: r });
@@ -57,62 +32,36 @@ function show(r: Results) {
 
 describe.each(plans)('%s', (name) => {
   const r = fixtureResults(name);
-  const startYear = r.det_rows[0].year;
 
   // One render per plan (a page with every table is slow to build in jsdom).
-  it('matches the page Django renders', async () => {
+  it('matches results-page.json', async () => {
     const page = show(r);
-    headersMatch(page.container);
-    stressMatches(page.container);
-
-    // The projection and cash-flow tables, in nominal and then real dollars.
-    for (const mode of REAL_PLANS.includes(name) ? (['nominal', 'real'] as const) : (['nominal'] as const)) {
-      const django = djangoPage(name);
-      applyResultsJs(django, mode, r.inflation_rate, startYear);
-      if (mode === 'real') {
-        await fireEvent.click(page.container.querySelector('#proj_real')!);
-        flushSync();
-      }
-      for (const table of ['#projection', '#cashflow']) {
-        const expected = cellTexts(django, table);
-        const actual = cellTexts(page.container, table);
-        expect(actual.length, `${table} rows`).toBe(expected.length);
-        expected.forEach((row, i) => expect(actual[i], `${table} ${mode} row ${i}`).toEqual(row));
-      }
+    const c = page.container;
+    stressMatches(c);
+    const shown: Record<string, unknown> = {
+      results_card: squash(c.querySelector('#mcResultsCard')?.textContent),
+      print_header: squash(c.querySelector('.print-only-header')?.textContent),
+      print_header_name: c.querySelector('.print-only-header strong')?.textContent,
+      tabs: [...c.querySelectorAll('#resultsTabs button')].map((b) => squash(b.textContent)),
+      // Every input with its value (radios: checked), and the balances shown beside the returns.
+      inputs: Object.fromEntries([...c.querySelectorAll<HTMLInputElement>('#resultsInputsForm input[id]')]
+        .map((i) => [i.id, i.type === 'radio' ? i.checked : i.value])),
+      balances: [...c.querySelectorAll('#resultsInputsForm .small.text-muted')].map((e) => squash(e.textContent)),
+      nominal: tables(c),
+    };
+    expect(Object.keys(shown.inputs as object).length).toBeGreaterThan(10);
+    if (REAL_PLANS.includes(name)) {
+      await fireEvent.click(c.querySelector('#proj_real')!);
+      flushSync();
+      shown.real = tables(c);
+      // One toggle sets every table (and the charts).
+      expect((c.querySelector('#cf_real') as HTMLInputElement).checked).toBe(true);
+      expect((c.querySelector('#chart_real') as HTMLInputElement).checked).toBe(true);
     }
-    if (!REAL_PLANS.includes(name)) return;
-    // One toggle sets every table (and the charts).
-    expect((page.container.querySelector('#cf_real') as HTMLInputElement).checked).toBe(true);
-    expect((page.container.querySelector('#chart_real') as HTMLInputElement).checked).toBe(true);
+    expectPlanFixture(shown, name, 'results-page', 0);
   });
 
-  function headersMatch(container: HTMLElement) {
-    const page = { container };
-    const django = djangoPage(name);
-    expect(squash(page.container.querySelector('#mcResultsCard')?.textContent))
-      .toBe(squash(django.querySelector('#stats .col-md-7 .card')?.textContent));
-    expect(squash(page.container.querySelector('.print-only-header')?.textContent))
-      .toBe(squash(django.querySelector('.print-only-header')?.textContent));
-    expect(page.container.querySelector('.print-only-header strong')?.textContent)
-      .toBe(django.querySelector('.print-only-header strong')?.textContent);
-    expect([...page.container.querySelectorAll('#resultsTabs button')].map((b) => squash(b.textContent)))
-      .toEqual([...django.querySelectorAll('#resultsTabs button')].map((b) => squash(b.textContent)));
-
-    // Every input Django rendered, with the same value (the target rate gets its "%").
-    const inputs = [...django.querySelectorAll<HTMLInputElement>('#resultsInputsForm input[id]')];
-    expect(inputs.length).toBeGreaterThan(10);
-    for (const want of inputs) {
-      const got = page.container.querySelector<HTMLInputElement>(`#${want.id}`);
-      expect(got, want.id).not.toBeNull();
-      if (want.type === 'radio') expect(got!.checked, want.id).toBe(want.hasAttribute('checked'));
-      else expect(got!.value, want.id).toBe(want.id === 'results_target_success_rate' ? `${want.getAttribute('value')}%` : want.getAttribute('value') ?? '');
-    }
-    // ...and the balances shown beside the returns.
-    const balances = (root: ParentNode) => [...root.querySelectorAll('#resultsInputsForm .small.text-muted')].map((e) => squash(e.textContent));
-    expect(balances(page.container)).toEqual(balances(django));
-  }
-
-  /** The stress test tab shows the default scenario as results.js filled it in. */
+  /** The stress test tab shows the default scenario's results. */
   function stressMatches(container: HTMLElement) {
     const page = { container };
     const s = r.stress_test;

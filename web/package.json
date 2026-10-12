@@ -10,6 +10,7 @@
     "prepare": "svelte-kit sync || true",
     "test": "vitest run",
     "test:watch": "vitest",
+    "fixtures:update": "UPDATE_FIXTURES=1 vitest run test/plan && UPDATE_FIXTURES=1 vitest run test/deterministic.test.ts test/inputs.test.ts test/montecarlo.test.ts test/mc.test.ts test/stress.test.ts && UPDATE_FIXTURES=1 vitest run",
     "typecheck": "svelte-kit sync && tsc --noEmit",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "bench": "vitest run --config vitest.bench.config.ts",
