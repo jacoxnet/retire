@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Results } from '../../src/lib/app/results';
-import { stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
+import { djangoMoney, realValue, stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
 import ResultsPage from '../../src/lib/components/results/ResultsPage.svelte';
 import { fixtureResults } from '../resultsFixture';
 import { expectPlanFixture, fixtureIndex } from '../fixtures';
@@ -177,5 +177,24 @@ describe('interactions', () => {
     const page = show(goal!);
     expect(page.container.querySelector('#mcResultsCard')?.textContent).toContain('Max Achieved Desired Spending');
     expect(page.container.querySelector('#input_desired_spending')).toBeNull();
+  });
+
+  it('renders Ending Wealth percentiles with both nominal and real dollar columns', () => {
+    const page = show(r);
+    const table = page.container.querySelector('#mcEndingWealthTable');
+    expect(table).not.toBeNull();
+    const headers = [...table!.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+    expect(headers).toEqual(['Metric', 'Nominal', 'Real']);
+
+    const rows = [...table!.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()),
+    );
+    expect(rows.length).toBe(6);
+    expect(rows[0][0]).toBe('Mean Ending Wealth');
+    expect(rows[0][1]).toBe(`$${djangoMoney(r.run_mean)}`);
+    expect(rows[0][2]).toBe(`$${djangoMoney(realValue(r.run_mean, r.years, r.inflation_rate))}`);
+    expect(rows[1][0]).toBe('Median Ending Wealth');
+    expect(rows[1][1]).toBe(`$${djangoMoney(r.run_median)}`);
+    expect(rows[1][2]).toBe(`$${djangoMoney(realValue(r.run_median, r.years, r.inflation_rate))}`);
   });
 });

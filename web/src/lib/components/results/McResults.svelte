@@ -2,17 +2,17 @@
      percentiles, or the solved maximum spending for a goal-seeking run. -->
 <script lang="ts">
   import type { Results } from '../../app/results';
-  import { djangoMoney, floatformat } from '../../app/resultsFormat';
+  import { djangoMoney, floatformat, realValue } from '../../app/resultsFormat';
 
   let { results: r }: { results: Results } = $props();
   const sign = (v: number) => (v >= 0 ? 'text-success' : 'text-danger');
   const rows = $derived([
-    { label: 'Mean Ending Wealth:', value: r.run_mean, bold: false },
-    { label: 'Median Ending Wealth:', value: r.run_median, bold: true },
-    { label: '25th Percentile Ending Wealth:', value: r.run_25, bold: false },
-    { label: '10th Percentile Ending Wealth:', value: r.run_10, bold: true },
-    { label: 'Maximum Wealth:', value: r.run_max, bold: false },
-    { label: 'Minimum Wealth:', value: r.run_min, bold: false },
+    { label: 'Mean Ending Wealth', value: r.run_mean, bold: false },
+    { label: 'Median Ending Wealth', value: r.run_median, bold: true },
+    { label: '25th Percentile Ending Wealth', value: r.run_25, bold: false },
+    { label: '10th Percentile Ending Wealth', value: r.run_10, bold: true },
+    { label: 'Maximum Wealth', value: r.run_max, bold: false },
+    { label: 'Minimum Wealth', value: r.run_min, bold: false },
   ]);
 </script>
 
@@ -27,18 +27,33 @@
 
       <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span></p>
       <hr>
-      <h5 class="text-secondary mt-3">Ending Wealth Percentiles (Nominal)</h5>
+      <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
       {#if r.terminal_life_insurance > 0}
         <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
           <i class="fa-solid fa-shield-halved me-2 text-info"></i>
           <span>Includes <strong>${djangoMoney(r.terminal_life_insurance)}</strong> life insurance death benefit paid to estate/heirs.</span>
         </div>
       {/if}
-      <div class="row">
-        {#each rows as row (row.label)}
-          <div class="col-6 mb-2"><strong>{row.label}</strong></div>
-          <div class={['col-6 text-end', row.bold && 'font-weight-bold', sign(row.value)]}>${djangoMoney(row.value)}</div>
-        {/each}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="mcEndingWealthTable">
+          <thead class="table-light">
+            <tr>
+              <th>Metric</th>
+              <th class="text-end">Nominal</th>
+              <th class="text-end">Real</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each rows as row (row.label)}
+              {@const real = realValue(row.value, r.years ?? 0, r.inflation_rate ?? 0)}
+              <tr>
+                <td><strong>{row.label}</strong></td>
+                <td class={['text-end', row.bold && 'font-weight-bold', sign(row.value)]}>${djangoMoney(row.value)}</td>
+                <td class={['text-end', row.bold && 'font-weight-bold', sign(real)]}>${djangoMoney(real)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
       </div>
     </div>
   {:else}
