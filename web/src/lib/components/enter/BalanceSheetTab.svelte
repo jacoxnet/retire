@@ -96,6 +96,74 @@
     { key: 'net_retirement', label: 'Retirement Savings (Net of Income Tax)' },
     { key: 'breakdown', label: 'Asset Breakdown' },
   ];
+
+  let proxyEl: HTMLDivElement | null = $state(null);
+  let containerEl: HTMLDivElement | null = $state(null);
+  let isOverflowing = $state(false);
+  let tableScrollWidth = $state(0);
+  let isSyncing = false;
+
+  function syncScroll(from: HTMLElement, to: HTMLElement) {
+    if (isSyncing) return;
+    if (Math.abs(to.scrollLeft - from.scrollLeft) >= 1) {
+      isSyncing = true;
+      to.scrollLeft = from.scrollLeft;
+      queueMicrotask(() => {
+        isSyncing = false;
+      });
+    }
+  }
+
+  function onProxyScroll() {
+    if (proxyEl && containerEl) syncScroll(proxyEl, containerEl);
+  }
+
+  function onContainerScroll() {
+    if (proxyEl && containerEl) syncScroll(containerEl, proxyEl);
+  }
+
+  function onProxyWheel(e: WheelEvent) {
+    if (!proxyEl || e.deltaX !== 0 || e.deltaY === 0) return;
+    proxyEl.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+
+  function updateOverflow() {
+    if (!containerEl) return;
+    const scrollW = containerEl.scrollWidth;
+    const clientW = containerEl.clientWidth;
+    const overflowing = scrollW - clientW > 1;
+    isOverflowing = overflowing;
+    tableScrollWidth = scrollW;
+    if (proxyEl && Math.abs(proxyEl.scrollLeft - containerEl.scrollLeft) >= 1) {
+      proxyEl.scrollLeft = containerEl.scrollLeft;
+    }
+  }
+
+  $effect(() => {
+    // Re-evaluate when periods or view mode change
+    periods;
+    mode;
+    if (!containerEl) return;
+
+    updateOverflow();
+
+    const onResize = () => updateOverflow();
+    window.addEventListener('resize', onResize);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => updateOverflow());
+      ro.observe(containerEl);
+      const table = containerEl.querySelector('table');
+      if (table) ro.observe(table);
+    }
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      ro?.disconnect();
+    };
+  });
 </script>
 
 {#snippet deltaBadge(d: { diff: number; pct: number })}
@@ -209,7 +277,18 @@
     </div>
   {/if}
 
-  <div class="bs-table-container mb-4">
+  <div
+    class={['bs-scroll-proxy', isOverflowing && 'is-active']}
+    id="bsScrollProxy"
+    bind:this={proxyEl}
+    onscroll={onProxyScroll}
+    onwheel={onProxyWheel}
+    aria-hidden="true"
+    style:display={isOverflowing ? 'block' : 'none'}
+  >
+    <div class="bs-scroll-proxy-inner" style:width="{tableScrollWidth}px"></div>
+  </div>
+  <div class={['bs-table-container mb-4', isOverflowing && 'has-proxy-top']} bind:this={containerEl} onscroll={onContainerScroll}>
     <BsTable bind:bs={() => plan.balance_sheet as Record<string, any>, (v) => (plan.balance_sheet = v)} {periods} {taxRate} {autoRate} hasOverride={hasRateOverride(bs)} cpi={cpiSeries}
       {duplicateKeys} {onRemovePeriod} onShowGoal={(s) => (goalStatus = s)} onEditTarget={(t) => (cpiEdit = t)}
       onOverrideRate={(v) => (bs.marginal_tax_rate_override = v)} {onAddGoal} {onAddProperty} {onAddDebt} />

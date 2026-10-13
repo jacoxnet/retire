@@ -254,4 +254,31 @@ describe('editing', () => {
     expect(store.plan).toBeTruthy();
     stop();
   });
+
+  it('renders top scroll proxy above table container and synchronizes horizontal scrolling', async () => {
+    const { stop } = setup(loadSaved('sept27'));
+    await tab('balance-sheet');
+
+    const proxy = $('#bsScrollProxy') as HTMLDivElement;
+    const container = $('.bs-table-container') as HTMLDivElement;
+    expect(proxy).not.toBeNull();
+    expect(container).not.toBeNull();
+    expect(proxy.nextElementSibling).toBe(container);
+
+    const inner = proxy.querySelector('.bs-scroll-proxy-inner');
+    expect(inner).not.toBeNull();
+
+    // Test proxy -> container scroll sync
+    proxy.scrollLeft = 180;
+    await fireEvent.scroll(proxy);
+    expect(container.scrollLeft).toBe(180);
+
+    // Test container -> proxy scroll sync
+    container.scrollLeft = 320;
+    await fireEvent.scroll(container);
+    expect(proxy.scrollLeft).toBe(320);
+
+    stop();
+  });
 });
+

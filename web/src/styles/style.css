@@ -1291,11 +1291,18 @@ tbody tr:hover {
   background: #ffffff;
   box-shadow: var(--shadow-sm);
   max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.bs-table-container.has-proxy-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* Pinned duplicate horizontal scrollbar shown directly above the table. */
 .bs-scroll-proxy {
-  display: none; /* shown by syncBsScrollProxy() only when the table overflows */
+  display: none;
   overflow-x: auto;
   overflow-y: hidden;
   position: sticky;
@@ -1306,10 +1313,43 @@ tbody tr:hover {
   border: 1px solid #e2e8f0;
   border-bottom: none;
   border-radius: var(--radius-md) var(--radius-md) 0 0;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.bs-scroll-proxy.is-active {
+  display: block;
 }
 
 .bs-scroll-proxy-inner {
   height: 1px;
+}
+
+.bs-scroll-proxy::-webkit-scrollbar,
+.bs-table-container::-webkit-scrollbar {
+  height: 12px;
+}
+
+.bs-scroll-proxy::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.bs-table-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.bs-scroll-proxy::-webkit-scrollbar-thumb,
+.bs-table-container::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+}
+
+.bs-scroll-proxy::-webkit-scrollbar-thumb:hover,
+.bs-table-container::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
 }
 
 .bs-table {
@@ -1933,12 +1973,30 @@ tbody tr:hover {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
+  scrollbar-color: #94a3b8 #1e293b;
 }
 
 [data-theme="dark"] .bs-scroll-proxy {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-bottom: none;
+  scrollbar-color: #94a3b8 #1e293b;
+}
+
+[data-theme="dark"] .bs-scroll-proxy::-webkit-scrollbar-track,
+[data-theme="dark"] .bs-table-container::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .bs-scroll-proxy::-webkit-scrollbar-thumb,
+[data-theme="dark"] .bs-table-container::-webkit-scrollbar-thumb {
+  background-color: #64748b;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .bs-scroll-proxy::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .bs-table-container::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
 [data-theme="dark"] .bs-table {
