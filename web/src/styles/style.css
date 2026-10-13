@@ -1203,6 +1203,11 @@ tbody tr:hover {
   background-color: var(--bg-secondary);
 }
 
+.chart-card .card-header {
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
 .chart-card:hover {
   box-shadow: var(--shadow-lg) !important;
 }
@@ -2128,6 +2133,7 @@ tbody tr:hover {
 }
 
 [data-theme="dark"] .table-light td,
+[data-theme="dark"] .table-light th,
 [data-theme="dark"] .bs-table tbody tr.bs-goal-row td,
 [data-theme="dark"] .bs-table tbody tr.table-light td {
   background-color: #19263a !important;
@@ -2351,6 +2357,79 @@ tbody tr:hover {
   color: var(--accent-hover) !important;
   border-color: var(--border-color) var(--border-color) transparent;
 }
+
+/* Charts Page Styling in Dark Mode */
+[data-theme="dark"] .chart-card {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] .chart-card .card-header {
+  background-color: var(--bg-tertiary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] .chart-card .card-title {
+  color: var(--accent-hover) !important;
+}
+
+[data-theme="dark"] .chart-card .card-header small,
+[data-theme="dark"] .chart-card .card-header .text-muted {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] #charts .card.bg-light {
+  background-color: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] #charts .card.bg-light h4 {
+  color: var(--text-primary) !important;
+}
+
+/* Historical Stress Test Page Styling in Dark Mode */
+[data-theme="dark"] #stressComparisonTable {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] #stressComparisonTable thead.table-light th,
+[data-theme="dark"] #stressComparisonTable thead th {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-secondary) !important;
+  border-bottom: 2px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] #stressComparisonTable tbody td {
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] #stressComparisonTable tbody tr:hover td {
+  background-color: #27374d !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .alert-light {
+  background-color: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .alert-light strong,
+[data-theme="dark"] .alert-light span {
+  color: var(--text-primary) !important;
+}
+
+/* Fallback for any lingering bg-white in dark mode */
+[data-theme="dark"] .bg-white:not(.badge) {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary);
+}
+
+
 
 /* ==========================================================================
    Multi-Section Executive Print & PDF Report Styles (Landscape)

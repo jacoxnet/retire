@@ -72,7 +72,7 @@
   {#each CARDS as c (c.kind)}
     <div class={c.col}>
       <div class={['card shadow-sm border-0 chart-card', c.kind !== 'taxLiability' && 'h-100']}>
-        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header border-bottom py-3 d-flex justify-content-between align-items-center">
           <div>
             <h5 class="card-title text-primary mb-0 fw-bold"><i class="fa {c.icon} me-2"></i>{CHART_TITLES[c.kind].card}</h5>
             <small class="text-muted">{c.sub}</small>

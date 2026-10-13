@@ -76,7 +76,7 @@
   </div>
 {/snippet}
 
-<div class="card p-4 shadow-sm mb-4 border-0 bg-white">
+<div class="card p-4 shadow-sm mb-4">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 border-bottom pb-3 mb-3">
     <div>
       <h4 class="fw-bold text-danger mb-0"><i class="fa fa-fire me-2"></i>Historical Crisis & Sequence-of-Returns Stress Test</h4>
@@ -119,7 +119,7 @@
 
 <div class="row justify-content-center mb-4">
   <div class="col-12">
-    <div class="card p-4 shadow-sm border-0 h-100 bg-white" class:opacity-50={busy}>
+    <div class="card p-4 shadow-sm h-100" class:opacity-50={busy}>
       <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
         <h3 class="text-primary mb-0"><i class="fa fa-scale-balanced me-2"></i>Results Comparison</h3>
         <span class="badge bg-light text-secondary border fw-normal">Stress Test vs. Regular Monte Carlo</span>

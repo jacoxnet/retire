@@ -79,7 +79,7 @@
 
   <div class="row g-4 justify-content-center">
     <div class="col-md-4">
-      <div class="card p-4 h-100 shadow-sm border-0 text-center hover-shadow transition-all bg-white">
+      <div class="card p-4 h-100 shadow-sm text-center hover-shadow transition-all">
         <div class="card-body d-flex flex-column justify-content-between p-0">
           <div>
             <div class="p-3 bg-primary bg-opacity-10 rounded-circle d-inline-block mb-3"><i class="fa fa-download fa-2x text-primary"></i></div>
@@ -94,7 +94,7 @@
     </div>
 
     <div class="col-md-4">
-      <div class="card p-4 h-100 shadow-sm border-0 text-center hover-shadow transition-all bg-white">
+      <div class="card p-4 h-100 shadow-sm text-center hover-shadow transition-all">
         <div class="card-body d-flex flex-column justify-content-between p-0">
           <div>
             <div class="p-3 bg-success bg-opacity-10 rounded-circle d-inline-block mb-3"><i class="fa fa-upload fa-2x text-success"></i></div>
@@ -112,7 +112,7 @@
     </div>
 
     <div class="col-md-4">
-      <div class="card p-4 h-100 shadow-sm border-0 text-center hover-shadow transition-all bg-white">
+      <div class="card p-4 h-100 shadow-sm text-center hover-shadow transition-all">
         <div class="card-body d-flex flex-column justify-content-between p-0">
           <div>
             <div class="p-3 bg-danger bg-opacity-10 rounded-circle d-inline-block mb-3"><i class="fa fa-trash-can fa-2x text-danger"></i></div>
