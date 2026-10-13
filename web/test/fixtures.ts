@@ -31,10 +31,19 @@ export function stringifyFixture(value: unknown): string {
 }
 
 /**
+ * Default relative tolerance for engine snapshots. Floating-point results differ in the
+ * last bit between platforms (e.g. `**` on macOS vs Linux), and Monte Carlo / stress means
+ * amplify that to ~1e-7 relative (heavy-tailed paths dominate the sum), so fixtures written
+ * on one machine must still pass on CI. 1e-6 leaves headroom while still catching any real
+ * change (a $1 shift on a $1M value).
+ */
+export const FIXTURE_TOL = 1e-6;
+
+/**
  * Snapshot check: `actual` must match fixtures/<parts> (numbers within `tol`, see
  * deepClose). Under UPDATE_FIXTURES=1 the file is rewritten from `actual` instead.
  */
-export function expectFixture(actual: unknown, parts: string[], tol = 1e-9): void {
+export function expectFixture(actual: unknown, parts: string[], tol = FIXTURE_TOL): void {
   const path = join(FIXTURES_DIR, ...parts);
   if (UPDATING) {
     mkdirSync(dirname(path), { recursive: true });
@@ -47,7 +56,7 @@ export function expectFixture(actual: unknown, parts: string[], tol = 1e-9): voi
   if (diff) throw new Error(`${parts.join('/')} differs at ${diff} (run \`npm run fixtures:update\` if the change is intended)`);
 }
 
-export const expectPlanFixture = (actual: unknown, plan: string, file: string, tol = 1e-9) =>
+export const expectPlanFixture = (actual: unknown, plan: string, file: string, tol = FIXTURE_TOL) =>
   expectFixture(actual, ['plans', plan, `${file}.json`], tol);
 
 /** Parse fixture JSON, turning the "NaN"/"Infinity" sentinels back into numbers. */

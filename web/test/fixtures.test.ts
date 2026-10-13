@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { close, fixtureIndex, loadFixture, loadPlanFixture, parseFixture, stringifyFixture } from './fixtures';
+import { close, FIXTURE_TOL, fixtureIndex, loadFixture, loadPlanFixture, parseFixture, stringifyFixture } from './fixtures';
 
 const PLAN_FILES = ['imported', 'inputs', 'numba_inputs', 'det_rows', 'kernel', 'mc', 'stress', 'results', 'results-page'];
 
@@ -14,6 +14,9 @@ describe('fixture loader', () => {
     expect(close(1e9, 1e9 + 0.5)).toBe(true);
     expect(close(1, 1 + 1e-6)).toBe(false);
     expect(close(NaN, NaN)).toBe(true);
+    // Snapshots absorb cross-platform float noise in Monte Carlo means, but not real changes.
+    expect(close(-19261651.63528176, -19261653.57758715, FIXTURE_TOL)).toBe(true);
+    expect(close(1_000_000, 1_000_002, FIXTURE_TOL)).toBe(false);
   });
 });
 
