@@ -35,7 +35,7 @@ export function stringifyFixture(value: unknown): string {
  * last bit between platforms (e.g. `**` on macOS vs Linux), and Monte Carlo / stress means
  * amplify that to ~1e-7 relative (heavy-tailed paths dominate the sum), so fixtures written
  * on one machine must still pass on CI. 1e-6 leaves headroom while still catching any real
- * change (a $1 shift on a $1M value).
+ * change (more than $1 on a $1M value).
  */
 export const FIXTURE_TOL = 1e-6;
 
