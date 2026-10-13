@@ -7,6 +7,7 @@
     type Volatility, volatilityChoice, yearAtAge,
   } from '../../plan/accountCard';
   import type { Account } from '../../plan/types';
+  import HelpPopover from '../shared/HelpPopover.svelte';
   import MoneyInput from '../shared/MoneyInput.svelte';
   import PercentInput from '../shared/PercentInput.svelte';
 
@@ -165,15 +166,32 @@
         <PercentInput id="{uid}-mean" class="form-control form-control-sm percent-input" bind:value={getMean, setMean} />
       </div>
       <div class="col-6 advanced-only-field">
-        <label class="form-label small fw-bold mb-1" for="{uid}-vol">Volatility (Std Dev)</label>
-        <select class="form-select form-select-sm acc-volatility-select" id="{uid}-vol" value={volatility} onchange={onVolatility}>
+        <label class="form-label small fw-bold mb-1" for="{uid}-vol">
+          Volatility (Std Dev)
+          <HelpPopover
+            title="Volatility (Standard Deviation)"
+            content="Historical market analysis supports an annualized standard deviation of 15%–20% for U.S. equities, 5%–8% for U.S. Treasuries, and 1%–3% for cash equivalents, depending on the time period measured."
+          />
+        </label>
+        <select
+          class="form-select form-select-sm acc-volatility-select"
+          id="{uid}-vol"
+          value={volatility}
+          onchange={onVolatility}
+          title="Historical market analysis supports an annualized standard deviation of 15%–20% for U.S. equities, 5%–8% for U.S. Treasuries, and 1%–3% for cash equivalents, depending on the time period measured."
+        >
           <option value="low">Low (4.5%)</option>
           <option value="moderate">Moderate (9.5%)</option>
           <option value="high">High (16.0%)</option>
           <option value="custom">User Specified</option>
         </select>
         {#if volatility === 'custom'}
-          <PercentInput id="{uid}-std" class="form-control form-control-sm percent-input mt-1 acc-return-std" bind:value={getStd, setStd} />
+          <PercentInput
+            id="{uid}-std"
+            class="form-control form-control-sm percent-input mt-1 acc-return-std"
+            bind:value={getStd, setStd}
+            title="Historical market analysis supports an annualized standard deviation of 15%–20% for U.S. equities, 5%–8% for U.S. Treasuries, and 1%–3% for cash equivalents, depending on the time period measured."
+          />
         {/if}
       </div>
     </div>

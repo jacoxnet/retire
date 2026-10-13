@@ -9,8 +9,9 @@
     emptyValue?: number;
     class?: string;
     invalid?: boolean;
+    title?: string;
   }
-  let { value = $bindable(), id, emptyValue = 0, class: cls = 'form-control', invalid = false }: Props = $props();
+  let { value = $bindable(), id, emptyValue = 0, class: cls = 'form-control', invalid = false, title }: Props = $props();
 
   let focused = $state(false);
   let text = $state('');
@@ -36,6 +37,7 @@
   inputmode="decimal"
   class={[cls, invalid && 'is-invalid']}
   {id}
+  {title}
   value={text}
   onfocus={() => (focused = true)}
   {oninput}
