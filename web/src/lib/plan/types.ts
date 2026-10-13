@@ -2,7 +2,8 @@
 // plans round-trip unchanged. Loose index signatures keep unknown-but-harmless keys
 // (e.g. engine metadata) from failing type checks.
 
-export type SimulationType = 'regular' | 'goal_seeking';
+export type SimulationType = 'regular' | 'goal_seeking' | 'earliest_retirement';
+export type EarliestRetirementStrategy = 'simultaneous' | 'same_age' | 'solve_user' | 'solve_spouse';
 export type FilingStatus = 'single' | 'joint' | 'married_filing_jointly' | 'hoh' | 'head_of_household';
 export type Frequency = 'monthly' | 'annual' | 'one_time' | 'one-time';
 export type AdjustType = 'inflation' | 'fixed_pct' | 'inflation_less_pct' | 'none';
@@ -134,6 +135,7 @@ export type BalanceSheet = Record<string, any>;
 export interface Plan {
   goal_seeking?: boolean;
   simulation_type?: SimulationType | string;
+  earliest_retirement_strategy?: EarliestRetirementStrategy | string;
   user_name?: string;
   user_age?: number;
   user_retirement_age?: number;

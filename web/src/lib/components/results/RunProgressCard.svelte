@@ -17,7 +17,7 @@
     <div class="card p-4 shadow-sm text-center" id="runProgressCard">
       <h4 class="text-primary mb-3"><i class="fa fa-spinner fa-spin me-2"></i>Running simulations…</h4>
       <p class="text-secondary small mb-3">
-        {runs.toLocaleString('en-US')} Monte Carlo paths{#if goalSeeking}, solving for the maximum spending (each search step uses up to {Math.min(runs, GOAL_SEEK_RUNS_CAP).toLocaleString('en-US')} paths){/if}.
+        {runs.toLocaleString('en-US')} Monte Carlo paths{#if goalSeeking}, solving for the target goal (each search step uses up to {Math.min(runs, GOAL_SEEK_RUNS_CAP).toLocaleString('en-US')} paths){/if}.
       </p>
       {#if progress}
         <div class="small fw-semibold mb-1" id="runProgressStage">Step {progress.step} of {progress.steps}: {STAGE_LABELS[progress.stage]}</div>

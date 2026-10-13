@@ -38,8 +38,9 @@
 
   // The form as the template rendered it.
   function initialValues(): Record<string, string> {
+    const currentSimType = r.simulation_type || (r.goal_seeking ? 'goal_seeking' : 'regular');
     const v: Record<string, string> = {
-      simulation_type: r.goal_seeking ? 'goal_seeking' : 'regular',
+      simulation_type: currentSimType,
       target_success_rate: percentText(floatformat(r.target_success_rate || 80.0, -2)),
       inflation_rate: floatformat(r.inflation_rate, 1),
       user_age_death: pyStr(r.user_age_death),
@@ -49,7 +50,10 @@
       hsa_return_mean: floatformat(r.hsa_assets?.return_mean, 1),
       runs: pyStr(r.runs || 50000),
     };
-    if (!r.goal_seeking) v.desired_spending = floatformat(r.desired_spending, 0);
+    if (currentSimType === 'earliest_retirement') {
+      v.earliest_retirement_strategy = (r.plan_data_json?.earliest_retirement_strategy as string) || (r as any).strategy || 'simultaneous';
+    }
+    if (currentSimType !== 'goal_seeking') v.desired_spending = floatformat(r.desired_spending, 0);
     if (r.is_married) v.spouse_age_death = pyStr(r.spouse_age_death);
     return v;
   }
@@ -74,7 +78,7 @@
   });
 
   const topSliders = $derived<Slider[]>([
-    ...(!r.goal_seeking
+    ...((r.simulation_type ?? (r.goal_seeking ? 'goal_seeking' : 'regular')) !== 'goal_seeking'
       ? [{ name: 'desired_spending', label: 'Desired Annual Recurring Spending', min: 0, max: 500000, step: 1000, width: 120, unit: '$' as const }]
       : []),
     { name: 'inflation_rate', label: 'Inflation Rate', min: 0, max: 15, step: 0.1, width: 90, unit: '%' },
@@ -105,7 +109,7 @@
       document.getElementById('input_runs')?.focus();
       return;
     }
-    if (values.simulation_type === 'goal_seeking') {
+    if (values.simulation_type === 'goal_seeking' || values.simulation_type === 'earliest_retirement') {
       const t = parsePercent(values.target_success_rate);
       targetInvalid = Number.isNaN(t) || t < 1.0 || t > 99.0;
       if (targetInvalid) {
@@ -183,14 +187,21 @@
         Regular Simulation <span class="text-muted fw-normal small">(Calculates Success Rate)</span>
       </label>
     </div>
-    <div class="form-check mb-3">
+    <div class="form-check mb-2">
       <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_goal" value="goal_seeking"
         checked={values.simulation_type === 'goal_seeking'} onchange={set('simulation_type')} {disabled}>
       <label class="form-check-label fw-semibold" for="results_sim_type_goal">
         Maximum Spending Simulation <span class="text-muted fw-normal small">(Solves for Spending)</span>
       </label>
     </div>
-    <div class="mb-3" id="results_target_success_group" style="display: {values.simulation_type === 'goal_seeking' ? 'block' : 'none'};">
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_earliest" value="earliest_retirement"
+        checked={values.simulation_type === 'earliest_retirement'} onchange={set('simulation_type')} {disabled}>
+      <label class="form-check-label fw-semibold" for="results_sim_type_earliest">
+        Earliest Retirement Age Simulation <span class="text-secondary fw-normal small">(Solves for Retirement Age)</span>
+      </label>
+    </div>
+    <div class="mb-3" id="results_target_success_group" style="display: {values.simulation_type === 'goal_seeking' || values.simulation_type === 'earliest_retirement' ? 'block' : 'none'};">
       <label for="results_target_success_rate" class="form-label fw-semibold">Target Success Rate %</label>
       <input type="text" inputmode="decimal" class={['form-control percent-input', targetInvalid && 'is-invalid']} id="results_target_success_rate"
         name="target_success_rate" value={values.target_success_rate} {disabled}
@@ -200,6 +211,21 @@
         Target Success Rate must be between 1% and 99%.
       </div>
     </div>
+    {#if values.simulation_type === 'earliest_retirement' && r.is_married}
+      <div class="mb-3" id="results_strategy_group">
+        <label for="results_strategy" class="form-label fw-semibold">Retirement Strategy</label>
+        <select class="form-select" id="results_strategy" name="earliest_retirement_strategy"
+          value={values.earliest_retirement_strategy} onchange={set('earliest_retirement_strategy')} {disabled}>
+          <option value="simultaneous">Retire Simultaneously (Same Year)</option>
+          <option value="same_age">Retire at the Same Age</option>
+          <option value="solve_user">Solve for You (Keep Spouse's Retirement Age Fixed)</option>
+          <option value="solve_spouse">Solve for Spouse (Keep Your Retirement Age Fixed)</option>
+        </select>
+        <div class="form-text">
+          Choose how to solve for combined retirement ages.
+        </div>
+      </div>
+    {/if}
     <button type="submit" class={['btn btn-primary btn-md w-100 shadow-sm', stale && 'btn-rerun-highlight']} {disabled}>
       <i class="fa fa-sync-alt me-1"></i> Update Simulation Mode
     </button>

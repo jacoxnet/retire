@@ -31,18 +31,31 @@ export function applyModeChange(plan: Plan, input: ModeChangeInput): ModeChangeM
   const has = (k: string) => k in input && input[k] !== undefined;
   const post = (k: string) => (has(k) ? input[k] : null);
 
-  const isGoal = (has('simulation_type') ? input.simulation_type : 'regular') === 'goal_seeking';
-  data.simulation_type = isGoal ? 'goal_seeking' : 'regular';
+  const requestedType = has('simulation_type') ? input.simulation_type : 'regular';
+  const isGoal = requestedType === 'goal_seeking';
+  const isEarliestRet = requestedType === 'earliest_retirement';
+  data.simulation_type = isGoal ? 'goal_seeking' : isEarliestRet ? 'earliest_retirement' : 'regular';
   data.goal_seeking = isGoal;
 
-  if (isGoal) {
+  if (isGoal || isEarliestRet) {
+    const modeName = isGoal ? 'Maximum Spending' : 'Earliest Retirement Age';
     const target = getFloat(post('target_success_rate'), data.target_success_rate ?? 80.0);
     if (target < 1.0 || target > 99.0) {
-      error('Target Success Rate must be between 1% and 99% for Maximum Spending simulation.');
+      error(`Target Success Rate must be between 1% and 99% for ${modeName} simulation.`);
       data.target_success_rate = Math.min(99.0, Math.max(1.0, target));
     } else {
       data.target_success_rate = target;
     }
+  }
+
+  if (isEarliestRet) {
+    if (has('earliest_retirement_strategy')) {
+      data.earliest_retirement_strategy = input.earliest_retirement_strategy;
+    } else if (!data.earliest_retirement_strategy) {
+      data.earliest_retirement_strategy = 'simultaneous';
+    }
+  } else if (has('earliest_retirement_strategy')) {
+    data.earliest_retirement_strategy = input.earliest_retirement_strategy;
   }
 
   const changedValue = (key: string, current: unknown, decimals: number): number | null => {

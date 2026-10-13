@@ -92,4 +92,23 @@ describe('computeResults', () => {
     expect(stress.regular_results.run_success).toBe(r.run_success);
     expect(stress.deltas.delta_success).toBeCloseTo(stress.stress_results.run_success - r.run_success, 12);
   }, 60_000);
+
+  it('an earliest-retirement plan: search stage, full run at solved retirement ages, baseline at plan age', async () => {
+    const { plan } = loadPlanFixture('early_suzie_plan', 'imported');
+    const earliestPlan = {
+      ...plan,
+      runs: 400,
+      simulation_type: 'earliest_retirement',
+      target_success_rate: 80.0,
+    };
+    const { runner } = countingRunner();
+    const seen: RunProgress[] = [];
+    const r = await computeResults(earliestPlan, { runner, chunks: 1, seed: 5, goalSeekRunsCap: 200, onProgress: (p) => seen.push(p) });
+
+    expect(r.simulation_type).toBe('earliest_retirement');
+    expect(r.achieved_user_ret_age).toBeGreaterThanOrEqual(earliestPlan.user_age);
+    expect(r.achieved_success_rate).toBeGreaterThanOrEqual(80.0);
+    expect(r.det_rows.length).toBeGreaterThan(0);
+    checkProgress(seen, ['search', 'mc', 'baseline', 'stress']);
+  }, 60_000);
 });

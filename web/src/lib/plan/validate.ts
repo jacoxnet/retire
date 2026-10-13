@@ -193,6 +193,7 @@ export function deathAgeErrors(data: Plan | Obj): string[] {
 export function planErrors(data: Plan | Obj): string[] {
   const { userAge, userAgeDeath, isMarried, spouseAge, spouseAgeDeath } = people(data);
   const isGoalSeeking = getBool(data.goal_seeking);
+  const isEarliestRet = data.simulation_type === 'earliest_retirement';
   const runs = getInt(data.runs, 50000);
   const target = getFloat(data.target_success_rate, 80.0);
   const userRetirementAge = getInt(data.user_retirement_age, 65);
@@ -202,8 +203,9 @@ export function planErrors(data: Plan | Obj): string[] {
 
   const errors: string[] = [];
   if (runs < 1 || runs > 1000000) errors.push('Number of Simulations must be an integer between 1 and 1,000,000.');
-  if (isGoalSeeking && (target < 1.0 || target > 99.0)) {
-    errors.push('Target Success Rate must be between 1% and 99% for Maximum Spending simulation.');
+  if ((isGoalSeeking || isEarliestRet) && (target < 1.0 || target > 99.0)) {
+    const simName = isEarliestRet ? 'Earliest Retirement Age' : 'Maximum Spending';
+    errors.push(`Target Success Rate must be between 1% and 99% for ${simName} simulation.`);
   }
 
   if (userAge < 18 || userAge > 120) errors.push('Your Present Age must be an integer between 18 and 120.');

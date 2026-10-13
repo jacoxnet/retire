@@ -51,4 +51,24 @@ describe('change_mode tests', () => {
     applyModeChange(plan, { simulation_type: 'regular', spouse_hsa_return_mean: '7.5' });
     expect(plan.spouse_hsa_assets.return_mean).toBe(7.5);
   });
+
+  it('switches to earliest_retirement mode with strategy', () => {
+    const plan = getDefaultData();
+    applyModeChange(plan, {
+      simulation_type: 'earliest_retirement',
+      target_success_rate: '90.0',
+      earliest_retirement_strategy: 'same_age',
+    });
+    expect(plan.simulation_type).toBe('earliest_retirement');
+    expect(plan.goal_seeking).toBe(false);
+    expect(plan.target_success_rate).toBe(90.0);
+    expect(plan.earliest_retirement_strategy).toBe('same_age');
+  });
+
+  it('clamps invalid target success rate for earliest_retirement with message', () => {
+    const plan = getDefaultData();
+    const notes = applyModeChange(plan, { simulation_type: 'earliest_retirement', target_success_rate: '0.5' });
+    expect(notes.map((n) => n.message)).toContain('Target Success Rate must be between 1% and 99% for Earliest Retirement Age simulation.');
+    expect(plan.target_success_rate).toBe(1.0);
+  });
 });

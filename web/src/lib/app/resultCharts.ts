@@ -270,8 +270,8 @@ export function milestonesList(r: Results): Milestone[] {
   const plan = r.plan_data_json ?? {};
   const isMarried = Boolean(plan.is_married ?? r.is_married);
   const int = (v: unknown) => parseInt(String(v));
-  const userRetAge = int(plan.user_retirement_age ?? r.user_retirement_age);
-  const spouseRetAge = isMarried ? int(plan.spouse_retirement_age ?? r.spouse_retirement_age) : null;
+  const userRetAge = int(r.achieved_user_ret_age ?? plan.user_retirement_age ?? r.user_retirement_age);
+  const spouseRetAge = isMarried ? int(r.achieved_spouse_ret_age ?? plan.spouse_retirement_age ?? r.spouse_retirement_age) : null;
   const userDeathAge = int(plan.user_age_death ?? r.user_age_death);
   const spouseDeathAge = isMarried ? int(plan.spouse_age_death ?? r.spouse_age_death) : null;
   const ss = plan.social_security || {};

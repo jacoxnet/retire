@@ -234,6 +234,9 @@ export function normalizePlanFields(data: Obj): string[] {
   } else if (!('simulation_type' in data) && 'goal_seeking' in data) {
     data.simulation_type = data.goal_seeking ? 'goal_seeking' : 'regular';
   }
+  if (data.simulation_type === 'earliest_retirement' && !data.earliest_retirement_strategy) {
+    data.earliest_retirement_strategy = 'simultaneous';
+  }
 
   if (isObj(data.social_security)) {
     const ss = data.social_security;

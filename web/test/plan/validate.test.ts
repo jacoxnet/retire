@@ -43,4 +43,9 @@ describe('validator cases', () => {
   it('the default plan is valid (an export of it loads back cleanly)', () => {
     expect(planErrors(getDefaultData())).toEqual([]);
   });
+
+  it('validates target success rate for earliest_retirement mode', () => {
+    const plan = { ...getDefaultData(), simulation_type: 'earliest_retirement', target_success_rate: 150 };
+    expect(planErrors(plan)).toContain('Target Success Rate must be between 1% and 99% for Earliest Retirement Age simulation.');
+  });
 });

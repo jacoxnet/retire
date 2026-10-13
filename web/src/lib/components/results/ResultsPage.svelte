@@ -93,7 +93,7 @@
     </div>
     <div class="text-end">
       <span class="badge bg-primary fs-6 px-3 py-2">
-        {#if !results.goal_seeking}Success Rate: {floatformat(results.run_success, 1)}%{:else}Max Spending: ${djangoMoney(results.achieved_spending)}/yr{/if}
+        {#if results.simulation_type === 'earliest_retirement'}Earliest Ret: Age {results.achieved_user_ret_age}{#if results.is_married} / {results.achieved_spouse_ret_age}{/if}{:else if !results.goal_seeking}Success Rate: {floatformat(results.run_success, 1)}%{:else}Max Spending: ${djangoMoney(results.achieved_spending)}/yr{/if}
       </span>
     </div>
   </div>

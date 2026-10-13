@@ -3,6 +3,7 @@
 // local runner in tests.
 import type { StressSpec } from '../engine/crisis';
 import { runDeterministic } from '../engine/deterministic';
+import { earliestRetirementSearch, type EarliestRetirementResult } from '../engine/earliestRetirement';
 import { binarySearch, type ChunkRunner, generateRuns, type GoalSeekResult, type McStats } from '../engine/mc';
 import type { Dict } from '../engine/py';
 import { runHistoricalStressTest } from '../engine/stress';
@@ -18,7 +19,7 @@ export const GOAL_SEEK_RUNS_CAP = 100_000;
 export type RunStage = 'search' | 'mc' | 'baseline' | 'stress';
 
 export const STAGE_LABELS: Record<RunStage, string> = {
-  search: 'Solving for maximum spending',
+  search: 'Solving for target goal',
   mc: 'Monte Carlo simulation',
   baseline: 'Regular simulation for the stress test',
   stress: 'Historical stress test',
@@ -50,7 +51,9 @@ const stripSpaghetti = ({ mc_spaghetti_paths: _, ...rest }: McStats) => rest;
 export async function computeResults(plan: Dict, opts: RunOptions): Promise<Results> {
   const { runner, chunks } = opts;
   const goal = Boolean(plan.goal_seeking);
-  const stages: RunStage[] = goal ? ['search', 'mc', 'baseline', 'stress'] : ['mc', 'stress'];
+  const isEarliestRet = plan.simulation_type === 'earliest_retirement';
+  const hasSearch = goal || isEarliestRet;
+  const stages: RunStage[] = hasSearch ? ['search', 'mc', 'baseline', 'stress'] : ['mc', 'stress'];
   const report = (stage: RunStage) => (done: number, total: number) =>
     opts.onProgress?.({ stage, step: stages.indexOf(stage) + 1, steps: stages.length, fraction: total > 0 ? Math.min(1, done / total) : 1 });
   // Run a stage and report it complete (a goal search can stop before its 25 steps).
@@ -61,15 +64,16 @@ export async function computeResults(plan: Dict, opts: RunOptions): Promise<Resu
   };
   const seed = (n: number) => (opts.seed === undefined ? undefined : (opts.seed + n) >>> 0);
 
-  const detRows = runDeterministic(plan);
+  let detRows = runDeterministic(plan);
 
   let mc: McStats;
   let solved: GoalSeekResult | null = null;
+  let solvedEarliest: EarliestRetirementResult | null = null;
   let baseline: Omit<McStats, 'mc_spaghetti_paths'>;
-  if (!goal) {
+  if (!hasSearch) {
     mc = await stage('mc', (onProgress) => generateRuns(plan, { runner, chunks, seed: seed(0), onProgress }));
     baseline = stripSpaghetti(mc);
-  } else {
+  } else if (goal) {
     const cap = opts.goalSeekRunsCap ?? GOAL_SEEK_RUNS_CAP;
     const searchPlan = Number(plan.runs) > cap ? { ...plan, runs: cap } : plan;
     const found = await stage('search', (onProgress) => binarySearch(searchPlan, { runner, chunks, seed: seed(1), onProgress }));
@@ -78,12 +82,26 @@ export async function computeResults(plan: Dict, opts: RunOptions): Promise<Resu
       generateRuns(plan, { runner, chunks, seed: seed(2), testSpending: found.achieved_spending, onProgress }));
     // The stress test compares against the plan's own spending, not the solved one.
     baseline = stripSpaghetti(await stage('baseline', (onProgress) => generateRuns(plan, { runner, chunks, seed: seed(3), onProgress })));
+  } else {
+    const cap = opts.goalSeekRunsCap ?? GOAL_SEEK_RUNS_CAP;
+    const searchPlan = Number(plan.runs) > cap ? { ...plan, runs: cap } : plan;
+    const found = await stage('search', (onProgress) => earliestRetirementSearch(searchPlan, { runner, chunks, seed: seed(1), onProgress }));
+    solvedEarliest = found;
+    const solvedPlan: Dict = {
+      ...plan,
+      user_retirement_age: found.achieved_user_ret_age,
+      ...(found.achieved_spouse_ret_age !== undefined ? { spouse_retirement_age: found.achieved_spouse_ret_age } : {}),
+    };
+    detRows = runDeterministic(solvedPlan);
+    mc = await stage('mc', (onProgress) =>
+      generateRuns(solvedPlan, { runner, chunks, seed: seed(2), onProgress }));
+    baseline = stripSpaghetti(await stage('baseline', (onProgress) => generateRuns(plan, { runner, chunks, seed: seed(3), onProgress })));
   }
 
   const stress = await stage('stress', (onProgress) =>
     runStressTest(plan, { scenarioKey: '2000_dotcom', assetAllocation: 'matched', crisisTiming: 'retirement' },
       baseline, { runner, chunks, seed: seed(4), onProgress: (p) => onProgress(p.fraction, 1) }));
-  return resultsContext(plan, detRows, mc, solved, stress);
+  return resultsContext(plan, detRows, mc, solved, stress, solvedEarliest);
 }
 
 /**

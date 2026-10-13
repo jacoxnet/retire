@@ -3,6 +3,7 @@
 import { getLifeInsuranceRouting } from '../engine/inputs';
 import { CRISIS_SCENARIOS } from '../engine/historicalData';
 import type { GoalSeekResult, McStats } from '../engine/mc';
+import type { EarliestRetirementResult } from '../engine/earliestRetirement';
 import { get, type Dict } from '../engine/py';
 import type { StressResult } from '../engine/stress';
 
@@ -12,8 +13,9 @@ export type DetRow = Dict;
 /** The stress test as the page receives it (the engine's result, scenarios list optional). */
 export type StressData = Omit<StressResult, 'scenarios_list'> & { scenarios_list?: StressResult['scenarios_list'] };
 
-export interface Results extends McStats, Partial<GoalSeekResult> {
+export interface Results extends McStats, Partial<GoalSeekResult>, Partial<EarliestRetirementResult> {
   goal_seeking: boolean;
+  simulation_type?: string;
   initial_wealth: number;
   years: number;
   runs: number;
@@ -55,8 +57,10 @@ export interface Results extends McStats, Partial<GoalSeekResult> {
  */
 export function resultsContext(
   data: Dict, detRows: DetRow[], mcStats: McStats, goal: GoalSeekResult | null, stressTest: StressData,
+  earliestRet: EarliestRetirementResult | null = null,
 ): Results {
   const isGoal = get(data, 'goal_seeking', false);
+  const simType = get(data, 'simulation_type', isGoal ? 'goal_seeking' : 'regular');
   const married = get(data, 'is_married');
   const bal = (key: string, onlyIfMarried = false) =>
     onlyIfMarried && !married ? 0.0 : get(get(data, key, {}), 'present_balance', 0.0);
@@ -65,6 +69,7 @@ export function resultsContext(
 
   const results: Results = {
     goal_seeking: isGoal,
+    ...(data.simulation_type ? { simulation_type: data.simulation_type } : {}),
     initial_wealth: initialWealth,
     years: detRows.length,
     runs: get(data, 'runs', 50000),
@@ -101,6 +106,7 @@ export function resultsContext(
     taxable_deposit_t: -1,
   };
   if (isGoal && goal) Object.assign(results, goal);
+  if (simType === 'earliest_retirement' && earliestRet) Object.assign(results, earliestRet);
 
   const routing = getLifeInsuranceRouting(data);
   results.terminal_life_insurance = get(routing, 'terminal_life_ins_estate', 0.0);
