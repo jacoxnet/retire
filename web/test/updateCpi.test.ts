@@ -4,6 +4,13 @@ import { CPI_FILE, formatCpiJson, mergeCpi, parseFredCsv } from '../scripts/upda
 
 const bundledText = readFileSync(CPI_FILE, 'utf8');
 const bundled: Record<string, number> = JSON.parse(bundledText);
+// The bundled file grows every month (the update-cpi workflow runs these tests on the
+// freshly fetched data), so derive the months under test rather than hardcoding them.
+const months = Object.keys(bundled).sort();
+const latest = months[months.length - 1];
+const prior = months[months.length - 2];
+const [y, m] = latest.split('-').map(Number);
+const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
 
 /** A FRED download: the bundled months (minus a contingency month FRED lacks) plus `extra`. */
 function fredCsv(extra: Record<string, number | '.'> = {}) {
@@ -24,12 +31,14 @@ describe('update-cpi script', () => {
   });
 
   it('adds new months, keeps months FRED lacks, and reports revisions', () => {
-    const { data, added, revised } = mergeCpi(bundled, parseFredCsv(fredCsv({ '2026-09': 335.5, '2026-07': 333.9 })));
-    expect(added).toEqual(['2026-09']);
-    expect(revised).toEqual(['2026-07']);
+    const revisedValue = bundled[prior] + 0.5;
+    const { data, added, revised } = mergeCpi(bundled, parseFredCsv(fredCsv({ [next]: 1000.5, [prior]: revisedValue })));
+    expect(added).toEqual([next]);
+    expect(revised).toEqual([prior]);
+    expect(data[prior]).toBe(revisedValue);
     expect(data['2025-10']).toBe(bundled['2025-10']);
-    expect(Object.keys(data).at(-1)).toBe('2026-09');
-    expect(formatCpiJson(data)).toContain('"2026-09": 335.5\n}');
+    expect(Object.keys(data).at(-1)).toBe(next);
+    expect(formatCpiJson(data)).toContain(`"${next}": 1000.5\n}`);
   });
 
   it('an unchanged download leaves the file as it is', () => {
@@ -41,7 +50,7 @@ describe('update-cpi script', () => {
   it('refuses a truncated or stale download', () => {
     expect(() => mergeCpi(bundled, { '2026-08': 1 })).toThrow(/only 1 months/);
     const stale: Record<string, number> = parseFredCsv(fredCsv());
-    delete stale['2026-08'];
-    expect(() => mergeCpi(bundled, stale)).toThrow(/older than the bundled 2026-08/);
+    delete stale[latest];
+    expect(() => mergeCpi(bundled, stale)).toThrow(`older than the bundled ${latest}`);
   });
 });
