@@ -50,7 +50,13 @@ describe('misc helper grid', () => {
 });
 
 describe('cpi', () => {
-  const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, '..', 'src', 'lib', 'data', 'cpi_u_historical.json'), 'utf8'));
+  // The grid's open-ended cases ("through the latest month") were written when the bundled
+  // series ended at CPI_FIXTURE_LATEST. The update-cpi workflow appends new months, so
+  // check against the series as it stood then.
+  const CPI_FIXTURE_LATEST = '2026-08';
+  const bundled: Record<string, number> = JSON.parse(
+    readFileSync(join(FIXTURES_DIR, '..', 'src', 'lib', 'data', 'cpi_u_historical.json'), 'utf8'));
+  const raw = Object.fromEntries(Object.entries(bundled).filter(([k]) => k <= CPI_FIXTURE_LATEST));
   const data = interpolateMissingMonths(raw);
   const cases = loadFixture<any[]>('functions', 'cpi.json');
   it(`matches ${cases.length} cases`, () => {
