@@ -54,12 +54,17 @@ describe('Enter page', () => {
   it('hides the advanced tabs in simple mode and remembers the mode', async () => {
     const { storage, stop } = setup();
     expect(byId('balance-sheet-tab')).not.toBeNull();
+    expect(byId('descAdvanced')?.textContent).toContain('volatility (standard deviation) of returns');
+    expect(byId('descAdvanced')?.querySelector('.fa-circle-info')).not.toBeNull();
+    expect(byId('descAdvanced')?.querySelector('.fa-circle-check')).toBeNull();
     await fireEvent.click(byId('balance-sheet-tab')!);
     expect(byId('balance-sheet-tab')!.classList.contains('active')).toBe(true);
 
     await fireEvent.click(byId('mode_simple')!);
     expect(byId('balance-sheet-tab')).toBeNull();
     expect(byId('rebalance-tab')).toBeNull();
+    expect(byId('descSimple')?.textContent).toContain('volatility (standard deviation) of returns');
+    expect(byId('descSimple')?.querySelector('.fa-circle-info')).not.toBeNull();
     expect(byId('assets-tab')!.classList.contains('active')).toBe(true); // fell back from Balance Sheet
     expect(byId('enterDataForm')!.classList.contains('planner-simple-mode')).toBe(true);
     expect(storage.getItem(MODE_KEY)).toBe('simple');
@@ -71,6 +76,8 @@ describe('Enter page', () => {
     expect(byId('rebalance-tab')).toBeNull();
     await fireEvent.click(byId('mode_advanced')!);
     expect(byId('rebalance-tab')).not.toBeNull();
+    expect(byId('descAdvanced')?.textContent).toContain('volatility (standard deviation) of returns');
+    expect(byId('descAdvanced')?.querySelector('.fa-circle-info')).not.toBeNull();
     again.stop();
   });
 

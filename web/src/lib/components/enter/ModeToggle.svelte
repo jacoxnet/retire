@@ -27,9 +27,9 @@
   </div>
   <div class="text-secondary small" id="plannerModeDescription">
     {#if mode === 'advanced'}
-      <span id="descAdvanced"><i class="fa-solid fa-circle-check text-primary me-1"></i>Includes ability to change the standard deviation of each account held for retirement, ability to address other types of taxes/surcharges, balance sheet net worth tracking, and portfolio rebalancing.</span>
+      <span id="descAdvanced"><i class="fa-solid fa-circle-info text-primary me-1"></i>Includes ability to change the volatility (standard deviation) of returns of each account held for retirement, ability to address other types of taxes/surcharges, balance sheet net worth tracking, and portfolio rebalancing.</span>
     {:else}
-      <span id="descSimple"><i class="fa-solid fa-circle-info text-primary me-1"></i>Includes a streamlined 4-step wizard based on essential retirement assets, timeline, and baseline spending. Excludes ability to change the standard deviation of each account held for retirement, ability to address other types of taxes/surcharges, balance sheet net worth tracking, and portfolio rebalancing.</span>
+      <span id="descSimple"><i class="fa-solid fa-circle-info text-primary me-1"></i>Includes a streamlined 4-step wizard based on essential retirement assets, timeline, and baseline spending. Excludes ability to change the volatility (standard deviation) of returns of each account held for retirement, ability to address other types of taxes/surcharges, balance sheet net worth tracking, and portfolio rebalancing.</span>
     {/if}
   </div>
 </div>
