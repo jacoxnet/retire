@@ -44,7 +44,9 @@ export interface FlatAssets {
   [key: string]: unknown;
 }
 
-export type AccountType = 'pretax' | 'roth' | 'taxable' | 'hsa';
+export type AccountType = 'pretax' | 'roth' | 'taxable' | 'hsa' | 'inherited_pretax' | 'inherited_roth';
+export type InheritedRule = 'ten_year' | 'stretch' | 'five_year';
+export type DistributionStrategy = 'rmd_only' | 'equalized';
 
 export interface Account {
   id?: string;
@@ -67,6 +69,10 @@ export interface Account {
   capital_gains_dist_rate?: number;
   cost_basis_ratio?: number;
   is_community_property?: boolean;
+  death_year?: number;
+  inherited_rule?: InheritedRule | string;
+  decedent_passed_rbd?: boolean;
+  distribution_strategy?: DistributionStrategy | string;
   [key: string]: unknown;
 }
 
@@ -172,6 +178,10 @@ export interface Plan {
   taxable_assets?: FlatAssets;
   hsa_assets?: FlatAssets;
   spouse_hsa_assets?: FlatAssets;
+  inherited_pretax_assets?: FlatAssets;
+  spouse_inherited_pretax_assets?: FlatAssets;
+  inherited_roth_assets?: FlatAssets;
+  spouse_inherited_roth_assets?: FlatAssets;
   additional_spending?: AdditionalSpendingItem[];
   income_sources?: IncomeSource[];
   other_taxes?: OtherTax[];

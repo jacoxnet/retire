@@ -185,15 +185,15 @@
   <div class="alert alert-light border p-3 mt-4 mb-0">
     <p class="mb-0 text-secondary small">
       <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
-      1) Required Minimum Distributions (RMDs) from Pretax accounts;
-      2) Taxable accounts;
-      3) Pretax accounts (with tax gross-up);
-      4) Roth accounts;
-      5) Health Savings Accounts (HSA).
-      <strong>Early-withdrawal exception:</strong> If an account owner is under age 59&frac12;, withdrawals from that owner's Pretax accounts would incur a 10% penalty.
-      Those withdrawals are deferred until after Roth accounts and any penalty-free HSAs (medical use, or owner age 65 or older),
-      but are taken before HSAs whose non-medical withdrawals would incur the 20% under-65 penalty.
-      Pretax accounts of an owner age 59&frac12; or older remain at step 3.
+      1) Non-portfolio income, regular RMDs, and mandatory Inherited IRA distributions (inherited pre-tax RMDs and inherited Roth scheduled distributions);
+      2) Taxable accounts (with capital gains tax gross-up);
+      3) Inherited Pre-tax IRAs (penalty-free ordinary income gross-up);
+      4) Own Pre-tax accounts (for owner age 59&frac12; or older, penalty-free);
+      5) Inherited Roth IRAs (tax-free);
+      6) Own Roth accounts (tax-free);
+      7) Health Savings Accounts (HSA).
+      <strong>Early-withdrawal and inherited IRA exceptions:</strong> Inherited Pre-tax IRAs are exempt from the 10% early withdrawal penalty regardless of age (IRC § 72(t)(2)(A)(ii)) and are drawn before own pre-tax accounts to satisfy their 10-year expiration clock. If an account owner is under age 59&frac12;, discretionary withdrawals from that owner's own Pretax accounts would incur a 10% penalty and are deferred until after Roth accounts and penalty-free HSAs, but ahead of penalized non-medical HSA withdrawals (20% penalty under age 65).
+      Pretax accounts of an owner age 59&frac12; or older remain at step 4.
     </p>
   </div>
 </div>

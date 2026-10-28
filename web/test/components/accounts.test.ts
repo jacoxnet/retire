@@ -211,4 +211,29 @@ describe('Accounts tab editing', () => {
     expect([...document.querySelectorAll('#filing_status option')].map((o) => (o as HTMLOptionElement).value)).toEqual(['joint', 'hoh']);
     stop();
   });
+
+  it('renders inherited IRA fields with updated labels and popovers', async () => {
+    const { store, stop } = setup();
+    store.plan.accounts = [
+      {
+        id: 'inh_1',
+        name: 'Inherited Traditional IRA',
+        type: 'inherited_pretax',
+        owner: 'user',
+        balance: 100000,
+        death_year: 2024,
+        inherited_rule: 'ten_year',
+        decedent_passed_rbd: false,
+        distribution_strategy: 'rmd_only',
+      },
+    ];
+    flushSync();
+    await openAccounts();
+    const card = cards()[0];
+    expect(card.textContent).toContain('Contributions are legally prohibited to inherited accounts.');
+    expect(card.textContent).toContain("Beneficiary's RMD Rule");
+    expect(card.textContent).toContain('Did the Decedent Reach their Required Beginning Date (RBD)?');
+    expect(card.textContent).toContain('10-Year Distribution Strategy');
+    stop();
+  });
 });

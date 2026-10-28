@@ -2,7 +2,7 @@
 // in core/forms.py). The engine reads the aggregates (pretax_assets, roth_assets, ...);
 // the UI edits the account list.
 import { pyBool, pyFloat } from '../engine/py';
-import { getBool } from './coerce';
+import { getBool, getInt } from './coerce';
 import { get, type Obj } from './pyutil';
 import type { Account, FlatAssets } from './types';
 
@@ -14,6 +14,10 @@ export const ASSET_PREFIX_CONFIG: Array<[string, string, 'user' | 'spouse']> = [
   ['taxable', 'taxable', 'user'],
   ['hsa', 'hsa', 'user'],
   ['spouse_hsa', 'hsa', 'spouse'],
+  ['inherited_pretax', 'inherited_pretax', 'user'],
+  ['spouse_inherited_pretax', 'inherited_pretax', 'spouse'],
+  ['inherited_roth', 'inherited_roth', 'user'],
+  ['spouse_inherited_roth', 'inherited_roth', 'spouse'],
 ];
 
 /** Accounts list from a legacy plan's flat `{prefix}_assets` dicts. */
@@ -74,6 +78,10 @@ export function aggregateAccounts(
     },
     hsa: { ...common(userAge, 'retirement', userRetirementAge, 5.0, 8.0, false), hsa_for_medical: true },
     spouse_hsa: { ...common(spStart, spEndType, spEnd, 5.0, 8.0, true), hsa_for_medical: true },
+    inherited_pretax: common(userAge, 'retirement', userRetirementAge, 6.0, 10.0, false),
+    spouse_inherited_pretax: common(spStart, spEndType, spEnd, 6.0, 10.0, true),
+    inherited_roth: common(userAge, 'retirement', userRetirementAge, 6.0, 10.0, false),
+    spouse_inherited_roth: common(spStart, spEndType, spEnd, 6.0, 10.0, true),
   };
   const grouped: Record<string, Account[]> = Object.fromEntries(Object.keys(assetMap).map((k) => [k, []]));
   for (const acc of accounts) {
@@ -81,8 +89,10 @@ export function aggregateAccounts(
     const owner = isMarried ? get(acc, 'owner', 'user') : 'user';
     let key: string;
     if (atype === 'pretax') key = owner === 'spouse' ? 'spouse_pretax' : 'pretax';
+    else if (atype === 'inherited_pretax') key = owner === 'spouse' ? 'spouse_inherited_pretax' : 'inherited_pretax';
     else if (atype === 'hsa') key = owner === 'spouse' ? 'spouse_hsa' : 'hsa';
     else if (atype === 'roth') key = 'roth';
+    else if (atype === 'inherited_roth') key = owner === 'spouse' ? 'spouse_inherited_roth' : 'inherited_roth';
     else key = 'taxable';
     grouped[key].push(acc);
   }
@@ -122,6 +132,13 @@ export function aggregateAccounts(
       base.contrib_end_age_specified = get(primary, 'contrib_end_age_specified', base.contrib_end_age_specified);
       base.contrib_adjust_inflation = getBool(get(primary, 'contrib_adjust_inflation', true));
       if ('hsa_for_medical' in base) base.hsa_for_medical = list.some((a) => pyBool(get(a, 'hsa_for_medical', true)));
+      if (key.includes('inherited')) {
+        base.contrib_amount = 0.0;
+        base.death_year = getInt(get(primary, 'death_year', 2026)) as number;
+        base.inherited_rule = get(primary, 'inherited_rule', 'ten_year');
+        base.decedent_passed_rbd = getBool(get(primary, 'decedent_passed_rbd', false));
+        base.distribution_strategy = get(primary, 'distribution_strategy', 'rmd_only');
+      }
       base.accounts = list;
     }
     result[`${key}_assets`] = base;

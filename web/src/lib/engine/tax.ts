@@ -209,20 +209,29 @@ export const RTW = {
   hsaPenaltyUser: 16, hsaPenaltySpouse: 17,
   shortfall: 18,
   taxableBasisEnd: 19, realizedCg: 20, fedOrdTax: 21, fedPrefTax: 22,
+  inhPreUserEnd: 23, inhPreSpouseEnd: 24, inhRothUserEnd: 25, inhRothSpouseEnd: 26,
+  userInhPretaxRmd: 27, spouseInhPretaxRmd: 28,
+  userInhRothDist: 29, spouseInhRothDist: 30,
+  wInhPreUserExtra: 31, wInhPreSpouseExtra: 32,
+  wInhRothUser: 33, wInhRothSpouse: 34,
 } as const;
-export const RTW_LEN = 23;
+export const RTW_LEN = 35;
 
 const STEP_PRETAX_FREE = 0;
 const STEP_ROTH = 1;
 const STEP_HSA_USER = 2;
 const STEP_HSA_SPOUSE = 3;
 const STEP_PRETAX_PENALIZED = 4;
+const STEP_INH_PRETAX_USER = 5;
+const STEP_INH_PRETAX_SPOUSE = 6;
+const STEP_INH_ROTH_USER = 7;
+const STEP_INH_ROTH_SPOUSE = 8;
 
 // Scratch buffers for the inflation-adjusted brackets. Each worker runs one path at a
 // time, so module-level buffers are safe and avoid allocating in the hot loop.
 const thrScratch = new Float64Array(6);
 const ltcgScratch = new Float64Array(2);
-const order = new Int32Array(5);
+const order = new Int32Array(16);
 
 /**
  * One year's RMDs, taxes and deficit-funding withdrawals. The result is written to
@@ -243,9 +252,42 @@ export function njitRmdTaxWithdraw(
   taxableYieldDivQual = 0.0,
   taxableYieldCgDist = 0.0,
   out?: Float64Array,
+  inhPreUserPrior = 0.0,
+  inhPreSpousePrior = 0.0,
+  inhPreUserMid = 0.0,
+  inhPreSpouseMid = 0.0,
+  inhRothUserPrior = 0.0,
+  inhRothSpousePrior = 0.0,
+  inhRothUserMid = 0.0,
+  inhRothSpouseMid = 0.0,
+  inhPreUserFrac = 0.0,
+  inhPreSpouseFrac = 0.0,
+  inhRothUserFrac = 0.0,
+  inhRothSpouseFrac = 0.0,
 ): Float64Array {
   const stateRate = stateTaxRate / 100.0;
-  const totalIncomeSources = taxableIncomeSources + ssBenefits + nontaxableIncome;
+
+  let userInhPretaxRmd = 0.0;
+  if (userAlive && inhPreUserPrior > 0.0 && inhPreUserFrac > 0.0) {
+    userInhPretaxRmd = inhPreUserFrac >= 1.0 ? inhPreUserMid : Math.min(inhPreUserPrior * inhPreUserFrac, inhPreUserMid);
+  }
+  let spouseInhPretaxRmd = 0.0;
+  if (spouseAlive && inhPreSpousePrior > 0.0 && inhPreSpouseFrac > 0.0) {
+    spouseInhPretaxRmd = inhPreSpouseFrac >= 1.0 ? inhPreSpouseMid : Math.min(inhPreSpousePrior * inhPreSpouseFrac, inhPreSpouseMid);
+  }
+  const inhPreRmdT = userInhPretaxRmd + spouseInhPretaxRmd;
+
+  let userInhRothDist = 0.0;
+  if (userAlive && inhRothUserPrior > 0.0 && inhRothUserFrac > 0.0) {
+    userInhRothDist = inhRothUserFrac >= 1.0 ? inhRothUserMid : Math.min(inhRothUserPrior * inhRothUserFrac, inhRothUserMid);
+  }
+  let spouseInhRothDist = 0.0;
+  if (spouseAlive && inhRothSpousePrior > 0.0 && inhRothSpouseFrac > 0.0) {
+    spouseInhRothDist = inhRothSpouseFrac >= 1.0 ? inhRothSpouseMid : Math.min(inhRothSpousePrior * inhRothSpouseFrac, inhRothSpouseMid);
+  }
+  const inhRothDistT = userInhRothDist + spouseInhRothDist;
+
+  const totalIncomeSources = taxableIncomeSources + ssBenefits + nontaxableIncome + inhRothDistT;
 
   let userRmdT = 0.0;
   if (userAlive && userAgeT >= userRmdStartAge) {
@@ -285,7 +327,7 @@ export function njitRmdTaxWithdraw(
   const yOrdInv = taxableYieldInterest + taxableYieldDivOrd;
   const yPrefInv = taxableYieldDivQual + taxableYieldCgDist;
 
-  const baseOrdExSs = taxableIncomeSources + rmdT + yOrdInv;
+  const baseOrdExSs = taxableIncomeSources + rmdT + inhPreRmdT + yOrdInv;
   const baseAgiExSs = baseOrdExSs + yPrefInv;
 
   // Social Security provisional income includes total AGI ex SS (including LTCG/QD)
@@ -302,7 +344,7 @@ export function njitRmdTaxWithdraw(
   const baseStateTax = baseStTaxableIncome * stateRate;
   let totalBaseTax = baseTax + baseStateTax;
 
-  const cashInflows = totalIncomeSources + rmdT;
+  const cashInflows = totalIncomeSources + rmdT + inhPreRmdT;
   const cashOutflows = totalSpendingTarget + totalBaseTax + otherTaxesT;
   const netBase = cashInflows - cashOutflows;
 
@@ -313,12 +355,20 @@ export function njitRmdTaxWithdraw(
   let taxableBasisEnd = taxableBasisMid;
   let hsaUserEnd = hsaUserMid;
   let hsaSpouseEnd = hsaSpouseMid;
+  let inhPreUserEnd = inhPreUserMid - userInhPretaxRmd;
+  let inhPreSpouseEnd = inhPreSpouseMid - spouseInhPretaxRmd;
+  let inhRothUserEnd = inhRothUserMid - userInhRothDist;
+  let inhRothSpouseEnd = inhRothSpouseMid - spouseInhRothDist;
 
   let wPretaxExtra = 0.0;
   let wTaxable = 0.0;
   let wRoth = 0.0;
   let wHsaUser = 0.0;
   let wHsaSpouse = 0.0;
+  let wInhPreUserExtra = 0.0;
+  let wInhPreSpouseExtra = 0.0;
+  let wInhRothUser = 0.0;
+  let wInhRothSpouse = 0.0;
   let finalFedTax = baseTax;
   let finalFedOrdTax = ordTax;
   let finalFedPrefTax = prefTax;
@@ -408,7 +458,11 @@ export function njitRmdTaxWithdraw(
     const hsaSpouseLate = pretaxDeferred && hsaSpousePen;
 
     let nSteps = 0;
+    order[nSteps++] = STEP_INH_PRETAX_USER;
+    order[nSteps++] = STEP_INH_PRETAX_SPOUSE;
     order[nSteps++] = STEP_PRETAX_FREE;
+    order[nSteps++] = STEP_INH_ROTH_USER;
+    order[nSteps++] = STEP_INH_ROTH_SPOUSE;
     order[nSteps++] = STEP_ROTH;
     if (!hsaUserLate) order[nSteps++] = STEP_HSA_USER;
     if (!hsaSpouseLate) order[nSteps++] = STEP_HSA_SPOUSE;
@@ -425,7 +479,29 @@ export function njitRmdTaxWithdraw(
       let wStep = 0.0;
       let taxedStep = false;
 
-      if (step === STEP_PRETAX_FREE || step === STEP_PRETAX_PENALIZED) {
+      if (step === STEP_INH_PRETAX_USER) {
+        if (inhPreUserEnd > 0.0 && userAlive) {
+          [wStep, deficit] = njitSolveOrdinaryWithdrawal(
+            inhPreUserEnd, 0.0, deficit, extraOrd, finalPenalty, totalBaseTax,
+            baseAgiExSs, baseOrdExSs, realizedCg, curPrefIncome,
+            ssBenefits, filingStatusCode, stdDeductionT, thresholdsT, ltcgThresholdsT, stateSsExemptCode, stateRate,
+          );
+          inhPreUserEnd = Math.max(0.0, inhPreUserEnd - wStep);
+          wInhPreUserExtra += wStep;
+          taxedStep = true;
+        }
+      } else if (step === STEP_INH_PRETAX_SPOUSE) {
+        if (inhPreSpouseEnd > 0.0 && (spouseAlive || !userAlive)) {
+          [wStep, deficit] = njitSolveOrdinaryWithdrawal(
+            inhPreSpouseEnd, 0.0, deficit, extraOrd, finalPenalty, totalBaseTax,
+            baseAgiExSs, baseOrdExSs, realizedCg, curPrefIncome,
+            ssBenefits, filingStatusCode, stdDeductionT, thresholdsT, ltcgThresholdsT, stateSsExemptCode, stateRate,
+          );
+          inhPreSpouseEnd = Math.max(0.0, inhPreSpouseEnd - wStep);
+          wInhPreSpouseExtra += wStep;
+          taxedStep = true;
+        }
+      } else if (step === STEP_PRETAX_FREE || step === STEP_PRETAX_PENALIZED) {
         // Pre-tax extra withdrawals (gross-up solver), pro-rata across the owners in this pass
         const penalizedPass = step === STEP_PRETAX_PENALIZED;
         const poolU = userPrePen === penalizedPass ? pretaxUserEnd : 0.0;
@@ -445,6 +521,18 @@ export function njitRmdTaxWithdraw(
         wPretaxExtra += wStep;
         finalPenalty += penRate * wStep;
         taxedStep = true;
+      } else if (step === STEP_INH_ROTH_USER) {
+        if (inhRothUserEnd > 0.0 && userAlive) {
+          wInhRothUser = Math.min(deficit, Math.max(0.0, inhRothUserEnd));
+          inhRothUserEnd = inhRothUserEnd - wInhRothUser;
+          deficit = deficit - wInhRothUser;
+        }
+      } else if (step === STEP_INH_ROTH_SPOUSE) {
+        if (inhRothSpouseEnd > 0.0 && (spouseAlive || !userAlive)) {
+          wInhRothSpouse = Math.min(deficit, Math.max(0.0, inhRothSpouseEnd));
+          inhRothSpouseEnd = inhRothSpouseEnd - wInhRothSpouse;
+          deficit = deficit - wInhRothSpouse;
+        }
       } else if (step === STEP_ROTH) {
         if (rothEnd > 0.0) {
           wRoth = Math.min(deficit, Math.max(0.0, rothEnd));
@@ -516,5 +604,13 @@ export function njitRmdTaxWithdraw(
   r[16] = hsaPenaltyUser; r[17] = hsaPenaltySpouse;
   r[18] = shortfall;
   r[19] = taxableBasisEnd; r[20] = realizedCg; r[21] = finalFedOrdTax; r[22] = finalFedPrefTax;
+  if (r.length >= 35) {
+    r[23] = inhPreUserEnd; r[24] = inhPreSpouseEnd;
+    r[25] = inhRothUserEnd; r[26] = inhRothSpouseEnd;
+    r[27] = userInhPretaxRmd; r[28] = spouseInhPretaxRmd;
+    r[29] = userInhRothDist; r[30] = spouseInhRothDist;
+    r[31] = wInhPreUserExtra; r[32] = wInhPreSpouseExtra;
+    r[33] = wInhRothUser; r[34] = wInhRothSpouse;
+  }
   return r;
 }

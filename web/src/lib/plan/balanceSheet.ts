@@ -10,6 +10,7 @@ import { getBool, getFloat, getInt, pyStr } from './coerce';
 import { calculateMarginalTaxRate } from './marginal';
 import { get, isObj, type Obj, or, pyEqual, title, todayIso } from './pyutil';
 import type { Account, BalanceSheet } from './types';
+import { isInheritedType } from './accountCard';
 
 const RETIREMENT_CATS = ['pretax', 'roth', 'taxable', 'hsa'];
 const nameKey = (o: Obj) => pyStr(get(o, 'name', '')).trim().toLowerCase();
@@ -281,6 +282,12 @@ export function syncBalanceSheetToAccounts(
       capital_gains_dist_rate: getFloat(pick('capital_gains_dist_rate', taxable ? 0.5 : 0.0)) as number,
       cost_basis_ratio: getFloat(pick('cost_basis_ratio', taxable ? 70.0 : 100.0)) as number,
       is_community_property: getBool(match ? pickNullable('is_community_property', false) : get(acc, 'is_community_property', false)),
+      ...(isInheritedType(atype) || (match && 'death_year' in match) || (acc && 'death_year' in acc) ? {
+        death_year: getInt(pick('death_year', 2026)) as number,
+        inherited_rule: (pick('inherited_rule', 'ten_year') || 'ten_year') as string,
+        decedent_passed_rbd: getBool(match ? pickNullable('decedent_passed_rbd', false) : get(acc, 'decedent_passed_rbd', false)),
+        distribution_strategy: (pick('distribution_strategy', 'rmd_only') || 'rmd_only') as string,
+      } : {}),
     });
   };
 
@@ -396,7 +403,7 @@ export function syncAccountsToBalanceSheet(
 
   for (const acc of accounts ?? []) {
     const atype = get(acc, 'type', 'pretax');
-    const cat = RETIREMENT_CATS.includes(atype) ? atype : 'taxable';
+    const cat = atype === 'inherited_pretax' ? 'pretax' : atype === 'inherited_roth' ? 'roth' : RETIREMENT_CATS.includes(atype) ? atype : 'taxable';
     categories[cat].accounts ??= [];
     const catAccs: Obj[] = categories[cat].accounts;
 
@@ -456,11 +463,18 @@ export function syncAccountsToBalanceSheet(
       matched.interest_yield = getFloat(prefer('interest_yield', 0.0));
       matched.capital_gains_dist_rate = getFloat(prefer('capital_gains_dist_rate', taxable ? 0.5 : 0.0));
       matched.cost_basis_ratio = getFloat(prefer('cost_basis_ratio', taxable ? 70.0 : 100.0));
+      if (isInheritedType(atype) || (acc && 'death_year' in acc) || (matched && 'death_year' in matched)) {
+        matched.death_year = getInt(prefer('death_year', 2026));
+        matched.inherited_rule = prefer('inherited_rule', 'ten_year');
+        matched.decedent_passed_rbd = getBool(preferNullable('decedent_passed_rbd', false));
+        matched.distribution_strategy = prefer('distribution_strategy', 'rmd_only');
+      }
       if (!isObj(matched.values)) matched.values = {};
       matched.values[period] = bal;
     } else {
       const values: Obj = Object.fromEntries(periods.map((p) => [p, 0.0]));
       values[period] = bal;
+      const isInherited = isInheritedType(atype) || (acc && 'death_year' in acc);
       catAccs.push({
         id: or(get(acc, 'id'), `acc_${cat}_${catAccs.length + 1}`),
         name: get(acc, 'name', `${title(pyStr(get(acc, 'owner', 'User')))} ${title(String(atype))} Account`),
@@ -484,6 +498,12 @@ export function syncAccountsToBalanceSheet(
         capital_gains_dist_rate: getFloat(get(acc, 'capital_gains_dist_rate', taxable ? 0.5 : 0.0)),
         cost_basis_ratio: getFloat(get(acc, 'cost_basis_ratio', taxable ? 70.0 : 100.0)),
         is_community_property: getBool(get(acc, 'is_community_property', false)),
+        ...(isInherited ? {
+          death_year: getInt(get(acc, 'death_year', 2026)),
+          inherited_rule: get(acc, 'inherited_rule', 'ten_year'),
+          decedent_passed_rbd: getBool(get(acc, 'decedent_passed_rbd', false)),
+          distribution_strategy: get(acc, 'distribution_strategy', 'rmd_only'),
+        } : {}),
       });
     }
   }

@@ -3,7 +3,7 @@
 <script lang="ts">
   import { formatMoney } from '../../app/format';
   import {
-    ACCOUNT_TYPE_OPTIONS, cardAccount, endAgeIsSpecified, type People, setAccountOwner, VOLATILITY_PRESETS,
+    ACCOUNT_TYPE_OPTIONS, cardAccount, endAgeIsSpecified, isInheritedType, type People, setAccountOwner, VOLATILITY_PRESETS,
     type Volatility, volatilityChoice, yearAtAge,
   } from '../../plan/accountCard';
   import type { Account } from '../../plan/types';
@@ -67,6 +67,25 @@
   const [getCg, setCg] = field('capital_gains_dist_rate');
   const [getBasis, setBasis] = field('cost_basis_ratio');
   const [getHsa, setHsa] = field('hsa_for_medical');
+  const [getDeathYear, setDeathYear] = field('death_year');
+  const [getRule, setRule] = field('inherited_rule');
+  const [getRbd, setRbd] = field('decedent_passed_rbd');
+  const [getStrategy, setStrategy] = field('distribution_strategy');
+
+  const inherited = $derived(isInheritedType(view.type));
+  const deathYearVal = $derived(Number(view.death_year) || people.currentYear);
+  const yearsElapsed = $derived(Math.max(0, people.currentYear - deathYearVal));
+  const remainingYearsText = $derived.by(() => {
+    if (view.inherited_rule === 'ten_year') {
+      const rem = Math.max(0, 10 - yearsElapsed);
+      return rem === 0 ? '10-year window reached (fully distributed this year)' : `${rem} year${rem === 1 ? '' : 's'} remaining on 10-year clock`;
+    }
+    if (view.inherited_rule === 'five_year') {
+      const rem = Math.max(0, 5 - yearsElapsed);
+      return rem === 0 ? '5-year window reached' : `${rem} year${rem === 1 ? '' : 's'} remaining on 5-year clock`;
+    }
+    return 'Annual Single Life Table stretch distributions';
+  });
 </script>
 
 <div class="col-md-6 mb-4 account-card-col" data-account-id={view.id}>
@@ -111,54 +130,120 @@
       <MoneyInput id="{uid}-balance" class="form-control currency-input" dollarSign bind:value={getBalance, setBalance} />
     </div>
 
-    <div class="row g-2 mb-3">
-      <div class="col-7">
-        <label class="form-label small fw-bold mb-1" for="{uid}-contrib">Future Contributions</label>
-        <MoneyInput id="{uid}-contrib" class="form-control currency-input" dollarSign bind:value={getContrib, setContrib} />
-      </div>
-      <div class="col-5">
-        <label class="form-label small fw-bold mb-1" for="{uid}-freq">Frequency</label>
-        <select class="form-select form-select-sm" id="{uid}-freq" bind:value={getFreq, setFreq}>
-          <option value="annual">Annual</option>
-          <option value="monthly">Monthly</option>
-          <option value="one-time">One-Time</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="row g-2 mb-3 align-items-start">
-      <div class="col-6">
-        <label class="form-label small fw-bold mb-1 acc-start-age-label" for="{uid}-start">{ownerName}Contribution Start Age</label>
-        <input type="number" class="form-control form-control-sm acc-start-age-input" id="{uid}-start" min="18" max="120"
-          bind:value={getStart, setStart} />
-        <div class="age-helper-badge small text-muted fst-italic mt-1">
-          {#if startYear !== null}<i class="fa-regular fa-calendar me-1"></i>Year {startYear}{/if}
+    {#if !inherited}
+      <div class="row g-2 mb-3">
+        <div class="col-7">
+          <label class="form-label small fw-bold mb-1" for="{uid}-contrib">Future Contributions</label>
+          <MoneyInput id="{uid}-contrib" class="form-control currency-input" dollarSign bind:value={getContrib, setContrib} />
+        </div>
+        <div class="col-5">
+          <label class="form-label small fw-bold mb-1" for="{uid}-freq">Frequency</label>
+          <select class="form-select form-select-sm" id="{uid}-freq" bind:value={getFreq, setFreq}>
+            <option value="annual">Annual</option>
+            <option value="monthly">Monthly</option>
+            <option value="one-time">One-Time</option>
+          </select>
         </div>
       </div>
-      <div class="col-6">
-        <label class="form-label small fw-bold mb-1" for="{uid}-endtype">Contribution End Age</label>
-        <select class="form-select form-select-sm acc-end-age-type" id="{uid}-endtype" bind:value={getEndType, setEndType}>
-          <option value="retirement">{married ? `${people.userName}'s` : 'Your'} Retirement ({people.userRetAge})</option>
-          {#if married}<option value="spouse_retirement">{people.spouseName}'s Retirement ({people.spouseRetAge})</option>{/if}
-          {#if married}<option value="first_death">First Death</option>{/if}
-          <option value="user_specified">Specify {married ? `${people.userName}'s` : 'Your'} Age</option>
-          {#if married}<option value="spouse_specified">Specify {people.spouseName}'s Age</option>{/if}
-        </select>
-        {#if endAgeIsSpecified(view.contrib_end_age_type)}
-          <input type="number" class="form-control form-control-sm mt-1 acc-end-age-spec" id="{uid}-endspec" min="18" max="120"
-            aria-label="Contribution end age" bind:value={getEndSpec, setEndSpec}
-            placeholder="{endSpouse ? people.spouseName : people.userName}'s End Age" />
-          <div class="age-helper-badge small text-muted fst-italic mt-1">
-            {#if endYear !== null}<i class="fa-regular fa-calendar me-1"></i>Year {endYear}{/if}
-          </div>
-        {/if}
-      </div>
-    </div>
 
-    <div class="form-check form-switch mb-3 ps-5">
-      <input class="form-check-input acc-contrib-adjust-inf-check" type="checkbox" id="{uid}-inf" bind:checked={getAdjInf, setAdjInf} />
-      <label class="form-check-label small font-weight-bold" for="{uid}-inf">Adjust Contributions for Inflation</label>
-    </div>
+      <div class="row g-2 mb-3 align-items-start">
+        <div class="col-6">
+          <label class="form-label small fw-bold mb-1 acc-start-age-label" for="{uid}-start">{ownerName}Contribution Start Age</label>
+          <input type="number" class="form-control form-control-sm acc-start-age-input" id="{uid}-start" min="18" max="120"
+            bind:value={getStart, setStart} />
+          <div class="age-helper-badge small text-muted fst-italic mt-1">
+            {#if startYear !== null}<i class="fa-regular fa-calendar me-1"></i>Year {startYear}{/if}
+          </div>
+        </div>
+        <div class="col-6">
+          <label class="form-label small fw-bold mb-1" for="{uid}-endtype">Contribution End Age</label>
+          <select class="form-select form-select-sm acc-end-age-type" id="{uid}-endtype" bind:value={getEndType, setEndType}>
+            <option value="retirement">{married ? `${people.userName}'s` : 'Your'} Retirement ({people.userRetAge})</option>
+            {#if married}<option value="spouse_retirement">{people.spouseName}'s Retirement ({people.spouseRetAge})</option>{/if}
+            {#if married}<option value="first_death">First Death</option>{/if}
+            <option value="user_specified">Specify {married ? `${people.userName}'s` : 'Your'} Age</option>
+            {#if married}<option value="spouse_specified">Specify {people.spouseName}'s Age</option>{/if}
+          </select>
+          {#if endAgeIsSpecified(view.contrib_end_age_type)}
+            <input type="number" class="form-control form-control-sm mt-1 acc-end-age-spec" id="{uid}-endspec" min="18" max="120"
+              aria-label="Contribution end age" bind:value={getEndSpec, setEndSpec}
+              placeholder="{endSpouse ? people.spouseName : people.userName}'s End Age" />
+            <div class="age-helper-badge small text-muted fst-italic mt-1">
+              {#if endYear !== null}<i class="fa-regular fa-calendar me-1"></i>Year {endYear}{/if}
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <div class="form-check form-switch mb-3 ps-5">
+        <input class="form-check-input acc-contrib-adjust-inf-check" type="checkbox" id="{uid}-inf" bind:checked={getAdjInf, setAdjInf} />
+        <label class="form-check-label small font-weight-bold" for="{uid}-inf">Adjust Contributions for Inflation</label>
+      </div>
+    {:else}
+      <div class="alert alert-secondary py-2 px-3 small mb-3 d-flex align-items-center">
+        <i class="fa-solid fa-circle-info me-2 text-primary"></i>
+        <span>Contributions are legally prohibited to inherited accounts.</span>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <label class="form-label small fw-bold mb-1" for="{uid}-death-year">Year of Death / Inherited</label>
+          <input type="number" class="form-control form-control-sm" id="{uid}-death-year" min="1980" max="2100"
+            bind:value={getDeathYear, setDeathYear} />
+          <div class="small text-muted fst-italic mt-1">
+            <i class="fa-regular fa-clock me-1"></i>{remainingYearsText}
+          </div>
+        </div>
+        <div class="col-6">
+          <label class="form-label small fw-bold mb-1 d-flex align-items-center" for="{uid}-rule">
+            <span>Beneficiary's RMD Rule</span>
+            <HelpPopover
+              title="Beneficiary's RMD Rule"
+              html
+              content="<b>10-Year Rule (Standard post-2019):</b> Applies to most individual designated beneficiaries if the IRA owner died after Dec 31, 2019 (under the SECURE Act). The account must be fully emptied by the end of the 10th year following death.<br><br><b>Lifetime Stretch (Pre-2020 / EDB):</b> Select if the owner died before 2020, OR if the beneficiary is an Eligible Designated Beneficiary (EDB): surviving spouse, disabled or chronically ill individual, individual not more than 10 years younger than decedent, or minor child of decedent (until age 21). EDBs take annual RMDs over their single life expectancy.<br><br><b>5-Year Rule (Estate / Non-Designated):</b> Applies to non-designated beneficiaries (such as an estate, charity, or non-qualifying trust) when the owner died before their Required Beginning Date, or when mandated by plan documents."
+            />
+          </label>
+          <select class="form-select form-select-sm" id="{uid}-rule" bind:value={getRule, setRule}>
+            <option value="ten_year">10-Year Rule (Standard post-2019)</option>
+            <option value="stretch">Lifetime Stretch (Pre-2020 / EDB)</option>
+            <option value="five_year">5-Year Rule (Estate / Non-Designated)</option>
+          </select>
+        </div>
+      </div>
+
+      {#if view.type === 'inherited_pretax'}
+        <div class="mb-3">
+          <label class="form-label small fw-bold mb-1 d-flex align-items-center" for="{uid}-rbd">
+            <span>Did the Decedent Reach their Required Beginning Date (RBD)?</span>
+            <HelpPopover
+              title="Required Beginning Date (RBD)"
+              content="The Required Beginning Date (RBD) is April 1 of the calendar year following the year in which the IRA owner reached their applicable RMD age: age 70½ if born before July 1, 1949; age 72 if born between July 1, 1949 and Dec 31, 1950; age 73 if born 1951–1959; or age 75 if born 1960 or later (SECURE Act & SECURE 2.0). Under IRS regulations, if the decedent reached their RBD prior to death, annual RMDs are required during years 1–9 of the 10-year rule based on the beneficiary's single life expectancy. If the decedent died before reaching their RBD, annual RMDs are not required in years 1–9 (the entire account balance must simply be distributed by the end of the 10th year)."
+            />
+          </label>
+          <select class="form-select form-select-sm" id="{uid}-rbd" value={view.decedent_passed_rbd ? 'yes' : 'no'}
+            onchange={(e) => setRbd((e.currentTarget as HTMLSelectElement).value === 'yes')}>
+            <option value="no">No (Died Before RBD — No annual RMDs in years 1–9)</option>
+            <option value="yes">Yes (Reached RBD Prior to Death — Annual Single Life RMDs in years 1–9)</option>
+          </select>
+        </div>
+      {/if}
+
+      {#if view.inherited_rule === 'ten_year'}
+        <div class="mb-3">
+          <label class="form-label small fw-bold mb-1 d-flex align-items-center" for="{uid}-strategy">
+            <span>10-Year Distribution Strategy</span>
+            <HelpPopover
+              title="10-Year Distribution Strategy"
+              content="Choose how to draw from this account within the 10-year window: 'Minimum Required Only' takes only required annual RMDs (if any) and liquidates 100% in Year 10 (which may cause a large tax spike). 'Equalized / Ratable (1/Nth)' smooths distributions across the remaining years to avoid jumping into higher tax brackets."
+            />
+          </label>
+          <select class="form-select form-select-sm" id="{uid}-strategy" bind:value={getStrategy, setStrategy}>
+            <option value="rmd_only">Minimum Required Only (Balloon remaining balance in Year 10)</option>
+            <option value="equalized">Equalized / Ratable (Distribute 1/Nth each year to smooth taxes)</option>
+          </select>
+        </div>
+      {/if}
+    {/if}
 
     <div class="row g-2 mb-3">
       <div class="col-6">

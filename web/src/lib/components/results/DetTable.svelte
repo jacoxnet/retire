@@ -51,7 +51,13 @@
 
 {#snippet accounts(block: Record<string, number>, t: number, signed = false)}
   {@render line('Pretax:', block.pretax, t, { amt: signed ? signCls(block.pretax) : '' })}
+  {#if block.inherited_pretax > 0}
+    {@render line('Inherited Pretax:', block.inherited_pretax, t, { amt: signed ? signCls(block.inherited_pretax) : '' })}
+  {/if}
   {@render line('Roth:', block.roth, t, { amt: signed ? signCls(block.roth) : '' })}
+  {#if block.inherited_roth > 0}
+    {@render line('Inherited Roth:', block.inherited_roth, t, { amt: signed ? signCls(block.inherited_roth) : '' })}
+  {/if}
   {@render line('Taxable:', block.taxable, t, { amt: signed ? signCls(block.taxable) : '' })}
   {@render line('HSA:', block.hsa, t, { last: true, amt: signed ? signCls(block.hsa) : '' })}
 {/snippet}
@@ -227,12 +233,25 @@
                 {#snippet withdrawalsTotal()}{@render amount(row.withdrawals.total, t, 'text-primary font-weight-bold')}{/snippet}
                 {#snippet withdrawalsBody()}
                   {@render line('Taxable:', row.withdrawals.taxable, t)}
+                  {#if row.withdrawals.inherited_pretax_rmd > 0}
+                    {#if row.withdrawals.user_inherited_pretax_rmd > 0 && row.withdrawals.spouse_inherited_pretax_rmd > 0}
+                      {@render line('Your Inherited Pretax RMD:', row.withdrawals.user_inherited_pretax_rmd, t, { cls: 'text-muted ps-2' })}
+                      {@render line('Spouse Inherited Pretax RMD:', row.withdrawals.spouse_inherited_pretax_rmd, t, { cls: 'text-muted ps-2' })}
+                    {/if}
+                    {@render line('Inherited Pretax RMD:', row.withdrawals.inherited_pretax_rmd, t)}
+                  {/if}
+                  {#if row.withdrawals.inherited_pretax_extra > 0}
+                    {@render line('Inherited Pretax (Extra):', row.withdrawals.inherited_pretax_extra, t)}
+                  {/if}
                   {#if row.withdrawals.user_pretax_rmd > 0 || row.withdrawals.spouse_pretax_rmd > 0}
                     {@render line('Your RMD:', row.withdrawals.user_pretax_rmd, t, { cls: 'text-muted ps-2' })}
                     {@render line('Spouse RMD:', row.withdrawals.spouse_pretax_rmd, t, { cls: 'text-muted ps-2' })}
                   {/if}
                   {@render line('Pretax (RMD Total):', row.withdrawals.pretax_rmd, t)}
                   {@render line('Pretax (Extra):', row.withdrawals.pretax_extra, t)}
+                  {#if row.withdrawals.inherited_roth > 0}
+                    {@render line('Inherited Roth:', row.withdrawals.inherited_roth, t)}
+                  {/if}
                   {@render line('Roth:', row.withdrawals.roth, t)}
                   {@render line('HSA:', row.withdrawals.hsa, t, { last: true })}
                 {/snippet}

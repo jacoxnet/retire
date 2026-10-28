@@ -178,16 +178,18 @@ The calculator incorporates a realistic tax model to estimate how taxes impact y
 
 Each modeled year, the app balances inflows and outflows in the following specific order:
 
-1. **Required Minimum Distributions (RMDs) Taken First:** RMDs are calculated according to IRS rules (SECURE 2.0 Uniform Lifetime Table, beginning at age 73 or 75 depending on birth year) based on the prior year-end pre-tax balance and are taken first.
-2. **Cash Inflows vs. Outflows:** Income streams (Social Security, pensions, annuities) and RMDs are pooled to cover living expenses, regular taxes, and other taxes.
-3. **Handling Surpluses:** If total income and RMDs exceed spending and taxes, the extra cash is reinvested into your taxable accounts (increasing both balance and cost basis).
-4. **Handling Shortfalls (Withdrawal Waterfall):** When income and RMDs do not fully cover spending and taxes, the deficit is withdrawn from accounts in an order designed to minimize taxes and early-withdrawal penalties:
+1. **Required Minimum Distributions (RMDs) and Inherited Distributions Taken First:** RMDs are calculated according to IRS rules (SECURE 2.0 Uniform Lifetime Table, beginning at age 73 or 75 depending on birth year) based on the prior year-end pre-tax balance. Inherited Pre-Tax RMDs (based on the IRS Single Life Expectancy Table non-recalculation method) and scheduled Inherited Roth distributions are also taken first.
+2. **Cash Inflows vs. Outflows:** Income streams (Social Security, pensions, annuities), regular RMDs, and inherited IRA distributions are pooled to cover living expenses, regular taxes, and other taxes.
+3. **Handling Surpluses:** If total income, RMDs, and inherited distributions exceed spending and taxes, the extra cash is reinvested into your taxable accounts (increasing both balance and cost basis). Inherited IRAs cannot accept contributions.
+4. **Handling Shortfalls (Withdrawal Waterfall):** When income and mandatory distributions do not fully cover spending and taxes, the deficit is withdrawn from accounts in an order designed to minimize taxes, honor account expiration rules, and avoid early-withdrawal penalties:
    - **1. Taxable Accounts First:** Withdrawn first. The engine calculates the portion that is return of basis (tax-free) vs. realized capital gain (taxed at capital gains rates), grossing up the withdrawal to cover the resulting taxes.
-   - **2. Pre-Tax Accounts (Penalty-Free):** If the account owner is age 59½ or older, additional withdrawals are drawn from Traditional IRAs/401(k)s, grossed up for ordinary income taxes.
-   - **3. Roth Accounts:** Roth accounts are drawn next, completely tax-free.
-   - **4. HSA Accounts:** HSAs designated for qualified medical expenses are drawn tax-free. Non-medical HSA withdrawals for owners age 65 or older are drawn as ordinary income with no penalty.
-   - **5. Penalized Pre-Tax Accounts:** If the account owner is under age 59½, pre-tax withdrawals are deferred until after Roth and penalty-free accounts because they incur an additional 10% early-withdrawal penalty.
-   - **6. Penalized Non-Medical HSA Accounts:** Non-medical HSA withdrawals under age 65 are drawn last due to the steep 20% early-withdrawal penalty.
+   - **2. Inherited Pre-Tax IRAs:** Withdrawn next. Under IRC § 72(t)(2)(A)(ii), inherited accounts are exempt from the 10% early withdrawal penalty regardless of beneficiary age. Withdrawing from inherited pre-tax IRAs before your own pre-tax accounts helps empty the account within the statutory 10-year rule while preserving your own pre-tax tax-deferred compounding.
+   - **3. Pre-Tax Accounts (Penalty-Free):** If the account owner is age 59½ or older, additional withdrawals are drawn from Traditional IRAs/401(k)s, grossed up for ordinary income taxes.
+   - **4. Inherited Roth IRAs:** Inherited Roth withdrawals are tax-free and drawn before own Roth IRAs, drawing down the 10-year expiring tax shelter to preserve lifetime tax exemption in your own Roth accounts.
+   - **5. Own Roth Accounts:** Lifetime Roth accounts are drawn next, completely tax-free.
+   - **6. HSA Accounts:** HSAs designated for qualified medical expenses are drawn tax-free. Non-medical HSA withdrawals for owners age 65 or older are drawn as ordinary income with no penalty.
+   - **7. Penalized Pre-Tax Accounts:** If the account owner is under age 59½, pre-tax withdrawals from own accounts are deferred until after Roth and penalty-free accounts because they incur an additional 10% early-withdrawal penalty.
+   - **8. Penalized Non-Medical HSA Accounts:** Non-medical HSA withdrawals under age 65 are drawn last due to the steep 20% early-withdrawal penalty.
 
 ---
 

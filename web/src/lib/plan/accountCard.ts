@@ -40,20 +40,26 @@ export function personLabels(plan: Plan): People {
   };
 }
 
-export type CardType = 'pretax' | 'roth' | 'taxable' | 'hsa';
+export type CardType = 'pretax' | 'roth' | 'taxable' | 'hsa' | 'inherited_pretax' | 'inherited_roth';
 
 export const ACCOUNT_TYPE_OPTIONS: { value: CardType; label: string }[] = [
   { value: 'pretax', label: 'Pre-Tax (IRA / 401k / 403b)' },
   { value: 'roth', label: 'Roth (Roth IRA / Roth 401k)' },
   { value: 'taxable', label: 'Taxable (Brokerage / Savings)' },
   { value: 'hsa', label: 'Health Savings Account (HSA)' },
+  { value: 'inherited_pretax', label: 'Inherited Pre-Tax (Traditional / 401k / 403b)' },
+  { value: 'inherited_roth', label: 'Inherited Roth (Roth IRA)' },
 ];
+
+export const isInheritedType = (type: unknown): boolean => type === 'inherited_pretax' || type === 'inherited_roth';
 
 const BASE_NAMES: Record<string, string> = {
   pretax: 'Traditional 401(k) / IRA',
   roth: 'Roth IRA / 401(k)',
   hsa: 'Health Savings Account (HSA)',
   taxable: 'Taxable Brokerage',
+  inherited_pretax: 'Inherited Traditional IRA',
+  inherited_roth: 'Inherited Roth IRA',
 };
 
 /** `baseName`, or `baseName N` with the first N from 2 not already used (case-insensitive). */
@@ -117,6 +123,12 @@ export function cardAccount(data: Account, people: People, existingNames: string
     capital_gains_dist_rate: def(data.capital_gains_dist_rate, 0.5),
     cost_basis_ratio: def(data.cost_basis_ratio, 70.0),
     is_community_property: data.is_community_property === true || (data.is_community_property as unknown) === 'true',
+    ...(isInheritedType(type) || data.death_year !== undefined ? {
+      death_year: def(data.death_year, people.currentYear),
+      inherited_rule: def(data.inherited_rule, 'ten_year'),
+      decedent_passed_rbd: def(data.decedent_passed_rbd, false),
+      distribution_strategy: def(data.distribution_strategy, 'rmd_only'),
+    } : {}),
   };
 }
 

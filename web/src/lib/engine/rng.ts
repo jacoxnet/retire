@@ -124,6 +124,10 @@ export interface ReturnModels {
   taxable: BucketModel;
   hsaUser: BucketModel;
   hsaSpouse: BucketModel;
+  inhPreUser: BucketModel;
+  inhPreSpouse: BucketModel;
+  inhRothUser: BucketModel;
+  inhRothSpouse: BucketModel;
 }
 
 export function returnModels(inputs: SimInputs): ReturnModels {
@@ -135,6 +139,10 @@ export function returnModels(inputs: SimInputs): ReturnModels {
     taxable: bucketModel(inputs.taxable_data, 6.0, 8.0),
     hsaUser: bucketModel(inputs.hsa_data, 6.0, 8.0),
     hsaSpouse: bucketModel(married ? inputs.spouse_hsa_data : inputs.hsa_data, 6.0, 8.0),
+    inhPreUser: bucketModel(inputs.inherited_pretax_data, 6.0, 10.0),
+    inhPreSpouse: bucketModel(married ? inputs.spouse_inherited_pretax_data : inputs.inherited_pretax_data, 6.0, 10.0),
+    inhRothUser: bucketModel(inputs.inherited_roth_data, 6.0, 10.0),
+    inhRothSpouse: bucketModel(married ? inputs.spouse_inherited_roth_data : inputs.inherited_roth_data, 6.0, 10.0),
   };
 }
 
@@ -146,11 +154,18 @@ export interface PathBuffers extends PathReturns {
   taxable: Float64Array;
   hsaUser: Float64Array;
   hsaSpouse: Float64Array;
+  inhPreUser: Float64Array;
+  inhPreSpouse: Float64Array;
+  inhRothUser: Float64Array;
+  inhRothSpouse: Float64Array;
 }
 
 export function pathBuffers(years: number): PathBuffers {
   const z = () => new Float64Array(years);
-  return { preUser: z(), preSpouse: z(), roth: z(), taxable: z(), hsaUser: z(), hsaSpouse: z() };
+  return {
+    preUser: z(), preSpouse: z(), roth: z(), taxable: z(), hsaUser: z(), hsaSpouse: z(),
+    inhPreUser: z(), inhPreSpouse: z(), inhRothUser: z(), inhRothSpouse: z(),
+  };
 }
 
 const L = ASSET_CLASS_CHOLESKY;
@@ -183,5 +198,9 @@ export function generatePathReturns(models: ReturnModels, years: number, rng: Rn
     fill(out.taxable, models.taxable, t, zs, zb, zc);
     fill(out.hsaUser, models.hsaUser, t, zs, zb, zc);
     fill(out.hsaSpouse, models.hsaSpouse, t, zs, zb, zc);
+    fill(out.inhPreUser, models.inhPreUser, t, zs, zb, zc);
+    fill(out.inhPreSpouse, models.inhPreSpouse, t, zs, zb, zc);
+    fill(out.inhRothUser, models.inhRothUser, t, zs, zb, zc);
+    fill(out.inhRothSpouse, models.inhRothSpouse, t, zs, zb, zc);
   }
 }

@@ -29,8 +29,16 @@ function call(c: Case): unknown {
       return calculateMarginalTaxRate(a[0]);
     case 'flat_assets_to_accounts':
       return flatAssetsToAccounts(a[0], a[1]);
-    case 'aggregate_accounts':
-      return aggregateAccounts(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+    case 'aggregate_accounts': {
+      const res = aggregateAccounts(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]) as any;
+      if (c.out && typeof c.out === 'object' && !('inherited_pretax_assets' in c.out)) {
+        delete res.inherited_pretax_assets;
+        delete res.spouse_inherited_pretax_assets;
+        delete res.inherited_roth_assets;
+        delete res.spouse_inherited_roth_assets;
+      }
+      return res;
+    }
     case 'build_default_balance_sheet':
       return buildDefaultBalanceSheet(a[0] ?? k.accounts ?? null, k.current_year ?? 2026, k.data ?? null, TODAY);
     case 'parse_balance_sheet':

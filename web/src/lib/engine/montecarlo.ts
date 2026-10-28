@@ -52,6 +52,14 @@ export interface KernelParams {
   taxableCgDistRate: number;
   taxableBasisInit: number;
   isCommunityPropertyCode: number;
+  inhPreUserInit: number;
+  inhPreSpouseInit: number;
+  inhRothUserInit: number;
+  inhRothSpouseInit: number;
+  inhPreUserFrac: Float64Array;
+  inhPreSpouseFrac: Float64Array;
+  inhRothUserFrac: Float64Array;
+  inhRothSpouseFrac: Float64Array;
 }
 
 const f64 = (a: ArrayLike<number>) => (a instanceof Float64Array ? a : Float64Array.from(a));
@@ -104,6 +112,14 @@ export function kernelParams(inputs: SimInputs, nb: NumbaInputs): KernelParams {
     taxableCgDistRate: nb.taxable_cg_dist_rate,
     taxableBasisInit: nb.taxable_basis_init,
     isCommunityPropertyCode: nb.is_community_property_code,
+    inhPreUserInit: nb.inherited_pretax_user_init,
+    inhPreSpouseInit: nb.inherited_pretax_spouse_init,
+    inhRothUserInit: nb.inherited_roth_user_init,
+    inhRothSpouseInit: nb.inherited_roth_spouse_init,
+    inhPreUserFrac: f64(nb.inh_pre_user_frac),
+    inhPreSpouseFrac: f64(nb.inh_pre_spouse_frac),
+    inhRothUserFrac: f64(nb.inh_roth_user_frac),
+    inhRothSpouseFrac: f64(nb.inh_roth_spouse_frac),
   };
 }
 
@@ -115,6 +131,10 @@ export interface PathReturns {
   taxable: ArrayLike<number>;
   hsaUser: ArrayLike<number>;
   hsaSpouse: ArrayLike<number>;
+  inhPreUser?: ArrayLike<number>;
+  inhPreSpouse?: ArrayLike<number>;
+  inhRothUser?: ArrayLike<number>;
+  inhRothSpouse?: ArrayLike<number>;
 }
 
 export interface PathResult {
@@ -141,9 +161,13 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
   let hsaUser = p.hsaUserInit;
   let hsaSpouse = p.hsaSpouseInit;
   let taxableBasis = p.taxableBasisInit >= 0.0 ? p.taxableBasisInit : Math.max(0.0, p.taxableInit) * 0.70;
+  let inhPreUser = p.inhPreUserInit;
+  let inhPreSpouse = p.inhPreSpouseInit;
+  let inhRothUser = p.inhRothUserInit;
+  let inhRothSpouse = p.inhRothSpouseInit;
 
   let everDepleted = false;
-  if (trajectory) trajectory[0] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse;
+  if (trajectory) trajectory[0] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse;
 
   const tFirstDeath = isMarried ? Math.min(userAgeDeath - userAge, spouseAgeDeath - spouseAge) : userAgeDeath - userAge;
   const intYield = p.taxableIntYield / 100.0;
@@ -158,7 +182,7 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     const spouseAlive = isMarried && spouseAgeT <= spouseAgeDeath;
 
     if (!userAlive && !spouseAlive) {
-      pretaxUser = pretaxSpouse = roth = taxable = taxableBasis = hsaUser = hsaSpouse = 0.0;
+      pretaxUser = pretaxSpouse = roth = taxable = taxableBasis = hsaUser = hsaSpouse = inhPreUser = inhPreSpouse = inhRothUser = inhRothSpouse = 0.0;
       if (trajectory) trajectory[t + 1] = 0.0;
       continue;
     }
@@ -178,6 +202,28 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     const cHsaUserT = ro[7];
     const cHsaSpouseT = ro[8];
 
+    if (isMarried && t > tFirstDeath) {
+      if (userAlive && !spouseAlive) {
+        if (inhPreSpouse > 0.0) {
+          inhPreUser += inhPreSpouse;
+          inhPreSpouse = 0.0;
+        }
+        if (inhRothSpouse > 0.0) {
+          inhRothUser += inhRothSpouse;
+          inhRothSpouse = 0.0;
+        }
+      } else if (spouseAlive && !userAlive) {
+        if (inhPreUser > 0.0) {
+          inhPreSpouse += inhPreUser;
+          inhPreUser = 0.0;
+        }
+        if (inhRothUser > 0.0) {
+          inhRothSpouse += inhRothUser;
+          inhRothUser = 0.0;
+        }
+      }
+    }
+
     if (isMarried && t === tFirstDeath && taxable > 0.0) {
       taxableBasis = p.isCommunityPropertyCode !== 0
         ? Math.max(0.0, taxable)
@@ -191,6 +237,10 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
 
     const pretaxUserPrior = Math.max(0.0, pretaxUser);
     const pretaxSpousePrior = isMarried ? Math.max(0.0, pretaxSpouse) : 0.0;
+    const inhPreUserPrior = Math.max(0.0, inhPreUser);
+    const inhPreSpousePrior = isMarried ? Math.max(0.0, inhPreSpouse) : 0.0;
+    const inhRothUserPrior = Math.max(0.0, inhRothUser);
+    const inhRothSpousePrior = isMarried ? Math.max(0.0, inhRothSpouse) : 0.0;
 
     const pretaxUserBefore = Math.max(0.0, pretaxUser + cPreUserT);
     const pretaxSpouseBefore = isMarried ? Math.max(0.0, pretaxSpouse + cPreSpouseT) : 0.0;
@@ -200,12 +250,21 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     const hsaUserBefore = Math.max(0.0, hsaUser + cHsaUserT);
     const hsaSpouseBefore = isMarried ? Math.max(0.0, hsaSpouse + cHsaSpouseT) : 0.0;
 
+    const rInhPreU = r.inhPreUser ? r.inhPreUser[t] : (r.preUser ? r.preUser[t] : 0.0);
+    const rInhPreS = r.inhPreSpouse ? r.inhPreSpouse[t] : (r.preSpouse ? r.preSpouse[t] : 0.0);
+    const rInhRothU = r.inhRothUser ? r.inhRothUser[t] : (r.roth ? r.roth[t] : 0.0);
+    const rInhRothS = r.inhRothSpouse ? r.inhRothSpouse[t] : (r.roth ? r.roth[t] : 0.0);
+
     const pretaxUserMid = pretaxUserBefore + pretaxUserBefore * r.preUser[t];
     const pretaxSpouseMid = pretaxSpouseBefore + (isMarried ? pretaxSpouseBefore * r.preSpouse[t] : 0.0);
     const rothMid = rothBefore + rothBefore * r.roth[t];
     const taxableMid = taxableBefore + (taxableBefore > 0.0 ? taxableBefore * r.taxable[t] : 0.0);
     const hsaUserMid = hsaUserBefore + hsaUserBefore * r.hsaUser[t];
     const hsaSpouseMid = hsaSpouseBefore + (isMarried ? hsaSpouseBefore * r.hsaSpouse[t] : 0.0);
+    const inhPreUserMid = inhPreUserPrior + inhPreUserPrior * rInhPreU;
+    const inhPreSpouseMid = inhPreSpousePrior + (isMarried ? inhPreSpousePrior * rInhPreS : 0.0);
+    const inhRothUserMid = inhRothUserPrior + inhRothUserPrior * rInhRothU;
+    const inhRothSpouseMid = inhRothSpousePrior + (isMarried ? inhRothSpousePrior * rInhRothS : 0.0);
 
     let yInt = 0.0;
     let totDiv = 0.0;
@@ -230,6 +289,11 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     }
     const totalSpendingTarget = desiredSpendingT + p.addSpending[t];
 
+    const inhPreUserFracT = p.inhPreUserFrac[t];
+    const inhPreSpouseFracT = p.inhPreSpouseFrac[t];
+    const inhRothUserFracT = p.inhRothUserFrac[t];
+    const inhRothSpouseFracT = p.inhRothSpouseFrac[t];
+
     njitRmdTaxWithdraw(
       userAgeT, spouseAgeT, userAlive, spouseAlive, isMarried,
       pretaxUserPrior, pretaxSpousePrior, pretaxUserMid, pretaxSpouseMid,
@@ -241,6 +305,9 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
       p.hsaUserForMedicalCode, p.hsaSpouseForMedicalCode,
       taxableBasisMid, yInt, yDivOrd, yDivQual, yCgDist,
       rtw,
+      inhPreUserPrior, inhPreSpousePrior, inhPreUserMid, inhPreSpouseMid,
+      inhRothUserPrior, inhRothSpousePrior, inhRothUserMid, inhRothSpouseMid,
+      inhPreUserFracT, inhPreSpouseFracT, inhRothUserFracT, inhRothSpouseFracT,
     );
 
     if (rtw[18] > 0.0) everDepleted = true;
@@ -252,11 +319,15 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     hsaUser = rtw[4];
     hsaSpouse = rtw[5];
     taxableBasis = rtw[19];
+    inhPreUser = rtw[23];
+    inhPreSpouse = rtw[24];
+    inhRothUser = rtw[25];
+    inhRothSpouse = rtw[26];
 
-    if (trajectory) trajectory[t + 1] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse;
+    if (trajectory) trajectory[t + 1] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse;
   }
 
-  const endingPortfolio = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse;
+  const endingPortfolio = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse;
   const terminalEstate = endingPortfolio + p.terminalLifeInsEstate;
   if (trajectory) trajectory[totalYears] = terminalEstate;
   result.terminalEstate = terminalEstate;
@@ -274,6 +345,10 @@ export interface ReturnMatrices {
   taxable: Float64Array;
   hsaUser: Float64Array;
   hsaSpouse: Float64Array;
+  inhPreUser?: Float64Array;
+  inhPreSpouse?: Float64Array;
+  inhRothUser?: Float64Array;
+  inhRothSpouse?: Float64Array;
 }
 
 /**
@@ -295,6 +370,10 @@ export function simulateAllPaths(
       taxable: m.taxable.subarray(a, b),
       hsaUser: m.hsaUser.subarray(a, b),
       hsaSpouse: m.hsaSpouse.subarray(a, b),
+      inhPreUser: m.inhPreUser ? m.inhPreUser.subarray(a, b) : undefined,
+      inhPreSpouse: m.inhPreSpouse ? m.inhPreSpouse.subarray(a, b) : undefined,
+      inhRothUser: m.inhRothUser ? m.inhRothUser.subarray(a, b) : undefined,
+      inhRothSpouse: m.inhRothSpouse ? m.inhRothSpouse.subarray(a, b) : undefined,
     };
     const traj = trajectories ? trajectories.subarray(i * (years + 1), (i + 1) * (years + 1)) : null;
     const res = simulatePath(p, r, traj);
