@@ -15,7 +15,14 @@ At the top of the **Enter Data** page, select your planning mode:
 
 ### 2. Enter Your Core Plan (Key Tabs)
 1. **Demographics & Plan Details:** Enter your current age, retirement age, and expected lifespan (and spouse’s details if married). Set your tax filing status, state income tax rate, and expected inflation rate.
-2. **Accounts for Retirement:** Click **"+ Add Account"** to create an individual Account Card for each account you own (401(k), Traditional IRA, Roth IRA, Taxable Brokerage, or HSA). Enter current balances, future contributions, and expected average return.
+2. **Accounts for Retirement:** Click **"+ Add Account"** to create an individual Account Card for each account you own:
+   - Pre-Tax (Traditional 401(k), Traditional IRA, 403(b))
+   - Roth (Roth IRA, Roth 401(k))
+   - Taxable Brokerage or Savings
+   - Health Savings Account (HSA)
+   - Inherited Pre-Tax (Traditional IRA / 401(k))
+   - Inherited Roth (Roth IRA)  
+   Enter current balances, expected average return, and future contributions. *(Note: Contributions are legally prohibited to inherited accounts; you will instead configure their inherited withdrawal clock and IRS distribution rules.)*
 3. **Spending:**
    - **Regular Retirement Spending:** Enter your baseline desired annual spending in retirement (in today’s dollars).
    - **Additional Spending:** Enter milestone or non-annual expenses (such as buying a car every 7 years, college tuition, or home renovations).  
@@ -26,7 +33,8 @@ At the top of the **Enter Data** page, select your planning mode:
 Click **Run Simulation** from any tab:
 - **Regular Simulation:** Shows your **Success Rate**—the percentage of thousands of randomized market paths where your money lasted your entire lifetime.
 - **Maximum Spending Simulation:** Solves for the **highest annual spending** your portfolio can sustain at your target confidence level (e.g., an 80% or 90% success rate).
-- **Projections & Cash Flows:** Review year-by-year account balances, income, living costs, taxes, and withdrawals.
+- **Earliest Retirement Age Simulation:** Solves for the **earliest age and calendar year** you can retire at your target confidence level, including coordination strategies and an interactive trade-off explorer for married couples.
+- **Projections & Cash Flows:** Review year-by-year account balances, income, living costs, taxes, and exact withdrawals from each account type.
 - **Stress Test:** See how your plan would have survived historical crashes like the 2000 Dot-Com bust or the 2008 Financial Crisis.
 
 ### 4. Save Your Work
@@ -42,9 +50,10 @@ Your plan is saved automatically in this browser on this device (its local stora
   - **Monte Carlo Engine:** Simulates thousands of randomized market return sequences to measure how sequence-of-returns risk affects your portfolio.
   - **Deterministic Projections:** Models your year-by-year account growth and detailed cash flows using the average expected return you assign to each account.
   - **Historical Stress Testing:** Re-runs your retirement timeline by inserting the actual market conditions of historical financial crises (e.g., 2000 Dot-Com, 2008 Financial Crisis, 1970s Stagflation) starting at your retirement year.
-- **Two Simulation Modes:**
+- **Three Simulation Modes:**
   - **Regular Simulation:** You supply your desired annual spending; the app calculates your probability of success.
   - **Maximum Spending Simulation (Goal Seeking):** You specify a target success rate (e.g., 85%); the engine solves for the maximum sustainable annual spending.
+  - **Earliest Retirement Age Simulation:** You specify a target success rate; the engine solves for the earliest age and calendar year you can retire. For married couples, multiple coordination strategies and an interactive trade-off frontier explorer are provided.
 - **Data Privacy & Storage:** All calculations run in your browser; the site has no server, and your financial data never leaves your device. Use the **Save / Load / Clear Data** page to export your plan to a `.json` file for backup.
 
 ---
@@ -54,12 +63,12 @@ Your plan is saved automatically in this browser on this device (its local stora
 Toggle between modes at the top of the **Enter Data** page:
 
 - **Advanced Mode (Default):** Designed for comprehensive financial planning. Includes:
-  - Account volatility (standard deviation) customization.
+  - Account volatility (standard deviation) customization (presets or user-specified).
   - Taxable account tax settings (dividend yields, qualified dividend splits, cost basis ratios, and community property state step-up elections).
   - The **Other Taxes** card for scheduling unmodeled taxes or surcharges (like IRMAA or NIIT).
   - The **Personal Balance Sheet** for tracking past and present net worth and sinking funds.
   - The **Portfolio Rebalancing** tool.
-- **Simple Mode:** Hides advanced volatility inputs, detailed taxable account drawers, other taxes, balance sheet net worth tracking, and rebalancing. It provides a clean, 4-step wizard for fast modeling.
+- **Simple Mode:** Hides advanced volatility inputs, detailed taxable account drawers, other taxes, balance sheet net worth tracking, and rebalancing. It provides a clean, 4-step wizard for fast modeling. (All account types, including Inherited IRAs, are supported in both modes.)
 
 ---
 
@@ -77,8 +86,32 @@ Toggle between modes at the top of the **Enter Data** page:
 
 #### Tab 2: Accounts for Retirement
 
-- **Account Cards:** Rather than typing into a spreadsheet table, you manage accounts through individual **Account Cards**. Click **"+ Add Account"** to create a card for each 401(k), Traditional IRA, Roth IRA, Taxable Brokerage, or HSA account. Every account must have a unique name.
-- **Card Fields:** Specify account owner (you or spouse), current balance, contribution amount and frequency, contribution start and end ages (or "at retirement"), and an inflation adjustment toggle.
+- **Account Cards:** Rather than typing into a spreadsheet table, you manage accounts through individual **Account Cards**. Click **"+ Add Account"** to create a card for each retirement or investment account you own. Every account must have a unique name.
+- **Supported Account Types:**
+  - **Pre-Tax (IRA / 401k / 403b):** Traditional tax-deferred accounts.
+  - **Roth (Roth IRA / Roth 401k):** Tax-free growth and tax-free withdrawals for life.
+  - **Taxable (Brokerage / Savings):** Standard non-retirement accounts.
+  - **Health Savings Account (HSA):** Triple-tax-advantaged medical savings accounts.
+  - **Inherited Pre-Tax (Traditional / 401k / 403b):** Tax-deferred accounts inherited from another individual.
+  - **Inherited Roth (Roth IRA):** Roth accounts inherited from another individual.
+- **Standard Account Card Fields:**
+  - **Owner:** You or your spouse.
+  - **Present Balance:** Current market value.
+  - **Future Contributions:** Dollar amount, frequency (Annual, Monthly, One-Time), contribution start age, contribution end age (or "at retirement"), and inflation adjustment toggle.
+- **Inherited Accounts (Inherited Pre-Tax & Inherited Roth):**
+  - **Contributions Prohibited:** Under IRS rules, contributions cannot be made to inherited accounts. Contribution fields are replaced with inherited account parameters.
+  - **Year of Death / Inherited:** Enter the year the original account owner passed away (or when the account was inherited). The card displays a dynamic clock indicating the number of years remaining on your distribution window.
+  - **Beneficiary's RMD Rule:**
+    - *10-Year Rule (Standard post-2019):* Established by the SECURE Act for most non-spouse individual designated beneficiaries inheriting after December 31, 2019. The account must be completely emptied by December 31 of the 10th year following the owner's death.
+    - *Lifetime Stretch (Pre-2020 / Eligible Designated Beneficiary - EDB):* Select if the original owner died before 2020, or if the beneficiary is an Eligible Designated Beneficiary (surviving spouse, disabled or chronically ill individual, individual not more than 10 years younger than decedent, or minor child of decedent until age 21). Annual RMDs are calculated across the beneficiary's single life expectancy (IRS Single Life Table I) using the non-recalculation method (subtracting 1.0 from the initial factor each subsequent year).
+    - *5-Year Rule (Estate / Non-Designated):* Applies to non-designated beneficiaries (such as an estate, charity, or non-qualifying trust) when the owner died before their Required Beginning Date, or where specified by plan documents. The account must be fully emptied within 5 years.
+  - **Decedent Reached Required Beginning Date (RBD) (Inherited Pre-Tax Only):**
+    - Under IRS regulations, if the decedent reached their RBD prior to death, annual RMDs are mandatory during years 1–9 of the 10-year rule based on the beneficiary's single life expectancy, with the remaining balance distributed in Year 10.
+    - If the decedent died *before* reaching their RBD, annual RMDs are *not* required during years 1–9; only the full liquidation by Year 10 is required.
+    - For *Inherited Roth IRAs*, original Roth owners are treated as having died before RBD, so no annual RMDs are required during years 1–9 under the 10-year rule regardless of decedent age.
+  - **10-Year Distribution Strategy:**
+    - *Minimum Required Only (Balloon in Year 10):* Takes only required minimum distributions (if any) during years 1–9 and liquidates 100% of the remaining balance in Year 10. For pre-tax accounts, this delays taxable income but can create a significant tax spike in Year 10.
+    - *Equalized / Ratable (1/Nth):* Distributes roughly equal proportions (1/10th, 1/9th, ..., 1/2, 1/1) of the remaining balance each year to smooth withdrawals and mitigate jumping into higher income tax brackets.
 - **Expected Return & Volatility:** Enter your expected average annual return. In Advanced Mode, choose a volatility (standard deviation) preset—Low (4.5%), Moderate (9.5%), High (16.0%)—or specify a custom percentage.
 - **Taxable Account Tax Treatment (Advanced Mode):** For taxable brokerage accounts, expand the tax drawer to inspect or adjust the app's default tax assumptions:
   - Dividend yield (default 2.0%) and qualified dividend share (default 85%).
@@ -112,6 +145,7 @@ Toggle between modes at the top of the **Enter Data** page:
 
 - **Historical Net Worth Tracker:** The Personal Balance Sheet is **not** a future projection. It tracks your **past and present** financial history across recorded calendar dates (snapshots at quarter-ends, year-ends, or specific dates you record).
 - **Net Worth Metrics:** Displays Gross Net Worth, Liquid Net Worth, Retirement Savings (net of estimated deferred income tax), Home Equity, and Total Debts.
+  - *Inherited Account Categorization:* Inherited Pre-Tax accounts are grouped under Pre-Tax Retirement assets (and reduced by estimated deferred income tax), while Inherited Roth accounts are grouped under Roth Retirement assets.
 - **Savings Goals (Sinking Funds):**
   - Create dedicated goals (such as an Emergency Reserve, Vacation Fund, or New Car Fund), assign target dollar amounts, and link specific accounts to each goal.
   - **CPI-U Auto-Inflation:** Toggle whether your target amount automatically adjusts over time based on historical U.S. Consumer Price Index (CPI-U) data.
@@ -138,9 +172,23 @@ Toggle between modes at the top of the **Enter Data** page:
 
 ### 2. Simulation Results Page
 
-- **Monte Carlo Simulation:** Displays your overall success rate (or solved maximum spending in goal-seeking mode), ending wealth percentiles (nominal and inflation-adjusted), and legacy/estate totals. You can adjust key inputs on the left-hand panel and re-run simulations instantly. Simulations run in parallel on your computer's processor cores, with a progress bar and a Cancel button; results are remembered until you change the plan. In Maximum Spending mode, each search step uses at most 100,000 paths, then your full number of paths is run once at the solved spending.
+- **Interactive Simulation Controls:** On the left-hand panel of the Results page, you can adjust spending, inflation, lifespans, asset return rates, and simulation mode, then instantly re-run simulations without returning to the data entry tabs.
+- **Simulation Modes on the Results Page:**
+  - **Regular Simulation:** Computes your **Success Rate**—the percentage of randomized market paths where your portfolio lasted your full lifetime.
+  - **Maximum Spending Simulation (Goal Seeking):** Solves for the **highest sustainable annual spending** that achieves your specified target success rate (e.g., 85%).
+  - **Earliest Retirement Age Simulation:** Solves for the **earliest age and calendar year** you can retire while sustaining your desired spending at your target confidence level.
+    - *Single Planners:* Solves directly for your earliest retirement age.
+    - *Married Couples:* Provides 4 coordination strategies:
+      - **Retire Simultaneously (Same Year):** Solves for the earliest calendar year both spouses can retire together.
+      - **Retire at the Same Age:** Solves for the earliest chronological age both spouses can retire.
+      - **Solve for You:** Solves for your retirement age while keeping spouse's retirement age fixed.
+      - **Solve for Spouse:** Solves for spouse's retirement age while keeping your retirement age fixed.
+    - **Couple's Retirement Trade-Off Explorer:** An interactive slider and comparison table on the results card that lets couples explore the full trade-off frontier (e.g., seeing how working an additional year allows the spouse to retire earlier).
+    - **Outcome Indicators:** Alerts you if you can *Retire Immediately!* (plan already satisfies target success today) or if the target rate is *Unreachable* even when working to maximum modeled ages.
+- **Ending Wealth Percentiles (Nominal & Real):** Displays ending wealth statistics (Mean, Median, 25th percentile, 10th percentile, Max, Min) showing both **Nominal dollars** (future dollars) and **Real dollars** (purchasing power in today's dollars, adjusted for cumulative inflation) side-by-side.
+- **Simulation Performance & Run Count:** Simulations default to **50,000 runs** for high statistical precision (adjustable up to 1,000,000 runs). Simulations execute in parallel across your computer's CPU cores, featuring a live progress bar and Cancel button. Results remain cached until you change inputs.
 - **Deterministic Projection:** Provides a year-by-year table of projected balances for every individual account using its expected average return.
-- **Deterministic Cash Flow:** Displays a year-by-year cash flow ledger showing total income, living expenses, taxes paid, and exact withdrawals taken from each account type.
+- **Deterministic Cash Flow:** Displays a year-by-year cash flow ledger showing total income, living expenses, taxes paid, and exact withdrawals taken from each account type. The ledger explicitly itemizes Inherited Pre-Tax RMDs (broken down by spouse when applicable), extra inherited withdrawals, regular pre-tax RMDs, and Inherited Roth distributions.
 - **Charts:** Visualizes wealth trajectories over time, percentiles, and asset breakdowns. Click any chart to open a full-screen view or print it.
 - **Stress Test:** Re-runs your plan under actual historical market crises (such as the 2000 Dot-Com crash, the 2008 Financial Crisis, or 1970s Stagflation) starting at your retirement date to test resilience. The "Regular Simulation" column is the same Monte Carlo run shown on the first tab, so the two can be compared directly.
 
@@ -162,6 +210,10 @@ The calculator incorporates a realistic tax model to estimate how taxes impact y
    - Automatically applies progressive federal income tax brackets and standard deductions (including senior age additions).
    - Models the IRS formula for provisional income taxation of Social Security benefits (determining whether 0%, 50%, or up to 85% of your benefit is taxable).
    - Applies your state income tax rate, respecting your choice on whether Social Security is state-exempt.
+   - **Inherited Accounts Tax Treatment:**
+     - Distributions from **Inherited Pre-Tax accounts** are treated as ordinary income and subject to standard federal and state tax brackets.
+     - Distributions from **Inherited Roth accounts** are 100% tax-free.
+     - **Penalty Exemption:** Under IRC § 72(t)(2)(A)(ii), withdrawals from inherited retirement accounts are exempt from the 10% early withdrawal penalty, regardless of the beneficiary's age.
 2. **Taxable Account Taxes (During Accumulation & Retirement):**
    - In taxable brokerage accounts, taxes are incurred each year on investment distributions—even if you do not withdraw cash.
    - **Default Assumptions:** By default, the engine models a 2.0% dividend yield (85% qualified at lower capital gains rates, 15% ordinary), 0.5% annual capital gains distributions, and 0.0% interest yield for equity accounts.
@@ -195,7 +247,8 @@ Each modeled year, the app balances inflows and outflows in the following specif
 
 ### Helpful Tips
 
-- **Start in Regular Mode:** Enter your realistic spending expectations to check your baseline success rate. If your success rate is far above or below your target, switch to **Maximum Spending Simulation** on the Results page to find the spending level that matches your preferred confidence level.
-- **Simulation Runs for Accuracy:** Use 10,000 to 50,000 runs for final evaluations. Lower run counts can be used for quick interactive experiments.
+- **Start in Regular Mode:** Enter your realistic spending expectations to check your baseline success rate.
+- **Explore Alternative Modes:** Use **Maximum Spending Simulation** to find the spending level that matches your desired confidence level (e.g. 85%), or use **Earliest Retirement Age Simulation** to explore how soon you (and your spouse) can stop working.
+- **Simulation Runs for Accuracy:** The engine defaults to 50,000 runs for high statistical precision. Lower run counts can be used for quick interactive experiments, and higher counts (up to 1,000,000) for exhaustive evaluations.
 - **Export Your Data:** Download your plan (`.json`) from the Save / Load / Clear Data page before clearing your browser data or switching devices, and keep it as a backup.
 - **Check the Stress Test:** Before finalizing your plan, inspect the Historical Stress Test tab to see how your portfolio behaves during historical market crises.
