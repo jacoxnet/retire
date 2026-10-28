@@ -178,4 +178,26 @@ describe('syncAllTabs', () => {
     const all = Object.values(bs.categories).flatMap((c: any) => c?.accounts ?? []);
     expect(all.find((a: any) => a.id === plan.accounts![0].id)?.values[bs.current_period]).toBe(4242);
   });
+
+  it('creates a new column as of today when current column is a past date and card balance changes', () => {
+    const { plan } = loadPlanFixture<{ plan: Plan }>('sept27', 'imported');
+    const bs = plan.balance_sheet as Record<string, any>;
+    bs.periods = ['2025-12-31'];
+    bs.current_period = '2025-12-31';
+    for (const cat of Object.values(bs.categories) as any[]) {
+      for (const a of cat?.accounts ?? []) {
+        if (a.values) a.values = { '2025-12-31': a.values['2026-09-27'] ?? 0 };
+      }
+    }
+    const target = plan.accounts![0];
+    const oldBalance = target.balance;
+    target.balance = oldBalance + 50000;
+    const testToday = '2026-10-28';
+    syncAllTabs(plan, false, testToday);
+    expect(bs.periods).toEqual(['2025-12-31', testToday]);
+    expect(bs.current_period).toBe(testToday);
+    const updatedAcc = (bs.categories.pretax.accounts as any[]).find((a) => a.id === target.id);
+    expect(updatedAcc.values['2025-12-31']).toBe(oldBalance);
+    expect(updatedAcc.values[testToday]).toBe(oldBalance + 50000);
+  });
 });

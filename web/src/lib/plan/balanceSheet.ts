@@ -5,6 +5,7 @@
 // Functions that need "today" (the Django code calls datetime.date.today()) take it as
 // a trailing YYYY-MM-DD argument, defaulting to the local date.
 import { pyBool, pyFloat } from '../engine/py';
+import { addPeriod } from './bsView';
 import { getBool, getFloat, getInt, pyStr } from './coerce';
 import { calculateMarginalTaxRate } from './marginal';
 import { get, isObj, type Obj, or, pyEqual, title, todayIso } from './pyutil';
@@ -300,6 +301,45 @@ const removeFirstEqual = (list: Obj[], item: Obj) => {
 };
 
 /**
+ * True if any account in `accounts` has a different balance than in `period`,
+ * if any new account with balance > 0 was added, or if an account marked for
+ * retirement with balance > 0 was removed.
+ */
+function hasAssetValueChange(
+  accounts: Account[] | null,
+  period: string,
+  bsById: Map<unknown, [string, Obj]>,
+  bsByName: Map<string, [string, Obj]>,
+  accountIds: Set<unknown>,
+): boolean {
+  const accountNames = new Set((accounts ?? []).map((a) => nameKey(a)).filter(Boolean));
+  for (const acc of accounts ?? []) {
+    const key = nameKey(acc);
+    const link = pyBool(get(acc, 'id')) && bsById.has(acc.id) ? bsById.get(acc.id)! : key && bsByName.has(key) ? bsByName.get(key)! : null;
+    const newBal = getFloat(get(acc, 'balance', 0.0)) as number;
+    if (link) {
+      const [, m] = link;
+      const oldBal = getFloat(m.values?.[period] ?? 0.0) as number;
+      if (newBal !== oldBal) return true;
+    } else if (newBal !== 0.0) {
+      return true;
+    }
+  }
+  const seen = new Set<Obj>();
+  for (const [, [, m]] of [...bsById, ...bsByName]) {
+    if (seen.has(m)) continue;
+    seen.add(m);
+    if (pyBool(get(m, 'include_in_retirement', false))) {
+      const mId = get(m, 'id');
+      const mKey = nameKey(m);
+      const isRetained = (pyBool(mId) && accountIds.has(mId)) || (mKey && accountNames.has(mKey));
+      if (!isRetained && getFloat(m.values?.[period] ?? 0.0) > 0) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Push account-card edits (name, balance, contributions, returns, ...) into the
  * balance sheet's current column, linking by id then case-insensitive name, moving
  * accounts whose type changed, adding new ones, and dropping unlinked duplicates and
@@ -311,8 +351,9 @@ export function syncAccountsToBalanceSheet(
   if (!isObj(balanceSheet) || !('categories' in balanceSheet)) {
     return buildDefaultBalanceSheet(accounts, currentYear, null, today);
   }
-  const period = currentPeriod(balanceSheet, today) as string;
+  let period = currentPeriod(balanceSheet, today) as string;
   const periods: string[] = get(balanceSheet, 'periods', []);
+  if (!Array.isArray(balanceSheet.periods)) balanceSheet.periods = periods;
 
   balanceSheet.categories ??= {};
   const categories: Obj = balanceSheet.categories;
@@ -341,6 +382,17 @@ export function syncAccountsToBalanceSheet(
   }
 
   const accountIds = new Set((accounts ?? []).filter((a) => isObj(a) && pyBool(get(a, 'id'))).map((a) => a.id));
+
+  // If the current column is a past date and the user changed an asset value, create a new
+  // column as of today (copying latest snapshot values) and make it the current column.
+  const cur = period;
+  if (cur && cur < today && hasAssetValueChange(accounts, cur, bsById, bsByName, accountIds)) {
+    if (!periods.includes(today)) {
+      addPeriod(balanceSheet, today);
+    }
+    balanceSheet.current_period = today;
+    period = today;
+  }
 
   for (const acc of accounts ?? []) {
     const atype = get(acc, 'type', 'pretax');

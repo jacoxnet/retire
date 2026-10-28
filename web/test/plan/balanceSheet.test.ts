@@ -241,4 +241,165 @@ describe('BalanceSheetTests', () => {
     expect(updated.categories.roth.accounts.map((a: any) => a.name.toLowerCase())).not.toContain('roth ira');
     expect(validateBalanceSheetAccounts(updated)).toEqual([]);
   });
+
+  it('creates a new column as of today when an asset value changes and the current column is a past date', () => {
+    const bs: any = {
+      periods: ['2025-12-31'],
+      current_period: '2025-12-31',
+      marginal_tax_rate: 24.0,
+      emergency_goal_amount: 30000.0,
+      categories: {
+        pretax: {
+          title: 'Pretax Retirement Accounts',
+          is_pretax: true,
+          accounts: [{
+            id: 'acc_pretax_1',
+            name: 'Primary 401(k)',
+            institution: 'Fidelity',
+            owner: 'user',
+            type: 'pretax',
+            include_in_retirement: true,
+            values: { '2025-12-31': 500000.0 },
+            contrib_amount: 15000.0,
+            return_mean: 6.0,
+            return_std: 10.0,
+          }],
+        },
+        roth: { accounts: [] },
+        taxable: { accounts: [] },
+        hsa: { accounts: [] },
+        emergency: {
+          title: 'Emergency Fund Accounts',
+          target_amount: 30000.0,
+          accounts: [{
+            id: 'acc_emg_1',
+            name: 'Emergency HYSA',
+            type: 'cash',
+            include_in_retirement: false,
+            values: { '2025-12-31': 30000.0 },
+          }],
+        },
+        goals: { goal_groups: [] },
+        daily: { accounts: [] },
+        real_estate: {
+          properties: [{
+            id: 'prop_1',
+            name: 'Primary Residence',
+            market_values: { '2025-12-31': 400000.0 },
+            mortgages: [{ id: 'mort_1', name: 'Mortgage', balances: { '2025-12-31': 200000.0 } }],
+          }],
+        },
+        debts: [{ id: 'debt_1', name: 'Auto Loan', institution: 'Bank', values: { '2025-12-31': 15000.0 } }],
+      },
+    };
+
+    const accounts = [{
+      id: 'acc_pretax_1',
+      name: 'Primary 401(k)',
+      type: 'pretax',
+      owner: 'user',
+      balance: 550000.0,
+      contrib_amount: 15000.0,
+      return_mean: 6.0,
+      return_std: 10.0,
+    }];
+
+    const today = '2026-10-28';
+    const updated = syncAccountsToBalanceSheet(bs, accounts, 2026, today);
+
+    expect(updated.periods).toEqual(['2025-12-31', '2026-10-28']);
+    expect(updated.current_period).toBe('2026-10-28');
+
+    const pretax = updated.categories.pretax.accounts[0];
+    expect(pretax.values['2025-12-31']).toBe(500000.0);
+    expect(pretax.values['2026-10-28']).toBe(550000.0);
+
+    const emg = updated.categories.emergency.accounts[0];
+    expect(emg.values['2025-12-31']).toBe(30000.0);
+    expect(emg.values['2026-10-28']).toBe(30000.0);
+
+    const prop = updated.categories.real_estate.properties[0];
+    expect(prop.market_values['2025-12-31']).toBe(400000.0);
+    expect(prop.market_values['2026-10-28']).toBe(400000.0);
+    expect(prop.mortgages[0].balances['2025-12-31']).toBe(200000.0);
+    expect(prop.mortgages[0].balances['2026-10-28']).toBe(200000.0);
+
+    const debt = updated.categories.debts[0];
+    expect(debt.values['2025-12-31']).toBe(15000.0);
+    expect(debt.values['2026-10-28']).toBe(15000.0);
+  });
+
+  it('does not create a new column when asset values have not changed', () => {
+    const bs: any = {
+      periods: ['2025-12-31'],
+      current_period: '2025-12-31',
+      categories: {
+        pretax: {
+          accounts: [{
+            id: 'acc_pretax_1',
+            name: 'Primary 401(k)',
+            type: 'pretax',
+            include_in_retirement: true,
+            values: { '2025-12-31': 500000.0 },
+            contrib_amount: 15000.0,
+          }],
+        },
+        roth: { accounts: [] },
+        taxable: { accounts: [] },
+        hsa: { accounts: [] },
+      },
+    };
+
+    const accounts = [{
+      id: 'acc_pretax_1',
+      name: 'Primary 401(k)',
+      type: 'pretax',
+      balance: 500000.0,
+      contrib_amount: 25000.0,
+    }];
+
+    const today = '2026-10-28';
+    const updated = syncAccountsToBalanceSheet(bs, accounts, 2026, today);
+
+    expect(updated.periods).toEqual(['2025-12-31']);
+    expect(updated.current_period).toBe('2025-12-31');
+    expect(updated.categories.pretax.accounts[0].values).toEqual({ '2025-12-31': 500000.0 });
+    expect(updated.categories.pretax.accounts[0].contrib_amount).toBe(25000.0);
+  });
+
+  it('updates in place when current column is already today', () => {
+    const bs: any = {
+      periods: ['2025-12-31', '2026-10-28'],
+      current_period: '2026-10-28',
+      categories: {
+        pretax: {
+          accounts: [{
+            id: 'acc_pretax_1',
+            name: 'Primary 401(k)',
+            type: 'pretax',
+            include_in_retirement: true,
+            values: { '2025-12-31': 500000.0, '2026-10-28': 550000.0 },
+          }],
+        },
+        roth: { accounts: [] },
+        taxable: { accounts: [] },
+        hsa: { accounts: [] },
+      },
+    };
+
+    const accounts = [{
+      id: 'acc_pretax_1',
+      name: 'Primary 401(k)',
+      type: 'pretax',
+      balance: 560000.0,
+    }];
+
+    const today = '2026-10-28';
+    const updated = syncAccountsToBalanceSheet(bs, accounts, 2026, today);
+
+    expect(updated.periods).toEqual(['2025-12-31', '2026-10-28']);
+    expect(updated.current_period).toBe('2026-10-28');
+    expect(updated.categories.pretax.accounts[0].values['2025-12-31']).toBe(500000.0);
+    expect(updated.categories.pretax.accounts[0].values['2026-10-28']).toBe(560000.0);
+  });
 });
