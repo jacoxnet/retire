@@ -190,7 +190,7 @@ describe('syncAllTabs', () => {
       }
     }
     const target = plan.accounts![0];
-    const oldBalance = target.balance;
+    const oldBalance = target.balance ?? 0;
     target.balance = oldBalance + 50000;
     const testToday = '2026-10-28';
     syncAllTabs(plan, false, testToday);
