@@ -45,7 +45,9 @@ export interface FlatAssets {
 }
 
 export type AccountType = 'pretax' | 'roth' | 'taxable' | 'hsa' | 'inherited_pretax' | 'inherited_roth';
-export type InheritedRule = 'ten_year' | 'stretch' | 'five_year';
+export type InheritedRule = 'ten_year' | 'stretch' | 'five_year' | 'minor_child' | 'spouse';
+/** Surviving-spouse beneficiary's table: recalculated Single Life, or Uniform Lifetime by election. */
+export type SpouseTable = 'single' | 'uniform';
 export type DistributionStrategy = 'rmd_only' | 'equalized';
 
 export interface Account {
@@ -73,6 +75,8 @@ export interface Account {
   inherited_rule?: InheritedRule | string;
   decedent_passed_rbd?: boolean;
   distribution_strategy?: DistributionStrategy | string;
+  decedent_birth_year?: number | null;
+  spouse_table?: SpouseTable | string;
   [key: string]: unknown;
 }
 

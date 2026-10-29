@@ -2,7 +2,12 @@
 // contribution, income and life-insurance helpers they use (core/runs.py).
 // Plan JSON is read with Python dict semantics (see py.ts) so that loosely-typed or
 // legacy plans resolve exactly as they do in the Django app.
-import { FILING_STATUS_MAP, getRmdStartAge, getSingleLifeDivisor } from './constants';
+import {
+  FILING_STATUS_MAP, getRmdStartAge, getSingleLifeDivisor, RMD_TABLE_ARR, SINGLE_LIFE_TABLE_ARR,
+} from './constants';
+import {
+  INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, type InheritedAccounts,
+} from './inherited';
 import { type Dict, get, pyBool, pyFloat, pyInt, pyMod } from './py';
 
 type Num = ArrayLike<number>;
@@ -551,11 +556,7 @@ export interface NumbaInputs {
   other_taxes_arr: Float64Array;
   pretax_user_init: number;
   pretax_spouse_init: number;
-  inherited_pretax_user_init: number;
-  inherited_pretax_spouse_init: number;
   roth_init: number;
-  inherited_roth_user_init: number;
-  inherited_roth_spouse_init: number;
   taxable_init: number;
   hsa_init: number;
   hsa_user_init: number;
@@ -574,66 +575,132 @@ export interface NumbaInputs {
   taxable_deposit_t: number;
   taxable_deposit_amt: number;
   terminal_life_ins_estate: number;
-  inh_pre_user_frac: Float64Array;
-  inh_pre_spouse_frac: Float64Array;
-  inh_roth_user_frac: Float64Array;
-  inh_roth_spouse_frac: Float64Array;
+  /** Bucket code of each inherited account (see inherited.ts). */
+  inh_acct_bucket: Float64Array;
+  inh_acct_balance: Float64Array;
+  /** Inherited accounts x years, row-major: required distribution fractions. */
+  inh_acct_frac: Float64Array;
 }
 
 /**
- * Annual mandated/scheduled distribution fractions for an inherited IRA under
- * the 10-year rule, 5-year rule, or lifetime stretch rule.
+ * Annual required distribution fractions of the prior year-end balance for one inherited
+ * account (>= 1 in the year the account must close), under the 10-year rule, 5-year rule,
+ * lifetime stretch, minor-child rule or surviving-spouse rule. `beneficiaryLastT` is the
+ * beneficiary's final year (index); after it the account passes to a successor
+ * beneficiary, who continues any annual distributions and must close the account by the
+ * end of the 10th year after the beneficiary's death if that comes before the original
+ * deadline (Treas. Reg. § 1.401(a)(9)-5(e)).
  */
 export function computeInheritedFractions(
   totalYears: number, currentYear: number, beneficiaryAge: number, d: Dict, isRoth = false,
+  beneficiaryLastT = Infinity,
 ): Float64Array {
   const fracs = new Float64Array(totalYears);
   if (!pyBool(d)) return fracs;
   const deathYear = pyInt(get(d, 'death_year', currentYear));
   const rule = String(get(d, 'inherited_rule', 'ten_year'));
-  const passedRbd = pyBool(get(d, 'decedent_passed_rbd', false));
+  // A Roth owner has no lifetime RMDs, so always dies before the Required Beginning Date.
+  const passedRbd = !isRoth && pyBool(get(d, 'decedent_passed_rbd', false));
   const strategy = String(get(d, 'distribution_strategy', 'rmd_only'));
+  const ageIn = (year: number) => beneficiaryAge + (year - currentYear);
+  // Single Life Table at the beneficiary's age in the year after death, less 1 each later year.
+  const fixedDivisor = (year: number) => getSingleLifeDivisor(ageIn(deathYear + 1), year - deathYear);
+
+  let rmdStartYear = deathYear + 1;
+  let deadline = Infinity;
+  let divisor: ((year: number) => number) | null = null;
+  if (rule === 'ten_year') {
+    deadline = deathYear + 10;
+    if (passedRbd) divisor = fixedDivisor;
+  } else if (rule === 'five_year') {
+    deadline = deathYear + 5;
+  } else if (rule === 'minor_child') {
+    // Life expectancy until age 21, then 10 years: closes in the year the child turns 31.
+    divisor = fixedDivisor;
+    deadline = Math.max(deathYear + 10, currentYear + (31 - beneficiaryAge));
+  } else if (rule === 'spouse') {
+    // Sole spouse beneficiary: if the decedent died before their RBD, distributions may wait
+    // until the year the decedent would have reached RMD age. The spouse's life expectancy is
+    // recalculated each year, or under the § 401(a)(9)(B)(iv) election (pre-RBD deaths only)
+    // the Uniform Lifetime Table is used; below age 72, which that table does not cover, the
+    // larger Single Life Table distribution is taken.
+    const birthYear = Math.trunc(Number(get(d, 'decedent_birth_year', 0)) || 0);
+    if (!passedRbd && birthYear > 0) rmdStartYear = Math.max(rmdStartYear, birthYear + getRmdStartAge(birthYear));
+    const uniform = !passedRbd && get(d, 'spouse_table', 'single') === 'uniform';
+    divisor = (year: number) => {
+      const age = Math.min(150, Math.max(0, Math.trunc(ageIn(year))));
+      return uniform && age >= 72 ? RMD_TABLE_ARR[age] : Math.max(1.0, SINGLE_LIFE_TABLE_ARR[Math.min(120, age)]);
+    };
+  } else {
+    // 'stretch': pre-2020 deaths and eligible designated beneficiaries
+    divisor = fixedDivisor;
+  }
+
+  // Successor beneficiary after the beneficiary's death
+  const beneficiaryDeathYear = currentYear + beneficiaryLastT;
+  let successorDivisor = divisor;
+  if (Number.isFinite(beneficiaryLastT)) {
+    deadline = Math.min(deadline, beneficiaryDeathYear + 10);
+    if (rule === 'spouse') {
+      // A spouse who dies before distributions begin is treated as the owner dying before the
+      // RBD (no annual distributions); otherwise the spouse's remaining life expectancy at death
+      // continues, less 1 each later year.
+      successorDivisor = beneficiaryDeathYear < rmdStartYear
+        ? null
+        : (year: number) => getSingleLifeDivisor(ageIn(beneficiaryDeathYear), year - beneficiaryDeathYear + 1);
+    }
+  }
 
   for (let t = 0; t < totalYears; t++) {
     const yearT = currentYear + t;
-    const yearsElapsed = yearT - deathYear;
-    if (yearsElapsed <= 0) {
-      fracs[t] = 0.0;
+    if (yearT <= deathYear) continue;
+    if (yearT >= deadline) {
+      fracs[t] = 1.0;
       continue;
     }
-
-    if (rule === 'ten_year') {
-      if (yearsElapsed >= 10) {
-        fracs[t] = 1.0;
-      } else {
-        const remainingYears = 10 - yearsElapsed + 1;
-        let rmdFrac = 0.0;
-        if (!isRoth && passedRbd) {
-          const ageInYear1 = (beneficiaryAge + t) - (yearsElapsed - 1);
-          const divisor = getSingleLifeDivisor(ageInYear1, yearsElapsed);
-          rmdFrac = divisor > 0 ? 1.0 / divisor : 1.0;
-        }
-        if (strategy === 'equalized') {
-          const eqFrac = 1.0 / Math.max(1, remainingYears);
-          fracs[t] = Math.min(1.0, Math.max(rmdFrac, eqFrac));
-        } else {
-          fracs[t] = Math.min(1.0, rmdFrac);
-        }
-      }
-    } else if (rule === 'five_year') {
-      if (yearsElapsed >= 5) {
-        fracs[t] = 1.0;
-      } else {
-        fracs[t] = 0.0;
-      }
-    } else {
-      // 'stretch' (Lifetime Single Life Table stretch)
-      const ageInYear1 = (beneficiaryAge + t) - (yearsElapsed - 1);
-      const divisor = getSingleLifeDivisor(ageInYear1, yearsElapsed);
-      fracs[t] = divisor > 0 ? Math.min(1.0, 1.0 / divisor) : 1.0;
-    }
+    const div = yearT > beneficiaryDeathYear ? successorDivisor : divisor;
+    let frac = div !== null && yearT >= rmdStartYear ? 1.0 / div(yearT) : 0.0;
+    if (rule === 'ten_year' && strategy === 'equalized') frac = Math.max(frac, 1.0 / (deadline - yearT + 1));
+    fracs[t] = Math.min(1.0, frac);
   }
   return fracs;
+}
+
+/**
+ * Each inherited account with its own schedule, from the four inherited buckets'
+ * `accounts` lists (or the bucket itself for plans without one).
+ */
+export function inheritedAccounts(inputs: SimInputs): InheritedAccounts {
+  const { total_years: years, current_year: currentYear, is_married: isMarried } = inputs;
+  const userLastT = inputs.user_age_death - inputs.user_age;
+  const spouseLastT = inputs.spouse_age_death - inputs.spouse_age;
+  const buckets: Array<[number, Dict, number, number, boolean]> = [
+    [INH_PRE_USER, inputs.inherited_pretax_data, inputs.user_age, userLastT, false],
+    [INH_ROTH_USER, inputs.inherited_roth_data, inputs.user_age, userLastT, true],
+  ];
+  if (isMarried) {
+    buckets.push(
+      [INH_PRE_SPOUSE, inputs.spouse_inherited_pretax_data, inputs.spouse_age, spouseLastT, false],
+      [INH_ROTH_SPOUSE, inputs.spouse_inherited_roth_data, inputs.spouse_age, spouseLastT, true],
+    );
+  }
+  const bucket: number[] = [];
+  const balance: number[] = [];
+  const fracs: Float64Array[] = [];
+  for (const [code, d, age, lastT, isRoth] of buckets) {
+    if (!pyBool(d)) continue;
+    const list: Dict[] = Array.isArray(get(d, 'accounts', null)) && get(d, 'accounts').length ? get(d, 'accounts') : [d];
+    for (const a of list) {
+      const bal = pyFloat(get(a, 'balance', get(a, 'present_balance', 0.0)));
+      if (bal <= 0.0) continue;
+      bucket.push(code);
+      balance.push(bal);
+      fracs.push(computeInheritedFractions(years, currentYear, age, a, isRoth, lastT));
+    }
+  }
+  const frac = new Float64Array(fracs.length * years);
+  fracs.forEach((f, i) => frac.set(f, i * years));
+  return { bucket: Float64Array.from(bucket), balance: Float64Array.from(balance), frac };
 }
 
 export function prepareNumbaInputs(
@@ -859,19 +926,12 @@ export function prepareNumbaInputs(
   const bal = (d: Dict) => pyFloat(get(d, 'present_balance', 0.0));
   const pretaxUserInit = bal(inputs.pretax_data);
   const pretaxSpouseInit = isMarried ? bal(inputs.spouse_pretax_data) : 0.0;
-  const inhPreUserInit = bal(inputs.inherited_pretax_data);
-  const inhPreSpouseInit = isMarried ? bal(inputs.spouse_inherited_pretax_data) : 0.0;
   const rothInit = bal(inputs.roth_data);
-  const inhRothUserInit = bal(inputs.inherited_roth_data);
-  const inhRothSpouseInit = isMarried ? bal(inputs.spouse_inherited_roth_data) : 0.0;
   const taxableInit = bal(inputs.taxable_data);
   const hsaUserInit = bal(inputs.hsa_data);
   const hsaSpouseInit = isMarried ? bal(inputs.spouse_hsa_data) : 0.0;
 
-  const inhPreUserFrac = computeInheritedFractions(totalYears, currentYear, userAge, inputs.inherited_pretax_data, false);
-  const inhPreSpouseFrac = isMarried ? computeInheritedFractions(totalYears, currentYear, spouseAge, inputs.spouse_inherited_pretax_data, false) : zeros();
-  const inhRothUserFrac = computeInheritedFractions(totalYears, currentYear, userAge, inputs.inherited_roth_data, true);
-  const inhRothSpouseFrac = isMarried ? computeInheritedFractions(totalYears, currentYear, spouseAge, inputs.spouse_inherited_roth_data, true) : zeros();
+  const inherited = inheritedAccounts(inputs);
 
   const taxData: Dict = get(inputs, 'taxable_data', {});
   const costBasisRatio = pyFloat(get(taxData, 'cost_basis_ratio', 70.0));
@@ -901,11 +961,7 @@ export function prepareNumbaInputs(
     other_taxes_arr: otherTaxesArr,
     pretax_user_init: pretaxUserInit,
     pretax_spouse_init: pretaxSpouseInit,
-    inherited_pretax_user_init: inhPreUserInit,
-    inherited_pretax_spouse_init: inhPreSpouseInit,
     roth_init: rothInit,
-    inherited_roth_user_init: inhRothUserInit,
-    inherited_roth_spouse_init: inhRothSpouseInit,
     taxable_init: taxableInit,
     hsa_init: hsaUserInit,
     hsa_user_init: hsaUserInit,
@@ -924,9 +980,8 @@ export function prepareNumbaInputs(
     taxable_deposit_t: routing.taxable_deposit_t,
     taxable_deposit_amt: routing.taxable_deposit_amt,
     terminal_life_ins_estate: routing.terminal_life_ins_estate,
-    inh_pre_user_frac: inhPreUserFrac,
-    inh_pre_spouse_frac: inhPreSpouseFrac,
-    inh_roth_user_frac: inhRothUserFrac,
-    inh_roth_spouse_frac: inhRothSpouseFrac,
+    inh_acct_bucket: inherited.bucket,
+    inh_acct_balance: inherited.balance,
+    inh_acct_frac: inherited.frac,
   };
 }

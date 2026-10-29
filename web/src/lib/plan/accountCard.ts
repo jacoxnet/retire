@@ -48,7 +48,7 @@ export const ACCOUNT_TYPE_OPTIONS: { value: CardType; label: string }[] = [
   { value: 'taxable', label: 'Taxable (Brokerage / Savings)' },
   { value: 'hsa', label: 'Health Savings Account (HSA)' },
   { value: 'inherited_pretax', label: 'Inherited Pre-Tax (Traditional / 401k / 403b)' },
-  { value: 'inherited_roth', label: 'Inherited Roth (Roth IRA)' },
+  { value: 'inherited_roth', label: 'Inherited Roth (Roth IRA / Roth 401k / 403b)' },
 ];
 
 export const isInheritedType = (type: unknown): boolean => type === 'inherited_pretax' || type === 'inherited_roth';
@@ -128,6 +128,8 @@ export function cardAccount(data: Account, people: People, existingNames: string
       inherited_rule: def(data.inherited_rule, 'ten_year'),
       decedent_passed_rbd: def(data.decedent_passed_rbd, false),
       distribution_strategy: def(data.distribution_strategy, 'rmd_only'),
+      decedent_birth_year: def(data.decedent_birth_year, null),
+      spouse_table: def(data.spouse_table, 'single'),
     } : {}),
   };
 }

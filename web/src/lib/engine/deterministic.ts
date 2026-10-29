@@ -3,12 +3,16 @@
 // tables. Shares the RMD/tax/withdrawal waterfall with the Monte Carlo kernel.
 import { FILING_STATUS_MAP } from './constants';
 import {
+  INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, inheritedLedger, ledgerRequired, ledgerSettle,
+  ledgerTotals, ledgerTransfer,
+} from './inherited';
+import {
   calculateIncomeBenefitMultiplier,
   calculateIncomeGrowthFactor,
-  computeInheritedFractions,
   extractSimInputs,
   getContributionsForYear,
   getLifeInsuranceRouting,
+  inheritedAccounts,
   resolveAge,
   type SimInputs,
 } from './inputs';
@@ -97,10 +101,10 @@ export interface StepParams {
   r_inh_pretax_spouse?: number;
   r_inh_roth_user?: number;
   r_inh_roth_spouse?: number;
-  inh_pre_user_frac?: number;
-  inh_pre_spouse_frac?: number;
-  inh_roth_user_frac?: number;
-  inh_roth_spouse_frac?: number;
+  inh_pre_user_req?: number;
+  inh_pre_spouse_req?: number;
+  inh_roth_user_req?: number;
+  inh_roth_spouse_req?: number;
 }
 
 const START_TYPES = ['start', 'income_start', 'at_start'];
@@ -172,19 +176,20 @@ export function simulateStep(p: StepParams): StepResult {
     r_inh_pretax_spouse: rInhPreSpouse = 0.0,
     r_inh_roth_user: rInhRothUser = 0.0,
     r_inh_roth_spouse: rInhRothSpouse = 0.0,
-    inh_pre_user_frac: inhPreUserFrac = 0.0,
-    inh_pre_spouse_frac: inhPreSpouseFrac = 0.0,
-    inh_roth_user_frac: inhRothUserFrac = 0.0,
-    inh_roth_spouse_frac: inhRothSpouseFrac = 0.0,
+    inh_pre_user_req: inhPreUserReq = 0.0,
+    inh_pre_spouse_req: inhPreSpouseReq = 0.0,
+    inh_roth_user_req: inhRothUserReq = 0.0,
+    inh_roth_spouse_req: inhRothSpouseReq = 0.0,
   } = p;
   let pretaxUser = p.pretax_user;
   let pretaxSpouse = p.pretax_spouse;
   let hsaUser = p.hsa_user ?? 0.0;
   let hsaSpouse = p.hsa_spouse ?? 0.0;
-  let inhPreUser = inhPreUserInit;
-  let inhPreSpouse = inhPreSpouseInit;
-  let inhRothUser = inhRothUserInit;
-  let inhRothSpouse = inhRothSpouseInit;
+  // Inherited accounts pass to the survivor in runSimulationPath (inherited.ts ledgerTransfer)
+  const inhPreUser = inhPreUserInit;
+  const inhPreSpouse = inhPreSpouseInit;
+  const inhRothUser = inhRothUserInit;
+  const inhRothSpouse = inhRothSpouseInit;
   let contribPretaxUser = p.contrib_pretax_user ?? 0.0;
   let contribPretaxSpouse = p.contrib_pretax_spouse ?? 0.0;
   let contribHsaUser = p.contrib_hsa_user ?? 0.0;
@@ -210,28 +215,6 @@ export function simulateStep(p: StepParams): StepResult {
     pretaxUser, pretaxSpouse, hsaUser, hsaSpouse,
     contribPretaxUser, contribPretaxSpouse, contribHsaUser, contribHsaSpouse,
   );
-
-  if (isMarried && t > tFirstDeath) {
-    if (userAlive && !spouseAlive) {
-      if (inhPreSpouse > 0.0) {
-        inhPreUser += inhPreSpouse;
-        inhPreSpouse = 0.0;
-      }
-      if (inhRothSpouse > 0.0) {
-        inhRothUser += inhRothSpouse;
-        inhRothSpouse = 0.0;
-      }
-    } else if (spouseAlive && !userAlive) {
-      if (inhPreUser > 0.0) {
-        inhPreSpouse += inhPreUser;
-        inhPreUser = 0.0;
-      }
-      if (inhRothUser > 0.0) {
-        inhRothSpouse += inhRothUser;
-        inhRothUser = 0.0;
-      }
-    }
-  }
 
   const pretaxUserPrior = Math.max(0.0, pretaxUser);
   const pretaxSpousePrior = isMarried ? Math.max(0.0, pretaxSpouse) : 0.0;
@@ -476,7 +459,7 @@ export function simulateStep(p: StepParams): StepResult {
     rtwOut,
     inhPreUserPrior, inhPreSpousePrior, inhPreUserMid, inhPreSpouseMid,
     inhRothUserPrior, inhRothSpousePrior, inhRothUserMid, inhRothSpouseMid,
-    inhPreUserFrac, inhPreSpouseFrac, inhRothUserFrac, inhRothSpouseFrac,
+    inhPreUserReq, inhPreSpouseReq, inhRothUserReq, inhRothSpouseReq,
   );
   const [pretaxUserEnd, pretaxSpouseEnd, rothEnd, taxableEnd, hsaUserEnd, hsaSpouseEnd,
     userRmdT, spouseRmdT, wPretaxExtra, wTaxable, wRoth, wHsaUser, wHsaSpouse,
@@ -622,10 +605,6 @@ export function runSimulationPath(
   let taxable = get(inputs.taxable_data, 'present_balance', 0.0);
   let hsaUser = get(inputs.hsa_data, 'present_balance', 0.0);
   let hsaSpouse = isMarried ? get(inputs.spouse_hsa_data, 'present_balance', 0.0) : 0.0;
-  let inhPreUser = get(inputs.inherited_pretax_data, 'present_balance', 0.0);
-  let inhPreSpouse = isMarried ? get(inputs.spouse_inherited_pretax_data, 'present_balance', 0.0) : 0.0;
-  let inhRothUser = get(inputs.inherited_roth_data, 'present_balance', 0.0);
-  let inhRothSpouse = isMarried ? get(inputs.spouse_inherited_roth_data, 'present_balance', 0.0) : 0.0;
 
   const rPreSpouse = returnsPretaxSpouse ?? returnsPretax;
   const rHsaSpouse = returnsHsaSpouse ?? returnsHsa;
@@ -634,18 +613,14 @@ export function runSimulationPath(
   const rInhRoth = returnsInhRoth ?? returnsRoth;
   const rInhRothSpouse = returnsInhRothSpouse ?? returnsRoth;
 
-  const inhPreUserFrac = computeInheritedFractions(
-    inputs.total_years, inputs.current_year, inputs.user_age, inputs.inherited_pretax_data, false,
-  );
-  const inhPreSpouseFrac = isMarried
-    ? computeInheritedFractions(inputs.total_years, inputs.current_year, inputs.spouse_age, inputs.spouse_inherited_pretax_data, false)
-    : new Float64Array(inputs.total_years);
-  const inhRothUserFrac = computeInheritedFractions(
-    inputs.total_years, inputs.current_year, inputs.user_age, inputs.inherited_roth_data, true,
-  );
-  const inhRothSpouseFrac = isMarried
-    ? computeInheritedFractions(inputs.total_years, inputs.current_year, inputs.spouse_age, inputs.spouse_inherited_roth_data, true)
-    : new Float64Array(inputs.total_years);
+  const inhLedger = inheritedLedger(inheritedAccounts(inputs), inputs.total_years);
+  const inhBal = new Float64Array(4);
+  const inhRet = new Float64Array(4);
+  const inhReq = new Float64Array(4);
+  const inhEnd = new Float64Array(4);
+  const tFirstDeath = isMarried
+    ? Math.min(inputs.user_age_death - inputs.user_age, inputs.spouse_age_death - inputs.spouse_age)
+    : inputs.user_age_death - inputs.user_age;
 
   const desiredSpending = testSpending !== null ? testSpending : inputs.desired_spending;
   let survivorSpending = inputs.survivor_spending;
@@ -670,6 +645,16 @@ export function runSimulationPath(
 
   const results: StepResult[] = [];
   for (let t = 0; t < inputs.total_years; t++) {
+    const userAlive = userAge + t <= inputs.user_age_death;
+    const spouseAlive = isMarried && spouseAge + t <= inputs.spouse_age_death;
+    if (isMarried && t > tFirstDeath) ledgerTransfer(inhLedger, userAlive, spouseAlive);
+    ledgerTotals(inhLedger, inhBal);
+    inhRet[INH_PRE_USER] = rInhPre[t];
+    inhRet[INH_PRE_SPOUSE] = rInhPreSpouse[t];
+    inhRet[INH_ROTH_USER] = rInhRoth[t];
+    inhRet[INH_ROTH_SPOUSE] = rInhRothSpouse[t];
+    ledgerRequired(inhLedger, t, inhRet, userAlive, spouseAlive, inhReq);
+
     const res = simulateStep({
       t,
       user_age: userAge,
@@ -721,18 +706,18 @@ export function runSimulationPath(
       taxable_cost_basis_ratio: costBasisRatio,
       taxable_cost_basis: taxableBasis,
       is_community_property: get(inputs, 'is_community_property', false),
-      inherited_pretax_user: inhPreUser,
-      inherited_pretax_spouse: inhPreSpouse,
-      inherited_roth_user: inhRothUser,
-      inherited_roth_spouse: inhRothSpouse,
+      inherited_pretax_user: inhBal[INH_PRE_USER],
+      inherited_pretax_spouse: inhBal[INH_PRE_SPOUSE],
+      inherited_roth_user: inhBal[INH_ROTH_USER],
+      inherited_roth_spouse: inhBal[INH_ROTH_SPOUSE],
       r_inh_pretax_user: rInhPre[t],
       r_inh_pretax_spouse: rInhPreSpouse[t],
       r_inh_roth_user: rInhRoth[t],
       r_inh_roth_spouse: rInhRothSpouse[t],
-      inh_pre_user_frac: inhPreUserFrac[t],
-      inh_pre_spouse_frac: inhPreSpouseFrac[t],
-      inh_roth_user_frac: inhRothUserFrac[t],
-      inh_roth_spouse_frac: inhRothSpouseFrac[t],
+      inh_pre_user_req: inhReq[INH_PRE_USER],
+      inh_pre_spouse_req: inhReq[INH_PRE_SPOUSE],
+      inh_roth_user_req: inhReq[INH_ROTH_USER],
+      inh_roth_spouse_req: inhReq[INH_ROTH_SPOUSE],
     });
     results.push(res);
     const end = res.ending_assets;
@@ -742,10 +727,11 @@ export function runSimulationPath(
     taxable = end.taxable;
     hsaUser = end.hsa_user;
     hsaSpouse = end.hsa_spouse;
-    inhPreUser = end.inherited_pretax_user ?? 0.0;
-    inhPreSpouse = end.inherited_pretax_spouse ?? 0.0;
-    inhRothUser = end.inherited_roth_user ?? 0.0;
-    inhRothSpouse = end.inherited_roth_spouse ?? 0.0;
+    inhEnd[INH_PRE_USER] = end.inherited_pretax_user ?? 0.0;
+    inhEnd[INH_PRE_SPOUSE] = end.inherited_pretax_spouse ?? 0.0;
+    inhEnd[INH_ROTH_USER] = end.inherited_roth_user ?? 0.0;
+    inhEnd[INH_ROTH_SPOUSE] = end.inherited_roth_spouse ?? 0.0;
+    ledgerSettle(inhLedger, inhEnd);
     taxableBasis = get(end, 'taxable_basis', 0.0);
   }
 

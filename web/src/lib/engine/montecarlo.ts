@@ -1,6 +1,10 @@
 // Monte Carlo path kernel: njit_simulate_path / njit_simulate_all_paths (core/runs.py)
 // over typed arrays. One call simulates one path of per-year returns; the worker pool
 // (C4) generates returns path by path, so no runs x years matrices are needed.
+import {
+  INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, type InheritedAccounts, type InheritedLedger,
+  inheritedLedger, ledgerRequired, ledgerSettle, ledgerTotals, ledgerTransfer, resetLedger,
+} from './inherited';
 import type { NumbaInputs, SimInputs } from './inputs';
 import { njitRmdTaxWithdraw, njitSpousalRollover, RTW_LEN } from './tax';
 
@@ -52,14 +56,7 @@ export interface KernelParams {
   taxableCgDistRate: number;
   taxableBasisInit: number;
   isCommunityPropertyCode: number;
-  inhPreUserInit: number;
-  inhPreSpouseInit: number;
-  inhRothUserInit: number;
-  inhRothSpouseInit: number;
-  inhPreUserFrac: Float64Array;
-  inhPreSpouseFrac: Float64Array;
-  inhRothUserFrac: Float64Array;
-  inhRothSpouseFrac: Float64Array;
+  inherited: InheritedAccounts;
 }
 
 const f64 = (a: ArrayLike<number>) => (a instanceof Float64Array ? a : Float64Array.from(a));
@@ -112,14 +109,7 @@ export function kernelParams(inputs: SimInputs, nb: NumbaInputs): KernelParams {
     taxableCgDistRate: nb.taxable_cg_dist_rate,
     taxableBasisInit: nb.taxable_basis_init,
     isCommunityPropertyCode: nb.is_community_property_code,
-    inhPreUserInit: nb.inherited_pretax_user_init,
-    inhPreSpouseInit: nb.inherited_pretax_spouse_init,
-    inhRothUserInit: nb.inherited_roth_user_init,
-    inhRothSpouseInit: nb.inherited_roth_spouse_init,
-    inhPreUserFrac: f64(nb.inh_pre_user_frac),
-    inhPreSpouseFrac: f64(nb.inh_pre_spouse_frac),
-    inhRothUserFrac: f64(nb.inh_roth_user_frac),
-    inhRothSpouseFrac: f64(nb.inh_roth_spouse_frac),
+    inherited: { bucket: f64(nb.inh_acct_bucket), balance: f64(nb.inh_acct_balance), frac: f64(nb.inh_acct_frac) },
   };
 }
 
@@ -145,6 +135,11 @@ export interface PathResult {
 }
 
 const rtw = new Float64Array(RTW_LEN);
+const inhBal = new Float64Array(4);
+const inhRet = new Float64Array(4);
+const inhReq = new Float64Array(4);
+const inhEnd = new Float64Array(4);
+let ledger: InheritedLedger | null = null;
 
 /**
  * Simulate one path. When `trajectory` is given (length totalYears + 1) it receives the
@@ -161,10 +156,13 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
   let hsaUser = p.hsaUserInit;
   let hsaSpouse = p.hsaSpouseInit;
   let taxableBasis = p.taxableBasisInit >= 0.0 ? p.taxableBasisInit : Math.max(0.0, p.taxableInit) * 0.70;
-  let inhPreUser = p.inhPreUserInit;
-  let inhPreSpouse = p.inhPreSpouseInit;
-  let inhRothUser = p.inhRothUserInit;
-  let inhRothSpouse = p.inhRothSpouseInit;
+  if (ledger === null || ledger.acc !== p.inherited) ledger = inheritedLedger(p.inherited, totalYears);
+  else resetLedger(ledger);
+  ledgerTotals(ledger, inhBal);
+  let inhPreUser = inhBal[INH_PRE_USER];
+  let inhPreSpouse = inhBal[INH_PRE_SPOUSE];
+  let inhRothUser = inhBal[INH_ROTH_USER];
+  let inhRothSpouse = inhBal[INH_ROTH_SPOUSE];
 
   let everDepleted = false;
   if (trajectory) trajectory[0] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse;
@@ -203,25 +201,12 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     const cHsaSpouseT = ro[8];
 
     if (isMarried && t > tFirstDeath) {
-      if (userAlive && !spouseAlive) {
-        if (inhPreSpouse > 0.0) {
-          inhPreUser += inhPreSpouse;
-          inhPreSpouse = 0.0;
-        }
-        if (inhRothSpouse > 0.0) {
-          inhRothUser += inhRothSpouse;
-          inhRothSpouse = 0.0;
-        }
-      } else if (spouseAlive && !userAlive) {
-        if (inhPreUser > 0.0) {
-          inhPreSpouse += inhPreUser;
-          inhPreUser = 0.0;
-        }
-        if (inhRothUser > 0.0) {
-          inhRothSpouse += inhRothUser;
-          inhRothUser = 0.0;
-        }
-      }
+      ledgerTransfer(ledger, userAlive, spouseAlive);
+      ledgerTotals(ledger, inhBal);
+      inhPreUser = inhBal[INH_PRE_USER];
+      inhPreSpouse = inhBal[INH_PRE_SPOUSE];
+      inhRothUser = inhBal[INH_ROTH_USER];
+      inhRothSpouse = inhBal[INH_ROTH_SPOUSE];
     }
 
     if (isMarried && t === tFirstDeath && taxable > 0.0) {
@@ -289,10 +274,11 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     }
     const totalSpendingTarget = desiredSpendingT + p.addSpending[t];
 
-    const inhPreUserFracT = p.inhPreUserFrac[t];
-    const inhPreSpouseFracT = p.inhPreSpouseFrac[t];
-    const inhRothUserFracT = p.inhRothUserFrac[t];
-    const inhRothSpouseFracT = p.inhRothSpouseFrac[t];
+    inhRet[INH_PRE_USER] = rInhPreU;
+    inhRet[INH_PRE_SPOUSE] = rInhPreS;
+    inhRet[INH_ROTH_USER] = rInhRothU;
+    inhRet[INH_ROTH_SPOUSE] = rInhRothS;
+    ledgerRequired(ledger, t, inhRet, userAlive, spouseAlive, inhReq);
 
     njitRmdTaxWithdraw(
       userAgeT, spouseAgeT, userAlive, spouseAlive, isMarried,
@@ -307,7 +293,7 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
       rtw,
       inhPreUserPrior, inhPreSpousePrior, inhPreUserMid, inhPreSpouseMid,
       inhRothUserPrior, inhRothSpousePrior, inhRothUserMid, inhRothSpouseMid,
-      inhPreUserFracT, inhPreSpouseFracT, inhRothUserFracT, inhRothSpouseFracT,
+      inhReq[INH_PRE_USER], inhReq[INH_PRE_SPOUSE], inhReq[INH_ROTH_USER], inhReq[INH_ROTH_SPOUSE],
     );
 
     if (rtw[18] > 0.0) everDepleted = true;
@@ -323,6 +309,11 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     inhPreSpouse = rtw[24];
     inhRothUser = rtw[25];
     inhRothSpouse = rtw[26];
+    inhEnd[INH_PRE_USER] = inhPreUser;
+    inhEnd[INH_PRE_SPOUSE] = inhPreSpouse;
+    inhEnd[INH_ROTH_USER] = inhRothUser;
+    inhEnd[INH_ROTH_SPOUSE] = inhRothSpouse;
+    ledgerSettle(ledger, inhEnd);
 
     if (trajectory) trajectory[t + 1] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse;
   }
