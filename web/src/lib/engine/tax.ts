@@ -233,6 +233,9 @@ const thrScratch = new Float64Array(6);
 const ltcgScratch = new Float64Array(2);
 const order = new Int32Array(16);
 
+/** A bucket's required inherited distribution, capped at its balance after growth. */
+const inhReq = (alive: boolean, prior: number, mid: number, req: number) => (alive && prior > 0.0 && req > 0.0 ? Math.min(req, mid) : 0.0);
+
 /**
  * One year's RMDs, taxes and deficit-funding withdrawals. The result is written to
  * `out` (length RTW_LEN) when given, otherwise a new array; see RTW for the layout.
@@ -260,31 +263,20 @@ export function njitRmdTaxWithdraw(
   inhRothSpousePrior = 0.0,
   inhRothUserMid = 0.0,
   inhRothSpouseMid = 0.0,
-  inhPreUserFrac = 0.0,
-  inhPreSpouseFrac = 0.0,
-  inhRothUserFrac = 0.0,
-  inhRothSpouseFrac = 0.0,
+  inhPreUserReq = 0.0,
+  inhPreSpouseReq = 0.0,
+  inhRothUserReq = 0.0,
+  inhRothSpouseReq = 0.0,
 ): Float64Array {
   const stateRate = stateTaxRate / 100.0;
 
-  let userInhPretaxRmd = 0.0;
-  if (userAlive && inhPreUserPrior > 0.0 && inhPreUserFrac > 0.0) {
-    userInhPretaxRmd = inhPreUserFrac >= 1.0 ? inhPreUserMid : Math.min(inhPreUserPrior * inhPreUserFrac, inhPreUserMid);
-  }
-  let spouseInhPretaxRmd = 0.0;
-  if (spouseAlive && inhPreSpousePrior > 0.0 && inhPreSpouseFrac > 0.0) {
-    spouseInhPretaxRmd = inhPreSpouseFrac >= 1.0 ? inhPreSpouseMid : Math.min(inhPreSpousePrior * inhPreSpouseFrac, inhPreSpouseMid);
-  }
+  // Required inherited-IRA distributions for the year (per-account amounts from inherited.ts, summed by bucket)
+  const userInhPretaxRmd = inhReq(userAlive, inhPreUserPrior, inhPreUserMid, inhPreUserReq);
+  const spouseInhPretaxRmd = inhReq(spouseAlive, inhPreSpousePrior, inhPreSpouseMid, inhPreSpouseReq);
   const inhPreRmdT = userInhPretaxRmd + spouseInhPretaxRmd;
 
-  let userInhRothDist = 0.0;
-  if (userAlive && inhRothUserPrior > 0.0 && inhRothUserFrac > 0.0) {
-    userInhRothDist = inhRothUserFrac >= 1.0 ? inhRothUserMid : Math.min(inhRothUserPrior * inhRothUserFrac, inhRothUserMid);
-  }
-  let spouseInhRothDist = 0.0;
-  if (spouseAlive && inhRothSpousePrior > 0.0 && inhRothSpouseFrac > 0.0) {
-    spouseInhRothDist = inhRothSpouseFrac >= 1.0 ? inhRothSpouseMid : Math.min(inhRothSpousePrior * inhRothSpouseFrac, inhRothSpouseMid);
-  }
+  const userInhRothDist = inhReq(userAlive, inhRothUserPrior, inhRothUserMid, inhRothUserReq);
+  const spouseInhRothDist = inhReq(spouseAlive, inhRothSpousePrior, inhRothSpouseMid, inhRothSpouseReq);
   const inhRothDistT = userInhRothDist + spouseInhRothDist;
 
   const totalIncomeSources = taxableIncomeSources + ssBenefits + nontaxableIncome + inhRothDistT;

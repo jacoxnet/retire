@@ -21,7 +21,7 @@ At the top of the **Enter Data** page, select your planning mode:
    - Taxable Brokerage or Savings
    - Health Savings Account (HSA)
    - Inherited Pre-Tax (Traditional IRA / 401(k))
-   - Inherited Roth (Roth IRA)  
+   - Inherited Roth (Roth IRA / Roth 401(k))  
    Enter current balances, expected average return, and future contributions. *(Note: Contributions are legally prohibited to inherited accounts; you will instead configure their inherited withdrawal clock and IRS distribution rules.)*
 3. **Spending:**
    - **Regular Retirement Spending:** Enter your baseline desired annual spending in retirement (in today’s dollars).
@@ -93,7 +93,7 @@ Toggle between modes at the top of the **Enter Data** page:
   - **Taxable (Brokerage / Savings):** Standard non-retirement accounts.
   - **Health Savings Account (HSA):** Triple-tax-advantaged medical savings accounts.
   - **Inherited Pre-Tax (Traditional / 401k / 403b):** Tax-deferred accounts inherited from another individual.
-  - **Inherited Roth (Roth IRA):** Roth accounts inherited from another individual.
+  - **Inherited Roth (Roth IRA / Roth 401k / 403b):** Roth accounts inherited from another individual.
 - **Standard Account Card Fields:**
   - **Owner:** You or your spouse.
   - **Present Balance:** Current market value.
@@ -103,7 +103,9 @@ Toggle between modes at the top of the **Enter Data** page:
   - **Year of Death / Inherited:** Enter the year the original account owner passed away (or when the account was inherited). The card displays a dynamic clock indicating the number of years remaining on your distribution window.
   - **Beneficiary's RMD Rule:**
     - *10-Year Rule (Standard post-2019):* Established by the SECURE Act for most non-spouse individual designated beneficiaries inheriting after December 31, 2019. The account must be completely emptied by December 31 of the 10th year following the owner's death.
-    - *Lifetime Stretch (Pre-2020 / Eligible Designated Beneficiary - EDB):* Select if the original owner died before 2020, or if the beneficiary is an Eligible Designated Beneficiary (surviving spouse, disabled or chronically ill individual, individual not more than 10 years younger than decedent, or minor child of decedent until age 21). Annual RMDs are calculated across the beneficiary's single life expectancy (IRS Single Life Table I) using the non-recalculation method (subtracting 1.0 from the initial factor each subsequent year).
+    - *Lifetime Stretch (Pre-2020 / Eligible Designated Beneficiary - EDB):* Select if the original owner died before 2020, or if the beneficiary is an Eligible Designated Beneficiary who is disabled or chronically ill, or not more than 10 years younger than the decedent. Annual RMDs are calculated across the beneficiary's single life expectancy (IRS Single Life Table I) using the non-recalculation method (subtracting 1.0 from the initial factor each subsequent year).
+    - *Minor Child of Decedent (EDB):* Annual Single Life Table RMDs (non-recalculation method) until the child turns 21. The 10-year rule then applies, with annual RMDs continuing, and the account must be emptied by the end of the year the child turns 31.
+    - *Surviving Spouse (EDB):* For a spouse who is the sole beneficiary and keeps the account as an inherited IRA. RMDs use the spouse's Single Life Table factor, recalculated at the spouse's age each year. If the decedent died before their RBD, enter the decedent's birth year: RMDs then need not start until the year the decedent would have reached RMD age (73 or 75), and the spouse may elect the Uniform Lifetime Table instead (the Single Life Table is used below age 72, which the Uniform table does not cover). A spouse may instead roll the account into their own IRA; enter a rolled-over account as a regular Pre-Tax or Roth account.
     - *5-Year Rule (Estate / Non-Designated):* Applies to non-designated beneficiaries (such as an estate, charity, or non-qualifying trust) when the owner died before their Required Beginning Date, or where specified by plan documents. The account must be fully emptied within 5 years.
   - **Decedent Reached Required Beginning Date (RBD) (Inherited Pre-Tax Only):**
     - Under IRS regulations, if the decedent reached their RBD prior to death, annual RMDs are mandatory during years 1–9 of the 10-year rule based on the beneficiary's single life expectancy, with the remaining balance distributed in Year 10.
@@ -112,6 +114,8 @@ Toggle between modes at the top of the **Enter Data** page:
   - **10-Year Distribution Strategy:**
     - *Minimum Required Only (Balloon in Year 10):* Takes only required minimum distributions (if any) during years 1–9 and liquidates 100% of the remaining balance in Year 10. For pre-tax accounts, this delays taxable income but can create a significant tax spike in Year 10.
     - *Equalized / Ratable (1/Nth):* Distributes roughly equal proportions (1/10th, 1/9th, ..., 1/2, 1/1) of the remaining balance each year to smooth withdrawals and mitigate jumping into higher income tax brackets.
+  - **Each Account Keeps Its Own Rules:** Several inherited accounts are modeled separately, each with its own death year, rule and closing deadline.
+  - **Successor Beneficiary:** If the beneficiary dies first in a married plan, the surviving spouse inherits the account as successor beneficiary. Any annual RMDs continue on the original schedule, and the account must be emptied by the original deadline or by the end of the 10th year after the beneficiary's death, whichever comes first.
 - **Expected Return & Volatility:** Enter your expected average annual return. In Advanced Mode, choose a volatility (standard deviation) preset—Low (4.5%), Moderate (9.5%), High (16.0%)—or specify a custom percentage.
 - **Taxable Account Tax Treatment (Advanced Mode):** For taxable brokerage accounts, expand the tax drawer to inspect or adjust the app's default tax assumptions:
   - Dividend yield (default 2.0%) and qualified dividend share (default 85%).

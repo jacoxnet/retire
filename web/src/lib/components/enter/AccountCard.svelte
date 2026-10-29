@@ -71,6 +71,8 @@
   const [getRule, setRule] = field('inherited_rule');
   const [getRbd, setRbd] = field('decedent_passed_rbd');
   const [getStrategy, setStrategy] = field('distribution_strategy');
+  const [getBirthYear, setBirthYear] = field('decedent_birth_year');
+  const [getSpouseTable, setSpouseTable] = field('spouse_table');
 
   const inherited = $derived(isInheritedType(view.type));
   const deathYearVal = $derived(Number(view.death_year) || people.currentYear);
@@ -84,8 +86,19 @@
       const rem = Math.max(0, 5 - yearsElapsed);
       return rem === 0 ? '5-year window reached' : `${rem} year${rem === 1 ? '' : 's'} remaining on 5-year clock`;
     }
+    if (view.inherited_rule === 'minor_child') {
+      const closeYear = Math.max(deathYearVal + 10, yearAtAge(31, isSpouse, people) ?? 0);
+      return `Life expectancy distributions to age 21, then emptied by ${closeYear}`;
+    }
+    if (view.inherited_rule === 'spouse') {
+      return view.spouse_table === 'uniform' && !passedRbd
+        ? 'Annual Uniform Lifetime Table distributions'
+        : 'Annual Single Life Table distributions, recalculated each year';
+    }
     return 'Annual Single Life Table stretch distributions';
   });
+  // A Roth owner has no lifetime RMDs, so never reaches the Required Beginning Date.
+  const passedRbd = $derived(view.type === 'inherited_pretax' && !!view.decedent_passed_rbd);
 </script>
 
 <div class="col-md-6 mb-4 account-card-col" data-account-id={view.id}>
@@ -200,12 +213,14 @@
             <HelpPopover
               title="Beneficiary's RMD Rule"
               html
-              content="<b>10-Year Rule (Standard post-2019):</b> Applies to most individual designated beneficiaries if the IRA owner died after Dec 31, 2019 (under the SECURE Act). The account must be fully emptied by the end of the 10th year following death.<br><br><b>Lifetime Stretch (Pre-2020 / EDB):</b> Select if the owner died before 2020, OR if the beneficiary is an Eligible Designated Beneficiary (EDB): surviving spouse, disabled or chronically ill individual, individual not more than 10 years younger than decedent, or minor child of decedent (until age 21). EDBs take annual RMDs over their single life expectancy.<br><br><b>5-Year Rule (Estate / Non-Designated):</b> Applies to non-designated beneficiaries (such as an estate, charity, or non-qualifying trust) when the owner died before their Required Beginning Date, or when mandated by plan documents."
+              content="<b>10-Year Rule (Standard post-2019):</b> Applies to most individual designated beneficiaries if the IRA owner died after Dec 31, 2019 (under the SECURE Act). The account must be fully emptied by the end of the 10th year following death.<br><br><b>Lifetime Stretch (Pre-2020 / EDB):</b> Select if the owner died before 2020, OR if the beneficiary is an Eligible Designated Beneficiary (EDB) who is a disabled or chronically ill individual, or an individual not more than 10 years younger than the decedent. Annual RMDs are taken over the beneficiary's single life expectancy.<br><br><b>Minor Child of Decedent (EDB):</b> Annual life-expectancy RMDs until the child turns 21; then the 10-year rule applies, with annual RMDs continuing, and the account must be emptied by the end of the year the child turns 31.<br><br><b>Surviving Spouse (EDB):</b> For a spouse who is the sole beneficiary and keeps the account as an inherited IRA. RMDs use the spouse's single life expectancy, recalculated each year. If the decedent died before their Required Beginning Date, RMDs need not start until the year the decedent would have reached RMD age, and the spouse may elect to use the Uniform Lifetime Table instead. A spouse can instead roll the account into their own IRA; in that case enter it as a regular Pre-Tax or Roth account, not an inherited one.<br><br><b>5-Year Rule (Estate / Non-Designated):</b> Applies to non-designated beneficiaries (such as an estate, charity, or non-qualifying trust) when the owner died before their Required Beginning Date, or when mandated by plan documents."
             />
           </label>
           <select class="form-select form-select-sm" id="{uid}-rule" bind:value={getRule, setRule}>
             <option value="ten_year">10-Year Rule (Standard post-2019)</option>
             <option value="stretch">Lifetime Stretch (Pre-2020 / EDB)</option>
+            <option value="minor_child">Minor Child of Decedent (EDB)</option>
+            <option value="spouse">Surviving Spouse (EDB)</option>
             <option value="five_year">5-Year Rule (Estate / Non-Designated)</option>
           </select>
         </div>
@@ -225,6 +240,35 @@
             <option value="no">No (Died Before RBD — No annual RMDs in years 1–9)</option>
             <option value="yes">Yes (Reached RBD Prior to Death — Annual Single Life RMDs in years 1–9)</option>
           </select>
+        </div>
+      {/if}
+
+      {#if view.inherited_rule === 'spouse' && !passedRbd}
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small fw-bold mb-1 d-flex align-items-center" for="{uid}-birth-year">
+              <span>Decedent's Birth Year</span>
+              <HelpPopover
+                title="Decedent's Birth Year"
+                content="When the decedent died before their Required Beginning Date, a surviving spouse need not begin RMDs until the year the decedent would have reached RMD age (73 if born 1951–1959, 75 if born 1960 or later). Leave blank to start RMDs the year after death."
+              />
+            </label>
+            <input type="number" class="form-control form-control-sm" id="{uid}-birth-year" min="1900" max="2100"
+              bind:value={getBirthYear, setBirthYear} />
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-bold mb-1 d-flex align-items-center" for="{uid}-spouse-table">
+              <span>RMD Table</span>
+              <HelpPopover
+                title="Surviving Spouse RMD Table"
+                content="By default a spouse beneficiary's RMDs use the Single Life Table at the spouse's age each year. When the decedent died before their RBD, the spouse may elect (IRC § 401(a)(9)(B)(iv)) to use the Uniform Lifetime Table, which gives smaller RMDs. That table starts at age 72; below 72 the Single Life Table is used."
+              />
+            </label>
+            <select class="form-select form-select-sm" id="{uid}-spouse-table" bind:value={getSpouseTable, setSpouseTable}>
+              <option value="single">Single Life (recalculated)</option>
+              <option value="uniform">Uniform Lifetime (election)</option>
+            </select>
+          </div>
         </div>
       {/if}
 

@@ -287,6 +287,8 @@ export function syncBalanceSheetToAccounts(
         inherited_rule: (pick('inherited_rule', 'ten_year') || 'ten_year') as string,
         decedent_passed_rbd: getBool(match ? pickNullable('decedent_passed_rbd', false) : get(acc, 'decedent_passed_rbd', false)),
         distribution_strategy: (pick('distribution_strategy', 'rmd_only') || 'rmd_only') as string,
+        decedent_birth_year: getInt(pick('decedent_birth_year', null), null),
+        spouse_table: (pick('spouse_table', 'single') || 'single') as string,
       } : {}),
     });
   };
@@ -468,6 +470,8 @@ export function syncAccountsToBalanceSheet(
         matched.inherited_rule = prefer('inherited_rule', 'ten_year');
         matched.decedent_passed_rbd = getBool(preferNullable('decedent_passed_rbd', false));
         matched.distribution_strategy = prefer('distribution_strategy', 'rmd_only');
+        matched.decedent_birth_year = getInt(prefer('decedent_birth_year', null), null);
+        matched.spouse_table = prefer('spouse_table', 'single');
       }
       if (!isObj(matched.values)) matched.values = {};
       matched.values[period] = bal;
@@ -503,6 +507,8 @@ export function syncAccountsToBalanceSheet(
           inherited_rule: get(acc, 'inherited_rule', 'ten_year'),
           decedent_passed_rbd: getBool(get(acc, 'decedent_passed_rbd', false)),
           distribution_strategy: get(acc, 'distribution_strategy', 'rmd_only'),
+          decedent_birth_year: getInt(get(acc, 'decedent_birth_year', null), null),
+          spouse_table: get(acc, 'spouse_table', 'single'),
         } : {}),
       });
     }

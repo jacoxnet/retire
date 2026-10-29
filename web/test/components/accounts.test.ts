@@ -236,4 +236,30 @@ describe('Accounts tab editing', () => {
     expect(card.textContent).toContain('10-Year Distribution Strategy');
     stop();
   });
+
+  it('shows the surviving-spouse fields only when the decedent died before the RBD', async () => {
+    const { store, stop } = setup();
+    store.plan.accounts = [
+      {
+        id: 'inh_1',
+        name: 'Inherited Traditional IRA',
+        type: 'inherited_pretax',
+        owner: 'user',
+        balance: 100000,
+        death_year: 2024,
+        inherited_rule: 'spouse',
+        decedent_passed_rbd: false,
+      },
+    ];
+    flushSync();
+    await openAccounts();
+    const card = cards()[0];
+    expect(card.textContent).toContain("Decedent's Birth Year");
+    expect(card.textContent).toContain('Uniform Lifetime (election)');
+    expect(card.textContent).not.toContain('10-Year Distribution Strategy');
+    store.plan.accounts[0].decedent_passed_rbd = true;
+    flushSync();
+    expect(cards()[0].textContent).not.toContain("Decedent's Birth Year");
+    stop();
+  });
 });

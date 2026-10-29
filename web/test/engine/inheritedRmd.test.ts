@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { getSingleLifeDivisor, SINGLE_LIFE_TABLE } from '../../src/lib/engine/constants';
-import { computeInheritedFractions } from '../../src/lib/engine/inputs';
+import { computeInheritedFractions, extractSimInputs, prepareNumbaInputs } from '../../src/lib/engine/inputs';
+import { kernelParams, simulatePath } from '../../src/lib/engine/montecarlo';
 import { njitRmdTaxWithdraw, RTW, RTW_LEN } from '../../src/lib/engine/tax';
-import { runDeterministic } from '../../src/lib/engine/deterministic';
+import { meanReturns, runDeterministic } from '../../src/lib/engine/deterministic';
 import { commitEnterPlan } from '../../src/lib/plan/commit';
 
 describe('IRS Single Life Table and Divisors', () => {
@@ -133,7 +134,7 @@ describe('Tax Waterfall & Inherited IRA Rules', () => {
       out,
       100000, 0, 100000, 0, // inhPreUserMid = 100k
       0, 0, 0, 0, // inhRoth = 0
-      0, 0, 0, 0, // no mandatory RMD fraction this year
+      0, 0, 0, 0, // no required distribution this year
     );
 
     // Deficit should be funded by Inherited Pretax Extra, NOT own pre-tax
@@ -186,7 +187,7 @@ describe('Tax Waterfall & Inherited IRA Rules', () => {
       out,
       50000, 0, 52000, 0, // inhPreUserMid = 52k after growth
       30000, 0, 31000, 0, // inhRothUserMid = 31k after growth
-      1.0, 0, 1.0, 0,     // Year 10 fraction >= 1.0
+      52000, 0, 31000, 0, // Year 10: the whole account is required
     );
 
     // Ending balances must be strictly 0.0
@@ -256,5 +257,156 @@ describe('Deterministic Simulation with Inherited Accounts', () => {
     // In year 11 (2036), beginning assets must remain 0
     expect(rows[10].beg_assets.inherited_pretax).toBe(0.0);
     expect(rows[10].beg_assets.inherited_roth).toBe(0.0);
+  });
+});
+
+describe('Minor child and surviving spouse rules', () => {
+  const currentYear = 2026;
+
+  it('minor child: life expectancy RMDs, then emptied in the year the child turns 31', () => {
+    const fracs = computeInheritedFractions(20, currentYear, 15, { death_year: 2025, inherited_rule: 'minor_child' }, false);
+    // Age 15 in the year after death (2026): Single Life Table 69.9, less 1 each year
+    expect(fracs[0]).toBeCloseTo(1 / 69.9, 10);
+    expect(fracs[5]).toBeCloseTo(1 / 64.9, 10);
+    expect(fracs[15]).toBeCloseTo(1 / 54.9, 10); // age 30
+    expect(fracs[16]).toBe(1.0); // 2042, age 31
+  });
+
+  it('spouse: RMDs wait for the decedent\'s RMD age, then recalculate each year', () => {
+    const d = { death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1960 }; // RMD age 75 -> 2035
+    const fracs = computeInheritedFractions(15, currentYear, 60, d, false);
+    for (let t = 0; t < 9; t++) expect(fracs[t]).toBe(0.0);
+    expect(fracs[9]).toBeCloseTo(1 / SINGLE_LIFE_TABLE[69], 10);
+    expect(fracs[12]).toBeCloseTo(1 / SINGLE_LIFE_TABLE[72], 10); // recalculated, not 19.6 - 3
+  });
+
+  it('spouse: no delay when the decedent died after the RBD; Uniform election ignored', () => {
+    const d = { death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1950, decedent_passed_rbd: true, spouse_table: 'uniform' };
+    const fracs = computeInheritedFractions(5, currentYear, 70, d, false);
+    expect(fracs[0]).toBeCloseTo(1 / SINGLE_LIFE_TABLE[70], 10);
+  });
+
+  it('spouse: Uniform Lifetime Table election, Single Life Table below age 72', () => {
+    const d = { death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1960, spouse_table: 'uniform' };
+    const fracs = computeInheritedFractions(15, currentYear, 60, d, false);
+    expect(fracs[9]).toBeCloseTo(1 / SINGLE_LIFE_TABLE[69], 10);
+    expect(fracs[12]).toBeCloseTo(1 / 27.4, 10); // Uniform Lifetime Table, age 72
+  });
+
+  it('spouse: Roth owner never reaches the RBD, so the delay applies', () => {
+    const d = { death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1960, decedent_passed_rbd: true };
+    const fracs = computeInheritedFractions(15, currentYear, 60, d, true);
+    expect(fracs[8]).toBe(0.0);
+    expect(fracs[9]).toBeGreaterThan(0.0);
+  });
+});
+
+describe('Successor beneficiary after the beneficiary dies', () => {
+  const currentYear = 2026;
+
+  it('10-year rule: annual RMDs continue and the original deadline stands', () => {
+    const d = { death_year: 2025, inherited_rule: 'ten_year', decedent_passed_rbd: true };
+    const own = computeInheritedFractions(12, currentYear, 55, d, false);
+    const succ = computeInheritedFractions(12, currentYear, 55, d, false, 2); // beneficiary dies in 2028
+    expect(Array.from(succ)).toEqual(Array.from(own));
+  });
+
+  it('stretch: emptied by the end of the 10th year after the beneficiary\'s death', () => {
+    const d = { death_year: 2018, inherited_rule: 'stretch' };
+    const fracs = computeInheritedFractions(15, currentYear, 55, d, false, 2);
+    expect(fracs[11]).toBeGreaterThan(0.0);
+    expect(fracs[11]).toBeLessThan(1.0);
+    expect(fracs[12]).toBe(1.0); // 2038
+  });
+
+  it('spouse dying before RMDs begin: no annual RMDs, 10 years from the spouse\'s death', () => {
+    const d = { death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1960 };
+    const fracs = computeInheritedFractions(20, currentYear, 60, d, false, 5); // dies 2031, before 2035
+    for (let t = 0; t < 15; t++) expect(fracs[t]).toBe(0.0);
+    expect(fracs[15]).toBe(1.0); // 2041
+  });
+
+  it('spouse dying after RMDs begin: spouse\'s remaining life expectancy, less 1 each year', () => {
+    const d = { death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1960 };
+    const fracs = computeInheritedFractions(25, currentYear, 60, d, false, 12); // dies 2038 at 72
+    expect(fracs[12]).toBeCloseTo(1 / SINGLE_LIFE_TABLE[72], 10);
+    expect(fracs[13]).toBeCloseTo(1 / (SINGLE_LIFE_TABLE[72] - 1), 10);
+    expect(fracs[21]).toBeLessThan(1.0);
+    expect(fracs[22]).toBe(1.0); // 2048
+  });
+});
+
+describe('Deterministic simulation: successor and per-account rules', () => {
+  const base = {
+    current_year: 2026, user_age: 55, user_ret_age: 65, desired_spending: 0,
+    adjust_spending_inflation: false, inflation_rate: 2.5,
+  };
+  const married = {
+    ...base, user_age_death: 57, is_married: true, filing_status: 'married_filing_jointly',
+    spouse_age: 55, spouse_ret_age: 65, spouse_age_death: 90, survivor_spending: 0,
+  };
+  const inh = (id: string, extra: Record<string, unknown>) => ({
+    id, type: 'inherited_pretax', owner: 'user', balance: 100000, return_mean: 5.0, distribution_strategy: 'rmd_only', ...extra,
+  });
+  const run = (plan: any) => {
+    commitEnterPlan(plan);
+    return runDeterministic(plan);
+  };
+
+  it('surviving spouse keeps the 10-year schedule of an inherited IRA', () => {
+    const rows = run({ ...married, accounts: [inh('a', { death_year: 2025, inherited_rule: 'ten_year', decedent_passed_rbd: true })] });
+    // The user dies in 2028; annual RMDs continue in 2029-2034 and the account closes in 2035
+    for (let t = 3; t < 9; t++) expect(rows[t].withdrawals.inherited_pretax_rmd).toBeGreaterThan(0.0);
+    expect(rows[8].ending_assets.inherited_pretax).toBeGreaterThan(0.0);
+    expect(rows[9].ending_assets.inherited_pretax).toBe(0.0);
+  });
+
+  it('surviving spouse empties an inherited stretch IRA within 10 years of the beneficiary\'s death', () => {
+    const rows = run({ ...married, accounts: [inh('a', { death_year: 2018, inherited_rule: 'stretch' })] });
+    expect(rows[11].ending_assets.inherited_pretax).toBeGreaterThan(0.0);
+    expect(rows[12].ending_assets.inherited_pretax).toBe(0.0); // 2038
+  });
+
+  it('each inherited account follows its own rule', () => {
+    const single = { ...base, user_age_death: 90, is_married: false, filing_status: 'single' };
+    const stretch = inh('a', { death_year: 2018, inherited_rule: 'stretch' });
+    const tenYear = inh('b', { death_year: 2025, inherited_rule: 'ten_year', decedent_passed_rbd: false });
+    const both = run({ ...single, accounts: [stretch, tenYear] });
+    const alone = run({ ...single, accounts: [{ ...stretch }] });
+    // 2035: the 10-year account closes; only the stretch account remains
+    expect(both[9].ending_assets.inherited_pretax).toBeCloseTo(alone[9].ending_assets.inherited_pretax, 6);
+    expect(both[8].ending_assets.inherited_pretax).toBeGreaterThan(alone[8].ending_assets.inherited_pretax + 100000);
+  });
+});
+
+describe('MC kernel matches the deterministic projection with inherited accounts', () => {
+  it('several accounts, a first death and deficit withdrawals', () => {
+    const plan: any = {
+      current_year: 2026, user_age: 55, user_ret_age: 55, user_retirement_age: 55, user_age_death: 60, is_married: true,
+      filing_status: 'married_filing_jointly', spouse_age: 52, spouse_ret_age: 60, spouse_age_death: 88,
+      desired_spending: 30000, survivor_spending: 25000, adjust_spending_inflation: true, inflation_rate: 2.5,
+      accounts: [
+        { id: 'a', type: 'inherited_pretax', owner: 'user', balance: 200000, return_mean: 6.0, death_year: 2018, inherited_rule: 'stretch' },
+        { id: 'b', type: 'inherited_pretax', owner: 'user', balance: 80000, return_mean: 4.0, death_year: 2024, inherited_rule: 'ten_year', decedent_passed_rbd: true },
+        { id: 'c', type: 'inherited_roth', owner: 'spouse', balance: 50000, return_mean: 5.0, death_year: 2025, inherited_rule: 'spouse', decedent_birth_year: 1962 },
+      ],
+    };
+    commitEnterPlan(plan);
+    const inputs = extractSimInputs(plan);
+    const years = inputs.total_years;
+    const m = meanReturns(inputs);
+    const s = (v: number) => new Float64Array(years).fill(v);
+    const traj = new Float64Array(years + 1);
+    simulatePath(kernelParams(inputs, prepareNumbaInputs(inputs)), {
+      preUser: s(m.pretax), preSpouse: s(m.pretaxSpouse), roth: s(m.roth), taxable: s(m.taxable),
+      hsaUser: s(m.hsa), hsaSpouse: s(m.hsaSpouse), inhPreUser: s(m.inhPretax), inhPreSpouse: s(m.inhPretaxSpouse),
+      inhRothUser: s(m.inhRoth), inhRothSpouse: s(m.inhRothSpouse),
+    }, traj);
+    const rows = runDeterministic(plan);
+    expect(rows.some((r) => r.withdrawals.inherited_pretax_extra > 0)).toBe(true);
+    for (const r of rows) {
+      const e = r.ending_assets.total;
+      expect(Math.abs(e - traj[r.year_index + 1]) / Math.max(1, Math.abs(e))).toBeLessThan(1e-12);
+    }
   });
 });
