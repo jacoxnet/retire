@@ -94,6 +94,8 @@ describe('BalanceSheetTests', () => {
     single.state_tax_rate = 5.0;
     expect(calculateMarginalTaxRate(single)).toBe(27.0);
     expect(calculateMarginalTaxRate({ filing_status: 'single', state_tax_rate: 4.5, income_sources: [inc(300000.0)] })).toBe(39.5);
+    expect(calculateMarginalTaxRate({ filing_status: 'single', desired_spending: 10000.0, state_tax_rate: 5.0 })).toBe(0.0);
+    expect(calculateMarginalTaxRate({ is_married: true, filing_status: 'joint', desired_spending: 20000.0, state_tax_rate: 5.0 })).toBe(0.0);
   });
 
   it('marginal tax rate with pensions and Social Security', () => {

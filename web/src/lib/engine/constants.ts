@@ -58,9 +58,9 @@ export const THRESHOLDS_HOH_ARR = new Float64Array([17700.0, 67450.0, 105700.0, 
 export const TAX_RATES_ARR = new Float64Array([0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]);
 
 // 2026 preferential long-term capital gains / qualified dividends brackets
-export const LTCG_THRESHOLDS_SINGLE_ARR = new Float64Array([48350.0, 533400.0]);
-export const LTCG_THRESHOLDS_JOINT_ARR = new Float64Array([96700.0, 600050.0]);
-export const LTCG_THRESHOLDS_HOH_ARR = new Float64Array([64750.0, 566700.0]);
+export const LTCG_THRESHOLDS_SINGLE_ARR = new Float64Array([50400.0, 554600.0]);
+export const LTCG_THRESHOLDS_JOINT_ARR = new Float64Array([100800.0, 623900.0]);
+export const LTCG_THRESHOLDS_HOH_ARR = new Float64Array([67450.0, 589200.0]);
 export const LTCG_RATES_ARR = new Float64Array([0.0, 0.15, 0.20]);
 
 /** Ordinary and LTCG thresholds by filing-status string, for the non-njit helpers. */

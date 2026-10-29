@@ -387,10 +387,17 @@ export function njitRmdTaxWithdraw(
         taxableBasisEnd = Math.max(0.0, taxableBasisEnd - wTaxable);
         deficit = deficit - wTaxable;
       } else {
+        const calcFedTaxWithCg = (g: number): [number, number, number] => {
+          const agiG = baseAgiExSs + g;
+          const taxSsG = njitCalculateTaxableSs(agiG, ssBenefits, filingStatusCode);
+          const totOrdG = baseOrdExSs + taxSsG;
+          return njitCalcFedTaxDual(
+            totOrdG, curPrefIncome + g, stdDeductionT, thresholdsT, TAX_RATES_ARR, ltcgThresholdsT, LTCG_RATES_ARR,
+          );
+        };
+
         const gMax = taxableEnd * gainRatio;
-        const fedTaxGmax = njitCalcFedTaxDual(
-          totOrdIncome, curPrefIncome + gMax, stdDeductionT, thresholdsT, TAX_RATES_ARR, ltcgThresholdsT, LTCG_RATES_ARR,
-        )[2];
+        const fedTaxGmax = calcFedTaxWithCg(gMax)[2];
         const extraFedGmax = fedTaxGmax - baseTax;
         const extraStGmax = gMax * stateRate;
         const netCashMax = taxableEnd - (extraFedGmax + extraStGmax);
@@ -402,9 +409,7 @@ export function njitRmdTaxWithdraw(
           taxableBasisEnd = 0.0;
           deficit = deficit - netCashMax;
           curPrefIncome += realizedCg;
-          [finalFedOrdTax, finalFedPrefTax, finalFedTax] = njitCalcFedTaxDual(
-            totOrdIncome, curPrefIncome, stdDeductionT, thresholdsT, TAX_RATES_ARR, ltcgThresholdsT, LTCG_RATES_ARR,
-          );
+          [finalFedOrdTax, finalFedPrefTax, finalFedTax] = calcFedTaxWithCg(realizedCg);
           finalStateTax += extraStGmax;
           totalBaseTax = finalFedTax + finalStateTax;
         } else {
@@ -413,9 +418,7 @@ export function njitRmdTaxWithdraw(
           for (let i = 0; i < 25; i++) {
             const mid = (low + high) / 2.0;
             const g = mid * gainRatio;
-            const fedMid = njitCalcFedTaxDual(
-              totOrdIncome, curPrefIncome + g, stdDeductionT, thresholdsT, TAX_RATES_ARR, ltcgThresholdsT, LTCG_RATES_ARR,
-            )[2];
+            const fedMid = calcFedTaxWithCg(g)[2];
             const stMid = g * stateRate;
             const netCash = mid - ((fedMid - baseTax) + stMid);
             if (netCash < deficit) low = mid;
@@ -426,9 +429,7 @@ export function njitRmdTaxWithdraw(
           taxableBasisEnd = Math.max(0.0, taxableBasisEnd - (wTaxable * basisRatio));
           taxableEnd = Math.max(0.0, taxableEnd - wTaxable);
           curPrefIncome += realizedCg;
-          [finalFedOrdTax, finalFedPrefTax, finalFedTax] = njitCalcFedTaxDual(
-            totOrdIncome, curPrefIncome, stdDeductionT, thresholdsT, TAX_RATES_ARR, ltcgThresholdsT, LTCG_RATES_ARR,
-          );
+          [finalFedOrdTax, finalFedPrefTax, finalFedTax] = calcFedTaxWithCg(realizedCg);
           finalStateTax += realizedCg * stateRate;
           totalBaseTax = finalFedTax + finalStateTax;
           deficit = 0.0;

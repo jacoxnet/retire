@@ -76,6 +76,7 @@ export function calculateMarginalTaxRate(data: unknown): number {
   const desired = pyFloat(or(get(data, 'desired_spending', 60000.0), 0.0));
   const base = Math.max(desired, guaranteed);
   const taxable = Math.max(0.0, base - (STANDARD_DEDUCTION[status] ?? 16100));
+  if (taxable <= 0.0) return 0.0;
 
   let fedRate = RATES[0];
   for (const [i, threshold] of THRESHOLDS[status].entries()) {
