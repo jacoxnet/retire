@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Comprehensive Evaluation Report: Retirement App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- GitHub Markdown CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
+  <!-- KaTeX CSS & JS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true}
+        ],
+        throwOnError: false
+      });
+      mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+    });
+  </script>
+  <style>
+    body {
+      background-color: #f6f8fa;
+      margin: 0;
+      padding: 40px 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 45px;
+      background-color: #ffffff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      margin: 25px 0;
+      background: #fafbfc;
+      padding: 16px;
+      border-radius: 6px;
+      border: 1px solid #e1e4e8;
+    }
+    .katex-display {
+      margin: 1.2em 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    @media print {
+      body {
+        background-color: #ffffff;
+        padding: 0;
+      }
+      .markdown-body {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .mermaid {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      table {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <article class="markdown-body">
+    <h1>Comprehensive Evaluation Report: Conception, Design, Logic, and Functionality of the Retirement Calculator</h1>
+<p><strong>Date:</strong> October 2026<br><strong>Subject:</strong> Technical, Mathematical, Legal, and Functional Audit of the Static Retirement Planning Application<br><strong>Scope:</strong> Architecture, Tax &amp; RMD Legal Compliance, Monte Carlo Analysis, Crisis Stress-Testing, CPI Ingestion, Portfolio Rebalancing, Planning Omissions, and Third-Party Perspectives.</p>
+<hr>
+<h2>Executive Summary</h2>
+<p>This report provides an in-depth evaluation of the browser-based static retirement planning application (<code>web/</code>). The application is an ambitious, high-performance, client-side financial modeling tool implemented in SvelteKit 3, TypeScript, and Web Workers. It simulates multi-decade decumulation paths, tax calculations, Social Security benefits, asset liquidations, and historical crisis stress tests entirely within the user&#39;s browser, maintaining total data privacy.</p>
+<p>The application demonstrates sophisticated financial logic—notably its implementation of SECURE 2.0 Required Minimum Distribution (RMD) rules, 2024 IRS Final Regulations on Inherited IRAs, spousal rollovers, basis step-up rules, and common random number (CRN) seeded Monte Carlo searches. </p>
+<p>However, several critical conceptual gaps, mathematical simplifications, tax law omissions, and functional disconnects exist that would draw scrutiny from professional financial advisors (CFPs), quantitative analysts, and DIY retirees.</p>
+<div class="mermaid">
+flowchart TD
+    subgraph UI ["Client Presentation & Inputs"]
+        A[Demographics & Spending]
+        B[Account Balances & Types]
+        C[Balance Sheet & Rebalancing]
+    end
+
+    subgraph CoreEngine ["Pure TypeScript Engine"]
+        D[extractSimInputs & prepareNumbaInputs]
+        E[deterministic.ts: Cash Flows & Taxes]
+        F[montecarlo.ts: Web Worker Kernel]
+        G[inherited.ts: SECURE 2.0 Schedules]
+        H[tax.ts: Dual Tax & RMD Solver]
+    end
+
+    subgraph External ["Data & Background Jobs"]
+        I[FRED API: Weekly GitHub Action]
+        J[Bundled JSON: CPI-U Historical]
+    end
+
+    UI --> CoreEngine
+    External -.-> C
+    G --> H
+    H --> E
+    H --> F
+</div><hr>
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#1-legal--tax-compliance-audit-taxes--rmds">Legal &amp; Tax Compliance Audit (Taxes &amp; RMDs)</a></li>
+<li><a href="#2-monte-carlo-analysis-structure--mathematical-foundations">Monte Carlo Analysis Structure &amp; Mathematical Foundations</a></li>
+<li><a href="#3-crisis-scenarios--stress-testing-methodology">Crisis Scenarios &amp; Stress-Testing Methodology</a></li>
+<li><a href="#4-cpi-u-data-ingestion--ongoing-currency">CPI-U Data Ingestion &amp; Ongoing Currency</a></li>
+<li><a href="#5-portfolio-rebalancing-feature-analysis">Portfolio Rebalancing Feature Analysis</a></li>
+<li><a href="#6-critical-omissions-in-the-financial-planning-engine">Critical Omissions in the Financial Planning Engine</a></li>
+<li><a href="#7-third-party-stakeholder-analysis-praise-vs-criticism">Third-Party Stakeholder Analysis: Praise vs. Criticism</a></li>
+<li><a href="#8-consolidated-findings--recommendations">Consolidated Findings &amp; Recommendations</a></li>
+</ol>
+<hr>
+<h2>1. Legal &amp; Tax Compliance Audit (Taxes &amp; RMDs)</h2>
+<h3>1.1 Required Minimum Distributions (RMDs)</h3>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/constants.ts#L3-L48"><code>constants.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/inputs.ts#L481-L482"><code>inputs.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/inherited.ts#L1-L101"><code>inherited.ts</code></a></em></p>
+<h4>What the App Does Well:</h4>
+<ol>
+<li><strong>SECURE Act 2.0 Age Escalation:</strong> In <code>constants.ts</code>, <code>getRmdStartAge</code> uses:<ul>
+<li>Birth year $\le 1950 \implies 72$</li>
+<li>Birth year $1951\text{--}1959 \implies 73$</li>
+<li>Birth year $\ge 1960 \implies 75$<br>This correctly accounts for § 107 of the SECURE 2.0 Act and aligns with Congressional clarification regarding individuals born in 1959.</li>
+</ul>
+</li>
+<li><strong>Updated Divisors:</strong> Uses the 2022 revised IRS Uniform Lifetime Table (Table III, Treas. Reg. § 1.401(a)(9)-9(c)), beginning with divisor 27.4 at age 72 and 26.5 at age 73.</li>
+<li><strong>Inherited IRAs (Treas. Reg. § 1.401(a)(9)-5(e) &amp; July 2024 Final Regulations):</strong><ul>
+<li>The ledger logic in <code>inherited.ts</code> and <code>computeInheritedFractions</code> in <code>inputs.ts</code> tracks per-account schedules.</li>
+<li>Distinguishes whether the decedent died <strong>before</strong> or <strong>on/after</strong> their Required Beginning Date (RBD). If the decedent died on/after RBD under the 10-year rule, it enforces annual Single Life Table RMDs in years 1–9 and mandates complete liquidation by year 10.</li>
+<li>Models the Minor Child exception (Single Life Table until age 21, then 10 years to age 31).</li>
+<li>Accurately models the surviving spouse&#39;s ability to delay distributions until the decedent would have reached RMD age, with the option to elect the Uniform Lifetime Table under § 401(a)(9)(B)(iv).</li>
+<li>Accurately handles Successor Beneficiary rules (subjecting successors to a 10-year cap).</li>
+</ul>
+</li>
+<li><strong>SECURE 2.0 Roth Parity (§ 325):</strong> Starting in 2024, SECURE 2.0 eliminated pre-death RMDs for employer-sponsored designated Roth accounts (e.g., Roth 401(k), Roth 403(b)), establishing full parity with Roth IRAs. The application correctly treats all Roth assets as completely exempt from lifetime RMDs, which is fully compliant with codified post-2024 tax law.</li>
+</ol>
+<h4>Compliance Errors and Vulnerabilities:</h4>
+<ol>
+<li><strong>Required Beginning Date (RBD) Grace Period Ignored:</strong> Under IRC § 401(a)(9)(C), a taxpayer&#39;s first RMD may be delayed until April 1 of the year following the calendar year in which they attain the applicable age. The engine models RMDs purely on an annual basis in the exact year <code>userAge &gt;= userRmdStartAge</code>. While standard for high-level modeling, planners often analyze whether taking the first RMD in year 1 or deferring to year 2 (resulting in two RMDs in a single tax year) optimizes lifetime tax brackets.</li>
+</ol>
+<hr>
+<h3>1.2 Federal Income Taxes &amp; Brackets</h3>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/tax.ts#L23-L124"><code>tax.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/constants.ts#L50-L71"><code>constants.ts</code></a></em></p>
+<h4>What the App Does Well:</h4>
+<ol>
+<li><strong>Dual Stacking Mechanism (<code>njitCalcFedTaxDual</code>):</strong> Correctly stacks Preferential Income (Qualified Dividends and Long-Term Capital Gains) on top of Ordinary Income. Ordinary income consumes the lower tax brackets and standard deduction first, while LTCG/qual-divs sit atop ordinary income and are taxed at 0%, 15%, or 20%.</li>
+<li><strong>Gross-Up Deficit Solver (<code>njitSolveOrdinaryWithdrawal</code>):</strong> Uses an exact bisection solver to determine the gross withdrawal needed from pre-tax accounts so that net proceeds cover the spending deficit after accounting for marginal federal taxes, state taxes, and penalties.</li>
+<li><strong>Social Security Provisional Income Formula:</strong> Accurately implements IRC § 86:
+$$\text{Provisional Income} = \text{AGI (excluding SS)} + \text{Tax-Exempt Interest} + 0.5 \times \text{Gross SS}$$
+It applies the statutory non-inflation-indexed thresholds ($25,000/$34,000 for Single; $32,000/$44,000 for MFJ) and subjects 0%, up to 50%, or up to 85% of Social Security benefits to taxation.</li>
+<li><strong>Permanent TCJA Tax Rate Structure (OBBBA Compliance):</strong>
+The application models the 7-bracket federal individual income tax schedule (10%, 12%, 22%, 24%, 32%, 35%, 37%) and elevated standard deduction as permanent baseline law, indexing bracket cutoffs annually for inflation. Under the <strong>One Big Beautiful Bill Act (OBBBA)</strong> signed into law on July 4, 2025, the original December 31, 2025 sunset provisions of the Tax Cuts and Jobs Act (TCJA) were formally repealed, making the individual income tax rates and higher standard deduction permanent. The app&#39;s conception of treating these rates as ongoing into future decades accurately reflects codified law.</li>
+</ol>
+<h4>Compliance Errors and Vulnerabilities:</h4>
+<ol>
+<li><strong>Omission of the Age 65+ Additional Standard Deduction (IRC § 63(f)) &amp; OBBBA Senior Provisions:</strong><blockquote>
+<p>[!IMPORTANT]
+Taxpayers age 65 and older are legally entitled to an additional standard deduction ($1,550 per qualified spouse for MFJ, $1,950 for Single in 2024; indexed higher by 2026). In addition, the OBBBA enacted an additional temporary Senior Deduction for eligible taxpayers 65 and older spanning tax years 2025–2028. The app applies only the base standard deduction ($32,200 MFJ, $16,100 Single) regardless of user and spouse age. Because retirement plans revolve around individuals over 65, this <strong>systematically overstates federal and state taxable income and tax liabilities every single year</strong>, underestimating portfolio longevity.</p>
+</blockquote>
+</li>
+<li><strong>No Automatic Medicare IRMAA Surcharges or Net Investment Income Tax (NIIT):</strong><ul>
+<li>Under IRC § 1411, high earners pay a 3.8% NIIT on investment income above $200,000 (Single) / $250,000 (MFJ).</li>
+<li>Under the Medicare Modernization Act, Part B and Part D premiums incur significant cliff-bracket surcharges (IRMAA) based on MAGI with a 2-year lookback.</li>
+<li>The app delegates this to manual entry under &quot;Other Taxes&quot;. This is mathematically and functionally flawed: <strong>users cannot foresee the exact years their stochastic RMDs and taxable gains will push them over IRMAA or NIIT thresholds</strong>.</li>
+</ul>
+</li>
+<li><strong>Roth Early Withdrawal Ordering Rules (IRC § 408A(d)):</strong>
+The withdrawal solver assumes Roth distributions are 100% tax-free and penalty-free at any age. In reality, non-qualified distributions before age 59.5 (or prior to meeting the 5-year aging rule) trigger ordinary tax and a 10% penalty on earnings.</li>
+<li><strong>Rule of 55 and SEPP / 72(t) Omissions:</strong>
+The engine levies a rigid 10% penalty on pre-tax distributions whenever the owner is under age 59.5. It does not accommodate penalty exemptions such as the Rule of 55 (separation from service at or after age 55 for employer plans) or Substantially Equal Periodic Payments (IRC § 72(t)).</li>
+</ol>
+<hr>
+<h3>1.3 State Taxes</h3>
+<p><em>Code references: [<code>tax.ts</code>](file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/tax.ts#L120-L122, #L334-L336)</em></p>
+<h4>Significant Legal &amp; Logic Flaws:</h4>
+<ul>
+<li>State tax is calculated as:
+$$\text{State Tax} = \max(0, \text{Federal AGI} + \text{Taxable SS (if not exempt)} - \text{Federal Standard Deduction}) \times \text{State Rate}$$</li>
+<li>In reality:<ul>
+<li>States have distinct tax brackets, standard deductions, and personal exemptions.</li>
+<li>Numerous states exempt or heavily exclude pension and retirement account distributions (e.g., Pennsylvania exempts all qualified retirement distributions after age 59.5; Illinois completely exempts qualified retirement income; New York excludes the first $20,000).</li>
+<li>Applying a single flat percentage to federal taxable income severely miscalculates state tax burdens for retirees.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3>1.4 Post-Mortem &amp; Spousal Rules</h3>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/tax.ts#L164-L198"><code>tax.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/deterministic.ts#L208-L236"><code>deterministic.ts</code></a></em></p>
+<h4>Strong Compliance Points:</h4>
+<ol>
+<li><strong>Widow&#39;s Tax Penalty:</strong> In <code>t &gt; tFirstDeath</code>, the survivor&#39;s filing status correctly shifts from MFJ to Single. This compresses tax brackets by 50% while living expenses typically remain high, accurately modeling the tax shock faced by surviving spouses.</li>
+<li><strong>Year of Death MFJ Status:</strong> For <code>t === tFirstDeath</code>, the simulation continues to use MFJ status, in strict accordance with IRC § 6013(a)(3).</li>
+<li><strong>Step-Up in Basis (IRC § 1014):</strong><ul>
+<li>In Common Law states: Applies a <strong>50% basis step-up</strong> to fair market value on taxable assets.</li>
+<li>In Community Property states: Applies a <strong>100% &quot;double step-up&quot;</strong> to fair market value on community property (IRC § 1014(b)(6)).</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2>2. Monte Carlo Analysis Structure &amp; Mathematical Foundations</h2>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/montecarlo.ts"><code>montecarlo.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/mc.ts"><code>mc.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/rng.ts"><code>rng.ts</code></a></em></p>
+<div class="mermaid">
+flowchart LR
+    Seed[Job Seed + Path Index] --> PRNG[Rng: SplitMix32 + Xoshiro128**]
+    PRNG --> BM[Box-Muller: 3 Std Normals]
+    BM --> Chol[Cholesky Factor L: Asset Correlation]
+    Chol --> Factors[Stock, Bond, Cash Factors]
+    Factors --> BucketAlloc[Inferred Weights from Mean Return]
+    BucketAlloc --> AnnualReturns[Per-Bucket Annual Simple Returns]
+    AnnualReturns --> Kernel[simulatePath Kernel: RTW Waterfall]
+</div><h3>2.1 Strengths of the Implementation</h3>
+<ol>
+<li><strong>Parallel Execution Architecture:</strong> The worker pool (<code>pool.ts</code>) parallelizes paths across available CPU cores using typed arrays (<code>Float64Array</code>, <code>Float32Array</code>), minimizing memory allocations and avoiding $N \times T$ return matrix bloat.</li>
+<li><strong>Deterministic Seeded PRNG:</strong> Combines <code>splitmix32</code> and <code>xoshiro128**</code> to generate independent streams per <code>(seed, pathIndex)</code>. This guarantees exact reproducibility regardless of worker chunking.</li>
+<li><strong>Common Random Numbers (CRN) in Goal-Seek:</strong> Both <code>binarySearch</code> (maximum spending) and <code>earliestRetirementSearch</code> reuse the exact same random seeds across candidate iterations, preventing simulation noise from destabilizing the root-finding algorithms.</li>
+<li><strong>Cross-Asset Correlation via Cholesky Decomposition:</strong> Correlates stock, bond, and cash shocks via a lower Cholesky decomposition of an empirical covariance structure:
+$$\rho_{\text{stock, bond}} = -0.10, \quad \rho_{\text{bond, cash}} = 0.20, \quad \rho_{\text{stock, cash}} = 0.00$$</li>
+</ol>
+<hr>
+<h3>2.2 Critical Methodological Limitations</h3>
+<h4>A. Inferred Asset Allocation (The Expected-Return Inversion Flaw)</h4>
+<p><em>Code reference: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/constants.ts#L117-L128"><code>constants.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/rng.ts#L111-L116"><code>rng.ts</code></a></em></p>
+<ul>
+<li>The simulation does <strong>not</strong> allow users to define their asset allocation (e.g., 60% equities / 40% fixed income) per account.</li>
+<li>Instead, the engine reverse-engineers asset allocation strictly from the user&#39;s expected mean return:<ul>
+<li>$\ge 7.0% \implies 100%$ Stocks</li>
+<li>$4.0%\text{--}7.0% \implies$ Linear interpolation between 100% Bonds and 100% Stocks</li>
+<li>$2.5%\text{--}4.0% \implies$ Linear interpolation between 100% Cash and 100% Bonds</li>
+<li>$&lt; 2.5% \implies 100%$ Cash</li>
+</ul>
+</li>
+<li><strong>Why this is problematic:</strong><ul>
+<li>A conservative user holding an 80/20 equity portfolio who assumes a prudent 5.5% return is modeled by the engine as holding a <strong>50/50 portfolio</strong>.</li>
+<li>A user holding high-dividend equities expecting 4.0% return is modeled as <strong>100% Treasury bonds</strong>.</li>
+<li>There is a complete disconnect between the Rebalance/Balance Sheet tabs (which track granular asset classes) and the simulation engine (which ignores them).</li>
+</ul>
+</li>
+</ul>
+<h4>B. Arithmetic Normal Returns vs. Geometric Lognormal Returns</h4>
+<p><em>Code reference: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/rng.ts#L180"><code>rng.ts</code></a></em></p>
+<ul>
+<li>Annual returns are generated as simple arithmetic normals:
+$$R_t = \mu + \sigma \cdot Z_t$$</li>
+<li>In standard financial engineering, asset returns are modeled as lognormally distributed ($1 + R_t = e^{(\mu - \frac{1}{2}\sigma^2) + \sigma Z_t}$), which ensures:<ol>
+<li>Asset values can never drop below zero from price movements alone ($R_t &gt; -100%$).</li>
+<li>Volatility drag ($\approx \frac{1}{2}\sigma^2$) is mathematically respected.</li>
+</ol>
+</li>
+<li>Under arithmetic normal draws:<ul>
+<li>An extreme negative draw ($Z_t &lt; -3.5$ on a volatile portfolio) can produce a return below $-100%$, forcing asset balances directly into negative territory.</li>
+</ul>
+</li>
+</ul>
+<h4>C. Fixed Deterministic Inflation across All Monte Carlo Paths</h4>
+<p><em>Code reference: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/inputs.ts#L719-L726"><code>inputs.ts</code></a></em></p>
+<ul>
+<li>In <code>inputs.ts</code>, <code>infFactors</code> is precomputed before any Monte Carlo paths run:
+$$\text{infFactors}[t] = (1 + \text{inflation_rate} / 100)^t$$</li>
+<li><strong>Every single one of the 50,000 Monte Carlo paths experiences the exact same constant inflation rate.</strong></li>
+<li>In reality, inflation is stochastic and correlated with market drawdowns (e.g., stagflation in 1973–1974 or 2022). Modeling constant inflation eliminates a primary driver of sequence-of-returns failure.</li>
+</ul>
+<h4>D. Independent and Identically Distributed (i.i.d.) Returns</h4>
+<ul>
+<li>The engine assumes successive annual returns are completely independent ($Corr(R_t, R_{t+1}) = 0$).</li>
+<li>It ignores valuation metrics (such as the Shiller CAPE ratio), mean-reversion, interest rate cycles, and volatility clustering (GARCH phenomena).</li>
+</ul>
+<h4>E. Rigid Spending Behavior</h4>
+<ul>
+<li>The engine supports only constant spending or constant inflation-adjusted spending.</li>
+<li>It omits dynamic retirement withdrawal rules (e.g., Guyton-Klinger guardrails, percentage of portfolio with floors/ceilings, or Bengen&#39;s spending pause during down years). Real retirees cut discretionary spending during market downturns.</li>
+</ul>
+<hr>
+<h2>3. Crisis Scenarios &amp; Stress-Testing Methodology</h2>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/crisis.ts"><code>crisis.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/stress.ts"><code>stress.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/historicalData.ts"><code>historicalData.ts</code></a></em></p>
+<div class="mermaid">
+flowchart TD
+    ScenarioChoice[Select Crisis: e.g., 1973 Stagflation] --> TimingChoice[Timing: Retirement vs. Immediate]
+    TimingChoice --> MapYears[Map Historical Data: Stocks, Bonds, Cash, Inflation]
+    MapYears --> WindowOverride[Crisis Window: Override MC Draws & Inflation]
+    WindowOverride --> MCPath[Pre-Crisis: Random MC | Crisis: Historical Replay | Post-Crisis: Random MC]
+    MCPath --> CompareResults[Compute Deltas vs. Baseline Monte Carlo]
+</div><h3>3.1 Scenario Evaluation</h3>
+<table>
+<thead>
+<tr>
+<th>Scenario Key</th>
+<th>Historical Span</th>
+<th>Duration</th>
+<th>Key Historical Dynamics</th>
+<th>Evaluation in App</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>2000_dotcom</code></td>
+<td>2000–2012</td>
+<td>13 yrs</td>
+<td>3 consecutive equity declines followed by 2008 GFC</td>
+<td><strong>Excellent stress test</strong> for sequence-of-returns risk.</td>
+</tr>
+<tr>
+<td><code>1973_stagflation</code></td>
+<td>1973–1982</td>
+<td>10 yrs</td>
+<td>Equity drops combined with double-digit CPI inflation</td>
+<td><strong>Crucial scenario:</strong> tests dual market and inflation shocks.</td>
+</tr>
+<tr>
+<td><code>2008_gfc</code></td>
+<td>2007–2009</td>
+<td>3 yrs</td>
+<td>Severe banking crash, but strong Treasury bond offset (+20%)</td>
+<td><strong>Too brief:</strong> 3-year shock doesn&#39;t test long-term retirement sustainability.</td>
+</tr>
+<tr>
+<td><code>1929_depression</code></td>
+<td>1929–1941</td>
+<td>13 yrs</td>
+<td>&gt;60% drawdown, accompanied by severe deflation (-9%, -10%)</td>
+<td><strong>Historically relevant</strong>, though deflation partially insulates purchasing power.</td>
+</tr>
+<tr>
+<td><code>2022_rate_spike</code></td>
+<td>2022–2024</td>
+<td>3 yrs</td>
+<td>Simultaneous drop in equities (-18%) and bonds (-18%)</td>
+<td><strong>Valuable contemporary test</strong>, but 3-year window is brief.</td>
+</tr>
+<tr>
+<td><code>1966_bear</code></td>
+<td>1966–1981</td>
+<td>16 yrs</td>
+<td>Prolonged sideways market with creeping inflation</td>
+<td><strong>Bengen&#39;s classic worst-case cohort:</strong> tests purchasing power erosion.</td>
+</tr>
+</tbody></table>
+<h3>3.2 Strengths of the Stress-Testing Approach</h3>
+<ol>
+<li><strong>Coupled Inflation Overrides:</strong> Unlike standard Monte Carlo, during the crisis window, the actual historical CPI inflation series replaces the static assumption. For instance, in <code>1973_stagflation</code>, inflation surges to 12.3% and 13.3%, properly stressing inflation-adjusted withdrawals.</li>
+<li><strong>Timing Flexibility:</strong> Users can test the crisis hitting <strong>immediately</strong> (current age) or <strong>at retirement age</strong>, which is when portfolios are at their peak vulnerability.</li>
+<li><strong>Comparative Delta Analysis:</strong> Directly computes the impact of the crisis on success probability, median terminal estate, and percentile trajectories ($p10$, $p25$, $p50$).</li>
+</ol>
+<h3>3.3 Methodological Criticisms</h3>
+<ol>
+<li><strong>The Post-Crisis &quot;Cliff&quot; Reversion:</strong> Immediately following the crisis window, the simulation snaps back to uncorrelated Gaussian draws centered on long-term mean returns. It lacks transitional dynamics, momentum, or yield reset modeling.</li>
+<li><strong>Starting Bond Yield Disconnect:</strong> In 1982, bonds gained +32.8% because starting 10-year Treasury yields exceeded 15%. Applying 1982 bond returns to a retiree starting with 4.0% yields in 2026 is mathematically implausible.</li>
+<li><strong>No Rolling Historical Cohort Analysis:</strong> The app does not provide a true historical backtest (testing every rolling 30-year period from 1926 to 1994, as in FireCalc or cFIREsim). It only provides 6 curated historical slices.</li>
+</ol>
+<hr>
+<h2>4. CPI-U Data Ingestion &amp; Ongoing Currency</h2>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/.github/workflows/update-cpi.yml"><code>update-cpi.yml</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/scripts/update-cpi.ts"><code>update-cpi.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/engine/cpi.ts"><code>cpi.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/app/cpiData.ts"><code>cpiData.ts</code></a></em></p>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant FRED as St. Louis Fed (FRED)
+    participant GHA as GitHub Actions (update-cpi.yml)
+    participant Repo as Git Repository (main branch)
+    participant Pages as GitHub Pages (Static Hosting)
+    participant Browser as User Browser (Client)
+
+    Note over GHA: Scheduled Cron (Mondays 14:23 UTC)
+    GHA->>FRED: GET /graph/fredgraph.csv?id=CPIAUCNS
+    FRED-->>GHA: Observation Dates & Values
+    GHA->>GHA: update-cpi.ts: Validate & Merge
+    alt New Data Present
+        GHA->>Repo: Commit & Push cpi_u_historical.json
+        Repo->>Pages: deploy.yml (Static Site Rebuild)
+        Pages-->>Browser: Updated Bundle on next user visit
+    else No New Data
+        GHA-->>GHA: No Action
+    end
+</div><h3>4.1 Ingestion Mechanism Analysis</h3>
+<ul>
+<li><strong>Pipeline:</strong> Runs weekly via GitHub Actions on Mondays (<code>cron: &#39;23 14 * * 1&#39;</code>), downloading the unadjusted CPI-U index (<code>CPIAUCNS</code>) from the St. Louis Fed.</li>
+<li><strong>Merge &amp; Fallback Logic:</strong> Merges new data into <code>cpi_u_historical.json</code>. Preserves Treasury contingency overrides (e.g., <code>&#39;2025-10&#39;: 325.604</code> for government shutdowns under 31 CFR Part 356).</li>
+<li><strong>Static Deployment:</strong> Changes pushed to <code>main</code> trigger <code>deploy.yml</code>, which rebuilds the static app and publishes to GitHub Pages.</li>
+</ul>
+<h3>4.2 Critical Findings on CPI Currency &amp; Role</h3>
+<h4>1. Narrow Scope: CPI Is Not Used in the Simulation Engine</h4>
+<ul>
+<li>The bundled CPI-U series from FRED is <strong>used exclusively by the Balance Sheet tab</strong> to adjust nominal Emergency Fund and Goal targets.</li>
+<li><strong>It is not used anywhere in the retirement projection or Monte Carlo engine.</strong></li>
+<li>Users who see &quot;Live FRED CPI-U Source&quot; in the UI may be misled into believing that the simulation&#39;s future inflation forecasts or historical return series are dynamically updating from live economic feeds.</li>
+</ul>
+<h4>2. Fragility of Unauthenticated HTTP Scraping</h4>
+<ul>
+<li><code>update-cpi.ts</code> fetches raw CSV directly via <code>https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCNS</code> using a spoofed browser User-Agent header (<code>Mozilla/5.0 (RetireApp/1.0)</code>).</li>
+<li>If FRED institutes stricter Cloudflare bot protections, changes CSV endpoint structures, or rate-limits requests, this workflow will silently fail.</li>
+</ul>
+<h4>3. Staleness for Local, Forked, or PWA Users</h4>
+<ul>
+<li>If a user clones the repository, runs the app locally via <code>npm run dev</code>, or saves the PWA offline, the CPI data remains frozen at the compile-time commit date.</li>
+</ul>
+<hr>
+<h2>5. Portfolio Rebalancing Feature Analysis</h2>
+<p><em>Code references: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/plan/rebalance.ts"><code>rebalance.ts</code></a>, <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/components/enter/RebalanceTab.svelte"><code>RebalanceTab.svelte</code></a></em></p>
+<div class="mermaid">
+flowchart TD
+    BS[Latest Balance Sheet Accounts] --> Select[User Selects Included Accounts]
+    Select --> Map[User Maps Account Balances to Asset Classes]
+    Targets[User Sets Target Allocations & Tolerance Corridor] --> Calc[Compute Actual vs. Target Allocation]
+    CashFlow[User Inputs Net Cash Flow +/-] --> Calc
+    Calc --> Status{Within Corridor?}
+    Status -->|Yes| OK[Status: In Range]
+    Status -->|No| Trade[Generate Trade Plan: Sells & Buys]
+    Trade --> ExecutionNote[Warning: App gives aggregate trades only, no account-level routing]
+</div><h3>5.1 Rebalancing Mechanics</h3>
+<ol>
+<li><strong>Source:</strong> Pulls account balances from the latest balance sheet column.</li>
+<li><strong>Account Split:</strong> Allows splitting any account&#39;s balance across user-defined asset classes (e.g., US Equities, International, Bonds, Cash, Real Estate).</li>
+<li><strong>Corridor Calculation:</strong> Computes target dollar amounts and min/max corridors based on target percentages and a tolerance percentage.</li>
+<li><strong>Trade Generator:</strong> Produces recommended buys and sells in &quot;Standard&quot; (return to target) or &quot;Minimal&quot; (return to corridor boundary) modes.</li>
+</ol>
+<h3>5.2 Critical Conception &amp; Execution Flaws</h3>
+<h4>A. Total Disconnect from the Simulation</h4>
+<p>As documented in line 4 of <code>rebalance.ts</code>:</p>
+<blockquote>
+<p><em>&quot;Rebalancing is a planning aid only; the simulation never reads it.&quot;</em></p>
+</blockquote>
+<ul>
+<li>The simulation engine assumes constant account-level expected returns and volatilities indefinitely.</li>
+<li>It does not model portfolio drift, rebalancing friction, trading costs, or the tax drag of rebalancing.</li>
+</ul>
+<h4>B. Asset Location &amp; Tax Blindness (The Most Serious Hazard)</h4>
+<ul>
+<li>The trade plan outputs aggregate recommendations: e.g., <em>&quot;Sell $45,000 Equities; Buy $45,000 Bonds&quot;</em>.</li>
+<li><strong>It does not specify which account to trade in.</strong></li>
+<li>If an unsophisticated user executes the recommended $45,000 stock sale inside their <strong>taxable brokerage account</strong>, they could trigger substantial capital gains taxes.</li>
+<li>Professional rebalancing engines prioritize rebalancing within tax-deferred (Traditional IRA) or tax-free (Roth IRA) accounts to prevent tax drag.</li>
+</ul>
+<h4>C. Flawed Relative Tolerance Corridors</h4>
+<p><em>Code reference: <a href="file:///Users/Mike/Documents/GitHub/retire/web/src/lib/plan/rebalance.ts#L139-L140"><code>rebalance.ts</code></a></em></p>
+<pre><code class="language-ts">const minPct = targetPct * (1 - tolPct / 100);
+const maxPct = targetPct * (1 + tolPct / 100);
+</code></pre>
+<ul>
+<li>Corridors are calculated <strong>relative to the target</strong>, rather than in absolute percentage points.</li>
+<li><strong>Example:</strong><ul>
+<li>For an asset class with a 5% target and a 10% tolerance, the corridor is $4.5%$ to $5.5%$ (an absolute width of just $\pm 0.5%$). This will trigger trades constantly on minor fluctuations.</li>
+<li>For an asset class with a 60% target and a 10% tolerance, the corridor is $54%$ to $66%$ (an absolute width of $\pm 6.0%$).</li>
+</ul>
+</li>
+<li>Best-practice institutional frameworks (e.g., Larry Swedroe&#39;s 5/25 rule) set bands at the minimum of $5%$ absolute or $25%$ relative.</li>
+</ul>
+<h4>D. Sub-Optimal Cash Flow Routing</h4>
+<p>When cash flow is added, the tool simply increases total target wealth. It does not prioritize routing new cash into underweight asset classes to eliminate the need to sell appreciated assets.</p>
+<hr>
+<h2>6. Critical Omissions in the Financial Planning Engine</h2>
+<p>Compared to professional planning platforms (e.g., RightCapital, eMoney, NewRetirement/Boldin, MaxiFi, ProjectionLab), this application omits several essential capabilities:</p>
+<div class="mermaid">
+flowchart TD
+    Root["Retirement App Gaps"]
+
+    subgraph TaxPlanning ["Tax Planning"]
+        TP1["Roth Conversions & Tax Bracket Filling"]
+        TP2["Dynamic Medicare IRMAA Surcharges"]
+        TP3["State-Specific Retirement Exemptions"]
+    end
+
+    subgraph HealthcareShocks ["Healthcare & Shocks"]
+        HC1["Long-Term Care / Skilled Nursing Shocks"]
+        HC2["Out-of-Pocket Medicare Cost Escalation"]
+        HC3["Healthcare-Specific Differential Inflation"]
+    end
+
+    subgraph LiabilitiesHousing ["Liabilities & Housing"]
+        LH1["Amortizing Mortgage Principal & Interest"]
+        LH2["Home Downsizing & Equity Access (HELOC/Reverse)"]
+        LH3["Debt Payoff & Refinancing Schedules"]
+    end
+
+    subgraph LongevityEstate ["Longevity & Estate"]
+        LE1["Actuarial Mortality Curves vs. Fixed Age of Death"]
+        LE2["Qualified Charitable Distributions (QCDs)"]
+        LE3["Estate Tax & Systematic Gifting Strategies"]
+    end
+
+    Root --> TaxPlanning
+    Root --> HealthcareShocks
+    Root --> LiabilitiesHousing
+    Root --> LongevityEstate
+</div><h3>1. Roth Conversions &amp; Tax Bracket Filling</h3>
+<ul>
+<li>The app offers no modeling of strategic annual Roth conversions (converting pre-tax assets to Roth during low-income retirement years before RMDs and Social Security begin). This is one of the most widely used tax-reduction strategies in retirement planning.</li>
+</ul>
+<h3>2. Healthcare, Medicare, and Long-Term Care (LTC) Shocks</h3>
+<ul>
+<li>While basic HSA balances are supported, there is no dedicated healthcare cost projection.</li>
+<li>Healthcare costs routinely outpace headline CPI inflation.</li>
+<li>There is no stress test for late-life Long-Term Care (LTC) or skilled nursing events, which currently average over $100,000/year and represent the single largest catastrophic expenditure risk for seniors.</li>
+</ul>
+<h3>3. Liabilities, Mortgages, and Amortization</h3>
+<ul>
+<li>The balance sheet lists liabilities, but they are static.</li>
+<li>The cash flow engine does not support amortizing mortgages (where monthly payments remain fixed but interest drops and principal grows), early mortgage payoffs, or debt refinancing.</li>
+</ul>
+<h3>4. Housing &amp; Real Estate Liquidity</h3>
+<ul>
+<li>Real estate is tracked as a static balance sheet asset.</li>
+<li>The app cannot model selling a primary residence, downsizing, relocating to a lower-tax state, or tapping home equity via a reverse mortgage or HELOC.</li>
+</ul>
+<h3>5. Longevity Risk &amp; Actuarial Mortality</h3>
+<ul>
+<li>The plan terminates at a fixed deterministic age of death (e.g., age 90).</li>
+<li>Professional tools incorporate actuarial cohort life expectancy curves (e.g., Society of Actuaries tables), displaying the joint probability of at least one spouse surviving to ages 85, 90, 95, or 100.</li>
+</ul>
+<h3>6. Charitable Giving &amp; Estate Distribution</h3>
+<ul>
+<li>Omits Qualified Charitable Distributions (QCDs) under IRC § 408(d)(8), which allow individuals age 70.5+ to donate up to $105,000 directly from an IRA tax-free to satisfy RMDs.</li>
+<li>Omits annual exclusion gifting ($18,000/year per recipient) and federal/state estate taxes.</li>
+</ul>
+<hr>
+<h2>7. Third-Party Stakeholder Analysis: Praise vs. Criticism</h2>
+<p>How would distinct user personas evaluate this application?</p>
+<h3>7.1 Certified Financial Planners (CFPs) &amp; Wealth Advisors</h3>
+<h4>What Advisors Will Praise:</h4>
+<ul>
+<li><strong>Tax-Advantaged Decumulation Hierarchy:</strong> The liquidation solver respects standard tax efficiency: Taxable Brokerage $\to$ Pre-Tax Accounts $\to$ Roth Accounts.</li>
+<li><strong>Accurate Inherited IRA Schedules:</strong> Follows post-SECURE 2.0 regulations, including the 10-year rule post-RBD annual RMD requirement.</li>
+<li><strong>Post-Mortem Tax Realism:</strong> Recognizes the transition from MFJ to Single status and models community property vs. common law basis step-ups.</li>
+</ul>
+<h4>What Advisors Will Criticize:</h4>
+<ul>
+<li><strong>No Roth Conversion Tooling:</strong> The inability to model multi-year Roth conversion strategies makes it unsuitable for proactive tax planning.</li>
+<li><strong>Absence of IRMAA / NIIT Automation:</strong> Tax projections will understate actual expenses for mass-affluent clients.</li>
+<li><strong>Omission of Age 65+ Standard Deduction:</strong> Violates basic IRS rules, systematically distorting tax calculations.</li>
+<li><strong>Naive Rebalancing Engine:</strong> The lack of account-level trade routing risks triggering unintended capital gains for clients.</li>
+</ul>
+<hr>
+<h3>7.2 Quantitative Analysts &amp; Financial Engineers</h3>
+<h4>What Quants Will Praise:</h4>
+<ul>
+<li><strong>Algorithmic Elegance:</strong> Clean, dependency-free Web Worker kernel with zero DOM overhead.</li>
+<li><strong>Seed Reproducibility:</strong> Implementation of <code>xoshiro128**</code> and <code>splitmix32</code> ensuring common random numbers across goal-seeking bisection searches.</li>
+<li><strong>Asset Class Correlation:</strong> Proper use of Cholesky decomposition to capture multi-asset co-movements.</li>
+</ul>
+<h4>What Quants Will Criticize:</h4>
+<ul>
+<li><strong>Expected-Return Allocation Inversion:</strong> Inferring asset class weights purely from an account&#39;s expected return is financially unsound.</li>
+<li><strong>Normal Distribution Assumption:</strong> Fails to account for fat tails (excess kurtosis) and extreme left-tail crash risks.</li>
+<li><strong>Deterministic Inflation:</strong> Modeling stochastic returns alongside static inflation ignores the empirical covariance between market returns and inflation shocks.</li>
+<li><strong>Lack of Autocorrelation / Valuation Regimes:</strong> Ignores mean-reversion, market valuations (CAPE), and yield curve dynamics.</li>
+</ul>
+<hr>
+<h3>7.3 DIY Retirees &amp; the FIRE (Early Retirement) Community</h3>
+<h4>What DIY Users Will Praise:</h4>
+<ul>
+<li><strong>Total Data Privacy:</strong> No server-side tracking, zero account creation, zero database persistence. Financial data never leaves the client browser.</li>
+<li><strong>Instantaneous Goal Seek:</strong> Solves for maximum safe spending and earliest retirement age across 50,000 paths in seconds.</li>
+<li><strong>Historical Crisis Testing:</strong> Highly intuitive visualizations comparing plan resilience against Dot-Com, 1973 Stagflation, and 2008 crashes.</li>
+</ul>
+<h4>What DIY Users Will Criticize:</h4>
+<ul>
+<li><strong>Rigid Penalties for Early Retirees:</strong> Penalizes pre-tax withdrawals prior to age 59.5 without supporting Rule of 55 or SEPP / 72(t) exceptions.</li>
+<li><strong>No Guyton-Klinger Guardrails:</strong> Lack of dynamic spending rules forces users into an unrealistic &quot;spend blindly until zero&quot; assumption.</li>
+<li><strong>No Rolling Cohort Backtesting:</strong> Users familiar with tools like FireCalc, cFIREsim, and Big ERN&#39;s SWR Toolbox will miss full rolling 30-year historical backtests.</li>
+<li><strong>LocalStorage Data Vulnerability:</strong> Plans stored solely in browser storage risk accidental deletion if browser cookies/cache are cleared.</li>
+</ul>
+<hr>
+<h3>7.4 Compliance Officers &amp; Regulators (FINRA Rule 2214 / SEC)</h3>
+<h4>What Compliance Will Praise:</h4>
+<ul>
+<li>Detailed informational modals explaining taxable account defaults, qualified dividends, and basis reinvestment.</li>
+</ul>
+<h4>What Compliance Will Criticize:</h4>
+<ul>
+<li><strong>FINRA Rule 2214 Mandated Disclosures:</strong> Automated investment analysis tools presented to retail investors must prominently disclose:<ol>
+<li>That calculations are hypothetical and do not guarantee future investment performance.</li>
+<li>That simulations do not account for all fees, commissions, and transaction taxes.</li>
+<li>That results vary with each use and over time.</li>
+</ol>
+</li>
+<li>The app&#39;s current disclaimers should be formalized in a permanent footer across all results views.</li>
+</ul>
+<hr>
+<h2>8. Consolidated Findings &amp; Recommendations</h2>
+<p>The table below summarizes the key findings across all evaluated areas, categorized by severity.</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Finding</th>
+<th>Impact / Severity</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Tax Law</strong></td>
+<td>Missing Age 65+ Additional Standard Deduction &amp; OBBBA Senior Provisions</td>
+<td><strong>High</strong> (Systematically overstates taxes)</td>
+<td>Add IRC § 63(f) additional deductions to <code>tax.ts</code> based on <code>userAge</code> and <code>spouseAge</code>, alongside OBBBA senior deduction rules.</td>
+</tr>
+<tr>
+<td><strong>Tax Law</strong></td>
+<td>Missing IRMAA &amp; NIIT Calculations</td>
+<td><strong>Medium-High</strong> (Understates high-income healthcare/tax drag)</td>
+<td>Implement dynamic Medicare IRMAA cliff brackets based on lagged MAGI.</td>
+</tr>
+<tr>
+<td><strong>Monte Carlo</strong></td>
+<td>Asset Allocation Inferred from Expected Return</td>
+<td><strong>High</strong> (Distorts asset correlations)</td>
+<td>Allow explicit stock/bond/cash percentage inputs per account.</td>
+</tr>
+<tr>
+<td><strong>Monte Carlo</strong></td>
+<td>Deterministic Inflation in Monte Carlo</td>
+<td><strong>High</strong> (Ignores inflation risk)</td>
+<td>Model stochastic inflation correlated with bond and equity shocks.</td>
+</tr>
+<tr>
+<td><strong>Monte Carlo</strong></td>
+<td>Arithmetic Normal vs. Lognormal Returns</td>
+<td><strong>Medium</strong> (Mathematical rigor)</td>
+<td>Shift return modeling to geometric lognormal compounding.</td>
+</tr>
+<tr>
+<td><strong>Rebalancing</strong></td>
+<td>Aggregated, Tax-Blind Trade Recommendations</td>
+<td><strong>High</strong> (Potential capital gains tax trap)</td>
+<td>Restrict rebalancing trades to tax-advantaged accounts or warn users.</td>
+</tr>
+<tr>
+<td><strong>Stress Testing</strong></td>
+<td>Reversion to Long-Term Means Post-Crisis</td>
+<td><strong>Medium</strong> (Unrealistic immediate recovery)</td>
+<td>Implement smooth post-crisis recovery transitions.</td>
+</tr>
+<tr>
+<td><strong>CPI Ingestion</strong></td>
+<td>CPI Data Disconnected from Simulation</td>
+<td><strong>Medium</strong> (User clarity / expectation)</td>
+<td>Clarify in the UI that FRED CPI data is used only for balance sheet targets.</td>
+</tr>
+<tr>
+<td><strong>Omissions</strong></td>
+<td>No Strategic Roth Conversions</td>
+<td><strong>Medium-High</strong> (Major planning gap)</td>
+<td>Add a Roth conversion model that fills target tax brackets pre-RMD.</td>
+</tr>
+<tr>
+<td><strong>Omissions</strong></td>
+<td>No Long-Term Care / Healthcare Modeling</td>
+<td><strong>Medium-High</strong> (Catastrophic tail risk omitted)</td>
+<td>Introduce a late-life healthcare shock expense item.</td>
+</tr>
+</tbody></table>
+<hr>
+<p><em>Report compiled for the retirement repository maintainer. No code modifications have been made.</em></p>
+
+  </article>
+</body>
+</html>
