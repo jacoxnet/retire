@@ -17,6 +17,7 @@
   import IncomeTab from './IncomeTab.svelte';
   import SpendingTab from './SpendingTab.svelte';
   import ModeToggle from './ModeToggle.svelte';
+  import InterviewModal from './InterviewModal.svelte';
 
   interface Props {
     plan: Plan;
@@ -48,6 +49,8 @@
   ];
 
   let active: TabId = $state('demographics');
+  let interviewOpen = $state(false);
+  let bannerDismissed = $state(false);
 
   // As the Django page did on load: a single person's spouse-based choices show as
   // their single-person equivalents (a no-op for almost every plan).
@@ -144,6 +147,29 @@
 
   <form id="enterDataForm" class={[mode === 'simple' && 'planner-simple-mode']} novalidate
     onsubmit={(e) => { e.preventDefault(); syncTabs(); onRun(); }}>
+    {#if !bannerDismissed}
+      <div class="alert alert-info border-primary d-flex flex-column flex-md-row justify-content-between align-items-md-center shadow-sm p-3 mb-4 rounded-3" role="alert">
+        <div class="d-flex align-items-center mb-2 mb-md-0">
+          <span class="fs-3 me-3 text-primary"><i class="fa-solid fa-compass"></i></span>
+          <div>
+            <div class="fw-bold fs-6 text-primary">New to retirement planning?</div>
+            <div class="text-secondary small">
+              We can walk you through your setup step-by-step with plain-English questions.
+              <span class="text-muted ms-1">(Takes ~5–10 minutes &bull; Skip any question anytime)</span>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+          <button type="button" class="btn btn-primary btn-sm px-3 py-2 fw-semibold text-nowrap" id="btnStartInterview" onclick={() => (interviewOpen = true)}>
+            <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Start Guided Walkthrough
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-1" aria-label="Dismiss banner" title="Dismiss" onclick={() => (bannerDismissed = true)}>
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+    {/if}
+
     <ModeToggle {mode} onchange={(m) => { syncTabs(); onModeChange(m); }} />
 
     <div class="subnav-container mb-4" id="dataEntrySubNav">
@@ -201,4 +227,6 @@
       </div>
     </div>
   </form>
+
+  <InterviewModal bind:open={interviewOpen} bind:plan onRun={() => { syncTabs(); onRun(); }} />
 </div>
