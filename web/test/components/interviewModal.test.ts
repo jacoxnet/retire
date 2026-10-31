@@ -6,6 +6,11 @@ import { UiPrefs } from '../../src/lib/app/ui.svelte';
 import { memoryStorage, PlanStore } from '../../src/lib/plan/store.svelte';
 import EnterHarness from './EnterHarness.svelte';
 import { InterviewState } from '../../src/lib/components/enter/interview/interviewState.svelte';
+import Stage1Household from '../../src/lib/components/enter/interview/Stage1Household.svelte';
+import Stage2Accounts from '../../src/lib/components/enter/interview/Stage2Accounts.svelte';
+import Stage3Spending from '../../src/lib/components/enter/interview/Stage3Spending.svelte';
+import Stage4Income from '../../src/lib/components/enter/interview/Stage4Income.svelte';
+import Stage5NetWorth from '../../src/lib/components/enter/interview/Stage5NetWorth.svelte';
 import type { Plan } from '../../src/lib/plan/types';
 
 afterEach(cleanup);
@@ -147,6 +152,348 @@ describe('Interview Modal Integration', () => {
 
     // Check modal exists
     expect(document.getElementById('guidedInterviewModal')).not.toBeNull();
+  });
+});
+
+describe('Single vs Married Phrasing in Guided Walkthrough', () => {
+  it('omits all spouse mentions in Stage 1 and Stage 2 for single users', async () => {
+    const wizard = new InterviewState();
+    const singlePlan: Plan = {
+      is_married: false,
+      user_name: 'Alex',
+      user_age: 50,
+      user_retirement_age: 65,
+    };
+
+    // Stage 1 Life Insurance (Q1.8)
+    wizard.goTo('life_insurance');
+    const r1 = render(Stage1Household, { wizard, plan: singlePlan });
+    expect(r1.container.textContent).toContain('Do you have a life insurance policy that would pay out upon death?');
+    expect(r1.container.textContent).not.toContain('Do you or your spouse have life insurance policies');
+    expect(r1.container.textContent).not.toContain('surviving spouse');
+    expect(r1.container.textContent).toContain('heirs upon your death');
+    cleanup();
+
+    // Stage 2 Workplace Accounts (Q2.1)
+    wizard.goTo('accounts_workplace');
+    const r2 = render(Stage2Accounts, { wizard, plan: singlePlan });
+    expect(r2.container.textContent).toContain('Do you have retirement savings through work (like a 401(k), 403(b), or TSP)?');
+    expect(r2.container.textContent).not.toContain('Do you or your spouse have retirement savings through work');
+    cleanup();
+
+    // Stage 2 IRAs (Q2.2)
+    wizard.goTo('accounts_ira');
+    const r3 = render(Stage2Accounts, { wizard, plan: singlePlan });
+    expect(r3.container.textContent).toContain('Do you have an Individual Retirement Account (Traditional IRA or Roth IRA)?');
+    expect(r3.container.textContent).not.toContain('Do you or your spouse have an Individual Retirement Account');
+    cleanup();
+
+    // Stage 2 Inherited IRAs (Q2.5)
+    wizard.goTo('accounts_inherited');
+    const r4 = render(Stage2Accounts, { wizard, plan: singlePlan });
+    expect(r4.container.textContent).toContain('Have you inherited an IRA or 401(k) from someone who passed away?');
+    expect(r4.container.textContent).not.toContain('Have you or your spouse inherited an IRA');
+    cleanup();
+
+    // Stage 4 Income Streams (Q4.3)
+    wizard.goTo('income_streams');
+    const r5 = render(Stage4Income, { wizard, plan: singlePlan });
+    const addBtn = r5.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    // Should NOT have "Whose Income Stream?" dropdown for single user
+    expect(r5.container.querySelector('#int_inc_owner')).toBeNull();
+    expect(r5.container.textContent).not.toContain('Whose Income Stream?');
+    expect(r5.container.querySelector('#int_inc_surv')).toBeNull();
+    cleanup();
+  });
+
+  it('renders contribution end age and inflation controls when adding accounts with contributions', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const singlePlan: Plan = {
+      is_married: false,
+      user_name: 'Jordan',
+      user_age: 45,
+      user_retirement_age: 62,
+      accounts: [],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan: singlePlan });
+    const addBtn = r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    expect(addBtn).not.toBeNull();
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    // Before entering contributions, end-age controls shouldn't be rendered
+    expect(r.container.querySelector('#int_acc_endtype')).toBeNull();
+
+    // Enter contribution amount
+    const contribInput = r.container.querySelector('#int_acc_contrib') as HTMLInputElement;
+    await fireEvent.input(contribInput, { target: { value: '15000' } });
+    flushSync();
+
+    // Now contribution stop age controls and inflation toggle should appear
+    const endTypeSelect = r.container.querySelector('#int_acc_endtype') as HTMLSelectElement;
+    expect(endTypeSelect).not.toBeNull();
+    expect(endTypeSelect.textContent).toContain('At my retirement (Age 62) - Recommended');
+    expect(endTypeSelect.textContent).toContain('At a specific age...');
+
+    const inflationCheck = r.container.querySelector('#int_acc_adj_inf') as HTMLInputElement;
+    expect(inflationCheck).not.toBeNull();
+    expect(inflationCheck.checked).toBe(true);
+
+    // Switch to custom age
+    await fireEvent.change(endTypeSelect, { target: { value: 'user_specified' } });
+    flushSync();
+
+    const specAgeInput = r.container.querySelector('#int_acc_endspec') as HTMLInputElement;
+    expect(specAgeInput).not.toBeNull();
+    await fireEvent.input(specAgeInput, { target: { value: '55' } });
+    flushSync();
+
+    // Save account
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Account'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    expect(singlePlan.accounts?.length).toBe(1);
+    const saved = singlePlan.accounts![0];
+    expect(saved.contrib_amount).toBe(15000);
+    expect(saved.contrib_end_age_type).toBe('user_specified');
+    expect(saved.contrib_end_age_specified).toBe(55);
+    expect(saved.contrib_adjust_inflation).toBe(true);
+    // Listing card for single user should NOT display "Owner: You"
+    expect(r.container.textContent).not.toContain('Owner:');
+    cleanup();
+  });
+});
+
+describe('Smart Auto-Save on Next in Guided Walkthrough', () => {
+  it('auto-saves an in-progress 401(k) when clicking Next and displays a clean IRA page', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      user_name: 'Alex',
+      user_age: 50,
+      user_retirement_age: 65,
+      accounts: [],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // Click "Add a Workplace Account"
+    const addBtn = r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    expect(addBtn).not.toBeNull();
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    // Fill in balance and contribution
+    const balInput = r.container.querySelector('#int_acc_balance') as HTMLInputElement;
+    const contribInput = r.container.querySelector('#int_acc_contrib') as HTMLInputElement;
+    expect(balInput).not.toBeNull();
+    await fireEvent.input(balInput, { target: { value: '45000' } });
+    await fireEvent.input(contribInput, { target: { value: '6000' } });
+    flushSync();
+
+    // Click "Next" WITHOUT clicking "Save Account"
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    expect(nextBtn).toBeDefined();
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    // 1. Account should be auto-saved into plan.accounts
+    expect(plan.accounts?.length).toBe(1);
+    expect(plan.accounts![0].balance).toBe(45000);
+    expect(plan.accounts![0].contrib_amount).toBe(6000);
+
+    // 2. Wizard advanced to IRA question
+    expect(wizard.currentQuestionId).toBe('accounts_ira');
+
+    // 3. Sub-form is closed and clean "+ Add an IRA" button is visible
+    expect(r.container.textContent).toContain('Do you have an Individual Retirement Account');
+    expect(r.container.textContent).toContain('Add an IRA');
+    expect(r.container.querySelector('#int_acc_balance')).toBeNull();
+    cleanup();
+  });
+
+  it('cleanly discards an untouched blank account form on Next without creating phantom accounts', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_ira');
+    const plan: Plan = {
+      is_married: false,
+      accounts: [],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // Click "Add an IRA"
+    const addBtn = r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    // Do NOT enter any balance or contribution ($0 defaults)
+    // Click "Next"
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    // Plan accounts should remain empty
+    expect(plan.accounts?.length).toBe(0);
+    // Wizard advanced to taxable accounts
+    expect(wizard.currentQuestionId).toBe('accounts_taxable');
+    cleanup();
+  });
+
+  it('automatically de-duplicates account names on save to avoid duplicate name errors', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      user_name: 'Alex',
+      accounts: [
+        { name: "Alex's 401(k)", type: 'pretax', balance: 50000 },
+      ],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // Open add account
+    const addBtn = r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    // Default name is Alex's 401(k). Enter a balance
+    const balInput = r.container.querySelector('#int_acc_balance') as HTMLInputElement;
+    await fireEvent.input(balInput, { target: { value: '20000' } });
+    flushSync();
+
+    // Click Next
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    expect(plan.accounts?.length).toBe(2);
+    expect(plan.accounts?.[0]?.name).toBe("Alex's 401(k)");
+    expect(plan.accounts?.[1]?.name).toBe("Alex's 401(k) (2)");
+    cleanup();
+  });
+
+  it('auto-saves milestone expenses in Stage 3 on Next', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('spending_milestones');
+    const plan: Plan = {
+      is_married: false,
+      user_retirement_age: 65,
+      additional_spending: [],
+    };
+
+    const r = render(Stage3Spending, { wizard, plan });
+
+    // Click a milestone button
+    const carBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Vehicle Replacement'));
+    expect(carBtn).toBeDefined();
+    await fireEvent.click(carBtn!);
+    flushSync();
+
+    // Click Next without clicking Save Expense
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    expect(plan.additional_spending?.length).toBe(1);
+    expect(plan.additional_spending![0].name).toBe('Vehicle Replacement');
+    expect(plan.additional_spending![0].amount).toBe(35000);
+    cleanup();
+  });
+
+  it('auto-saves income streams in Stage 4 on Next', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('income_streams');
+    const plan: Plan = {
+      is_married: false,
+      income_sources: [],
+    };
+
+    const r = render(Stage4Income, { wizard, plan });
+
+    // Click pension button
+    const pensionBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Pension'));
+    expect(pensionBtn).toBeDefined();
+    await fireEvent.click(pensionBtn!);
+    flushSync();
+
+    // Click Next without clicking Save Income Stream
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    expect(plan.income_sources?.length).toBe(1);
+    expect(plan.income_sources![0].name).toBe('Company Pension');
+    expect(plan.income_sources![0].amount).toBe(24000);
+    cleanup();
+  });
+
+  it('auto-saves emergency fund in Stage 5 on Next only when balance is entered', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_emergency');
+    const plan: Plan = {
+      is_married: false,
+    };
+
+    const r = render(Stage5NetWorth, { wizard, plan });
+
+    // Enter balance
+    const balInput = r.container.querySelector('#int_em_bal') as HTMLInputElement;
+    expect(balInput).not.toBeNull();
+    await fireEvent.input(balInput, { target: { value: '25000' } });
+    flushSync();
+
+    // Click Next without clicking Save Emergency Fund
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    const bs = plan.balance_sheet as Record<string, any>;
+    expect(bs).toBeDefined();
+    expect(bs.categories?.emergency?.accounts?.length).toBe(1);
+    expect(bs.categories?.emergency?.accounts[0].name).toBe('High-Yield Savings');
+    cleanup();
+  });
+
+  it('discards in-progress draft when Skip for now is clicked', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      accounts: [],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // Open add account
+    const addBtn = r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    // Fill in balance
+    const balInput = r.container.querySelector('#int_acc_balance') as HTMLInputElement;
+    await fireEvent.input(balInput, { target: { value: '10000' } });
+    flushSync();
+
+    // Click "Skip for now"
+    const skipBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Skip for now'));
+    expect(skipBtn).toBeDefined();
+    await fireEvent.click(skipBtn!);
+    flushSync();
+
+    // Draft should be discarded and question marked skipped
+    expect(plan.accounts?.length).toBe(0);
+    expect(wizard.isSkipped('accounts_workplace')).toBe(true);
+    cleanup();
   });
 });
 

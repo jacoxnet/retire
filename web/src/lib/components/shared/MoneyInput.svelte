@@ -10,9 +10,10 @@
     dollarSign?: boolean;
     class?: string;
     invalid?: boolean;
+    placeholder?: string;
     onblur?: () => void;
   }
-  let { value = $bindable(), id, dollarSign = false, class: cls = 'form-control', invalid = false, onblur }: Props = $props();
+  let { value = $bindable(), id, dollarSign = false, class: cls = 'form-control', invalid = false, placeholder, onblur }: Props = $props();
 
   let focused = $state(false);
   let text = $state('');
@@ -20,17 +21,18 @@
   // Re-format from the value unless the user is typing in the field.
   $effect.pre(() => {
     const v = value;
-    if (!focused) text = formatMoney(v ?? 0, dollarSign);
+    if (!focused) text = (v === null || v === undefined) && placeholder ? '' : formatMoney(v ?? 0, dollarSign);
   });
 
   function oninput(e: Event) {
     text = (e.currentTarget as HTMLInputElement).value;
-    value = parseNumberText(text) ?? 0;
+    const parsed = parseNumberText(text);
+    value = parsed ?? (placeholder ? undefined : 0);
   }
 
   function handleBlur() {
     focused = false;
-    text = formatMoney(value ?? 0, dollarSign);
+    text = (value === null || value === undefined) && placeholder ? '' : formatMoney(value ?? 0, dollarSign);
     onblur?.();
   }
 </script>
@@ -41,6 +43,7 @@
   class={[cls, invalid && 'is-invalid']}
   {id}
   value={text}
+  {placeholder}
   onfocus={() => (focused = true)}
   {oninput}
   onblur={handleBlur}

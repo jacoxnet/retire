@@ -38,6 +38,9 @@
     acc.balance = 0;
     acc.contrib_amount = 0;
     acc.contrib_freq = 'annual';
+    acc.contrib_end_age_type = 'retirement';
+    acc.contrib_end_age_specified = people.userRetAge;
+    acc.contrib_adjust_inflation = true;
     acc.return_mean = 6.0;
     acc.return_std = 9.5;
     if (defaultType === 'inherited_pretax') {
@@ -50,11 +53,20 @@
     addingAccount = true;
   }
 
+  function ensureUniqueAccountName(baseName: string, accounts: Account[] | undefined): string {
+    const existing = new Set((accounts ?? []).map((a) => a.name?.toLowerCase().trim()));
+    let trimmed = baseName.trim() || 'Retirement Account';
+    if (!existing.has(trimmed.toLowerCase())) return trimmed;
+    let counter = 2;
+    while (existing.has(`${trimmed.toLowerCase()} (${counter})`)) {
+      counter++;
+    }
+    return `${trimmed} (${counter})`;
+  }
+
   function saveDraft() {
     if (draftAccount) {
-      if (!draftAccount.name?.trim()) {
-        draftAccount.name = 'Retirement Account';
-      }
+      draftAccount.name = ensureUniqueAccountName(draftAccount.name || 'Retirement Account', plan.accounts);
       (plan.accounts ??= []).push(draftAccount);
     }
     addingAccount = false;
@@ -68,12 +80,34 @@
     }
   }
 
+  // Safety net: if the user jumps questions via navigation or skipped drawer, clean up draft state
+  let lastQuestionId = $state<string | null>(null);
+  $effect(() => {
+    const current = wizard.currentQuestionId;
+    if (lastQuestionId !== null && current !== lastQuestionId) {
+      addingAccount = false;
+      draftAccount = null;
+    }
+    lastQuestionId = current;
+  });
+
   function onNext() {
+    if (addingAccount && draftAccount) {
+      const hasData = (Number(draftAccount.balance) || 0) > 0 || (Number(draftAccount.contrib_amount) || 0) > 0;
+      if (hasData) {
+        draftAccount.name = ensureUniqueAccountName(draftAccount.name || 'Retirement Account', plan.accounts);
+        (plan.accounts ??= []).push(draftAccount);
+      }
+      addingAccount = false;
+      draftAccount = null;
+    }
     wizard.clearSkipped(wizard.currentQuestionId);
     wizard.next(plan);
   }
 
   function onSkip() {
+    addingAccount = false;
+    draftAccount = null;
     wizard.applyDefaultAndSkip(wizard.currentQuestionId, plan);
   }
 </script>
@@ -81,9 +115,13 @@
 <div class="stage-container py-2">
   {#if wizard.currentQuestionId === 'accounts_workplace'}
     <div class="question-card">
-      <h4 class="fw-bold text-primary mb-2">Do you or your spouse have retirement savings through work (like a 401(k), 403(b), or TSP)?</h4>
+      <h4 class="fw-bold text-primary mb-2">
+        {married ? 'Do you or your spouse have retirement savings through work (like a 401(k), 403(b), or TSP)?' : 'Do you have retirement savings through work (like a 401(k), 403(b), or TSP)?'}
+      </h4>
       <p class="text-secondary mb-3">
-        Workplace plans allow you to contribute directly from your paycheck. You can add each plan you or your spouse currently have.
+        {married
+          ? 'Workplace plans allow you to contribute directly from your paycheck. You can add each plan you or your spouse currently have.'
+          : 'Workplace plans allow you to contribute directly from your paycheck. You can add each plan you currently have.'}
       </p>
 
       <!-- Account List -->
@@ -94,7 +132,10 @@
               <div>
                 <div class="fw-bold text-dark">{acc.name}</div>
                 <div class="small text-muted">
-                  Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; Type: {acc.type === 'roth' ? 'Roth' : 'Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'roth' ? 'Roth' : 'Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if (Number(acc.contrib_amount) || 0) > 0}
+                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                  {/if}
                 </div>
               </div>
               <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
@@ -117,7 +158,9 @@
     </div>
   {:else if wizard.currentQuestionId === 'accounts_ira'}
     <div class="question-card">
-      <h4 class="fw-bold text-primary mb-2">Do you or your spouse have an Individual Retirement Account (Traditional IRA or Roth IRA)?</h4>
+      <h4 class="fw-bold text-primary mb-2">
+        {married ? 'Do you or your spouse have an Individual Retirement Account (Traditional IRA or Roth IRA)?' : 'Do you have an Individual Retirement Account (Traditional IRA or Roth IRA)?'}
+      </h4>
       <p class="text-secondary mb-3">
         IRAs are individual accounts you open yourself at a brokerage like Fidelity, Schwab, or Vanguard.
       </p>
@@ -129,7 +172,10 @@
               <div>
                 <div class="fw-bold text-dark">{acc.name}</div>
                 <div class="small text-muted">
-                  Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; Type: {acc.type === 'roth' ? 'Roth IRA' : 'Traditional IRA'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'roth' ? 'Roth IRA' : 'Traditional IRA'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if (Number(acc.contrib_amount) || 0) > 0}
+                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                  {/if}
                 </div>
               </div>
               <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
@@ -165,7 +211,10 @@
               <div>
                 <div class="fw-bold text-dark">{acc.name}</div>
                 <div class="small text-muted">
-                  Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if (Number(acc.contrib_amount) || 0) > 0}
+                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                  {/if}
                 </div>
               </div>
               <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
@@ -201,7 +250,10 @@
               <div>
                 <div class="fw-bold text-dark">{acc.name}</div>
                 <div class="small text-muted">
-                  Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if (Number(acc.contrib_amount) || 0) > 0}
+                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                  {/if}
                 </div>
               </div>
               <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
@@ -224,7 +276,9 @@
     </div>
   {:else if wizard.currentQuestionId === 'accounts_inherited'}
     <div class="question-card">
-      <h4 class="fw-bold text-primary mb-2">Have you or your spouse inherited an IRA or 401(k) from someone who passed away?</h4>
+      <h4 class="fw-bold text-primary mb-2">
+        {married ? 'Have you or your spouse inherited an IRA or 401(k) from someone who passed away?' : 'Have you inherited an IRA or 401(k) from someone who passed away?'}
+      </h4>
       <div class="alert alert-light border small text-secondary mb-3 p-3 rounded-3" style="max-width: 650px;">
         <i class="fa-solid fa-scale-balanced text-primary me-2"></i>
         Under IRS rules, you cannot make new contributions to an inherited account, and withdrawals are subject to specific deadlines (most commonly a 10-year rule). If you have one, we will guide you through setting up those distribution rules.
@@ -237,7 +291,7 @@
               <div>
                 <div class="fw-bold text-dark">{acc.name}</div>
                 <div class="small text-muted">
-                  Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; Type: {acc.type === 'inherited_roth' ? 'Inherited Roth' : 'Inherited Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
+                  {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'inherited_roth' ? 'Inherited Roth' : 'Inherited Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
                 </div>
               </div>
               <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
@@ -318,6 +372,50 @@
             </select>
           </div>
         </div>
+
+        <!-- Contribution End Age and Inflation Adjustment -->
+        {#if (Number(draftAccount.contrib_amount) || 0) > 0}
+          <div class="row g-3 mb-3 align-items-end">
+            <div class="col-sm-7">
+              <label for="int_acc_endtype" class="form-label small fw-semibold">When will contributions stop?</label>
+              <select class="form-select form-select-sm" id="int_acc_endtype" bind:value={draftAccount.contrib_end_age_type}>
+                {#if married}
+                  <option value="retirement">When {draftAccount.owner === 'spouse' ? people.spouseName : people.userName} retires (Age {draftAccount.owner === 'spouse' ? people.spouseRetAge : people.userRetAge}) - Recommended</option>
+                  <option value="user_specified">At a specific age...</option>
+                {:else}
+                  <option value="retirement">At my retirement (Age {people.userRetAge}) - Recommended</option>
+                  <option value="user_specified">At a specific age...</option>
+                {/if}
+              </select>
+            </div>
+            {#if draftAccount.contrib_end_age_type === 'user_specified' || draftAccount.contrib_end_age_type === 'spouse_specified'}
+              <div class="col-sm-5">
+                <label for="int_acc_endspec" class="form-label small fw-semibold">Contribution Stop Age</label>
+                <input
+                  type="number"
+                  class="form-control form-control-sm"
+                  id="int_acc_endspec"
+                  min="18"
+                  max="120"
+                  placeholder="e.g. 65"
+                  bind:value={draftAccount.contrib_end_age_specified}
+                />
+              </div>
+            {/if}
+          </div>
+
+          <div class="form-check form-switch ps-5 mb-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="int_acc_adj_inf"
+              bind:checked={draftAccount.contrib_adjust_inflation}
+            />
+            <label class="form-check-label small fw-semibold" for="int_acc_adj_inf">
+              Adjust contributions annually for inflation (Recommended)
+            </label>
+          </div>
+        {/if}
       {:else if draftAccount.type === 'inherited_pretax' || draftAccount.type === 'inherited_roth'}
         <div class="row g-3 mb-3">
           <div class="col-sm-6">
@@ -346,7 +444,9 @@
             <select class="form-select form-select-sm" id="int_inh_rule" bind:value={draftAccount.inherited_rule}>
               <option value="ten_year">10-Year Rule (Standard post-2019)</option>
               <option value="stretch">Lifetime Stretch (Pre-2020 / EDB)</option>
-              <option value="spouse">Surviving Spouse Beneficiary</option>
+              {#if married}
+                <option value="spouse">Surviving Spouse Beneficiary</option>
+              {/if}
               <option value="five_year">5-Year Rule</option>
             </select>
           </div>
@@ -379,6 +479,50 @@
             </div>
           </div>
         </div>
+
+        <!-- Contribution End Age and Inflation for Taxable / HSA -->
+        {#if (Number(draftAccount.contrib_amount) || 0) > 0}
+          <div class="row g-3 mb-3 align-items-end">
+            <div class="col-sm-7">
+              <label for="int_gen_endtype" class="form-label small fw-semibold">When will contributions stop?</label>
+              <select class="form-select form-select-sm" id="int_gen_endtype" bind:value={draftAccount.contrib_end_age_type}>
+                {#if married}
+                  <option value="retirement">When {draftAccount.owner === 'spouse' ? people.spouseName : people.userName} retires (Age {draftAccount.owner === 'spouse' ? people.spouseRetAge : people.userRetAge}) - Recommended</option>
+                  <option value="user_specified">At a specific age...</option>
+                {:else}
+                  <option value="retirement">At my retirement (Age {people.userRetAge}) - Recommended</option>
+                  <option value="user_specified">At a specific age...</option>
+                {/if}
+              </select>
+            </div>
+            {#if draftAccount.contrib_end_age_type === 'user_specified' || draftAccount.contrib_end_age_type === 'spouse_specified'}
+              <div class="col-sm-5">
+                <label for="int_gen_endspec" class="form-label small fw-semibold">Contribution Stop Age</label>
+                <input
+                  type="number"
+                  class="form-control form-control-sm"
+                  id="int_gen_endspec"
+                  min="18"
+                  max="120"
+                  placeholder="e.g. 65"
+                  bind:value={draftAccount.contrib_end_age_specified}
+                />
+              </div>
+            {/if}
+          </div>
+
+          <div class="form-check form-switch ps-5 mb-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="int_gen_adj_inf"
+              bind:checked={draftAccount.contrib_adjust_inflation}
+            />
+            <label class="form-check-label small fw-semibold" for="int_gen_adj_inf">
+              Adjust contributions annually for inflation (Recommended)
+            </label>
+          </div>
+        {/if}
       {/if}
 
       <!-- Investment Style -->

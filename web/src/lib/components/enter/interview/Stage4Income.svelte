@@ -40,7 +40,11 @@
   function saveStream() {
     if (draftStream) {
       if (!draftStream.name?.trim()) draftStream.name = 'Income Stream';
-      if (streamOwner === 'spouse') {
+      if (!married) {
+        draftStream.has_survivor_benefit = false;
+        draftStream.start_age_type = 'retirement';
+        draftStream.end_age_type = 'death';
+      } else if (streamOwner === 'spouse') {
         draftStream.start_age_type = draftStream.start_age_type === 'retirement' ? 'spouse_retirement' : draftStream.start_age_type;
         draftStream.end_age_type = 'spouse_death';
       } else {
@@ -57,12 +61,34 @@
     plan.income_sources?.splice(index, 1);
   }
 
+  // Safety net: clean up draft state on question change
+  let lastQuestionId = $state<string | null>(null);
+  $effect(() => {
+    const current = wizard.currentQuestionId;
+    if (lastQuestionId !== null && current !== lastQuestionId) {
+      lastQuestionId = current;
+      addingStream = false;
+      draftStream = null;
+    }
+    lastQuestionId = current;
+  });
+
   function onNext() {
+    if (addingStream && draftStream) {
+      if ((Number(draftStream.amount) || 0) > 0) {
+        saveStream();
+      } else {
+        addingStream = false;
+        draftStream = null;
+      }
+    }
     wizard.clearSkipped(wizard.currentQuestionId);
     wizard.next(plan);
   }
 
   function onSkip() {
+    addingStream = false;
+    draftStream = null;
     wizard.applyDefaultAndSkip(wizard.currentQuestionId, plan);
   }
 </script>
@@ -243,7 +269,7 @@
               <div>
                 <div class="fw-bold text-dark">{stream.name}</div>
                 <div class="small text-muted">
-                  Amount: {formatMoney(Number(stream.amount) || 0)} ({stream.frequency ?? 'annual'}) &bull; Starts: {stream.start_age_type} &bull; Survivor: {stream.has_survivor_benefit ? `${stream.survivor_benefit_pct}%` : 'None'}
+                  Amount: {formatMoney(Number(stream.amount) || 0)} ({stream.frequency ?? 'annual'}) &bull; Starts: {stream.start_age_type}{#if married} &bull; Survivor: {stream.has_survivor_benefit ? `${stream.survivor_benefit_pct}%` : 'None'}{/if}
                 </div>
               </div>
               <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeStream(i)} aria-label="Delete">
@@ -279,7 +305,7 @@
           </div>
 
           <div class="row g-3 mb-3">
-            <div class="col-sm-7">
+            <div class={married ? 'col-sm-7' : 'col-12'}>
               <label for="int_inc_name" class="form-label small fw-semibold">Income Name</label>
               <input type="text" class="form-control form-control-sm" id="int_inc_name" bind:value={draftStream.name} />
             </div>

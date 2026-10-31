@@ -17,6 +17,7 @@
 
   const skippedItems = $derived(
     wizard.skippedQuestions
+      .filter((id) => wizard.activeQuestionList(plan).includes(id))
       .map((id) => ALL_QUESTIONS.find((q) => q.id === id))
       .filter((q): q is typeof ALL_QUESTIONS[number] => q !== undefined)
   );

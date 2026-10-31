@@ -10,7 +10,9 @@
   let { wizard, plan, onOpenSkipped }: Props = $props();
 
   const currentStage = $derived(wizard.currentStage(plan));
-  const skippedCount = $derived(wizard.skippedQuestions.length);
+  const skippedCount = $derived(
+    wizard.skippedQuestions.filter((id) => wizard.activeQuestionList(plan).includes(id)).length
+  );
 </script>
 
 <div class="interview-header mb-4 border-bottom pb-3">

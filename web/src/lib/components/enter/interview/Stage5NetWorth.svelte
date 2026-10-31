@@ -24,30 +24,36 @@
 
   // Local state for stage 5 items
   let emergencyName = $state('High-Yield Savings');
-  let emergencyBalance = $state(25000);
+  let emergencyBalance = $state<number | undefined>(undefined);
   let emergencyAdded = $state(false);
 
-  let checkingBalance = $state(5000);
+  let checkingBalance = $state<number | undefined>(undefined);
   let checkingAdded = $state(false);
 
   let propertyName = $state('Primary Residence');
-  let propertyValue = $state(450000);
-  let hasMortgage = $state(true);
-  let mortgageBalance = $state(180000);
+  let propertyValue = $state<number | undefined>(undefined);
+  let hasMortgage = $state(false);
+  let mortgageBalance = $state<number | undefined>(undefined);
   let propertyAdded = $state(false);
 
   let debtName = $state('Auto Loan');
-  let debtBalance = $state(12000);
+  let debtBalance = $state<number | undefined>(undefined);
   let debtAdded = $state(false);
 
   let goalName = $state('New Car Fund');
-  let goalTarget = $state(30000);
-  let goalCurrent = $state(10000);
+  let goalTarget = $state<number | undefined>(undefined);
+  let goalCurrent = $state<number | undefined>(undefined);
   let goalAdded = $state(false);
 
   function saveEmergency() {
     const bs = ensureBs();
-    const acc = addCategoryAccount(bs, 'emergency');
+    let acc: any;
+    const accounts = bs.categories?.emergency?.accounts;
+    if (accounts && accounts.length > 0) {
+      acc = accounts[0];
+    } else {
+      acc = addCategoryAccount(bs, 'emergency');
+    }
     acc.name = emergencyName || 'Emergency Fund';
     acc.values = { [today]: Number(emergencyBalance) || 0 };
     emergencyAdded = true;
@@ -55,7 +61,13 @@
 
   function saveChecking() {
     const bs = ensureBs();
-    const acc = addCategoryAccount(bs, 'daily');
+    let acc: any;
+    const accounts = bs.categories?.daily?.accounts;
+    if (accounts && accounts.length > 0) {
+      acc = accounts[0];
+    } else {
+      acc = addCategoryAccount(bs, 'daily');
+    }
     acc.name = 'Daily Checking';
     acc.values = { [today]: Number(checkingBalance) || 0 };
     checkingAdded = true;
@@ -63,28 +75,37 @@
 
   function saveProperty() {
     const bs = ensureBs();
-    addProperty(bs, propertyName || 'Primary Residence');
     const props = bs.categories?.real_estate?.properties;
+    let p: any;
     if (props && props.length > 0) {
-      const p = props[props.length - 1];
-      p.market_values = { [today]: Number(propertyValue) || 0 };
-      if (hasMortgage && Number(mortgageBalance) > 0) {
+      p = props[0];
+    } else {
+      addProperty(bs, propertyName || 'Primary Residence');
+      p = bs.categories?.real_estate?.properties?.[0];
+    }
+    p.name = propertyName || 'Primary Residence';
+    p.market_values = { [today]: Number(propertyValue) || 0 };
+    if (hasMortgage && Number(mortgageBalance) > 0) {
+      if (!p.mortgages || p.mortgages.length === 0) {
         addMortgage(bs, p);
-        if (p.mortgages && p.mortgages.length > 0) {
-          p.mortgages[0].balances = { [today]: Number(mortgageBalance) || 0 };
-        }
       }
+      p.mortgages[0].balances = { [today]: Number(mortgageBalance) || 0 };
     }
     propertyAdded = true;
   }
 
   function saveDebt() {
     const bs = ensureBs();
-    addDebt(bs, debtName || 'Loan');
     const debts = bs.categories?.debts;
+    let d: any;
     if (debts && debts.length > 0) {
-      debts[debts.length - 1].values = { [today]: Number(debtBalance) || 0 };
+      d = debts[0];
+    } else {
+      addDebt(bs, debtName || 'Loan');
+      d = bs.categories?.debts?.[0];
     }
+    d.name = debtName || 'Loan';
+    d.values = { [today]: Number(debtBalance) || 0 };
     debtAdded = true;
   }
 
@@ -102,6 +123,17 @@
   }
 
   function onNext() {
+    if (wizard.currentQuestionId === 'nw_emergency' && !emergencyAdded && (Number(emergencyBalance) || 0) > 0) {
+      saveEmergency();
+    } else if (wizard.currentQuestionId === 'nw_goals' && !goalAdded && (Number(goalTarget) || 0) > 0) {
+      saveGoal();
+    } else if (wizard.currentQuestionId === 'nw_cash' && !checkingAdded && (Number(checkingBalance) || 0) > 0) {
+      saveChecking();
+    } else if (wizard.currentQuestionId === 'nw_real_estate' && !propertyAdded && (Number(propertyValue) || 0) > 0) {
+      saveProperty();
+    } else if (wizard.currentQuestionId === 'nw_debts' && !debtAdded && (Number(debtBalance) || 0) > 0) {
+      saveDebt();
+    }
     wizard.clearSkipped(wizard.currentQuestionId);
     wizard.next(plan);
   }
@@ -174,7 +206,7 @@
               <label for="int_em_bal" class="form-label small fw-semibold">Current Balance ($)</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">$</span>
-                <MoneyInput id="int_em_bal" class="form-control" bind:value={emergencyBalance} />
+                <MoneyInput id="int_em_bal" class="form-control" bind:value={emergencyBalance} placeholder="e.g. 25,000" />
               </div>
             </div>
           </div>
@@ -212,7 +244,7 @@
               <label for="int_goal_target" class="form-label small fw-semibold">Target Goal Amount</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">$</span>
-                <MoneyInput id="int_goal_target" class="form-control" bind:value={goalTarget} />
+                <MoneyInput id="int_goal_target" class="form-control" bind:value={goalTarget} placeholder="e.g. 30,000" />
               </div>
             </div>
           </div>
@@ -221,7 +253,7 @@
               <label for="int_goal_cur" class="form-label small fw-semibold">Current Balance Saved Today</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">$</span>
-                <MoneyInput id="int_goal_cur" class="form-control" bind:value={goalCurrent} />
+                <MoneyInput id="int_goal_cur" class="form-control" bind:value={goalCurrent} placeholder="e.g. 10,000" />
               </div>
             </div>
           </div>
@@ -248,7 +280,7 @@
         <div class="d-flex align-items-center gap-3 mb-4" style="max-width: 450px;">
           <div class="input-group input-group-lg">
             <span class="input-group-text">$</span>
-            <MoneyInput id="int_checking_amt" class="form-control fw-bold" bind:value={checkingBalance} />
+            <MoneyInput id="int_checking_amt" class="form-control fw-bold" bind:value={checkingBalance} placeholder="e.g. 5,000" />
           </div>
           <button type="button" class="btn btn-primary" onclick={saveChecking}>Save</button>
         </div>
@@ -278,7 +310,7 @@
               <label for="int_prop_val" class="form-label small fw-semibold">Estimated Market Value</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">$</span>
-                <MoneyInput id="int_prop_val" class="form-control" bind:value={propertyValue} />
+                <MoneyInput id="int_prop_val" class="form-control" bind:value={propertyValue} placeholder="e.g. 450,000" />
               </div>
             </div>
           </div>
@@ -295,7 +327,7 @@
               <label for="int_mort_bal" class="form-label small fw-semibold">Mortgage Balance Owed</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">$</span>
-                <MoneyInput id="int_mort_bal" class="form-control" bind:value={mortgageBalance} />
+                <MoneyInput id="int_mort_bal" class="form-control" bind:value={mortgageBalance} placeholder="e.g. 180,000" />
               </div>
             </div>
           {/if}
@@ -330,7 +362,7 @@
               <label for="int_debt_bal" class="form-label small fw-semibold">Balance Owed</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">$</span>
-                <MoneyInput id="int_debt_bal" class="form-control" bind:value={debtBalance} />
+                <MoneyInput id="int_debt_bal" class="form-control" bind:value={debtBalance} placeholder="e.g. 12,000" />
               </div>
             </div>
           </div>

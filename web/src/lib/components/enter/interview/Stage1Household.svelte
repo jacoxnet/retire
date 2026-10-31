@@ -234,14 +234,20 @@
     </div>
   {:else if wizard.currentQuestionId === 'life_insurance'}
     <div class="question-card">
-      <h4 class="fw-bold text-primary mb-2">Do you or your spouse have life insurance policies that would pay out upon death?</h4>
+      <h4 class="fw-bold text-primary mb-2">
+        {married ? 'Do you or your spouse have life insurance policies that would pay out upon death?' : 'Do you have a life insurance policy that would pay out upon death?'}
+      </h4>
       <div class="alert alert-light border small text-secondary mb-4 p-3 rounded-3" style="max-width: 650px;">
         <i class="fa-solid fa-shield-halved text-primary me-2"></i>
-        For married couples, life insurance proceeds paid upon the first death are treated as having been deposited into your taxable brokerage assets to help fund ongoing living costs for the surviving spouse.
+        {#if married}
+          For married couples, life insurance proceeds paid upon the first death are treated as having been deposited into your taxable brokerage assets to help fund ongoing living costs for the surviving spouse.
+        {:else}
+          Life insurance proceeds will flow to your estate or designated heirs upon your death.
+        {/if}
       </div>
 
       <div class="card p-3 mb-3 bg-light border rounded-3" style="max-width: 650px;">
-        <h6 class="fw-bold text-primary mb-2">Your Life Insurance Policy</h6>
+        <h6 class="fw-bold text-primary mb-2">{married ? 'Your Life Insurance Policy' : 'Life Insurance Policy'}</h6>
         <div class="row g-2 align-items-center">
           <div class="col-md-6">
             <label for="int_user_life_amt" class="form-label small fw-semibold">Death Benefit Amount</label>

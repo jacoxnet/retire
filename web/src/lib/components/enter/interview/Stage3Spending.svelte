@@ -43,12 +43,33 @@
     plan.additional_spending?.splice(index, 1);
   }
 
+  // Safety net: clean up draft state on question change
+  let lastQuestionId = $state<string | null>(null);
+  $effect(() => {
+    const current = wizard.currentQuestionId;
+    if (lastQuestionId !== null && current !== lastQuestionId) {
+      addingMilestone = false;
+      draftItem = null;
+    }
+    lastQuestionId = current;
+  });
+
   function onNext() {
+    if (addingMilestone && draftItem) {
+      if ((Number(draftItem.amount) || 0) > 0) {
+        if (!draftItem.name?.trim()) draftItem.name = 'Milestone Expense';
+        (plan.additional_spending ??= []).push(draftItem);
+      }
+      addingMilestone = false;
+      draftItem = null;
+    }
     wizard.clearSkipped(wizard.currentQuestionId);
     wizard.next(plan);
   }
 
   function onSkip() {
+    addingMilestone = false;
+    draftItem = null;
     wizard.applyDefaultAndSkip(wizard.currentQuestionId, plan);
   }
 </script>
