@@ -29,9 +29,15 @@
   );
 
   let addingAccount = $state(false);
+  let editingAccountIndex = $state<number | null>(null);
   let draftAccount: Account | null = $state(null);
 
+  const editingAccount = $derived(
+    editingAccountIndex !== null ? plan.accounts?.[editingAccountIndex] ?? null : null
+  );
+
   function startAdding(defaultType: 'pretax' | 'roth' | 'taxable' | 'hsa' | 'inherited_pretax', defaultName: string) {
+    editingAccountIndex = null;
     const acc = newAccount(plan);
     acc.type = defaultType;
     acc.name = defaultName;
@@ -53,8 +59,26 @@
     addingAccount = true;
   }
 
-  function ensureUniqueAccountName(baseName: string, accounts: Account[] | undefined): string {
-    const existing = new Set((accounts ?? []).map((a) => a.name?.toLowerCase().trim()));
+  function startEditing(acc: Account) {
+    const idx = (plan.accounts ?? []).indexOf(acc);
+    if (idx < 0) return;
+    addingAccount = false;
+    editingAccountIndex = idx;
+    draftAccount = { ...acc };
+  }
+
+  function cancelDraft() {
+    addingAccount = false;
+    editingAccountIndex = null;
+    draftAccount = null;
+  }
+
+  function ensureUniqueAccountName(baseName: string, accounts: Account[] | undefined, excludeIndex?: number | null): string {
+    const existing = new Set(
+      (accounts ?? [])
+        .filter((_, i) => excludeIndex === undefined || excludeIndex === null || i !== excludeIndex)
+        .map((a) => a.name?.toLowerCase().trim())
+    );
     let trimmed = baseName.trim() || 'Retirement Account';
     if (!existing.has(trimmed.toLowerCase())) return trimmed;
     let counter = 2;
@@ -65,17 +89,26 @@
   }
 
   function saveDraft() {
-    if (draftAccount) {
+    if (editingAccountIndex !== null && draftAccount) {
+      draftAccount.name = ensureUniqueAccountName(draftAccount.name || 'Retirement Account', plan.accounts, editingAccountIndex);
+      Object.assign(plan.accounts![editingAccountIndex], draftAccount);
+    } else if (draftAccount) {
       draftAccount.name = ensureUniqueAccountName(draftAccount.name || 'Retirement Account', plan.accounts);
       (plan.accounts ??= []).push(draftAccount);
     }
     addingAccount = false;
+    editingAccountIndex = null;
     draftAccount = null;
   }
 
   function removeAccount(acc: Account) {
     const idx = (plan.accounts ?? []).indexOf(acc);
     if (idx >= 0) {
+      if (editingAccountIndex === idx) {
+        cancelDraft();
+      } else if (editingAccountIndex !== null && editingAccountIndex > idx) {
+        editingAccountIndex--;
+      }
       plan.accounts?.splice(idx, 1);
     }
   }
@@ -85,14 +118,15 @@
   $effect(() => {
     const current = wizard.currentQuestionId;
     if (lastQuestionId !== null && current !== lastQuestionId) {
-      addingAccount = false;
-      draftAccount = null;
+      cancelDraft();
     }
     lastQuestionId = current;
   });
 
   function onNext() {
-    if (addingAccount && draftAccount) {
+    if (editingAccountIndex !== null && draftAccount) {
+      saveDraft();
+    } else if (addingAccount && draftAccount) {
       const hasData = (Number(draftAccount.balance) || 0) > 0 || (Number(draftAccount.contrib_amount) || 0) > 0;
       if (hasData) {
         draftAccount.name = ensureUniqueAccountName(draftAccount.name || 'Retirement Account', plan.accounts);
@@ -106,8 +140,7 @@
   }
 
   function onSkip() {
-    addingAccount = false;
-    draftAccount = null;
+    cancelDraft();
     wizard.applyDefaultAndSkip(wizard.currentQuestionId, plan);
   }
 </script>
@@ -128,9 +161,14 @@
       {#if workplaceAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each workplaceAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{acc.name}</div>
+                <div class="fw-bold text-dark">
+                  {acc.name}
+                  {#if editingAccount === acc}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'roth' ? 'Roth' : 'Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
@@ -138,15 +176,20 @@
                   {/if}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditing(acc)} aria-label="Edit {acc.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete {acc.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingAccount}
+      {#if !addingAccount && !editingAccount}
         <button
           type="button"
           class="btn btn-outline-primary btn-sm px-3 mb-4"
@@ -168,9 +211,14 @@
       {#if iraAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each iraAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{acc.name}</div>
+                <div class="fw-bold text-dark">
+                  {acc.name}
+                  {#if editingAccount === acc}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'roth' ? 'Roth IRA' : 'Traditional IRA'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
@@ -178,15 +226,20 @@
                   {/if}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditing(acc)} aria-label="Edit {acc.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete {acc.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingAccount}
+      {#if !addingAccount && !editingAccount}
         <button
           type="button"
           class="btn btn-outline-primary btn-sm px-3 mb-4"
@@ -207,9 +260,14 @@
       {#if taxableAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each taxableAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{acc.name}</div>
+                <div class="fw-bold text-dark">
+                  {acc.name}
+                  {#if editingAccount === acc}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
@@ -217,15 +275,20 @@
                   {/if}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditing(acc)} aria-label="Edit {acc.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete {acc.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingAccount}
+      {#if !addingAccount && !editingAccount}
         <button
           type="button"
           class="btn btn-outline-primary btn-sm px-3 mb-4"
@@ -246,9 +309,14 @@
       {#if hsaAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each hsaAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{acc.name}</div>
+                <div class="fw-bold text-dark">
+                  {acc.name}
+                  {#if editingAccount === acc}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
@@ -256,15 +324,20 @@
                   {/if}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditing(acc)} aria-label="Edit {acc.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete {acc.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingAccount}
+      {#if !addingAccount && !editingAccount}
         <button
           type="button"
           class="btn btn-outline-primary btn-sm px-3 mb-4"
@@ -287,22 +360,32 @@
       {#if inheritedAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each inheritedAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{acc.name}</div>
+                <div class="fw-bold text-dark">
+                  {acc.name}
+                  {#if editingAccount === acc}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'inherited_roth' ? 'Inherited Roth' : 'Inherited Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditing(acc)} aria-label="Edit {acc.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeAccount(acc)} aria-label="Delete {acc.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingAccount}
+      {#if !addingAccount && !editingAccount}
         <button
           type="button"
           class="btn btn-outline-primary btn-sm px-3 mb-4"
@@ -315,11 +398,11 @@
   {/if}
 
   <!-- Add / Edit Account Drawer or Sub-form -->
-  {#if addingAccount && draftAccount}
+  {#if (addingAccount || editingAccount) && draftAccount}
     <div class="card p-4 border-primary shadow-sm bg-light mb-4 rounded-3" style="max-width: 650px;">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-bold text-primary mb-0">Configure Account</h5>
-        <button type="button" class="btn-close" aria-label="Cancel" onclick={() => (addingAccount = false)}></button>
+        <h5 class="fw-bold text-primary mb-0">{editingAccount ? `Edit Account: ${draftAccount.name || 'Retirement Account'}` : 'Configure Account'}</h5>
+        <button type="button" class="btn-close" aria-label="Cancel" onclick={cancelDraft}></button>
       </div>
 
       <div class="row g-3 mb-3">
@@ -537,8 +620,8 @@
       </div>
 
       <div class="d-flex justify-content-end gap-2">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => (addingAccount = false)}>Cancel</button>
-        <button type="button" class="btn btn-sm btn-primary" onclick={saveDraft}>Save Account</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick={cancelDraft}>Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick={saveDraft}>{editingAccount ? 'Save Changes' : 'Save Account'}</button>
       </div>
     </div>
   {/if}

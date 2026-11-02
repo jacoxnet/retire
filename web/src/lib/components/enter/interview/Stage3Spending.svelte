@@ -16,9 +16,11 @@
   const married = $derived(people.isMarried);
 
   let addingMilestone = $state(false);
+  let editingMilestoneIndex: number | null = $state(null);
   let draftItem: AdditionalSpendingItem | null = $state(null);
 
   function startAddingMilestone(name: string, defaultAmount: number, interval: number) {
+    editingMilestoneIndex = null;
     const item = newSpendingItem();
     item.name = name;
     item.amount = defaultAmount;
@@ -30,16 +32,40 @@
     addingMilestone = true;
   }
 
+  function startEditingMilestone(index: number) {
+    const item = plan.additional_spending?.[index];
+    if (!item) return;
+    addingMilestone = false;
+    editingMilestoneIndex = index;
+    draftItem = { ...item };
+  }
+
+  function cancelMilestone() {
+    addingMilestone = false;
+    editingMilestoneIndex = null;
+    draftItem = null;
+  }
+
   function saveMilestone() {
     if (draftItem) {
       if (!draftItem.name?.trim()) draftItem.name = 'Milestone Expense';
-      (plan.additional_spending ??= []).push(draftItem);
+      if (editingMilestoneIndex !== null) {
+        Object.assign(plan.additional_spending![editingMilestoneIndex], draftItem);
+      } else {
+        (plan.additional_spending ??= []).push(draftItem);
+      }
     }
     addingMilestone = false;
+    editingMilestoneIndex = null;
     draftItem = null;
   }
 
   function removeMilestone(index: number) {
+    if (editingMilestoneIndex === index) {
+      cancelMilestone();
+    } else if (editingMilestoneIndex !== null && editingMilestoneIndex > index) {
+      editingMilestoneIndex--;
+    }
     plan.additional_spending?.splice(index, 1);
   }
 
@@ -48,28 +74,25 @@
   $effect(() => {
     const current = wizard.currentQuestionId;
     if (lastQuestionId !== null && current !== lastQuestionId) {
-      addingMilestone = false;
-      draftItem = null;
+      cancelMilestone();
     }
     lastQuestionId = current;
   });
 
   function onNext() {
-    if (addingMilestone && draftItem) {
+    if ((addingMilestone || editingMilestoneIndex !== null) && draftItem) {
       if ((Number(draftItem.amount) || 0) > 0) {
-        if (!draftItem.name?.trim()) draftItem.name = 'Milestone Expense';
-        (plan.additional_spending ??= []).push(draftItem);
+        saveMilestone();
+      } else {
+        cancelMilestone();
       }
-      addingMilestone = false;
-      draftItem = null;
     }
     wizard.clearSkipped(wizard.currentQuestionId);
     wizard.next(plan);
   }
 
   function onSkip() {
-    addingMilestone = false;
-    draftItem = null;
+    cancelMilestone();
     wizard.applyDefaultAndSkip(wizard.currentQuestionId, plan);
   }
 </script>
@@ -193,22 +216,32 @@
       {#if (plan.additional_spending ?? []).length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each plan.additional_spending ?? [] as item, i (i)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingMilestoneIndex === i ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{item.name}</div>
+                <div class="fw-bold text-dark">
+                  {item.name}
+                  {#if editingMilestoneIndex === i}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   Amount: {formatMoney(Number(item.amount) || 0)} &bull; Start Age: {item.start_age} &bull; {Number(item.interval) > 0 ? `Repeats every ${item.interval} years` : 'One-time'}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeMilestone(i)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditingMilestone(i)} aria-label="Edit {item.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeMilestone(i)} aria-label="Delete {item.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingMilestone}
+      {#if !addingMilestone && editingMilestoneIndex === null}
         <div class="d-flex flex-wrap gap-2 mb-4" style="max-width: 650px;">
           <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingMilestone('Vehicle Replacement', 35000, 8)}>
             🚗 Vehicle Replacement (e.g. every 8 yrs)
@@ -225,11 +258,11 @@
         </div>
       {/if}
 
-      {#if addingMilestone && draftItem}
+      {#if (addingMilestone || editingMilestoneIndex !== null) && draftItem}
         <div class="card p-4 border-primary shadow-sm bg-light mb-4 rounded-3" style="max-width: 650px;">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold text-primary mb-0">Configure Milestone Expense</h5>
-            <button type="button" class="btn-close" aria-label="Cancel" onclick={() => (addingMilestone = false)}></button>
+            <h5 class="fw-bold text-primary mb-0">{editingMilestoneIndex !== null ? 'Edit Milestone Expense' : 'Configure Milestone Expense'}</h5>
+            <button type="button" class="btn-close" aria-label="Cancel" onclick={cancelMilestone}></button>
           </div>
 
           <div class="row g-3 mb-3">
@@ -258,8 +291,8 @@
           </div>
 
           <div class="d-flex justify-content-end gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => (addingMilestone = false)}>Cancel</button>
-            <button type="button" class="btn btn-sm btn-primary" onclick={saveMilestone}>Save Expense</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick={cancelMilestone}>Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick={saveMilestone}>{editingMilestoneIndex !== null ? 'Save Changes' : 'Save Expense'}</button>
           </div>
         </div>
       {/if}

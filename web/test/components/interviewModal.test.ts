@@ -497,3 +497,322 @@ describe('Smart Auto-Save on Next in Guided Walkthrough', () => {
   });
 });
 
+describe('Editing Items in Guided Walkthrough', () => {
+  it('edits an existing workplace account and preserves single account identity', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      user_name: 'Alex',
+      user_age: 50,
+      user_retirement_age: 65,
+      accounts: [
+        {
+          name: "Alex's 401(k)",
+          type: 'pretax',
+          balance: 50000,
+          contrib_amount: 5000,
+          contrib_freq: 'annual',
+          contrib_end_age_type: 'retirement',
+          return_mean: 6.0,
+        },
+      ],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // Verify Edit button exists
+    const editBtn = r.container.querySelector('button[aria-label="Edit Alex\'s 401(k)"]') as HTMLButtonElement;
+    expect(editBtn).not.toBeNull();
+
+    // Click edit
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    // Drawer should show edit title
+    expect(r.container.textContent).toContain("Edit Account: Alex's 401(k)");
+    expect(r.container.textContent).toContain('Save Changes');
+
+    // Change balance and contributions
+    const balInput = r.container.querySelector('#int_acc_balance') as HTMLInputElement;
+    const contribInput = r.container.querySelector('#int_acc_contrib') as HTMLInputElement;
+    expect(balInput).not.toBeNull();
+    await fireEvent.input(balInput, { target: { value: '75000' } });
+    await fireEvent.input(contribInput, { target: { value: '8000' } });
+    flushSync();
+
+    // Save changes
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Changes'));
+    expect(saveBtn).toBeDefined();
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    // Still only 1 account, with updated balance and contribution
+    expect(plan.accounts?.length).toBe(1);
+    expect(plan.accounts![0].name).toBe("Alex's 401(k)");
+    expect(plan.accounts![0].balance).toBe(75000);
+    expect(plan.accounts![0].contrib_amount).toBe(8000);
+
+    // Form drawer is closed
+    expect(r.container.querySelector('#int_acc_balance')).toBeNull();
+    cleanup();
+  });
+
+  it('cancels account edit without mutating original values', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      user_name: 'Alex',
+      accounts: [
+        {
+          name: "Alex's 401(k)",
+          type: 'pretax',
+          balance: 50000,
+        },
+      ],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    const editBtn = r.container.querySelector('button[aria-label="Edit Alex\'s 401(k)"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    const balInput = r.container.querySelector('#int_acc_balance') as HTMLInputElement;
+    await fireEvent.input(balInput, { target: { value: '999999' } });
+    flushSync();
+
+    // Click Cancel
+    const cancelBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Cancel');
+    expect(cancelBtn).toBeDefined();
+    await fireEvent.click(cancelBtn!);
+    flushSync();
+
+    // Balance remains 50000
+    expect(plan.accounts![0].balance).toBe(50000);
+    expect(r.container.querySelector('#int_acc_balance')).toBeNull();
+    cleanup();
+  });
+
+  it('retains account name when unchanged, and auto-renames only if colliding with another account', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      accounts: [
+        { name: "First Account", type: 'pretax', balance: 10000 },
+        { name: "Second Account", type: 'pretax', balance: 20000 },
+      ],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // 1. Edit First Account and save without changing name
+    let editBtn = r.container.querySelector('button[aria-label="Edit First Account"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    let saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Changes'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    expect(plan.accounts![0].name).toBe('First Account'); // Name should NOT have (2) appended
+
+    // 2. Edit First Account and change name to Second Account (collision)
+    editBtn = r.container.querySelector('button[aria-label="Edit First Account"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    const nameInput = r.container.querySelector('#int_acc_name') as HTMLInputElement;
+    await fireEvent.input(nameInput, { target: { value: 'Second Account' } });
+    flushSync();
+
+    saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Changes'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    expect(plan.accounts![0].name).toBe('Second Account (2)');
+    cleanup();
+  });
+
+  it('auto-saves edits to an account when clicking Next', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      user_name: 'Alex',
+      accounts: [
+        { name: "Alex's 401(k)", type: 'pretax', balance: 50000 },
+      ],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    const editBtn = r.container.querySelector('button[aria-label="Edit Alex\'s 401(k)"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    const balInput = r.container.querySelector('#int_acc_balance') as HTMLInputElement;
+    await fireEvent.input(balInput, { target: { value: '88000' } });
+    flushSync();
+
+    // Click Next
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    expect(plan.accounts![0].balance).toBe(88000);
+    expect(wizard.currentQuestionId).toBe('accounts_ira');
+    cleanup();
+  });
+
+  it('edits milestone expenses in Stage 3 and auto-saves edits on Next', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('spending_milestones');
+    const plan: Plan = {
+      is_married: false,
+      additional_spending: [
+        { name: 'Vehicle Replacement', amount: 35000, start_age: 65, interval: 8 },
+      ],
+    };
+
+    const r = render(Stage3Spending, { wizard, plan });
+
+    // Verify Edit button exists
+    const editBtn = r.container.querySelector('button[aria-label="Edit Vehicle Replacement"]') as HTMLButtonElement;
+    expect(editBtn).not.toBeNull();
+
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    expect(r.container.textContent).toContain('Edit Milestone Expense');
+
+    const amtInput = r.container.querySelector('#int_ms_amount') as HTMLInputElement;
+    const intervalInput = r.container.querySelector('#int_ms_interval') as HTMLInputElement;
+    await fireEvent.input(amtInput, { target: { value: '42000' } });
+    await fireEvent.input(intervalInput, { target: { value: '6' } });
+    flushSync();
+
+    // Click Save Changes
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Changes'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    expect(plan.additional_spending?.length).toBe(1);
+    expect(plan.additional_spending![0].amount).toBe(42000);
+    expect(plan.additional_spending![0].interval).toBe(6);
+
+    // Edit again and auto-save on Next
+    const editBtn2 = r.container.querySelector('button[aria-label="Edit Vehicle Replacement"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn2);
+    flushSync();
+
+    const amtInput2 = r.container.querySelector('#int_ms_amount') as HTMLInputElement;
+    await fireEvent.input(amtInput2, { target: { value: '45000' } });
+    flushSync();
+
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    expect(plan.additional_spending![0].amount).toBe(45000);
+    cleanup();
+  });
+
+  it('edits income streams in Stage 4 and auto-saves edits on Next', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('income_streams');
+    const plan: Plan = {
+      is_married: true,
+      user_name: 'Alex',
+      spouse_name: 'Sam',
+      income_sources: [
+        {
+          name: 'Company Pension',
+          amount: 24000,
+          frequency: 'annual',
+          start_age_type: 'retirement',
+          end_age_type: 'death',
+          has_survivor_benefit: true,
+          survivor_benefit_pct: 50,
+        },
+      ],
+    };
+
+    const r = render(Stage4Income, { wizard, plan });
+
+    // Verify Edit button exists
+    const editBtn = r.container.querySelector('button[aria-label="Edit Company Pension"]') as HTMLButtonElement;
+    expect(editBtn).not.toBeNull();
+
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    expect(r.container.textContent).toContain('Edit Income Stream');
+
+    const amtInput = r.container.querySelector('#int_inc_amount') as HTMLInputElement;
+    const freqSelect = r.container.querySelector('#int_inc_freq') as HTMLSelectElement;
+    await fireEvent.input(amtInput, { target: { value: '30000' } });
+    await fireEvent.change(freqSelect, { target: { value: 'monthly' } });
+    flushSync();
+
+    // Click Save Changes
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Changes'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    expect(plan.income_sources?.length).toBe(1);
+    expect(plan.income_sources![0].amount).toBe(30000);
+    expect(plan.income_sources![0].frequency).toBe('monthly');
+
+    // Edit again and auto-save on Next
+    const editBtn2 = r.container.querySelector('button[aria-label="Edit Company Pension"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn2);
+    flushSync();
+
+    const amtInput2 = r.container.querySelector('#int_inc_amount') as HTMLInputElement;
+    await fireEvent.input(amtInput2, { target: { value: '32000' } });
+    flushSync();
+
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    expect(plan.income_sources![0].amount).toBe(32000);
+    cleanup();
+  });
+
+  it('cleans up edit drawer state if an account is deleted while being edited', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = {
+      is_married: false,
+      accounts: [
+        { name: "First Account", type: 'pretax', balance: 10000 },
+        { name: "Second Account", type: 'pretax', balance: 20000 },
+      ],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    // Start editing First Account
+    const editBtn = r.container.querySelector('button[aria-label="Edit First Account"]') as HTMLButtonElement;
+    await fireEvent.click(editBtn);
+    flushSync();
+
+    expect(r.container.textContent).toContain('Edit Account: First Account');
+
+    // Click Delete on First Account
+    const delBtn = r.container.querySelector('button[aria-label="Delete First Account"]') as HTMLButtonElement;
+    await fireEvent.click(delBtn);
+    flushSync();
+
+    // Account removed and edit form closed
+    expect(plan.accounts?.length).toBe(1);
+    expect(plan.accounts![0].name).toBe('Second Account');
+    expect(r.container.querySelector('#int_acc_name')).toBeNull();
+    cleanup();
+  });
+});
+

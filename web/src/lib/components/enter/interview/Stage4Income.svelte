@@ -20,10 +20,12 @@
   const spouseSS = $derived(ssView(plan.social_security, 'spouse'));
 
   let addingStream = $state(false);
+  let editingStreamIndex: number | null = $state(null);
   let draftStream: IncomeSource | null = $state(null);
   let streamOwner = $state<'user' | 'spouse'>('user');
 
   function startAddingStream(name: string, defaultAmount: number) {
+    editingStreamIndex = null;
     const s = newIncomeSource();
     s.name = name;
     s.amount = defaultAmount;
@@ -35,6 +37,21 @@
     streamOwner = 'user';
     draftStream = s;
     addingStream = true;
+  }
+
+  function startEditingStream(index: number) {
+    const stream = plan.income_sources?.[index];
+    if (!stream) return;
+    addingStream = false;
+    editingStreamIndex = index;
+    streamOwner = (stream.start_age_type === 'spouse_retirement' || stream.end_age_type === 'spouse_death') ? 'spouse' : 'user';
+    draftStream = { ...stream };
+  }
+
+  function cancelStream() {
+    addingStream = false;
+    editingStreamIndex = null;
+    draftStream = null;
   }
 
   function saveStream() {
@@ -51,13 +68,23 @@
         draftStream.start_age_type = draftStream.start_age_type === 'spouse_retirement' ? 'retirement' : draftStream.start_age_type;
         draftStream.end_age_type = 'death';
       }
-      (plan.income_sources ??= []).push(draftStream);
+      if (editingStreamIndex !== null) {
+        Object.assign(plan.income_sources![editingStreamIndex], draftStream);
+      } else {
+        (plan.income_sources ??= []).push(draftStream);
+      }
     }
     addingStream = false;
+    editingStreamIndex = null;
     draftStream = null;
   }
 
   function removeStream(index: number) {
+    if (editingStreamIndex === index) {
+      cancelStream();
+    } else if (editingStreamIndex !== null && editingStreamIndex > index) {
+      editingStreamIndex--;
+    }
     plan.income_sources?.splice(index, 1);
   }
 
@@ -66,20 +93,17 @@
   $effect(() => {
     const current = wizard.currentQuestionId;
     if (lastQuestionId !== null && current !== lastQuestionId) {
-      lastQuestionId = current;
-      addingStream = false;
-      draftStream = null;
+      cancelStream();
     }
     lastQuestionId = current;
   });
 
   function onNext() {
-    if (addingStream && draftStream) {
+    if ((addingStream || editingStreamIndex !== null) && draftStream) {
       if ((Number(draftStream.amount) || 0) > 0) {
         saveStream();
       } else {
-        addingStream = false;
-        draftStream = null;
+        cancelStream();
       }
     }
     wizard.clearSkipped(wizard.currentQuestionId);
@@ -87,8 +111,7 @@
   }
 
   function onSkip() {
-    addingStream = false;
-    draftStream = null;
+    cancelStream();
     wizard.applyDefaultAndSkip(wizard.currentQuestionId, plan);
   }
 </script>
@@ -265,22 +288,32 @@
       {#if (plan.income_sources ?? []).length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each plan.income_sources ?? [] as stream, i (i)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingStreamIndex === i ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">{stream.name}</div>
+                <div class="fw-bold text-dark">
+                  {stream.name}
+                  {#if editingStreamIndex === i}
+                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                  {/if}
+                </div>
                 <div class="small text-muted">
                   Amount: {formatMoney(Number(stream.amount) || 0)} ({stream.frequency ?? 'annual'}) &bull; Starts: {stream.start_age_type}{#if married} &bull; Survivor: {stream.has_survivor_benefit ? `${stream.survivor_benefit_pct}%` : 'None'}{/if}
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeStream(i)} aria-label="Delete">
-                <i class="fa fa-trash"></i>
-              </button>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => startEditingStream(i)} aria-label="Edit {stream.name}" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick={() => removeStream(i)} aria-label="Delete {stream.name}" title="Delete">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
             </div>
           {/each}
         </div>
       {/if}
 
-      {#if !addingStream}
+      {#if !addingStream && editingStreamIndex === null}
         <div class="d-flex flex-wrap gap-2 mb-4" style="max-width: 650px;">
           <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Company Pension", 24000)}>
             🏛️ Company or Govt Pension
@@ -297,11 +330,11 @@
         </div>
       {/if}
 
-      {#if addingStream && draftStream}
+      {#if (addingStream || editingStreamIndex !== null) && draftStream}
         <div class="card p-4 border-primary shadow-sm bg-light mb-4 rounded-3" style="max-width: 650px;">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold text-primary mb-0">Configure Income Stream</h5>
-            <button type="button" class="btn-close" aria-label="Cancel" onclick={() => (addingStream = false)}></button>
+            <h5 class="fw-bold text-primary mb-0">{editingStreamIndex !== null ? 'Edit Income Stream' : 'Configure Income Stream'}</h5>
+            <button type="button" class="btn-close" aria-label="Cancel" onclick={cancelStream}></button>
           </div>
 
           <div class="row g-3 mb-3">
@@ -357,8 +390,8 @@
           {/if}
 
           <div class="d-flex justify-content-end gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => (addingStream = false)}>Cancel</button>
-            <button type="button" class="btn btn-sm btn-primary" onclick={saveStream}>Save Income Stream</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick={cancelStream}>Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick={saveStream}>{editingStreamIndex !== null ? 'Save Changes' : 'Save Income Stream'}</button>
           </div>
         </div>
       {/if}
