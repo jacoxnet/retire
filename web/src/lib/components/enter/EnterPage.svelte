@@ -117,28 +117,6 @@
     (plan.accounts ?? []).reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
   );
   const desiredSpend = $derived(Number(plan.desired_spending) || 0);
-  const annualGuaranteedIncome = $derived.by(() => {
-    let total = 0;
-    const ss = plan.social_security;
-    if (ss) {
-      if (ss.user_receiving || ss.user_future_entitled) {
-        const uAmt = Number(ss.user_amount) || 0;
-        total += ss.user_freq === 'annual' ? uAmt : uAmt * 12;
-      }
-      if (plan.is_married && (ss.spouse_receiving || ss.spouse_future_entitled)) {
-        const sAmt = Number(ss.spouse_amount) || 0;
-        total += ss.spouse_freq === 'annual' ? sAmt : sAmt * 12;
-      }
-    }
-    for (const inc of plan.income_sources ?? []) {
-      const amt = Number(inc.amount) || 0;
-      total += inc.frequency === 'annual' ? amt : amt * 12;
-    }
-    return total;
-  });
-
-  const netAnnualNeed = $derived(Math.max(0, desiredSpend - annualGuaranteedIncome));
-  const withdrawalRate = $derived(totalAssets > 0 ? (netAnnualNeed / totalAssets) * 100 : null);
 </script>
 
 <div class="container main-content mt-4">
@@ -281,29 +259,6 @@
             <div class="health-metric-chip">
               <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">DESIRED SPEND</span>
               <span class="fw-bold text-dark">${formatMoney(desiredSpend)}/yr</span>
-            </div>
-
-            <div class="health-metric-chip d-none d-md-flex">
-              <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">EST. WITHDRAWAL RATE</span>
-              <div>
-                {#if withdrawalRate !== null}
-                  {#if withdrawalRate < 4.0}
-                    <span class="badge bg-success-subtle text-success border border-success-subtle" title="Initial portfolio withdrawal rate is conservative (<4.0%)">
-                      <i class="fa-solid fa-circle-check me-1"></i>{withdrawalRate.toFixed(1)}% (Conservative)
-                    </span>
-                  {:else if withdrawalRate <= 5.0}
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="Initial portfolio withdrawal rate is moderate (4.0% - 5.0%)">
-                      <i class="fa-solid fa-circle-info me-1"></i>{withdrawalRate.toFixed(1)}% (Moderate)
-                    </span>
-                  {:else}
-                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" title="Initial portfolio withdrawal rate is elevated (>5.0%)">
-                      <i class="fa-solid fa-triangle-exclamation me-1"></i>{withdrawalRate.toFixed(1)}% (Elevated)
-                    </span>
-                  {/if}
-                {:else}
-                  <span class="text-muted small">N/A</span>
-                {/if}
-              </div>
             </div>
 
             {#if duplicates.length}

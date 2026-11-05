@@ -106,7 +106,7 @@ describe('Part 2: Modern Radial Success Gauge in McResults', () => {
 });
 
 describe('Part 3: Sticky Quick Health Bar on EnterPage', () => {
-  it('displays aggregated assets, spending, withdrawal rate, and sticky run button', async () => {
+  it('displays aggregated assets, spending, and sticky run button without withdrawal rate', async () => {
     const plan: Plan = {
       ...getDefaultData(),
       accounts: [
@@ -131,8 +131,8 @@ describe('Part 3: Sticky Quick Health Bar on EnterPage', () => {
     expect(healthBar?.textContent).toContain('$1,000,000');
     // Desired spending: $40,000
     expect(healthBar?.textContent).toContain('$40,000/yr');
-    // Estimated withdrawal rate: 40000 / 1000000 = 4.0%
-    expect(healthBar?.textContent).toContain('4.0%');
+    // Estimated withdrawal rate should not be displayed
+    expect(healthBar?.textContent).not.toContain('EST. WITHDRAWAL RATE');
 
     // Sticky Run button triggers onRun
     const btnRun = container.querySelector('#btnStickyRun') as HTMLButtonElement;
