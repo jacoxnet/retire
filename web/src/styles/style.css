@@ -26,6 +26,23 @@
   /* Transitions */
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.3s ease-in-out;
+
+  /* Tax Bucket Accents */
+  --tax-roth-border: #8b5cf6;
+  --tax-roth-bg: #f5f3ff;
+  --tax-roth-text: #6d28d9;
+  --tax-pretax-border: #2563eb;
+  --tax-pretax-bg: #eff6ff;
+  --tax-pretax-text: #1d4ed8;
+  --tax-taxable-border: #059669;
+  --tax-taxable-bg: #ecfdf5;
+  --tax-taxable-text: #047857;
+  --tax-hsa-border: #0891b2;
+  --tax-hsa-bg: #ecfeff;
+  --tax-hsa-text: #0e7490;
+  --tax-inherited-border: #d97706;
+  --tax-inherited-bg: #fffbeb;
+  --tax-inherited-text: #b45309;
 }
 
 /* Explicit Dark Theme via data-theme="dark" */
@@ -59,6 +76,23 @@
   --bs-modal-color: var(--text-primary);
   --bs-tertiary-bg: var(--bg-tertiary);
   --bs-light-rgb: 20, 31, 48;
+
+  /* Tax Bucket Accents - Dark Theme */
+  --tax-roth-border: #a78bfa;
+  --tax-roth-bg: rgba(139, 92, 246, 0.18);
+  --tax-roth-text: #ddd6fe;
+  --tax-pretax-border: #60a5fa;
+  --tax-pretax-bg: rgba(37, 99, 235, 0.18);
+  --tax-pretax-text: #bfdbfe;
+  --tax-taxable-border: #34d399;
+  --tax-taxable-bg: rgba(5, 150, 105, 0.18);
+  --tax-taxable-text: #a7f3d0;
+  --tax-hsa-border: #22d3ee;
+  --tax-hsa-bg: rgba(8, 145, 178, 0.18);
+  --tax-hsa-text: #a5f3fc;
+  --tax-inherited-border: #fbbf24;
+  --tax-inherited-bg: rgba(217, 119, 6, 0.18);
+  --tax-inherited-text: #fde68a;
 }
 
 /* Dark mode auto-detection fallback if no data-theme explicitly set */
@@ -88,6 +122,23 @@
     --bs-modal-color: var(--text-primary);
     --bs-tertiary-bg: var(--bg-tertiary);
     --bs-light-rgb: 20, 31, 48;
+
+    /* Tax Bucket Accents - Dark Theme */
+    --tax-roth-border: #a78bfa;
+    --tax-roth-bg: rgba(139, 92, 246, 0.18);
+    --tax-roth-text: #ddd6fe;
+    --tax-pretax-border: #60a5fa;
+    --tax-pretax-bg: rgba(37, 99, 235, 0.18);
+    --tax-pretax-text: #bfdbfe;
+    --tax-taxable-border: #34d399;
+    --tax-taxable-bg: rgba(5, 150, 105, 0.18);
+    --tax-taxable-text: #a7f3d0;
+    --tax-hsa-border: #22d3ee;
+    --tax-hsa-bg: rgba(8, 145, 178, 0.18);
+    --tax-hsa-text: #a5f3fc;
+    --tax-inherited-border: #fbbf24;
+    --tax-inherited-bg: rgba(217, 119, 6, 0.18);
+    --tax-inherited-text: #fde68a;
   }
 }
 
@@ -2486,6 +2537,148 @@ tbody tr:hover {
   background-color: var(--bg-secondary) !important;
   color: var(--text-primary);
 }
+
+/* ==========================================================================
+   Account Tax Bucket Cards & Badges
+   ========================================================================== */
+.account-card.account-card-roth,
+.card.account-card-roth {
+  border-left: 4px solid var(--tax-roth-border) !important;
+}
+.account-card.account-card-pretax,
+.card.account-card-pretax {
+  border-left: 4px solid var(--tax-pretax-border) !important;
+}
+.account-card.account-card-taxable,
+.card.account-card-taxable {
+  border-left: 4px solid var(--tax-taxable-border) !important;
+}
+.account-card.account-card-hsa,
+.card.account-card-hsa {
+  border-left: 4px solid var(--tax-hsa-border) !important;
+}
+.account-card.account-card-inherited,
+.card.account-card-inherited,
+.account-card.account-card-inherited_pretax,
+.card.account-card-inherited_pretax,
+.account-card.account-card-inherited_roth,
+.card.account-card-inherited_roth {
+  border-left: 4px solid var(--tax-inherited-border) !important;
+}
+
+.badge-tax {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 9999px;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.badge-tax-roth {
+  background-color: var(--tax-roth-bg);
+  color: var(--tax-roth-text);
+  border: 1px solid var(--tax-roth-border);
+}
+.badge-tax-pretax {
+  background-color: var(--tax-pretax-bg);
+  color: var(--tax-pretax-text);
+  border: 1px solid var(--tax-pretax-border);
+}
+.badge-tax-taxable {
+  background-color: var(--tax-taxable-bg);
+  color: var(--tax-taxable-text);
+  border: 1px solid var(--tax-taxable-border);
+}
+.badge-tax-hsa {
+  background-color: var(--tax-hsa-bg);
+  color: var(--tax-hsa-text);
+  border: 1px solid var(--tax-hsa-border);
+}
+.badge-tax-inherited {
+  background-color: var(--tax-inherited-bg);
+  color: var(--tax-inherited-text);
+  border: 1px solid var(--tax-inherited-border);
+}
+
+/* ==========================================================================
+   Radial Success Gauge (Results Page)
+   ========================================================================== */
+.radial-gauge-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 0 auto 1rem;
+}
+.radial-gauge-svg {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+  overflow: visible;
+}
+.radial-gauge-track {
+  fill: none;
+  stroke: var(--border-color, #e2e8f0);
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+.radial-gauge-fill {
+  fill: none;
+  stroke-width: 14;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.radial-gauge-center {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  width: 100%;
+  pointer-events: none;
+}
+.radial-gauge-center .display-5 {
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+/* ==========================================================================
+   Sticky Quick Plan Health Bar (Enter Data Page)
+   ========================================================================== */
+.sticky-health-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1020;
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.25s ease;
+}
+[data-theme="dark"] .sticky-health-bar {
+  background-color: rgba(30, 41, 59, 0.94);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+}
+.sticky-health-bar.is-collapsed {
+  transform: translateY(calc(100% - 34px));
+}
+.health-metric-chip {
+  display: flex;
+  flex-direction: column;
+}
+.withdrawal-chip {
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+  font-weight: 600;
+}
+
 
 
 

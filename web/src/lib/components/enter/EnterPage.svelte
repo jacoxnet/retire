@@ -2,6 +2,7 @@
 <script lang="ts">
   import { tabBadges, type TabId } from '../../app/badges';
   import { alertClass, type FlashMessage } from '../../app/flash.svelte';
+  import { formatMoney } from '../../app/format';
   import type { PlannerMode } from '../../app/ui.svelte';
   import { applyMarriageToAccounts, duplicateAccountNames } from '../../plan/accountCard';
   import { syncAllTabs } from '../../plan/bsSync';
@@ -109,6 +110,35 @@
     subnavOpen = false;
     window.scrollTo(0, 0);
   }
+
+  let healthBarCollapsed = $state(false);
+
+  const totalAssets = $derived(
+    (plan.accounts ?? []).reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
+  );
+  const desiredSpend = $derived(Number(plan.desired_spending) || 0);
+  const annualGuaranteedIncome = $derived.by(() => {
+    let total = 0;
+    const ss = plan.social_security;
+    if (ss) {
+      if (ss.user_receiving || ss.user_future_entitled) {
+        const uAmt = Number(ss.user_amount) || 0;
+        total += ss.user_freq === 'annual' ? uAmt : uAmt * 12;
+      }
+      if (plan.is_married && (ss.spouse_receiving || ss.spouse_future_entitled)) {
+        const sAmt = Number(ss.spouse_amount) || 0;
+        total += ss.spouse_freq === 'annual' ? sAmt : sAmt * 12;
+      }
+    }
+    for (const inc of plan.income_sources ?? []) {
+      const amt = Number(inc.amount) || 0;
+      total += inc.frequency === 'annual' ? amt : amt * 12;
+    }
+    return total;
+  });
+
+  const netAnnualNeed = $derived(Math.max(0, desiredSpend - annualGuaranteedIncome));
+  const withdrawalRate = $derived(totalAssets > 0 ? (netAnnualNeed / totalAssets) * 100 : null);
 </script>
 
 <div class="container main-content mt-4">
@@ -226,6 +256,82 @@
         {/if}
       </div>
     </div>
+
+    <aside class="sticky-health-bar mt-4 px-3 py-2 rounded-top-3 border" class:is-collapsed={healthBarCollapsed} aria-label="Plan Quick Health & Run Simulation">
+      <div class="d-flex justify-content-between align-items-center">
+        <!-- Metric Summary Chips -->
+        <div class="d-flex align-items-center flex-wrap gap-2 gap-md-4 py-1">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill me-1"
+            title={healthBarCollapsed ? 'Expand Quick Health Bar' : 'Minimize Quick Health Bar'}
+            aria-label={healthBarCollapsed ? 'Expand Quick Health Bar' : 'Minimize Quick Health Bar'}
+            onclick={() => (healthBarCollapsed = !healthBarCollapsed)}
+          >
+            <i class="fa-solid {healthBarCollapsed ? 'fa-chevron-up' : 'fa-chevron-down'} small"></i>
+            <span class="small ms-1 d-none d-sm-inline">{healthBarCollapsed ? 'Expand' : 'Quick Health'}</span>
+          </button>
+
+          {#if !healthBarCollapsed}
+            <div class="health-metric-chip">
+              <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">TOTAL ASSETS</span>
+              <span class="fw-bold text-dark">${formatMoney(totalAssets)}</span>
+            </div>
+
+            <div class="health-metric-chip">
+              <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">DESIRED SPEND</span>
+              <span class="fw-bold text-dark">${formatMoney(desiredSpend)}/yr</span>
+            </div>
+
+            <div class="health-metric-chip d-none d-md-flex">
+              <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">EST. WITHDRAWAL RATE</span>
+              <div>
+                {#if withdrawalRate !== null}
+                  {#if withdrawalRate < 4.0}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle" title="Initial portfolio withdrawal rate is conservative (<4.0%)">
+                      <i class="fa-solid fa-circle-check me-1"></i>{withdrawalRate.toFixed(1)}% (Conservative)
+                    </span>
+                  {:else if withdrawalRate <= 5.0}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="Initial portfolio withdrawal rate is moderate (4.0% - 5.0%)">
+                      <i class="fa-solid fa-circle-info me-1"></i>{withdrawalRate.toFixed(1)}% (Moderate)
+                    </span>
+                  {:else}
+                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" title="Initial portfolio withdrawal rate is elevated (>5.0%)">
+                      <i class="fa-solid fa-triangle-exclamation me-1"></i>{withdrawalRate.toFixed(1)}% (Elevated)
+                    </span>
+                  {/if}
+                {:else}
+                  <span class="text-muted small">N/A</span>
+                {/if}
+              </div>
+            </div>
+
+            {#if duplicates.length}
+              <div class="d-none d-lg-flex align-items-center">
+                <span class="badge bg-danger text-white">
+                  <i class="fa-solid fa-triangle-exclamation me-1"></i>Duplicate name
+                </span>
+              </div>
+            {/if}
+          {/if}
+        </div>
+
+        <!-- Run Simulation Action Button -->
+        <div class="d-flex align-items-center gap-2">
+          <button
+            type="submit"
+            class="btn btn-success fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2 text-nowrap"
+            id="btnStickyRun"
+            aria-label="Run Plan"
+            disabled={duplicates.length > 0}
+            title={duplicates.length > 0 ? 'Fix duplicate account names to run' : 'Run Monte Carlo Simulation'}
+          >
+            <i class="fa-solid fa-rocket"></i>
+            <span>Run Plan</span>
+          </button>
+        </div>
+      </div>
+    </aside>
   </form>
 
   <InterviewModal bind:open={interviewOpen} bind:plan onRun={() => { syncTabs(); onRun(); }} />

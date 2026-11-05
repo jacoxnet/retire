@@ -15,6 +15,44 @@
     { label: 'Maximum Wealth', value: r.run_max, bold: false },
     { label: 'Minimum Wealth', value: r.run_min, bold: false },
   ]);
+
+  const successRate = $derived(Math.max(0, Math.min(100, Number(r.run_success) || 0)));
+  const assessment = $derived.by(() => {
+    if (successRate >= 85) {
+      return {
+        label: 'High Confidence Plan',
+        badgeClass: 'bg-success-subtle text-success border-success-subtle',
+        color: '#10b981',
+        icon: 'fa-circle-check',
+        summary: 'Your retirement portfolio is well-funded to sustain planned spending across diverse market conditions.'
+      };
+    }
+    if (successRate >= 75) {
+      return {
+        label: 'Solid Foundation',
+        badgeClass: 'bg-primary-subtle text-primary border-primary-subtle',
+        color: '#3b82f6',
+        icon: 'fa-shield-halved',
+        summary: 'Your plan holds a reliable foundation, though modest cushion adjustments could further strengthen it.'
+      };
+    }
+    if (successRate >= 60) {
+      return {
+        label: 'Moderate Risk',
+        badgeClass: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
+        color: '#f59e0b',
+        icon: 'fa-triangle-exclamation',
+        summary: 'Your portfolio experiences shortfalls in severe downturns. Consider minor spending or retirement timing adjustments.'
+      };
+    }
+    return {
+      label: 'Shortfall Risk',
+      badgeClass: 'bg-danger-subtle text-danger border-danger-subtle',
+      color: '#ef4444',
+      icon: 'fa-circle-xmark',
+      summary: 'High probability of outliving your assets under historical market scenarios. Revision of spending or timing recommended.'
+    };
+  });
 </script>
 
 <div class="card p-4 h-100" id="mcResultsCard">
@@ -127,9 +165,28 @@
   {:else if !r.goal_seeking}
     <h3 class="border-bottom pb-2 text-success">Results</h3>
     <div class="mt-3">
-      <div class="alert alert-success border text-center py-3 mb-4">
-        <h4 class="mb-1">Success Rate</h4>
-        <span class="display-5 font-weight-bold {sign(r.run_success)}">{floatformat(r.run_success, 1)}%</span>
+      <div class="card bg-light-subtle border text-center p-3 mb-4 shadow-sm rounded-3">
+        <div class="radial-gauge-wrapper">
+          <svg viewBox="0 10 200 105" class="radial-gauge-svg" role="meter" aria-valuenow={successRate} aria-valuemin="0" aria-valuemax="100" aria-label="Probability of Plan Success">
+            <path class="radial-gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" />
+            <path class="radial-gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100"
+              stroke={assessment.color}
+              stroke-dasharray="251.33"
+              stroke-dashoffset={251.33 * (1 - successRate / 100)} />
+          </svg>
+          <div class="radial-gauge-center">
+            <span class="display-5 font-weight-bold {sign(r.run_success)}">{floatformat(r.run_success, 1)}%</span>
+            <div class="text-secondary small fw-semibold">Probability of Plan Success</div>
+          </div>
+        </div>
+        <div class="mt-1">
+          <span class="badge {assessment.badgeClass} border px-3 py-2 fs-6 rounded-pill">
+            <i class="fa-solid {assessment.icon} me-1"></i>{assessment.label}
+          </span>
+          <p class="small text-secondary mt-2 mb-0 px-2" style="max-width: 520px; margin-left: auto; margin-right: auto;">
+            {assessment.summary}
+          </p>
+        </div>
       </div>
 
       <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span></p>

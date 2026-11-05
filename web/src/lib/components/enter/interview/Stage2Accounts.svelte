@@ -73,6 +73,15 @@
     draftAccount = null;
   }
 
+  function taxBucket(type: string | undefined) {
+    if (type === 'roth') return { key: 'roth', label: 'Roth', icon: 'fa-gem' };
+    if (type === 'pretax') return { key: 'pretax', label: 'Pre-Tax', icon: 'fa-hourglass-half' };
+    if (type === 'taxable') return { key: 'taxable', label: 'Taxable', icon: 'fa-coins' };
+    if (type === 'hsa') return { key: 'hsa', label: 'HSA', icon: 'fa-heart-pulse' };
+    if (type === 'inherited_roth') return { key: 'inherited', label: 'Inherited Roth', icon: 'fa-clock-rotate-left' };
+    return { key: 'inherited', label: 'Inherited Pre-Tax', icon: 'fa-clock-rotate-left' };
+  }
+
   function ensureUniqueAccountName(baseName: string, accounts: Account[] | undefined, excludeIndex?: number | null): string {
     const existing = new Set(
       (accounts ?? [])
@@ -161,12 +170,13 @@
       {#if workplaceAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each workplaceAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center account-card-{taxBucket(acc.type).key} {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">
-                  {acc.name}
+                <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                  <span>{acc.name}</span>
+                  <span class="badge badge-tax badge-tax-{taxBucket(acc.type).key}"><i class="fa-solid {taxBucket(acc.type).icon} me-1"></i>{taxBucket(acc.type).label}</span>
                   {#if editingAccount === acc}
-                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                    <span class="badge bg-primary text-white small">Editing</span>
                   {/if}
                 </div>
                 <div class="small text-muted">
@@ -211,12 +221,13 @@
       {#if iraAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each iraAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center account-card-{taxBucket(acc.type).key} {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">
-                  {acc.name}
+                <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                  <span>{acc.name}</span>
+                  <span class="badge badge-tax badge-tax-{taxBucket(acc.type).key}"><i class="fa-solid {taxBucket(acc.type).icon} me-1"></i>{taxBucket(acc.type).label}</span>
                   {#if editingAccount === acc}
-                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                    <span class="badge bg-primary text-white small">Editing</span>
                   {/if}
                 </div>
                 <div class="small text-muted">
@@ -260,12 +271,13 @@
       {#if taxableAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each taxableAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center account-card-taxable {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">
-                  {acc.name}
+                <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                  <span>{acc.name}</span>
+                  <span class="badge badge-tax badge-tax-taxable"><i class="fa-solid fa-coins me-1"></i>Taxable</span>
                   {#if editingAccount === acc}
-                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                    <span class="badge bg-primary text-white small">Editing</span>
                   {/if}
                 </div>
                 <div class="small text-muted">
@@ -309,12 +321,13 @@
       {#if hsaAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each hsaAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center account-card-hsa {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">
-                  {acc.name}
+                <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                  <span>{acc.name}</span>
+                  <span class="badge badge-tax badge-tax-hsa"><i class="fa-solid fa-heart-pulse me-1"></i>HSA</span>
                   {#if editingAccount === acc}
-                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                    <span class="badge bg-primary text-white small">Editing</span>
                   {/if}
                 </div>
                 <div class="small text-muted">
@@ -360,12 +373,13 @@
       {#if inheritedAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each inheritedAccounts as acc (acc.id ?? acc.name)}
-            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
+            <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center account-card-{taxBucket(acc.type).key} {editingAccount === acc ? 'border-primary bg-primary-subtle' : ''}">
               <div>
-                <div class="fw-bold text-dark">
-                  {acc.name}
+                <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                  <span>{acc.name}</span>
+                  <span class="badge badge-tax badge-tax-{taxBucket(acc.type).key}"><i class="fa-solid {taxBucket(acc.type).icon} me-1"></i>{taxBucket(acc.type).label}</span>
                   {#if editingAccount === acc}
-                    <span class="badge bg-primary text-white ms-2 small">Editing</span>
+                    <span class="badge bg-primary text-white small">Editing</span>
                   {/if}
                 </div>
                 <div class="small text-muted">

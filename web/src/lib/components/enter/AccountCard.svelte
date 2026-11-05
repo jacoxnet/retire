@@ -99,13 +99,27 @@
   });
   // A Roth owner has no lifetime RMDs, so never reaches the Required Beginning Date.
   const passedRbd = $derived(view.type === 'inherited_pretax' && !!view.decedent_passed_rbd);
+
+  const taxBucket = $derived.by(() => {
+    if (view.type === 'roth') return { key: 'roth', label: 'Tax-Free Growth', icon: 'fa-gem' };
+    if (view.type === 'pretax') return { key: 'pretax', label: 'Tax-Deferred', icon: 'fa-hourglass-half' };
+    if (view.type === 'taxable') return { key: 'taxable', label: 'Flexible / Taxable', icon: 'fa-coins' };
+    if (view.type === 'hsa') return { key: 'hsa', label: 'Triple Tax-Advantaged', icon: 'fa-heart-pulse' };
+    if (view.type === 'inherited_roth') return { key: 'inherited', label: 'Inherited Roth', icon: 'fa-clock-rotate-left' };
+    return { key: 'inherited', label: 'Inherited Pre-Tax', icon: 'fa-clock-rotate-left' };
+  });
 </script>
 
 <div class="col-md-6 mb-4 account-card-col" data-account-id={view.id}>
-  <div class="card p-4 h-100 shadow-sm border account-card">
+  <div class="card p-4 h-100 shadow-sm border account-card account-card-{taxBucket.key} account-card-{view.type}">
     <div class="d-flex justify-content-between align-items-start mb-3 pb-2 border-bottom">
       <div class="flex-grow-1 me-2 position-relative">
-        <label class="form-label small fw-bold mb-1" for="{uid}-name">Account Name</label>
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <label class="form-label small fw-bold mb-0" for="{uid}-name">Account Name</label>
+          <span class="badge badge-tax badge-tax-{taxBucket.key}">
+            <i class="fa-solid {taxBucket.icon} me-1"></i>{taxBucket.label}
+          </span>
+        </div>
         <input type="text" id="{uid}-name" class={['form-control form-control-sm fw-bold text-primary account-name-input', duplicateName && 'is-invalid']}
           bind:value={getName, setName} placeholder="e.g. Primary 401(k), Roth IRA" required />
         {#if duplicateName}
