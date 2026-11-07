@@ -252,12 +252,12 @@
 
           {#if !healthBarCollapsed}
             <div class="health-metric-chip">
-              <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">TOTAL ASSETS</span>
+              <span class="text-secondary small fw-semibold text-uppercase" style="font-size: 0.72rem;">Total Assets for Retirement</span>
               <span class="fw-bold text-dark">${formatMoney(totalAssets)}</span>
             </div>
 
             <div class="health-metric-chip">
-              <span class="text-secondary small fw-semibold" style="font-size: 0.72rem;">DESIRED SPEND</span>
+              <span class="text-secondary small fw-semibold text-uppercase" style="font-size: 0.72rem;">Desired Recurring Spending</span>
               <span class="fw-bold text-dark">${formatMoney(desiredSpend)}/yr</span>
             </div>
 

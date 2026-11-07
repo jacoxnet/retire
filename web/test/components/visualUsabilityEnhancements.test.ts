@@ -130,9 +130,11 @@ describe('Part 3: Sticky Quick Health Bar on EnterPage', () => {
     const healthBar = container.querySelector('.sticky-health-bar');
     expect(healthBar).not.toBeNull();
 
-    // Total assets: $1,000,000
+    // Total assets for retirement: $1,000,000
+    expect(healthBar?.textContent).toContain('Total Assets for Retirement');
     expect(healthBar?.textContent).toContain('$1,000,000');
-    // Desired spending: $40,000
+    // Desired recurring spending: $40,000
+    expect(healthBar?.textContent).toContain('Desired Recurring Spending');
     expect(healthBar?.textContent).toContain('$40,000/yr');
     // Estimated withdrawal rate should not be displayed
     expect(healthBar?.textContent).not.toContain('EST. WITHDRAWAL RATE');
