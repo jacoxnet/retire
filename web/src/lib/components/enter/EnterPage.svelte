@@ -235,19 +235,19 @@
       </div>
     </div>
 
-    <aside class="sticky-health-bar mt-4 px-3 py-2 rounded-top-3 border" class:is-collapsed={healthBarCollapsed} aria-label="Plan Quick Health & Run Simulation">
+    <aside class="sticky-health-bar mt-4 px-3 py-2 rounded-top-3 border" class:is-collapsed={healthBarCollapsed} aria-label="Plan Summary & Run Simulation">
       <div class="d-flex justify-content-between align-items-center">
         <!-- Metric Summary Chips -->
         <div class="d-flex align-items-center flex-wrap gap-2 gap-md-4 py-1">
           <button
             type="button"
             class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill me-1"
-            title={healthBarCollapsed ? 'Expand Quick Health Bar' : 'Minimize Quick Health Bar'}
-            aria-label={healthBarCollapsed ? 'Expand Quick Health Bar' : 'Minimize Quick Health Bar'}
+            title={healthBarCollapsed ? 'Expand Summary Bar' : 'Minimize Summary Bar'}
+            aria-label={healthBarCollapsed ? 'Expand Summary Bar' : 'Minimize Summary Bar'}
             onclick={() => (healthBarCollapsed = !healthBarCollapsed)}
           >
             <i class="fa-solid {healthBarCollapsed ? 'fa-chevron-up' : 'fa-chevron-down'} small"></i>
-            <span class="small ms-1 d-none d-sm-inline">{healthBarCollapsed ? 'Expand' : 'Quick Health'}</span>
+            <span class="small ms-1 d-none d-sm-inline">{healthBarCollapsed ? 'Expand' : 'Summary'}</span>
           </button>
 
           {#if !healthBarCollapsed}

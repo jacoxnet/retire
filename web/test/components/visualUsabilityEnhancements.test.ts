@@ -108,7 +108,7 @@ describe('Part 2: Modern Radial Success Gauge in McResults', () => {
   });
 });
 
-describe('Part 3: Sticky Quick Health Bar on EnterPage', () => {
+describe('Part 3: Sticky Summary Bar on EnterPage', () => {
   it('displays aggregated assets, spending, and sticky run button without withdrawal rate', async () => {
     const plan: Plan = {
       ...getDefaultData(),
@@ -181,7 +181,7 @@ describe('Part 3: Sticky Quick Health Bar on EnterPage', () => {
     const healthBar = container.querySelector('.sticky-health-bar');
     expect(healthBar?.classList.contains('is-collapsed')).toBe(false);
 
-    const toggleBtn = healthBar?.querySelector('button[aria-label*="Quick Health Bar"]') as HTMLButtonElement;
+    const toggleBtn = healthBar?.querySelector('button[aria-label*="Summary Bar"]') as HTMLButtonElement;
     expect(toggleBtn).not.toBeNull();
 
     await fireEvent.click(toggleBtn);
