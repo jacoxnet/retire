@@ -197,4 +197,26 @@ describe('interactions', () => {
     expect(rows[1][1]).toBe(`$${djangoMoney(r.run_median)}`);
     expect(rows[1][2]).toBe(`$${djangoMoney(realValue(r.run_median, r.years, r.inflation_rate))}`);
   });
+
+  it('renders Earliest Retirement Age card with simultaneous strategy showing user and spouse on separate lines', () => {
+    const customResults: Results = {
+      ...r,
+      simulation_type: 'earliest_retirement',
+      strategy: 'simultaneous',
+      is_married: true,
+      user_name: 'George Jetson',
+      spouse_name: 'Jane Jetson',
+      user_age: 61,
+      spouse_age: 53,
+      achieved_user_ret_age: 66,
+      achieved_spouse_ret_age: 58,
+      current_year: 2026,
+    };
+    const page = show(customResults);
+    const card = page.container.querySelector('#mcResultsCard')!;
+    expect(card).not.toBeNull();
+    const lines = [...card.querySelectorAll('.display-6.font-weight-bold > div')].map((el) => el.textContent?.trim());
+    expect(lines).toEqual(['George Jetson: 66', 'Jane Jetson: 58']);
+    expect(card.textContent).toContain('Both retire in Year 2031');
+  });
 });

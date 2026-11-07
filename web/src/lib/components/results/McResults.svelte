@@ -86,10 +86,11 @@
               Both retire at age {r.achieved_user_ret_age} ({r.user_name}: {(r.current_year ?? 2026) + ((r.achieved_user_ret_age ?? 65) - (r.user_age ?? 60))}, {r.spouse_name}: {(r.current_year ?? 2026) + ((r.achieved_spouse_ret_age ?? 65) - (r.spouse_age ?? 60))})
             </p>
           {:else if r.strategy === 'simultaneous'}
-            <span class="display-6 font-weight-bold">
-              {r.user_name}: {r.achieved_user_ret_age} | {r.spouse_name}: {r.achieved_spouse_ret_age}
-            </span>
-            <p class="small text-muted mb-0">
+            <div class="display-6 font-weight-bold">
+              <div>{r.user_name}: {r.achieved_user_ret_age}</div>
+              <div>{r.spouse_name}: {r.achieved_spouse_ret_age}</div>
+            </div>
+            <p class="small text-muted mb-0 mt-1">
               Both retire in Year {(r.current_year ?? 2026) + ((r.achieved_user_ret_age ?? 65) - (r.user_age ?? 60))}
             </p>
           {:else if r.strategy === 'solve_user'}
