@@ -103,7 +103,7 @@
   const taxBucket = $derived.by(() => {
     if (view.type === 'roth') return { key: 'roth', label: 'Tax-Free Growth', icon: 'fa-gem' };
     if (view.type === 'pretax') return { key: 'pretax', label: 'Tax-Deferred', icon: 'fa-hourglass-half' };
-    if (view.type === 'taxable') return { key: 'taxable', label: 'Flexible / Taxable', icon: 'fa-coins' };
+    if (view.type === 'taxable') return { key: 'taxable', label: 'Taxable', icon: 'fa-coins' };
     if (view.type === 'hsa') return { key: 'hsa', label: 'Triple Tax-Advantaged', icon: 'fa-heart-pulse' };
     if (view.type === 'inherited_roth') return { key: 'inherited', label: 'Inherited Roth', icon: 'fa-clock-rotate-left' };
     return { key: 'inherited', label: 'Inherited Pre-Tax', icon: 'fa-clock-rotate-left' };
@@ -114,11 +114,19 @@
   <div class="card p-4 h-100 shadow-sm border account-card account-card-{taxBucket.key} account-card-{view.type}">
     <div class="d-flex justify-content-between align-items-start mb-3 pb-2 border-bottom">
       <div class="flex-grow-1 me-2 position-relative">
-        <div class="d-flex justify-content-between align-items-center mb-1">
+        <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
           <label class="form-label small fw-bold mb-0" for="{uid}-name">Account Name</label>
-          <span class="badge badge-tax badge-tax-{taxBucket.key}">
-            <i class="fa-solid {taxBucket.icon} me-1"></i>{taxBucket.label}
-          </span>
+          <div class="d-flex align-items-center gap-1">
+            {#if married}
+              <span class="badge badge-person badge-person-{isSpouse ? 'spouse' : (view.type === 'taxable' ? 'joint' : 'user')}">
+                <i class="fa-solid {isSpouse ? 'fa-user-group' : (view.type === 'taxable' ? 'fa-users' : 'fa-user')} me-1"></i>
+                {isSpouse ? people.spouseName : (view.type === 'taxable' ? `${people.userName} / Joint` : people.userName)}
+              </span>
+            {/if}
+            <span class="badge badge-tax badge-tax-{taxBucket.key}">
+              <i class="fa-solid {taxBucket.icon} me-1"></i>{taxBucket.label}
+            </span>
+          </div>
         </div>
         <input type="text" id="{uid}-name" class={['form-control form-control-sm fw-bold text-primary account-name-input', duplicateName && 'is-invalid']}
           bind:value={getName, setName} placeholder="e.g. Primary 401(k), Roth IRA" required />
@@ -142,7 +150,9 @@
       </div>
       {#if married}
         <div class="col-5 acc-owner-group">
-          <label class="form-label small fw-bold mb-1" for="{uid}-owner">Owner</label>
+          <label class="form-label small fw-bold mb-1" for="{uid}-owner">
+            <i class="fa-solid {isSpouse ? 'fa-user-group text-info' : 'fa-user text-primary'} me-1"></i>Owner
+          </label>
           <select class="form-select form-select-sm acc-owner-select" id="{uid}-owner" value={view.owner}
             onchange={(e) => setAccountOwner(account, (e.currentTarget as HTMLSelectElement).value)}>
             <option value="user">You ({people.userName}){view.type === 'taxable' ? ' or Joint' : ''}</option>

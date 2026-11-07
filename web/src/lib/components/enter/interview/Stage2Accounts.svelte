@@ -154,6 +154,15 @@
   }
 </script>
 
+{#snippet ownerBadge(acc: Account)}
+  {#if married}
+    <span class="badge badge-person badge-person-{acc.owner === 'spouse' ? 'spouse' : (acc.type === 'taxable' ? 'joint' : 'user')}">
+      <i class="fa-solid {acc.owner === 'spouse' ? 'fa-user-group' : (acc.type === 'taxable' ? 'fa-users' : 'fa-user')} me-1"></i>
+      {acc.owner === 'spouse' ? people.spouseName : (acc.type === 'taxable' ? `${people.userName} / Joint` : people.userName)}
+    </span>
+  {/if}
+{/snippet}
+
 <div class="stage-container py-2">
   {#if wizard.currentQuestionId === 'accounts_workplace'}
     <div class="question-card">
@@ -174,6 +183,7 @@
               <div>
                 <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
                   <span>{acc.name}</span>
+                  {@render ownerBadge(acc)}
                   <span class="badge badge-tax badge-tax-{taxBucket(acc.type).key}"><i class="fa-solid {taxBucket(acc.type).icon} me-1"></i>{taxBucket(acc.type).label}</span>
                   {#if editingAccount === acc}
                     <span class="badge bg-primary text-white small">Editing</span>
@@ -225,6 +235,7 @@
               <div>
                 <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
                   <span>{acc.name}</span>
+                  {@render ownerBadge(acc)}
                   <span class="badge badge-tax badge-tax-{taxBucket(acc.type).key}"><i class="fa-solid {taxBucket(acc.type).icon} me-1"></i>{taxBucket(acc.type).label}</span>
                   {#if editingAccount === acc}
                     <span class="badge bg-primary text-white small">Editing</span>
@@ -275,6 +286,7 @@
               <div>
                 <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
                   <span>{acc.name}</span>
+                  {@render ownerBadge(acc)}
                   <span class="badge badge-tax badge-tax-taxable"><i class="fa-solid fa-coins me-1"></i>Taxable</span>
                   {#if editingAccount === acc}
                     <span class="badge bg-primary text-white small">Editing</span>
@@ -325,6 +337,7 @@
               <div>
                 <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
                   <span>{acc.name}</span>
+                  {@render ownerBadge(acc)}
                   <span class="badge badge-tax badge-tax-hsa"><i class="fa-solid fa-heart-pulse me-1"></i>HSA</span>
                   {#if editingAccount === acc}
                     <span class="badge bg-primary text-white small">Editing</span>
@@ -377,6 +390,7 @@
               <div>
                 <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
                   <span>{acc.name}</span>
+                  {@render ownerBadge(acc)}
                   <span class="badge badge-tax badge-tax-{taxBucket(acc.type).key}"><i class="fa-solid {taxBucket(acc.type).icon} me-1"></i>{taxBucket(acc.type).label}</span>
                   {#if editingAccount === acc}
                     <span class="badge bg-primary text-white small">Editing</span>

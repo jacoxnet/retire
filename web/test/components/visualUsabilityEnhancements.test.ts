@@ -11,6 +11,9 @@ import { personLabels } from '../../src/lib/plan/accountCard';
 import type { Account, Plan } from '../../src/lib/plan/types';
 import type { Results } from '../../src/lib/app/results';
 import { fixtureResults } from '../resultsFixture';
+import InputsPanel from '../../src/lib/components/results/InputsPanel.svelte';
+import DemographicsTab from '../../src/lib/components/enter/DemographicsTab.svelte';
+import { assetBreakdownConfig } from '../../src/lib/app/resultCharts';
 
 afterEach(cleanup);
 window.scrollTo = () => {};
@@ -21,7 +24,7 @@ describe('Part 1: Account Tax Bucket Badges & Color Accents', () => {
   const accountTypes: Array<{ type: Account['type']; expectedClass: string; expectedBadge: string; expectedIcon: string }> = [
     { type: 'roth', expectedClass: 'account-card-roth', expectedBadge: 'Tax-Free Growth', expectedIcon: 'fa-gem' },
     { type: 'pretax', expectedClass: 'account-card-pretax', expectedBadge: 'Tax-Deferred', expectedIcon: 'fa-hourglass-half' },
-    { type: 'taxable', expectedClass: 'account-card-taxable', expectedBadge: 'Flexible / Taxable', expectedIcon: 'fa-coins' },
+    { type: 'taxable', expectedClass: 'account-card-taxable', expectedBadge: 'Taxable', expectedIcon: 'fa-coins' },
     { type: 'hsa', expectedClass: 'account-card-hsa', expectedBadge: 'Triple Tax-Advantaged', expectedIcon: 'fa-heart-pulse' },
     { type: 'inherited_pretax', expectedClass: 'account-card-inherited', expectedBadge: 'Inherited Pre-Tax', expectedIcon: 'fa-clock-rotate-left' },
     { type: 'inherited_roth', expectedClass: 'account-card-inherited', expectedBadge: 'Inherited Roth', expectedIcon: 'fa-clock-rotate-left' },
@@ -232,5 +235,160 @@ describe('Part 4: Guided Walkthrough Enhancements', () => {
     expect(container.querySelector('#cartTotalAssets')?.textContent).toBe('$150,000');
     expect(container.querySelector('#cartMonthlyIncome')?.textContent).toBe('$2,500/mo');
     expect(container.querySelector('#cartDesiredSpending')?.textContent).toBe('$65,000/yr');
+  });
+});
+
+describe('Part 5: Tax Bucket Color Harmonization in Charts & InputsPanel', () => {
+  it('aligns Asset Breakdown chart dataset colors with the tax bucket color tokens', () => {
+    const results = fixtureResults('aug_13_plan');
+    const chart = assetBreakdownConfig(results, 'nominal');
+
+    // Pretax: #2563eb
+    expect(chart.data.datasets[0].borderColor).toBe('#2563eb');
+    expect(chart.data.datasets[0].backgroundColor).toBe('rgba(37, 99, 235, 0.75)');
+
+    // Roth: #8b5cf6
+    expect(chart.data.datasets[1].borderColor).toBe('#8b5cf6');
+    expect(chart.data.datasets[1].backgroundColor).toBe('rgba(139, 92, 246, 0.75)');
+
+    // Taxable: #059669
+    expect(chart.data.datasets[2].borderColor).toBe('#059669');
+    expect(chart.data.datasets[2].backgroundColor).toBe('rgba(5, 150, 105, 0.75)');
+
+    // HSA: #0891b2
+    expect(chart.data.datasets[3].borderColor).toBe('#0891b2');
+    expect(chart.data.datasets[3].backgroundColor).toBe('rgba(8, 145, 178, 0.75)');
+  });
+
+  it('renders tax bucket border stripes and badges on InputsPanel return sliders', () => {
+    const results = fixtureResults('aug_13_plan');
+    const { container } = render(InputsPanel, {
+      results,
+      onApply: vi.fn(),
+    });
+
+    // Check presence of tax-specific slider cards
+    expect(container.querySelector('.slider-tax-pretax')).not.toBeNull();
+    expect(container.querySelector('.slider-tax-roth')).not.toBeNull();
+    expect(container.querySelector('.slider-tax-taxable')).not.toBeNull();
+    expect(container.querySelector('.slider-tax-hsa')).not.toBeNull();
+
+    // Check presence of badge-tax chips inside the slider cards
+    const pretaxBadge = container.querySelector('.slider-tax-pretax .badge-tax-pretax');
+    expect(pretaxBadge).not.toBeNull();
+    expect(pretaxBadge?.textContent).toContain('Pre-Tax');
+
+    const rothBadge = container.querySelector('.slider-tax-roth .badge-tax-roth');
+    expect(rothBadge).not.toBeNull();
+    expect(rothBadge?.textContent).toContain('Roth');
+  });
+});
+
+describe('Part 6: Household Identity Badges & Accents in Demographics & Account Cards', () => {
+  it('renders primary planner and spouse sections with person identity badges', () => {
+    const plan: Plan = {
+      ...getDefaultData(),
+      user_name: 'Elizabeth Bennet',
+      is_married: true,
+      spouse_name: 'Fitzwilliam Darcy',
+    };
+
+    const { container } = render(DemographicsTab, {
+      plan,
+      onNext: vi.fn(),
+    });
+
+    // Primary planner card
+    const userSection = container.querySelector('.person-section-user');
+    expect(userSection).not.toBeNull();
+    const userBadge = userSection?.querySelector('.badge-person-user');
+    expect(userBadge).not.toBeNull();
+    expect(userBadge?.textContent).toContain('Primary Planner');
+
+    // Spouse card
+    const spouseSection = container.querySelector('#spouse_section.person-section-spouse');
+    expect(spouseSection).not.toBeNull();
+    const spouseBadge = spouseSection?.querySelector('.badge-person-spouse');
+    expect(spouseBadge).not.toBeNull();
+    expect(spouseBadge?.textContent).toContain('Spouse');
+  });
+
+  it('renders person ownership badges on Account Cards when married', () => {
+    const plan: Plan = {
+      ...getDefaultData(),
+      user_name: 'Alex',
+      is_married: true,
+      spouse_name: 'Taylor',
+    };
+    const people = personLabels(plan);
+
+    const userAccount: Account = {
+      id: 'acc-user',
+      name: 'Alex 401(k)',
+      type: 'pretax',
+      owner: 'user',
+      balance: 100000,
+    };
+
+    const spouseAccount: Account = {
+      id: 'acc-spouse',
+      name: 'Taylor IRA',
+      type: 'roth',
+      owner: 'spouse',
+      balance: 75000,
+    };
+
+    // User Account Card
+    const { container: userContainer } = render(AccountCard, {
+      account: userAccount,
+      people,
+      priorNames: [],
+      onDelete: vi.fn(),
+      onShowAssumptions: vi.fn(),
+    });
+
+    const userBadge = userContainer.querySelector('.badge-person-user');
+    expect(userBadge).not.toBeNull();
+    expect(userBadge?.textContent).toContain('Alex');
+
+    // Spouse Account Card
+    const { container: spouseContainer } = render(AccountCard, {
+      account: spouseAccount,
+      people,
+      priorNames: [],
+      onDelete: vi.fn(),
+      onShowAssumptions: vi.fn(),
+    });
+
+    const spouseBadge = spouseContainer.querySelector('.badge-person-spouse');
+    expect(spouseBadge).not.toBeNull();
+    expect(spouseBadge?.textContent).toContain('Taylor');
+  });
+
+  it('does not render person ownership badge on Account Cards when single', () => {
+    const singlePlan: Plan = {
+      ...getDefaultData(),
+      user_name: 'Single Planner',
+      is_married: false,
+    };
+    const singlePeople = personLabels(singlePlan);
+
+    const account: Account = {
+      id: 'acc-single',
+      name: 'My Roth',
+      type: 'roth',
+      owner: 'user',
+      balance: 50000,
+    };
+
+    const { container } = render(AccountCard, {
+      account,
+      people: singlePeople,
+      priorNames: [],
+      onDelete: vi.fn(),
+      onShowAssumptions: vi.fn(),
+    });
+
+    expect(container.querySelector('.badge-person')).toBeNull();
   });
 });

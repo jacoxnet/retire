@@ -112,10 +112,10 @@ export function assetBreakdownConfig(r: Results, mode: DollarMode) {
     data: {
       labels: rowLabels(r),
       datasets: [
-        area('Pretax Assets (IRA/401k)', 'pretax', 'rgba(230, 57, 70, 0.75)', '#e63946', true),
-        area('Roth Assets (Roth IRA/401k)', 'roth', 'rgba(255, 183, 3, 0.75)', '#ffb703'),
-        area('Taxable Assets (Brokerage/Cash)', 'taxable', 'rgba(33, 158, 188, 0.75)', '#219ebc'),
-        area('HSA Assets (Health Savings)', 'hsa', 'rgba(42, 157, 143, 0.75)', '#2a9d8f'),
+        area('Pretax Assets (IRA/401k)', 'pretax', 'rgba(37, 99, 235, 0.75)', '#2563eb', true),
+        area('Roth Assets (Roth IRA/401k)', 'roth', 'rgba(139, 92, 246, 0.75)', '#8b5cf6'),
+        area('Taxable Assets (Brokerage/Cash)', 'taxable', 'rgba(5, 150, 105, 0.75)', '#059669'),
+        area('HSA Assets (Health Savings)', 'hsa', 'rgba(8, 145, 178, 0.75)', '#0891b2'),
       ],
     },
     options: lineOptions('Total Assets ($)', true, true),

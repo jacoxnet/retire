@@ -82,28 +82,41 @@
 {/snippet}
 
 <div class="card p-4 mb-4">
-  <h3 class="mb-4">Demographics</h3>
-
-  <div class="row">
-    <div class="col-md-6 mb-3">
-      <label for="user_name" class="form-label">Your Name</label>
-      <input type="text" class="form-control" id="user_name" bind:value={plan.user_name} required />
-    </div>
-    <div class="col-md-6 mb-3">
-      <label for="user_age" class="form-label">Your Present Age</label>
-      <input type="number" class="form-control" id="user_age" bind:value={plan.user_age} min="18" max="120" required />
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-1 text-primary">Demographics & Plan Details</h3>
+      <p class="text-secondary small mb-0">Define personal horizons, ages, and household members for your retirement simulation.</p>
     </div>
   </div>
-  <div class="row">
-    <div class="col-md-6 mb-3">
-      <label for="user_retirement_age" class="form-label">Your Retirement Age</label>
-      <input type="number" class="form-control" id="user_retirement_age" bind:value={plan.user_retirement_age}
-        min="18" max="120" required />
+
+  <div class="person-section person-section-user p-3 mb-4 rounded-3 border bg-light-subtle">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <span class="badge badge-person badge-person-user">
+        <i class="fa-solid fa-user me-1"></i>Primary Planner
+      </span>
+      <h4 class="h6 fw-bold mb-0 text-primary">{plan.user_name || 'Your Details'}</h4>
     </div>
-    <div class="col-md-6 mb-3">
-      <label for="user_age_death" class="form-label">Your Age at Death</label>
-      <input type="number" class="form-control" id="user_age_death" bind:value={plan.user_age_death}
-        min="18" max="120" required />
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label for="user_name" class="form-label">Your Name</label>
+        <input type="text" class="form-control" id="user_name" bind:value={plan.user_name} required />
+      </div>
+      <div class="col-md-6 mb-3">
+        <label for="user_age" class="form-label">Your Present Age</label>
+        <input type="number" class="form-control" id="user_age" bind:value={plan.user_age} min="18" max="120" required />
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-6 mb-3 mb-md-0">
+        <label for="user_retirement_age" class="form-label">Your Retirement Age</label>
+        <input type="number" class="form-control" id="user_retirement_age" bind:value={plan.user_retirement_age}
+          min="18" max="120" required />
+      </div>
+      <div class="col-md-6 mb-0">
+        <label for="user_age_death" class="form-label">Your Age at Death</label>
+        <input type="number" class="form-control" id="user_age_death" bind:value={plan.user_age_death}
+          min="18" max="120" required />
+      </div>
     </div>
   </div>
 
@@ -113,8 +126,13 @@
   </div>
 
   {#if married}
-    <div id="spouse_section">
-      <h4 class="text-secondary mb-3">Spouse Details</h4>
+    <div id="spouse_section" class="person-section person-section-spouse p-3 mb-4 rounded-3 border bg-light-subtle">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge badge-person badge-person-spouse">
+          <i class="fa-solid fa-user-group me-1"></i>Spouse
+        </span>
+        <h4 class="h6 fw-bold mb-0 text-info">{plan.spouse_name || "Spouse's Details"}</h4>
+      </div>
       <div class="row">
         <div class="col-md-6 mb-3">
           <label for="spouse_name" class="form-label">Spouse's Name</label>
@@ -126,12 +144,12 @@
         </div>
       </div>
       <div class="row">
-        <div class="col-md-6 mb-3">
+        <div class="col-md-6 mb-3 mb-md-0">
           <label for="spouse_retirement_age" class="form-label">Spouse's Retirement Age</label>
           <input type="number" class="form-control" id="spouse_retirement_age" bind:value={plan.spouse_retirement_age}
             min="18" max="120" />
         </div>
-        <div class="col-md-6 mb-3">
+        <div class="col-md-6 mb-0">
           <label for="spouse_age_death" class="form-label">Spouse's Age at Death</label>
           <input type="number" class="form-control" id="spouse_age_death" bind:value={plan.spouse_age_death}
             min="18" max="120" />

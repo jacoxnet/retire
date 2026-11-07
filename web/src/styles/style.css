@@ -43,6 +43,17 @@
   --tax-inherited-border: #d97706;
   --tax-inherited-bg: #fffbeb;
   --tax-inherited-text: #b45309;
+
+  /* Household Identity Accents */
+  --person-user-border: #2563eb;
+  --person-user-bg: #eff6ff;
+  --person-user-text: #1d4ed8;
+  --person-spouse-border: #0891b2;
+  --person-spouse-bg: #ecfeff;
+  --person-spouse-text: #0e7490;
+  --person-joint-border: #059669;
+  --person-joint-bg: #ecfdf5;
+  --person-joint-text: #047857;
 }
 
 /* Explicit Dark Theme via data-theme="dark" */
@@ -93,6 +104,17 @@
   --tax-inherited-border: #fbbf24;
   --tax-inherited-bg: rgba(217, 119, 6, 0.18);
   --tax-inherited-text: #fde68a;
+
+  /* Household Identity Accents - Dark Theme */
+  --person-user-border: #60a5fa;
+  --person-user-bg: rgba(37, 99, 235, 0.18);
+  --person-user-text: #bfdbfe;
+  --person-spouse-border: #22d3ee;
+  --person-spouse-bg: rgba(8, 145, 178, 0.18);
+  --person-spouse-text: #a5f3fc;
+  --person-joint-border: #34d399;
+  --person-joint-bg: rgba(5, 150, 105, 0.18);
+  --person-joint-text: #a7f3d0;
 }
 
 /* Dark mode auto-detection fallback if no data-theme explicitly set */
@@ -139,6 +161,17 @@
     --tax-inherited-border: #fbbf24;
     --tax-inherited-bg: rgba(217, 119, 6, 0.18);
     --tax-inherited-text: #fde68a;
+
+    /* Household Identity Accents - Dark Theme */
+    --person-user-border: #60a5fa;
+    --person-user-bg: rgba(37, 99, 235, 0.18);
+    --person-user-text: #bfdbfe;
+    --person-spouse-border: #22d3ee;
+    --person-spouse-bg: rgba(8, 145, 178, 0.18);
+    --person-spouse-text: #a5f3fc;
+    --person-joint-border: #34d399;
+    --person-joint-bg: rgba(5, 150, 105, 0.18);
+    --person-joint-text: #a7f3d0;
   }
 }
 
@@ -2600,6 +2633,64 @@ tbody tr:hover {
   background-color: var(--tax-inherited-bg);
   color: var(--tax-inherited-text);
   border: 1px solid var(--tax-inherited-border);
+}
+
+/* ==========================================================================
+   Household Identity Badges & Sections
+   ========================================================================== */
+.badge-person {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 9999px;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.badge-person-user {
+  background-color: var(--person-user-bg);
+  color: var(--person-user-text);
+  border: 1px solid var(--person-user-border);
+}
+.badge-person-spouse {
+  background-color: var(--person-spouse-bg);
+  color: var(--person-spouse-text);
+  border: 1px solid var(--person-spouse-border);
+}
+.badge-person-joint {
+  background-color: var(--person-joint-bg);
+  color: var(--person-joint-text);
+  border: 1px solid var(--person-joint-border);
+}
+
+.person-section-user,
+.person-card-user {
+  border-left: 4px solid var(--person-user-border) !important;
+}
+.person-section-spouse,
+.person-card-spouse {
+  border-left: 4px solid var(--person-spouse-border) !important;
+}
+.person-section-joint,
+.person-card-joint {
+  border-left: 4px solid var(--person-joint-border) !important;
+}
+
+/* ==========================================================================
+   Return Slider Cards (Simulation Inputs)
+   ========================================================================== */
+.slider-tax-roth {
+  border-left: 4px solid var(--tax-roth-border) !important;
+}
+.slider-tax-pretax {
+  border-left: 4px solid var(--tax-pretax-border) !important;
+}
+.slider-tax-taxable {
+  border-left: 4px solid var(--tax-taxable-border) !important;
+}
+.slider-tax-hsa {
+  border-left: 4px solid var(--tax-hsa-border) !important;
 }
 
 /* ==========================================================================

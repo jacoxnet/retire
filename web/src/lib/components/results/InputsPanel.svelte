@@ -27,6 +27,7 @@
     width: number;
     unit: '$' | '%' | 'yrs';
     balance?: number;
+    taxBucket?: 'pretax' | 'roth' | 'taxable' | 'hsa';
   }
 
   /** results.js formatPercent: the typed digits with a "%" sign. */
@@ -88,10 +89,10 @@
       : []),
   ]);
   const returnSliders = $derived<Slider[]>([
-    { name: 'pretax_return_mean', label: 'Pretax:', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.pretax_assets?.present_balance },
-    { name: 'roth_return_mean', label: 'Roth:', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.roth_assets?.present_balance },
-    { name: 'taxable_return_mean', label: 'Taxable:', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.taxable_assets?.present_balance },
-    { name: 'hsa_return_mean', label: 'HSA:', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.hsa_assets?.present_balance },
+    { name: 'pretax_return_mean', label: 'Pretax', taxBucket: 'pretax', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.pretax_assets?.present_balance },
+    { name: 'roth_return_mean', label: 'Roth', taxBucket: 'roth', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.roth_assets?.present_balance },
+    { name: 'taxable_return_mean', label: 'Taxable', taxBucket: 'taxable', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.taxable_assets?.present_balance },
+    { name: 'hsa_return_mean', label: 'HSA', taxBucket: 'hsa', min: -10, max: 25, step: 0.1, width: 90, unit: '%', balance: r.hsa_assets?.present_balance },
   ]);
 
   const set = (name: string) => (e: Event) => (values[name] = (e.currentTarget as HTMLInputElement).value);
@@ -122,11 +123,26 @@
 </script>
 
 {#snippet slider(s: Slider, boxClass: string)}
-  <div class="{boxClass} p-2 bg-light rounded border">
+  <div class="{boxClass} p-2 bg-light rounded border {s.taxBucket ? `slider-tax-${s.taxBucket}` : ''}">
     <div class="d-flex justify-content-between align-items-center mb-1">
       {#if s.balance !== undefined}
-        <div>
-          <span class="fw-bold small">{s.label}</span> <span class="small text-muted">${djangoMoney(s.balance)}</span>
+        <div class="d-flex align-items-center gap-2">
+          {#if s.taxBucket}
+            <span class="badge badge-tax badge-tax-{s.taxBucket}">
+              {#if s.taxBucket === 'pretax'}
+                <i class="fa-solid fa-hourglass-half me-1"></i>Pre-Tax
+              {:else if s.taxBucket === 'roth'}
+                <i class="fa-solid fa-gem me-1"></i>Roth
+              {:else if s.taxBucket === 'taxable'}
+                <i class="fa-solid fa-coins me-1"></i>Taxable
+              {:else if s.taxBucket === 'hsa'}
+                <i class="fa-solid fa-heart-pulse me-1"></i>HSA
+              {/if}
+            </span>
+          {:else}
+            <span class="fw-bold small">{s.label}:</span>
+          {/if}
+          <span class="small text-muted">${djangoMoney(s.balance)}</span>
         </div>
       {:else}
         <label for="input_{s.name}" class="form-label small fw-bold mb-0">{s.label}</label>

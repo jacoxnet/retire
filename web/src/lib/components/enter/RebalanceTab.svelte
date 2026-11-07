@@ -47,8 +47,16 @@
   });
 
   const money = (v: number) => formatMoney(v, true);
-  const BADGE: Record<string, string> = { pretax: 'bg-primary', roth: 'bg-success', taxable: 'bg-info text-dark', hsa: 'bg-warning text-dark' };
-  const badge = (a: RebAccount) => BADGE[a.category] ?? 'bg-secondary';
+  const BADGE: Record<string, string> = {
+    pretax: 'badge-tax badge-tax-pretax',
+    roth: 'badge-tax badge-tax-roth',
+    taxable: 'badge-tax badge-tax-taxable',
+    hsa: 'badge-tax badge-tax-hsa',
+    inherited: 'badge-tax badge-tax-inherited',
+    inherited_pretax: 'badge-tax badge-tax-inherited',
+    inherited_roth: 'badge-tax badge-tax-inherited',
+  };
+  const badge = (a: RebAccount) => BADGE[a.category] ?? 'badge-tax bg-secondary text-white';
   const sortOrder: Record<string, number> = { pretax: 1, roth: 2, hsa: 3, taxable: 4, emergency: 5, goals: 6, daily: 7 };
   const hasTaxable = $derived(results.included.some((a) => a.category === 'taxable'));
 
