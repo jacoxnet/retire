@@ -143,6 +143,8 @@ describe('Part 3: Sticky Summary Bar on EnterPage', () => {
     const btnRun = container.querySelector('#btnStickyRun') as HTMLButtonElement;
     expect(btnRun).not.toBeNull();
     expect(btnRun.disabled).toBe(false);
+    expect(btnRun.textContent?.trim()).toContain('Run Simulation');
+    expect(btnRun.getAttribute('aria-label')).toBe('Run Simulation');
 
     await fireEvent.click(btnRun);
     expect(onRun).toHaveBeenCalled();
@@ -283,6 +285,11 @@ describe('Part 5: Tax Bucket Color Harmonization in Charts & InputsPanel', () =>
     const rothBadge = container.querySelector('.slider-tax-roth .badge-tax-roth');
     expect(rothBadge).not.toBeNull();
     expect(rothBadge?.textContent).toContain('Roth');
+
+    // Check Update Inputs button text
+    const submitBtn = container.querySelector('button[type="submit"]');
+    expect(submitBtn?.textContent?.trim()).toContain('Update Inputs');
+    expect(submitBtn?.textContent?.trim()).not.toContain('Re-Run Simulation');
   });
 });
 

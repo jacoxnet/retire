@@ -277,12 +277,12 @@
             type="submit"
             class="btn btn-success fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2 text-nowrap"
             id="btnStickyRun"
-            aria-label="Run Plan"
+            aria-label="Run Simulation"
             disabled={duplicates.length > 0}
             title={duplicates.length > 0 ? 'Fix duplicate account names to run' : 'Run Monte Carlo Simulation'}
           >
             <i class="fa-solid fa-rocket"></i>
-            <span>Run Plan</span>
+            <span>Run Simulation</span>
           </button>
         </div>
       </div>

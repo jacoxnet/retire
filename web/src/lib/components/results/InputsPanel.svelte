@@ -208,7 +208,7 @@
       </div>
 
       <button type="submit" class={['btn btn-primary btn-md w-100 mt-3 shadow-sm', stale && 'btn-rerun-highlight']} {disabled}>
-        <i class="fa fa-sync-alt me-1"></i> Update Inputs & Re-Run Simulation
+        <i class="fa fa-sync-alt me-1"></i> Update Inputs
       </button>
     </div>
   </div>

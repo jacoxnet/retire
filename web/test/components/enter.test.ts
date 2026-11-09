@@ -144,7 +144,7 @@ describe('Enter page', () => {
     await type('user_age', '70');
     await type('user_retirement_age', '65');
     await fireEvent.click(byId('income-tab')!);
-    await fireEvent.click(screen.getByRole('button', { name: /Run Simulation/ }));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Run Simulation/ })[0]);
     expect(onNavigate).not.toHaveBeenCalled();
     expect(byId('validationAlertContainer')!.textContent).toMatch(
       /Your Retirement Age must be between Your Present Age \(70\) and 120\./);
@@ -152,7 +152,7 @@ describe('Enter page', () => {
     await fireEvent.click(byId('demographics-tab')!);
     await type('user_retirement_age', '72');
     await fireEvent.click(byId('income-tab')!);
-    await fireEvent.click(screen.getByRole('button', { name: /Run Simulation/ }));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Run Simulation/ })[0]);
     expect(onNavigate).toHaveBeenCalledOnce();
     expect(byId('validationAlertContainer')!.textContent!.trim()).toBe('');
     stop();

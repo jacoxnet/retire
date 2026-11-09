@@ -257,19 +257,19 @@ describe('marriage and validation', () => {
     store.plan.income_sources = [{ name: 'Annuity', amount: -5 }];
     flushSync();
     await tab('income');
-    await fireEvent.click(screen.getByRole('button', { name: /Run Simulation/ }));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Run Simulation/ })[0]);
     expect(onNavigate).not.toHaveBeenCalled();
     expect($('#validationAlertContainer').textContent).toMatch(/Additional Spending item #1 Name is required\./);
 
     store.plan.additional_spending = [{ name: 'Roof', start_age: 61 }];
     flushSync();
-    await fireEvent.click(screen.getByRole('button', { name: /Run Simulation/ }));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Run Simulation/ })[0]);
     expect(onNavigate).not.toHaveBeenCalled();
     expect($('#validationAlertContainer').textContent).toMatch(/Income Source 'Annuity' Amount cannot be negative\./);
 
     store.plan.income_sources![0].amount = 500;
     flushSync();
-    await fireEvent.click(screen.getByRole('button', { name: /Run Simulation/ }));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Run Simulation/ })[0]);
     expect(onNavigate).toHaveBeenCalledOnce();
     stop();
   });
