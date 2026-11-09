@@ -30,10 +30,12 @@
     stressError?: string | null;
     /** Inputs are disabled (e.g. while re-running). */
     busy?: boolean;
+    /** Adopt solved parameters into primary plan. */
+    onAdopt?: (type: 'spending' | 'retirement_age', value: any) => void;
   }
   let {
     results, messages = $bindable([]), onApply = () => {}, onStressChange, stressBusy = false, stressProgress = null,
-    stressError = null, busy = false,
+    stressError = null, busy = false, onAdopt,
   }: Props = $props();
 
   type TabId = 'stats' | 'projection' | 'cashflow' | 'charts' | 'stresstest';
@@ -47,11 +49,24 @@
 
   let active: TabId = $state('stats');
   let mode: DollarMode = $state('nominal');
+  let viewScenario = $state<'solved' | 'baseline'>('solved');
   let stale = $state(false);
   let printing = $state(false);
   let taxesOpen = $state(false);
   let withdrawalsOpen = $state(false);
   let inputs: ReturnType<typeof InputsPanel> | undefined = $state();
+
+  const isSolvedMode = $derived(
+    Boolean((results.simulation_type === 'goal_seeking' || results.simulation_type === 'earliest_retirement' || results.goal_seeking) && results.baseline_det_rows)
+  );
+  const activeRows = $derived(
+    viewScenario === 'baseline' && results.baseline_det_rows ? results.baseline_det_rows : results.det_rows
+  );
+  const chartResults = $derived(
+    viewScenario === 'baseline' && results.baseline_det_rows
+      ? { ...results, det_rows: results.baseline_det_rows }
+      : results
+  );
 
   const setMode = (m: DollarMode) => (mode = m);
   const paneClass = (id: TabId) => ['tab-pane fade', (active === id || printing) && 'show active'];
@@ -140,23 +155,59 @@
         <InputsPanel bind:this={inputs} {results} {onApply} bind:stale disabled={busy} />
       </div>
       <div class="col-md-7 mb-4">
-        <McResults {results} />
+        <McResults {results} {onAdopt} />
       </div>
     </div>
   </div>
 
+  {#snippet scenarioToggle()}
+    {#if isSolvedMode}
+      <div class="card p-2 px-3 mb-3 bg-light border shadow-sm d-flex flex-row flex-wrap justify-content-between align-items-center gap-2" id="scenarioComparisonBar">
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge {viewScenario === 'solved' ? 'bg-primary' : 'bg-secondary'}">
+            <i class="fa-solid fa-code-compare me-1"></i>Scenario
+          </span>
+          <span class="small fw-semibold text-secondary">
+            {#if viewScenario === 'solved'}
+              {#if results.simulation_type === 'earliest_retirement'}
+                Solved Earliest Retirement: <strong>Age {results.achieved_user_ret_age}{#if results.is_married && results.achieved_spouse_ret_age !== undefined} / {results.achieved_spouse_ret_age}{/if}</strong>
+              {:else}
+                Solved Maximum Spending: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
+              {/if}
+            {:else}
+              {#if results.simulation_type === 'earliest_retirement'}
+                Original Baseline Plan: <strong>Age {results.original_plan_data_json?.user_retirement_age ?? results.user_retirement_age}</strong>
+              {:else}
+                Original Baseline Plan: <strong>${djangoMoney(results.original_plan_data_json?.desired_spending ?? results.desired_spending)}/yr</strong>
+              {/if}
+            {/if}
+          </span>
+        </div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Scenario comparison toggle">
+          <input type="radio" class="btn-check" name="scenario_view" id="scenario_view_solved" autocomplete="off" checked={viewScenario === 'solved'} onclick={() => (viewScenario = 'solved')}>
+          <label class="btn btn-outline-primary" for="scenario_view_solved"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Solved Scenario</label>
+          <input type="radio" class="btn-check" name="scenario_view" id="scenario_view_baseline" autocomplete="off" checked={viewScenario === 'baseline'} onclick={() => (viewScenario = 'baseline')}>
+          <label class="btn btn-outline-secondary" for="scenario_view_baseline"><i class="fa-solid fa-clock-rotate-left me-1"></i>Original Baseline Plan</label>
+        </div>
+      </div>
+    {/if}
+  {/snippet}
+
   <div class={paneClass('projection')} id="projection" role="tabpanel" aria-labelledby="projection-tab">
-    <DetTable kind="projection" rows={results.det_rows} inflationRate={results.inflation_rate} {mode} onModeChange={setMode}
+    {@render scenarioToggle()}
+    <DetTable kind="projection" rows={activeRows} inflationRate={results.inflation_rate} {mode} onModeChange={setMode}
       onTaxesHelp={() => (taxesOpen = true)} />
   </div>
 
   <div class={paneClass('cashflow')} id="cashflow" role="tabpanel" aria-labelledby="cashflow-tab">
-    <DetTable kind="cashflow" rows={results.det_rows} inflationRate={results.inflation_rate} {mode} onModeChange={setMode}
+    {@render scenarioToggle()}
+    <DetTable kind="cashflow" rows={activeRows} inflationRate={results.inflation_rate} {mode} onModeChange={setMode}
       onTaxesHelp={() => (taxesOpen = true)} onWithdrawalsHelp={() => (withdrawalsOpen = true)} />
   </div>
 
   <div class={paneClass('charts')} id="charts" role="tabpanel" aria-labelledby="charts-tab">
-    <ChartsTab {results} {mode} onModeChange={setMode} />
+    {@render scenarioToggle()}
+    <ChartsTab results={chartResults} {mode} onModeChange={setMode} />
   </div>
 
   <div class={paneClass('stresstest')} id="stresstest" role="tabpanel" aria-labelledby="stress-tab">

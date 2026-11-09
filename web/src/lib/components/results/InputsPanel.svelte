@@ -170,6 +170,25 @@
       <p class="mb-2"><strong>Initial Wealth:</strong> <span class="dollar-amount-static">${djangoMoney(r.initial_wealth)}</span></p>
       <p class="mb-3"><strong>Projection Years:</strong> {r.years} years</p>
 
+      {#if (r.simulation_type ?? (r.goal_seeking ? 'goal_seeking' : 'regular')) === 'goal_seeking'}
+        <div class="mb-3 p-2 bg-light rounded border border-success-subtle" id="results_solved_spending_display">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold text-success"><i class="fa-solid fa-calculator me-1"></i>Desired Annual Spending (Solved)</span>
+            <span class="badge bg-success fs-6">${djangoMoney(r.achieved_spending || r.desired_spending)}/yr</span>
+          </div>
+          <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 80.0, 1)}% confidence.</small>
+        </div>
+      {/if}
+      {#if r.simulation_type === 'earliest_retirement' && r.achieved_user_ret_age}
+        <div class="mb-3 p-2 bg-light rounded border border-primary-subtle" id="results_solved_earliest_ret_display">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold text-primary"><i class="fa-solid fa-clock me-1"></i>Earliest Retirement (Solved)</span>
+            <span class="badge bg-primary fs-6">Age {r.achieved_user_ret_age}{#if r.is_married && r.achieved_spouse_ret_age !== undefined} / {r.achieved_spouse_ret_age}{/if}</span>
+          </div>
+          <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 80.0, 1)}% confidence.</small>
+        </div>
+      {/if}
+
       {#each topSliders as s (s.name)}{@render slider(s, 'mb-3')}{/each}
 
       <h5 class="mt-4 border-bottom pb-1 text-secondary">Asset Allocations & Average Returns</h5>

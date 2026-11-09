@@ -55,7 +55,7 @@ describe('computeResults', () => {
     expect(again).toEqual({ ...rest, stress_test });
   }, 60_000);
 
-  it('a goal-seeking plan: capped search, full run at the solved spending, baseline at the plan spending', async () => {
+  it('a goal-seeking plan: capped search, full run at the solved spending, stress test against solved plan', async () => {
     const { plan } = loadPlanFixture('aug_13_plan', 'imported');
     const small = { ...plan, runs: 600 };
     const { runner, jobs } = countingRunner();
@@ -67,15 +67,19 @@ describe('computeResults', () => {
     expect(r.searches).toBeGreaterThan(5);
     const search = jobs.slice(0, r.searches!);
     expect(search.every((j) => j.paths === 200 && j.testSpending !== null && !j.stress)).toBe(true);
-    const [mc, baseline, stress] = jobs.slice(r.searches!);
+    const [mc, stress] = jobs.slice(r.searches!);
     expect(mc).toEqual({ paths: 600, testSpending: r.achieved_spending, stress: false });
-    expect(baseline).toEqual({ paths: 600, testSpending: null, stress: false });
     expect(stress).toEqual({ paths: 600, testSpending: null, stress: true });
-    expect(jobs).toHaveLength(r.searches! + 3);
-    // The stress test compares with the plan's own spending.
-    expect(r.stress_test.desired_spending).toBe(plan.desired_spending);
-    expect(r.stress_test.regular_results.run_success).not.toBe(r.run_success);
-    checkProgress(seen, ['search', 'mc', 'baseline', 'stress']);
+    expect(jobs).toHaveLength(r.searches! + 2);
+    // Solved deterministic rows and baseline rows
+    expect(r.desired_spending).toBe(r.achieved_spending);
+    expect(r.plan_data_json.desired_spending).toBe(r.achieved_spending);
+    const activeRow = r.det_rows.find((row) => row.is_spending_active);
+    expect(activeRow).toBeDefined();
+    // The stress test compares with the solved spending
+    expect(r.stress_test.desired_spending).toBe(r.achieved_spending);
+    expect(r.stress_test.regular_results.run_success).toBe(r.run_success);
+    checkProgress(seen, ['search', 'mc', 'stress']);
   }, 60_000);
 
   it('a stress test for another scenario reuses the given baseline', async () => {
@@ -93,7 +97,7 @@ describe('computeResults', () => {
     expect(stress.deltas.delta_success).toBeCloseTo(stress.stress_results.run_success - r.run_success, 12);
   }, 60_000);
 
-  it('an earliest-retirement plan: search stage, full run at solved retirement ages, baseline at plan age', async () => {
+  it('an earliest-retirement plan: search stage, full run at solved retirement ages, stress test against solved plan', async () => {
     const { plan } = loadPlanFixture('early_suzie_plan', 'imported');
     const earliestPlan = {
       ...plan,
@@ -109,6 +113,9 @@ describe('computeResults', () => {
     expect(r.achieved_user_ret_age).toBeGreaterThanOrEqual(earliestPlan.user_age);
     expect(r.achieved_success_rate).toBeGreaterThanOrEqual(80.0);
     expect(r.det_rows.length).toBeGreaterThan(0);
-    checkProgress(seen, ['search', 'mc', 'baseline', 'stress']);
+    expect(r.det_rows[0].desired_spending_start_age).toBe(r.achieved_user_ret_age);
+    expect(r.baseline_det_rows?.[0].desired_spending_start_age).toBe(earliestPlan.user_retirement_age);
+    expect(r.stress_test.regular_results.run_success).toBe(r.run_success);
+    checkProgress(seen, ['search', 'mc', 'stress']);
   }, 60_000);
 });

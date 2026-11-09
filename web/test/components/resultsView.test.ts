@@ -107,6 +107,20 @@ describe('ResultsView', () => {
     expect((store.cachedResults as Results).achieved_spending).toBeGreaterThan(0);
   }, 60_000);
 
+  it('adopts solved spending into plan when clicking adopt button', async () => {
+    const { store, q } = setup({ runs: 200 });
+    await ready(q);
+    await fireEvent.click(q('#results_sim_type_goal')!);
+    await fireEvent.submit(q('#resultsInputsForm')!);
+    await waitFor(() => expect(q('#btnAdoptMaxSpending')).not.toBeNull(), { timeout: 30_000 });
+    const solved = (store.cachedResults as Results).achieved_spending!;
+    await fireEvent.click(q('#btnAdoptMaxSpending')!);
+    expect(store.plan.simulation_type).toBe('regular');
+    expect(store.plan.goal_seeking).toBe(false);
+    expect(store.plan.desired_spending).toBe(Math.round(solved));
+    await ready(q);
+  }, 60_000);
+
   it('runs another stress test on request and keeps it with the cached results', async () => {
     const { store, q, calls } = setup();
     await ready(q);

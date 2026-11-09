@@ -35,6 +35,7 @@ export interface Results extends McStats, Partial<GoalSeekResult>, Partial<Earli
   social_security: Dict;
   desired_spending_start_age: number;
   det_rows: DetRow[];
+  baseline_det_rows?: DetRow[];
   pretax_assets: Dict;
   spouse_pretax_assets: Dict;
   roth_assets: Dict;
@@ -43,6 +44,7 @@ export interface Results extends McStats, Partial<GoalSeekResult>, Partial<Earli
   spouse_hsa_assets: Dict;
   /** The plan the results were computed from. */
   plan_data_json: Dict;
+  original_plan_data_json?: Dict;
   stress_test: StressData;
   scenarios_list: typeof CRISIS_SCENARIOS;
   terminal_life_insurance: number;
@@ -58,6 +60,8 @@ export interface Results extends McStats, Partial<GoalSeekResult>, Partial<Earli
 export function resultsContext(
   data: Dict, detRows: DetRow[], mcStats: McStats, goal: GoalSeekResult | null, stressTest: StressData,
   earliestRet: EarliestRetirementResult | null = null,
+  baselineDetRows?: DetRow[],
+  originalPlan?: Dict,
 ): Results {
   const isGoal = get(data, 'goal_seeking', false);
   const simType = get(data, 'simulation_type', isGoal ? 'goal_seeking' : 'regular');
@@ -105,6 +109,12 @@ export function resultsContext(
     taxable_deposit_amt: 0,
     taxable_deposit_t: -1,
   };
+  if (baselineDetRows && (isGoal || simType === 'earliest_retirement')) {
+    results.baseline_det_rows = baselineDetRows;
+  }
+  if (originalPlan && (isGoal || simType === 'earliest_retirement')) {
+    results.original_plan_data_json = originalPlan;
+  }
   if (isGoal && goal) Object.assign(results, goal);
   if (simType === 'earliest_retirement' && earliestRet) Object.assign(results, earliestRet);
 

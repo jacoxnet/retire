@@ -5,7 +5,11 @@
   import { djangoMoney, floatformat, realValue } from '../../app/resultsFormat';
   import RetirementFrontierExplorer from './RetirementFrontierExplorer.svelte';
 
-  let { results: r }: { results: Results } = $props();
+  interface Props {
+    results: Results;
+    onAdopt?: (type: 'spending' | 'retirement_age', value: any) => void;
+  }
+  let { results: r, onAdopt }: Props = $props();
   const sign = (v: number) => (v >= 0 ? 'text-success' : 'text-danger');
   const rows = $derived([
     { label: 'Mean Ending Wealth', value: r.run_mean, bold: false },
@@ -122,6 +126,13 @@
         <div class="col-5 text-end">${djangoMoney(r.desired_spending)}/yr</div>
       </div>
 
+      {#if !r.unreachable && r.achieved_user_ret_age}
+        <button type="button" class="btn btn-outline-primary btn-sm mb-3 w-100 shadow-sm" id="btnAdoptEarliestRet"
+          onclick={() => onAdopt?.('retirement_age', { user: r.achieved_user_ret_age, spouse: r.achieved_spouse_ret_age })}>
+          <i class="fa-solid fa-circle-check me-1"></i> Adopt Earliest Retirement Age ({r.achieved_user_ret_age}{#if r.is_married && r.achieved_spouse_ret_age !== undefined} / {r.achieved_spouse_ret_age}{/if}) into Plan
+        </button>
+      {/if}
+
       <hr>
       <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
       {#if r.terminal_life_insurance > 0}
@@ -237,6 +248,13 @@
         <div class="col-7 mb-3"><strong>Achieved Success Rate:</strong></div>
         <div class="col-5 text-end text-success font-weight-bold">{floatformat(r.achieved_success_rate, 1)}%</div>
       </div>
+
+      {#if r.achieved_spending}
+        <button type="button" class="btn btn-outline-success btn-sm mb-3 w-100 shadow-sm" id="btnAdoptMaxSpending"
+          onclick={() => onAdopt?.('spending', r.achieved_spending)}>
+          <i class="fa-solid fa-circle-check me-1"></i> Adopt Solved Spending (${djangoMoney(r.achieved_spending)}/yr) into Plan
+        </button>
+      {/if}
     </div>
   {/if}
 

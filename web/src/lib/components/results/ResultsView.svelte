@@ -5,6 +5,7 @@
   import { onMount, untrack } from 'svelte';
   import type { FlashMessage } from '../../app/flash.svelte';
   import { engineKey, type Results } from '../../app/results';
+  import { djangoMoney } from '../../app/resultsFormat';
   import { computeResults, type RunEngine, type RunProgress, runStressTest } from '../../app/runResults';
   import type { StressSpec } from '../../engine/crisis';
   import type { ModeChangeInput } from '../../plan/modeChange';
@@ -135,10 +136,37 @@
       stressProgress = null;
     }
   }
+
+  function adoptSolved(type: 'spending' | 'retirement_age', value: any): void {
+    if (type === 'spending') {
+      const amt = Math.round(Number(value));
+      store.plan.desired_spending = amt;
+      store.plan.simulation_type = 'regular';
+      store.plan.goal_seeking = false;
+      store.markChanged();
+      messages = [
+        { level: 'success', text: `Plan updated: Desired spending set to $${djangoMoney(amt)}/yr and switched to Regular Simulation.` },
+      ];
+    } else if (type === 'retirement_age') {
+      const userAge = Number(value.user);
+      store.plan.user_retirement_age = userAge;
+      if (store.plan.is_married && value.spouse !== undefined) {
+        store.plan.spouse_retirement_age = Number(value.spouse);
+      }
+      store.plan.simulation_type = 'regular';
+      store.plan.goal_seeking = false;
+      store.markChanged();
+      const spText = store.plan.is_married && value.spouse !== undefined ? ` / Spouse Age ${value.spouse}` : '';
+      messages = [
+        { level: 'success', text: `Plan updated: Retirement age set to Age ${userAge}${spText} and switched to Regular Simulation.` },
+      ];
+    }
+    void run();
+  }
 </script>
 
 {#if view.kind === 'ready' && results}
-  <ResultsPage {results} bind:messages onApply={apply} onStressChange={changeStress} {stressBusy} {stressProgress} {stressError} />
+  <ResultsPage {results} bind:messages onApply={apply} onStressChange={changeStress} onAdopt={adoptSolved} {stressBusy} {stressProgress} {stressError} />
 {:else}
   <div class="mb-4 text-center">
     <h1 class="pageheading mb-2">Retirement Simulation Results</h1>

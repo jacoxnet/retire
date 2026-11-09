@@ -219,4 +219,77 @@ describe('interactions', () => {
     expect(lines).toEqual(['George Jetson: 66', 'Jane Jetson: 58']);
     expect(card.textContent).toContain('Both retire in Year 2031');
   });
+
+  it('calls onAdopt when clicking adopt button in goal seeking mode', () => {
+    const onAdopt = vi.fn();
+    const custom: Results = {
+      ...r,
+      simulation_type: 'goal_seeking',
+      goal_seeking: true,
+      achieved_spending: 95000,
+    };
+    const page = render(ResultsPage, { results: custom, onAdopt });
+    const btn = page.container.querySelector<HTMLButtonElement>('#btnAdoptMaxSpending');
+    expect(btn).not.toBeNull();
+    btn?.click();
+    expect(onAdopt).toHaveBeenCalledWith('spending', 95000);
+  });
+
+  it('calls onAdopt when clicking adopt button in earliest retirement mode', () => {
+    const onAdopt = vi.fn();
+    const custom: Results = {
+      ...r,
+      simulation_type: 'earliest_retirement',
+      achieved_user_ret_age: 62,
+      achieved_spouse_ret_age: 60,
+      is_married: true,
+    };
+    const page = render(ResultsPage, { results: custom, onAdopt });
+    const btn = page.container.querySelector<HTMLButtonElement>('#btnAdoptEarliestRet');
+    expect(btn).not.toBeNull();
+    btn?.click();
+    expect(onAdopt).toHaveBeenCalledWith('retirement_age', { user: 62, spouse: 60 });
+  });
+
+  it('displays read-only solved badges in the inputs card', () => {
+    const goalCustom: Results = {
+      ...r,
+      simulation_type: 'goal_seeking',
+      goal_seeking: true,
+      achieved_spending: 95000,
+    };
+    const goalPage = render(ResultsPage, { results: goalCustom });
+    expect(goalPage.container.querySelector('#results_solved_spending_display')?.textContent).toContain('$95,000/yr');
+
+    const earlyCustom: Results = {
+      ...r,
+      simulation_type: 'earliest_retirement',
+      achieved_user_ret_age: 63,
+    };
+    const earlyPage = render(ResultsPage, { results: earlyCustom });
+    expect(earlyPage.container.querySelector('#results_solved_earliest_ret_display')?.textContent).toContain('Age 63');
+  });
+
+  it('renders scenario comparison toggle and switches between solved and baseline rows', () => {
+    const solvedRows = r.det_rows.map((row) => ({ ...row, desired_spending: 95000 }));
+    const baseRows = r.det_rows.map((row) => ({ ...row, desired_spending: 60000 }));
+    const custom: Results = {
+      ...r,
+      simulation_type: 'goal_seeking',
+      goal_seeking: true,
+      achieved_spending: 95000,
+      det_rows: solvedRows,
+      baseline_det_rows: baseRows,
+    };
+    const page = render(ResultsPage, { results: custom });
+    const bar = page.container.querySelector('#scenarioComparisonBar');
+    expect(bar).not.toBeNull();
+    expect(page.container.querySelector('#projection')?.textContent).toContain('$95,000');
+
+    const baselineRadio = page.container.querySelector<HTMLInputElement>('#scenario_view_baseline')!;
+    expect(baselineRadio).not.toBeNull();
+    baselineRadio.click();
+    flushSync();
+    expect(page.container.querySelector('#projection')?.textContent).toContain('$60,000');
+  });
 });
