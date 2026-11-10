@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ALL_QUESTIONS, STAGES, type InterviewState } from './interviewState.svelte';
+  import { STAGES, type InterviewState } from './interviewState.svelte';
   import type { Plan } from '../../../plan/types';
   import { formatMoney } from '../../../app/format';
 
@@ -25,14 +25,7 @@
   };
 
   function jumpToStage(stageNum: number) {
-    const activeIds = wizard.activeQuestionList(plan);
-    const targetId = activeIds.find((id) => {
-      const meta = ALL_QUESTIONS.find((q) => q.id === id);
-      return meta?.stage === stageNum;
-    });
-    if (targetId) {
-      wizard.goTo(targetId);
-    }
+    wizard.jumpToStage(stageNum, plan);
   }
 
   const totalAssets = $derived(
@@ -89,38 +82,29 @@
   <div class="d-flex flex-wrap gap-1 gap-md-2 justify-content-between align-items-center stage-pills">
     {#each STAGES as s (s.number)}
       {@const isActive = s.number === currentStage}
-      {@const isDone = s.number < currentStage}
-      {#if s.number <= currentStage}
-        <button
-          type="button"
-          class="stage-pill stage-pill-btn d-flex align-items-center py-1 px-2 rounded-2 small"
-          class:stage-active={isActive}
-          class:stage-done={isDone}
-          onclick={() => jumpToStage(s.number)}
-          title="Jump to Stage {s.number}: {s.name}"
-        >
-          <span class="stage-num me-1 fw-bold rounded-circle text-center">
-            {#if isDone}
-              <i class="fa-solid fa-check"></i>
-            {:else}
-              {s.number}
-            {/if}
-          </span>
-          <i class="fa-solid {STAGE_ICONS[s.number]} me-1 small"></i>
-          <span class="stage-label d-none d-sm-inline">{s.short}</span>
-        </button>
-      {:else}
-        <div
-          class="stage-pill d-flex align-items-center py-1 px-2 rounded-2 small stage-upcoming"
-          title="Stage {s.number}: {s.name}"
-        >
-          <span class="stage-num me-1 fw-bold rounded-circle text-center">
+      {@const isDone = !isActive && wizard.isStageAnswered(s.number, plan)}
+      {@const isUpcoming = s.number > currentStage && !isDone}
+      <button
+        type="button"
+        class="stage-pill stage-pill-btn d-flex align-items-center py-1 px-2 rounded-2 small"
+        class:stage-active={isActive}
+        class:stage-done={isDone}
+        class:stage-upcoming={isUpcoming}
+        onclick={() => jumpToStage(s.number)}
+        title={isUpcoming
+          ? `Skip ahead to Stage ${s.number}: ${s.name} (unanswered questions go to the skipped list)`
+          : `Jump to Stage ${s.number}: ${s.name}`}
+      >
+        <span class="stage-num me-1 fw-bold rounded-circle text-center">
+          {#if isDone}
+            <i class="fa-solid fa-check"></i>
+          {:else}
             {s.number}
-          </span>
-          <i class="fa-solid {STAGE_ICONS[s.number]} me-1 small opacity-50"></i>
-          <span class="stage-label d-none d-sm-inline">{s.short}</span>
-        </div>
-      {/if}
+          {/if}
+        </span>
+        <i class="fa-solid {STAGE_ICONS[s.number]} me-1 small" class:opacity-50={isUpcoming}></i>
+        <span class="stage-label d-none d-sm-inline">{s.short}</span>
+      </button>
     {/each}
   </div>
 
@@ -167,6 +151,12 @@
   .stage-pill-btn:hover {
     border-color: #0d6efd;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  .stage-upcoming {
+    color: var(--bs-gray-500, #adb5bd);
+  }
+  .stage-upcoming:hover {
+    color: var(--bs-gray-700, #495057);
   }
   .stage-num {
     display: inline-block;

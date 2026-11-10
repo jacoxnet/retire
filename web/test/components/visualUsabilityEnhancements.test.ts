@@ -231,9 +231,34 @@ describe('Part 4: Guided Walkthrough Enhancements', () => {
     await fireEvent.click(stage1Btn);
     expect(wizard.currentQuestionId).toBe('user_name_age');
 
-    // Future Stage 4 should be non-interactive .stage-upcoming
-    const upcomingPills = container.querySelectorAll('.stage-upcoming');
-    expect(upcomingPills.length).toBeGreaterThan(0);
+    // Future stages are muted (.stage-upcoming) but clickable
+    const upcomingPills = container.querySelectorAll('button.stage-upcoming');
+    expect(upcomingPills.length).toBe(5);
+
+    // Answer the first question, then skip ahead to Stage 3 (Spending)
+    wizard.markAnswered('user_name_age');
+    await fireEvent.click(container.querySelectorAll('.stage-pill-btn')[2]);
+    expect(wizard.currentQuestionId).toBe('spending_start');
+    // Answered question is left alone; everything else passed over is skipped
+    expect(wizard.isSkipped('user_name_age')).toBe(false);
+    expect(wizard.isSkipped('user_ret_age')).toBe(true);
+    expect(wizard.isSkipped('accounts_inherited')).toBe(true);
+    expect(wizard.isSkipped('spending_start')).toBe(false);
+    expect(wizard.isSkipped('spouse_name_age')).toBe(false); // inactive (single)
+    expect(wizard.isSkipped('gateway_advanced')).toBe(false); // not passed yet
+
+    // Jumping backward skips nothing further
+    const skippedBefore = wizard.skippedQuestions.length;
+    await fireEvent.click(container.querySelectorAll('.stage-pill-btn')[1]);
+    expect(wizard.currentQuestionId).toBe('accounts_workplace');
+    expect(wizard.skippedQuestions.length).toBe(skippedBefore);
+
+    // Skipping ahead to Review passes the Stage 5 gateway but not its hidden sub-questions
+    await fireEvent.click(container.querySelectorAll('.stage-pill-btn')[5]);
+    expect(wizard.currentQuestionId).toBe('review_skipped');
+    expect(wizard.isSkipped('gateway_advanced')).toBe(true);
+    expect(wizard.isSkipped('nw_cash')).toBe(false);
+    expect(container.querySelectorAll('.stage-done').length).toBe(0);
 
     // Verify Running Plan Cart values
     expect(container.querySelector('#cartTotalAssets')?.textContent).toBe('$150,000');

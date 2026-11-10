@@ -1,0 +1,3 @@
+# The bundled CPI data is compared byte for byte against the update script's
+# LF output (web/test/updateCpi.test.ts), so keep it LF on every platform.
+web/src/lib/data/*.json text eol=lf

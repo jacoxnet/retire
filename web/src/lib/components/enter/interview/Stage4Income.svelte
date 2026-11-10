@@ -106,7 +106,7 @@
         cancelStream();
       }
     }
-    wizard.clearSkipped(wizard.currentQuestionId);
+    wizard.markAnswered(wizard.currentQuestionId);
     wizard.next(plan);
   }
 

@@ -134,7 +134,7 @@
     } else if (wizard.currentQuestionId === 'nw_debts' && !debtAdded && (Number(debtBalance) || 0) > 0) {
       saveDebt();
     }
-    wizard.clearSkipped(wizard.currentQuestionId);
+    wizard.markAnswered(wizard.currentQuestionId);
     wizard.next(plan);
   }
 
@@ -162,6 +162,7 @@
           class="btn p-3 border rounded-3 text-start {wizard.optedInStage5 ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
           onclick={() => {
             wizard.optedInStage5 = true;
+            wizard.markAnswered('gateway_advanced');
             wizard.goTo('nw_emergency');
           }}
         >
@@ -174,6 +175,7 @@
           class="btn p-3 border rounded-3 text-start {!wizard.optedInStage5 ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
           onclick={() => {
             wizard.optedInStage5 = false;
+            wizard.markAnswered('gateway_advanced');
             wizard.goTo('review_skipped');
           }}
         >

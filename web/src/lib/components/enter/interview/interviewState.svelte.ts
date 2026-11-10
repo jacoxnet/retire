@@ -60,10 +60,13 @@ export const STAGES = [
   { number: 6, name: 'Review & Run', short: 'Review' },
 ];
 
+const STAGE_BY_ID = new Map(ALL_QUESTIONS.map((q) => [q.id, q.stage]));
+
 export class InterviewState {
   currentQuestionId = $state<string>('user_name_age');
   optedInStage5 = $state<boolean>(false);
   skippedQuestions = $state<string[]>([]);
+  answeredQuestions = $state<string[]>([]);
   completed = $state<boolean>(false);
 
   /** Active questions given the plan's marital status and Stage 5 opt-in. */
@@ -95,14 +98,55 @@ export class InterviewState {
     if (!this.skippedQuestions.includes(questionId)) {
       this.skippedQuestions.push(questionId);
     }
+    this.answeredQuestions = this.answeredQuestions.filter((id) => id !== questionId);
   }
 
   clearSkipped(questionId: string): void {
     this.skippedQuestions = this.skippedQuestions.filter((id) => id !== questionId);
   }
 
+  isAnswered(questionId: string): boolean {
+    return this.answeredQuestions.includes(questionId);
+  }
+
+  /** Record that the user confirmed this question (Continue), removing it from the skipped list. */
+  markAnswered(questionId: string): void {
+    this.clearSkipped(questionId);
+    if (!this.answeredQuestions.includes(questionId)) {
+      this.answeredQuestions.push(questionId);
+    }
+  }
+
+  /** True when every active question in the stage has been answered. */
+  isStageAnswered(stageNum: number, plan: Plan): boolean {
+    const ids = this.activeQuestionList(plan).filter((id) => STAGE_BY_ID.get(id) === stageNum);
+    return ids.length > 0 && ids.every((id) => this.isAnswered(id));
+  }
+
   goTo(questionId: string): void {
     this.currentQuestionId = questionId;
+  }
+
+  /**
+   * Jump to the first question of a stage. Jumping forward marks every
+   * unanswered question passed over (including the current one) as skipped
+   * and applies its safe default, so it shows up in the review list.
+   */
+  jumpToStage(stageNum: number, plan: Plan): void {
+    const list = this.activeQuestionList(plan);
+    const targetIdx = list.findIndex((id) => STAGE_BY_ID.get(id) === stageNum);
+    if (targetIdx < 0) return;
+    const curIdx = list.indexOf(this.currentQuestionId);
+    if (curIdx >= 0) {
+      for (let i = curIdx; i < targetIdx; i++) {
+        const id = list[i];
+        if (!this.isAnswered(id)) {
+          this.markSkipped(id);
+          this.applySafeDefault(id, plan);
+        }
+      }
+    }
+    this.currentQuestionId = list[targetIdx];
   }
 
   next(plan: Plan): void {
