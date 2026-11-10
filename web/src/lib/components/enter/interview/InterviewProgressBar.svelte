@@ -102,7 +102,7 @@
             {s.number}
           {/if}
         </span>
-        <i class="fa-solid {STAGE_ICONS[s.number]} me-1 small" class:opacity-50={isUpcoming}></i>
+        <i class="fa-solid {STAGE_ICONS[s.number]} me-1 small"></i>
         <span class="stage-label d-none d-sm-inline">{s.short}</span>
       </button>
     {/each}
@@ -153,10 +153,10 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
   .stage-upcoming {
-    color: var(--bs-gray-500, #adb5bd);
+    color: var(--bs-gray-700, #495057);
   }
   .stage-upcoming:hover {
-    color: var(--bs-gray-700, #495057);
+    color: var(--bs-gray-900, #212529);
   }
   .stage-num {
     display: inline-block;

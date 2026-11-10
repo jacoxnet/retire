@@ -3,7 +3,7 @@
   import type { Account, Plan } from '../../../plan/types';
   import MoneyInput from '../../shared/MoneyInput.svelte';
   import PercentInput from '../../shared/PercentInput.svelte';
-  import { newAccount, personLabels } from '../../../plan/accountCard';
+  import { endAgeIsSpecified, newAccount, personLabels, setAccountOwner } from '../../../plan/accountCard';
   import { formatMoney } from '../../../app/format';
 
   interface Props {
@@ -65,6 +65,45 @@
     addingAccount = false;
     editingAccountIndex = idx;
     draftAccount = { ...acc };
+  }
+
+  const ageOf = (spouse: boolean) => (spouse ? people.spouseAge : people.userAge);
+  const retAgeOf = (spouse: boolean) => (spouse ? people.spouseRetAge : people.userRetAge);
+  const nameOf = (spouse: boolean) => (spouse ? people.spouseName : people.userName);
+
+  /**
+   * Change the draft's owner. The end-age choice moves to the same choice for the new
+   * owner (as on the main account card), and start / stop ages still at the old
+   * owner's defaults follow to the new owner's.
+   */
+  function changeOwner(owner: string) {
+    if (!draftAccount) return;
+    const wasSpouse = draftAccount.owner === 'spouse';
+    const isSpouse = owner === 'spouse';
+    if (draftAccount.contrib_start_age === ageOf(wasSpouse)) draftAccount.contrib_start_age = ageOf(isSpouse);
+    if (draftAccount.contrib_end_age_specified === retAgeOf(wasSpouse)) {
+      draftAccount.contrib_end_age_specified = retAgeOf(isSpouse);
+    }
+    setAccountOwner(draftAccount, owner);
+  }
+
+  const isOneTime = (freq: string | undefined) => freq === 'one-time' || freq === 'one_time';
+
+  /** One-time contributions happen at the start age, or at the first death when that end type is chosen. */
+  function setOneTimeTiming(timing: string) {
+    if (!draftAccount) return;
+    draftAccount.contrib_end_age_type =
+      timing === 'first_death' ? 'first_death' : draftAccount.owner === 'spouse' && married ? 'spouse_retirement' : 'retirement';
+  }
+
+  function contribSummary(acc: Account): string {
+    const amt = formatMoney(Number(acc.contrib_amount));
+    if (isOneTime(acc.contrib_freq)) {
+      return acc.contrib_end_age_type === 'first_death'
+        ? `${amt} one-time at first death`
+        : `${amt} one-time at age ${acc.contrib_start_age}`;
+    }
+    return `${amt}/${acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}`;
   }
 
   function cancelDraft() {
@@ -192,7 +231,7 @@
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'roth' ? 'Roth' : 'Traditional'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
-                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                    &bull; Contributing: {contribSummary(acc)}
                   {/if}
                 </div>
               </div>
@@ -244,7 +283,7 @@
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Type: {acc.type === 'roth' ? 'Roth IRA' : 'Traditional IRA'} &bull; Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
-                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                    &bull; Contributing: {contribSummary(acc)}
                   {/if}
                 </div>
               </div>
@@ -295,7 +334,7 @@
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
-                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                    &bull; Contributing: {contribSummary(acc)}
                   {/if}
                 </div>
               </div>
@@ -346,7 +385,7 @@
                 <div class="small text-muted">
                   {#if married}Owner: {acc.owner === 'spouse' ? people.spouseName : people.userName} &bull; {/if}Balance: {formatMoney(Number(acc.balance) || 0)}
                   {#if (Number(acc.contrib_amount) || 0) > 0}
-                    &bull; Contributing: {formatMoney(Number(acc.contrib_amount))}/{acc.contrib_freq === 'monthly' ? 'mo' : 'yr'}
+                    &bull; Contributing: {contribSummary(acc)}
                   {/if}
                 </div>
               </div>
@@ -441,7 +480,8 @@
         {#if married}
           <div class="col-sm-4">
             <label for="int_acc_owner" class="form-label small fw-semibold">Whose Account?</label>
-            <select class="form-select form-select-sm" id="int_acc_owner" bind:value={draftAccount.owner}>
+            <select class="form-select form-select-sm" id="int_acc_owner" value={draftAccount.owner}
+              onchange={(e) => changeOwner((e.currentTarget as HTMLSelectElement).value)}>
               <option value="user">{people.userName}</option>
               <option value="spouse">{people.spouseName}</option>
             </select>
@@ -467,66 +507,6 @@
           </div>
         </div>
 
-        <div class="row g-3 mb-3">
-          <div class="col-sm-6">
-            <label for="int_acc_contrib" class="form-label small fw-semibold">Future Contributions ($)</label>
-            <div class="input-group input-group-sm">
-              <span class="input-group-text">$</span>
-              <MoneyInput id="int_acc_contrib" class="form-control" bind:value={draftAccount.contrib_amount} />
-            </div>
-          </div>
-          <div class="col-sm-6">
-            <label for="int_acc_freq" class="form-label small fw-semibold">Contribution Frequency</label>
-            <select class="form-select form-select-sm" id="int_acc_freq" bind:value={draftAccount.contrib_freq}>
-              <option value="annual">Annual</option>
-              <option value="monthly">Monthly</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Contribution End Age and Inflation Adjustment -->
-        {#if (Number(draftAccount.contrib_amount) || 0) > 0}
-          <div class="row g-3 mb-3 align-items-end">
-            <div class="col-sm-7">
-              <label for="int_acc_endtype" class="form-label small fw-semibold">When will contributions stop?</label>
-              <select class="form-select form-select-sm" id="int_acc_endtype" bind:value={draftAccount.contrib_end_age_type}>
-                {#if married}
-                  <option value="retirement">When {draftAccount.owner === 'spouse' ? people.spouseName : people.userName} retires (Age {draftAccount.owner === 'spouse' ? people.spouseRetAge : people.userRetAge}) - Recommended</option>
-                  <option value="user_specified">At a specific age...</option>
-                {:else}
-                  <option value="retirement">At my retirement (Age {people.userRetAge}) - Recommended</option>
-                  <option value="user_specified">At a specific age...</option>
-                {/if}
-              </select>
-            </div>
-            {#if draftAccount.contrib_end_age_type === 'user_specified' || draftAccount.contrib_end_age_type === 'spouse_specified'}
-              <div class="col-sm-5">
-                <label for="int_acc_endspec" class="form-label small fw-semibold">Contribution Stop Age</label>
-                <input
-                  type="number"
-                  class="form-control form-control-sm"
-                  id="int_acc_endspec"
-                  min="18"
-                  max="120"
-                  placeholder="e.g. 65"
-                  bind:value={draftAccount.contrib_end_age_specified}
-                />
-              </div>
-            {/if}
-          </div>
-
-          <div class="form-check form-switch ps-5 mb-3">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="int_acc_adj_inf"
-              bind:checked={draftAccount.contrib_adjust_inflation}
-            />
-            <label class="form-check-label small fw-semibold" for="int_acc_adj_inf">
-              Adjust contributions annually for inflation (Recommended)
-            </label>
-          </div>
-        {/if}
       {:else if draftAccount.type === 'inherited_pretax' || draftAccount.type === 'inherited_roth'}
         <div class="row g-3 mb-3">
           <div class="col-sm-6">
@@ -582,55 +562,105 @@
               <MoneyInput id="int_gen_balance" class="form-control" bind:value={draftAccount.balance} />
             </div>
           </div>
+        </div>
+      {/if}
+
+      <!-- Contributions (every type except inherited), matching the main account card -->
+      {#if draftAccount.type !== 'inherited_pretax' && draftAccount.type !== 'inherited_roth'}
+        {@const ownerIsSpouse = married && draftAccount.owner === 'spouse'}
+        {@const oneTime = isOneTime(draftAccount.contrib_freq)}
+        {@const atFirstDeath = oneTime && draftAccount.contrib_end_age_type === 'first_death'}
+        <div class="row g-3 mb-3">
           <div class="col-sm-6">
-            <label for="int_gen_contrib" class="form-label small fw-semibold">Annual Contributions ($)</label>
+            <label for="int_acc_contrib" class="form-label small fw-semibold">Future Contributions ($)</label>
             <div class="input-group input-group-sm">
               <span class="input-group-text">$</span>
-              <MoneyInput id="int_gen_contrib" class="form-control" bind:value={draftAccount.contrib_amount} />
+              <MoneyInput id="int_acc_contrib" class="form-control" bind:value={draftAccount.contrib_amount} />
             </div>
+          </div>
+          <div class="col-sm-6">
+            <label for="int_acc_freq" class="form-label small fw-semibold">Contribution Frequency</label>
+            <select class="form-select form-select-sm" id="int_acc_freq" bind:value={draftAccount.contrib_freq}>
+              <option value="annual">Annual</option>
+              <option value="monthly">Monthly</option>
+              <option value="one-time">One-Time</option>
+            </select>
           </div>
         </div>
 
-        <!-- Contribution End Age and Inflation for Taxable / HSA -->
         {#if (Number(draftAccount.contrib_amount) || 0) > 0}
           <div class="row g-3 mb-3 align-items-end">
-            <div class="col-sm-7">
-              <label for="int_gen_endtype" class="form-label small fw-semibold">When will contributions stop?</label>
-              <select class="form-select form-select-sm" id="int_gen_endtype" bind:value={draftAccount.contrib_end_age_type}>
-                {#if married}
-                  <option value="retirement">When {draftAccount.owner === 'spouse' ? people.spouseName : people.userName} retires (Age {draftAccount.owner === 'spouse' ? people.spouseRetAge : people.userRetAge}) - Recommended</option>
-                  <option value="user_specified">At a specific age...</option>
-                {:else}
-                  <option value="retirement">At my retirement (Age {people.userRetAge}) - Recommended</option>
-                  <option value="user_specified">At a specific age...</option>
-                {/if}
-              </select>
-            </div>
-            {#if draftAccount.contrib_end_age_type === 'user_specified' || draftAccount.contrib_end_age_type === 'spouse_specified'}
+            {#if oneTime && married}
+              <div class="col-sm-7">
+                <label for="int_acc_onetime_when" class="form-label small fw-semibold">When is the contribution made?</label>
+                <select class="form-select form-select-sm" id="int_acc_onetime_when" value={atFirstDeath ? 'first_death' : 'age'}
+                  onchange={(e) => setOneTimeTiming((e.currentTarget as HTMLSelectElement).value)}>
+                  <option value="age">At a specific age</option>
+                  <option value="first_death">At the first death (e.g. life insurance proceeds)</option>
+                </select>
+              </div>
+            {/if}
+            {#if !atFirstDeath}
               <div class="col-sm-5">
-                <label for="int_gen_endspec" class="form-label small fw-semibold">Contribution Stop Age</label>
+                <label for="int_acc_start" class="form-label small fw-semibold">
+                  {oneTime ? 'Contribution made at' : 'Contributions start at'} {married ? `${nameOf(ownerIsSpouse)}'s` : 'your'} age
+                </label>
                 <input
                   type="number"
                   class="form-control form-control-sm"
-                  id="int_gen_endspec"
+                  id="int_acc_start"
                   min="18"
                   max="120"
-                  placeholder="e.g. 65"
-                  bind:value={draftAccount.contrib_end_age_specified}
+                  placeholder="e.g. {ageOf(ownerIsSpouse)}"
+                  bind:value={draftAccount.contrib_start_age}
                 />
               </div>
             {/if}
           </div>
 
+          {#if !oneTime}
+            <div class="row g-3 mb-3 align-items-end">
+              <div class="col-sm-7">
+                <label for="int_acc_endtype" class="form-label small fw-semibold">When will contributions stop?</label>
+                <select class="form-select form-select-sm" id="int_acc_endtype" bind:value={draftAccount.contrib_end_age_type}>
+                  {#if married}
+                    <option value="retirement">When {people.userName} retires (Age {people.userRetAge}){ownerIsSpouse ? '' : ' - Recommended'}</option>
+                    <option value="spouse_retirement">When {people.spouseName} retires (Age {people.spouseRetAge}){ownerIsSpouse ? ' - Recommended' : ''}</option>
+                    <option value="first_death">At the first death</option>
+                    <option value="user_specified">At a specific age for {people.userName}...</option>
+                    <option value="spouse_specified">At a specific age for {people.spouseName}...</option>
+                  {:else}
+                    <option value="retirement">At my retirement (Age {people.userRetAge}) - Recommended</option>
+                    <option value="user_specified">At a specific age...</option>
+                  {/if}
+                </select>
+              </div>
+              {#if endAgeIsSpecified(draftAccount.contrib_end_age_type)}
+                <div class="col-sm-5">
+                  <label for="int_acc_endspec" class="form-label small fw-semibold">Contribution Stop Age</label>
+                  <input
+                    type="number"
+                    class="form-control form-control-sm"
+                    id="int_acc_endspec"
+                    min="18"
+                    max="120"
+                    placeholder="e.g. 65"
+                    bind:value={draftAccount.contrib_end_age_specified}
+                  />
+                </div>
+              {/if}
+            </div>
+          {/if}
+
           <div class="form-check form-switch ps-5 mb-3">
             <input
               class="form-check-input"
               type="checkbox"
-              id="int_gen_adj_inf"
+              id="int_acc_adj_inf"
               bind:checked={draftAccount.contrib_adjust_inflation}
             />
-            <label class="form-check-label small fw-semibold" for="int_gen_adj_inf">
-              Adjust contributions annually for inflation (Recommended)
+            <label class="form-check-label small fw-semibold" for="int_acc_adj_inf">
+              {oneTime ? 'Express the contribution in today\'s dollars (adjust for inflation)' : 'Adjust contributions annually for inflation (Recommended)'}
             </label>
           </div>
         {/if}

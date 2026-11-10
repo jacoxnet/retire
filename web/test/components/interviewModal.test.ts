@@ -268,6 +268,84 @@ describe('Single vs Married Phrasing in Guided Walkthrough', () => {
     expect(r.container.textContent).not.toContain('Owner:');
     cleanup();
   });
+
+  it('offers monthly and one-time contributions with a start age for an HSA', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_hsa');
+    const plan: Plan = { is_married: false, user_name: 'Jordan', user_age: 45, user_retirement_age: 62, accounts: [] };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+    await fireEvent.click(r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement);
+    flushSync();
+
+    const freq = r.container.querySelector('#int_acc_freq') as HTMLSelectElement;
+    expect(Array.from(freq.options).map((o) => o.value)).toEqual(['annual', 'monthly', 'one-time']);
+
+    await fireEvent.input(r.container.querySelector('#int_acc_contrib') as HTMLInputElement, { target: { value: '5000' } });
+    await fireEvent.change(freq, { target: { value: 'one-time' } });
+    flushSync();
+
+    // A one-time contribution has a single age and no stop age
+    expect(r.container.querySelector('#int_acc_endtype')).toBeNull();
+    expect(r.container.querySelector('#int_acc_onetime_when')).toBeNull(); // first-death option is couples only
+    const start = r.container.querySelector('#int_acc_start') as HTMLInputElement;
+    expect(start.value).toBe('45');
+    await fireEvent.input(start, { target: { value: '50' } });
+    flushSync();
+
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Account'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    const saved = plan.accounts![0];
+    expect(saved.type).toBe('hsa');
+    expect(saved.contrib_amount).toBe(5000);
+    expect(saved.contrib_freq).toBe('one-time');
+    expect(saved.contrib_start_age).toBe(50);
+    cleanup();
+  });
+
+  it("stores the spouse's own end-age choices on a spouse-owned account", async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_taxable');
+    const plan: Plan = {
+      is_married: true, user_name: 'Jordan', user_age: 45, user_retirement_age: 62,
+      spouse_name: 'Sam', spouse_age: 40, spouse_retirement_age: 60, accounts: [],
+    };
+
+    const r = render(Stage2Accounts, { wizard, plan });
+    await fireEvent.click(r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement);
+    flushSync();
+    await fireEvent.change(r.container.querySelector('#int_acc_owner') as HTMLSelectElement, { target: { value: 'spouse' } });
+    await fireEvent.input(r.container.querySelector('#int_acc_contrib') as HTMLInputElement, { target: { value: '500' } });
+    await fireEvent.change(r.container.querySelector('#int_acc_freq') as HTMLSelectElement, { target: { value: 'monthly' } });
+    flushSync();
+
+    const endType = r.container.querySelector('#int_acc_endtype') as HTMLSelectElement;
+    expect(endType.value).toBe('spouse_retirement');
+    expect(Array.from(endType.options).map((o) => o.value)).toEqual(
+      ['retirement', 'spouse_retirement', 'first_death', 'user_specified', 'spouse_specified'],
+    );
+    expect((r.container.querySelector('#int_acc_start') as HTMLInputElement).value).toBe('40');
+
+    // One-time contributions for a couple can be made at the first death
+    await fireEvent.change(r.container.querySelector('#int_acc_freq') as HTMLSelectElement, { target: { value: 'one-time' } });
+    flushSync();
+    await fireEvent.change(r.container.querySelector('#int_acc_onetime_when') as HTMLSelectElement, { target: { value: 'first_death' } });
+    flushSync();
+    expect(r.container.querySelector('#int_acc_start')).toBeNull();
+
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Account'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    const saved = plan.accounts![0];
+    expect(saved.owner).toBe('spouse');
+    expect(saved.contrib_start_age).toBe(40);
+    expect(saved.contrib_end_age_specified).toBe(60);
+    expect(saved.contrib_end_age_type).toBe('first_death');
+    cleanup();
+  });
 });
 
 describe('Smart Auto-Save on Next in Guided Walkthrough', () => {
