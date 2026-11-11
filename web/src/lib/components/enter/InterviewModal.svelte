@@ -19,7 +19,7 @@
   }
   let { open = $bindable(), plan = $bindable(), onRun }: Props = $props();
 
-  const wizard = new InterviewState();
+  const wizard = new InterviewState(plan);
   let skippedDrawerOpen = $state(false);
 
   const currentStage = $derived(wizard.currentStage(plan));

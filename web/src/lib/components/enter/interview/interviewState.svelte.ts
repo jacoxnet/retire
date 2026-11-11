@@ -69,6 +69,25 @@ export class InterviewState {
   answeredQuestions = $state<string[]>([]);
   completed = $state<boolean>(false);
 
+  constructor(plan?: Plan) {
+    if (plan?.balance_sheet) {
+      const bs = plan.balance_sheet as any;
+      const emgTarget = parseFloat(bs.categories?.emergency?.target_amount ?? bs.emergency_goal_amount ?? 0);
+      const emgBal = parseFloat(bs.categories?.emergency?.accounts?.[0]?.values?.[bs.current_period] ?? 0);
+      const goals = bs.categories?.goals?.goal_groups ?? [];
+      const hasGoals = goals.some(
+        (g: any) =>
+          g.is_configured === true ||
+          parseFloat(g.target_amount || 0) > 0 ||
+          parseFloat(g.accounts?.[0]?.values?.[bs.current_period] || 0) > 0 ||
+          g.target_auto_inflate === true
+      );
+      if (emgTarget > 0 || emgBal > 0 || hasGoals) {
+        this.optedInStage5 = true;
+      }
+    }
+  }
+
   /** Active questions given the plan's marital status and Stage 5 opt-in. */
   activeQuestionList(plan: Plan): string[] {
     const isMarried = !!plan.is_married;

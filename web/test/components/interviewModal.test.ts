@@ -12,6 +12,7 @@ import Stage3Spending from '../../src/lib/components/enter/interview/Stage3Spend
 import Stage4Income from '../../src/lib/components/enter/interview/Stage4Income.svelte';
 import Stage5NetWorth from '../../src/lib/components/enter/interview/Stage5NetWorth.svelte';
 import type { Plan } from '../../src/lib/plan/types';
+import { todayIso } from '../../src/lib/plan/pyutil';
 
 afterEach(cleanup);
 window.scrollTo = () => {};
@@ -890,6 +891,256 @@ describe('Editing Items in Guided Walkthrough', () => {
     expect(plan.accounts?.length).toBe(1);
     expect(plan.accounts![0].name).toBe('Second Account');
     expect(r.container.querySelector('#int_acc_name')).toBeNull();
+    cleanup();
+  });
+});
+
+describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', () => {
+  it('preserves emergency fund data (name, balance, target, autoInflate) when jumping away and returning', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_emergency');
+    const plan: Plan = { is_married: false };
+
+    // 1. First visit to Emergency Fund
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    const nameInput = r.container.querySelector('#int_em_name') as HTMLInputElement;
+    const balInput = r.container.querySelector('#int_em_bal') as HTMLInputElement;
+    const tgtInput = r.container.querySelector('#int_em_target') as HTMLInputElement;
+    const inflateSwitch = r.container.querySelector('#int_em_auto_inflate') as HTMLInputElement;
+
+    expect(nameInput).not.toBeNull();
+    expect(balInput).not.toBeNull();
+    expect(tgtInput).not.toBeNull();
+    expect(inflateSwitch).not.toBeNull();
+
+    await fireEvent.input(nameInput, { target: { value: 'Marcus Rainy Day' } });
+    await fireEvent.input(balInput, { target: { value: '25000' } });
+    await fireEvent.input(tgtInput, { target: { value: '35000' } });
+    if (!inflateSwitch.checked) {
+      await fireEvent.click(inflateSwitch);
+    }
+    flushSync();
+
+    // Click Next (advances to nw_goals and auto-saves)
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    // Verify saved into plan.balance_sheet
+    const bs = plan.balance_sheet as any;
+    expect(bs).toBeDefined();
+    expect(bs.categories?.emergency?.target_amount).toBe(35000);
+    expect(bs.emergency_goal_amount).toBe(35000);
+    expect(bs.categories?.emergency?.target_auto_inflate).toBe(true);
+    expect(bs.categories?.emergency?.accounts[0].name).toBe('Marcus Rainy Day');
+
+    cleanup();
+
+    // 2. Simulate navigating to Stage 6 and then jumping back to nw_emergency
+    wizard.goTo('review_summary');
+    wizard.goTo('nw_emergency');
+
+    r = render(Stage5NetWorth, { wizard, plan });
+
+    const remountName = r.container.querySelector('#int_em_name') as HTMLInputElement;
+    const remountBal = r.container.querySelector('#int_em_bal') as HTMLInputElement;
+    const remountTgt = r.container.querySelector('#int_em_target') as HTMLInputElement;
+    const remountInflate = r.container.querySelector('#int_em_auto_inflate') as HTMLInputElement;
+
+    // Fields should NOT be empty or lost!
+    expect(remountName.value).toBe('Marcus Rainy Day');
+    expect(remountBal.value).toBe('25,000');
+    expect(remountTgt.value).toBe('35,000');
+    expect(remountInflate.checked).toBe(true);
+
+    // Shows progress pill: 25k of 35k = 71%
+    expect(r.container.textContent).toContain('71% of target funded');
+    expect(r.container.textContent).toContain('$10,000 remaining');
+
+    cleanup();
+  });
+
+  it('supports multiple savings goals with individual targets, balances, and inflation adjustment', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_goals');
+    const plan: Plan = { is_married: false };
+
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    // Click quick starter button for "🚗 Vehicle Replacement"
+    const carBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Vehicle Replacement'));
+    expect(carBtn).toBeDefined();
+    await fireEvent.click(carBtn!);
+    flushSync();
+
+    // Fill in target and balance
+    const tgtInput = r.container.querySelector('#int_goal_target') as HTMLInputElement;
+    const curInput = r.container.querySelector('#int_goal_cur') as HTMLInputElement;
+    const inflateSwitch = r.container.querySelector('#int_goal_auto_inflate') as HTMLInputElement;
+
+    await fireEvent.input(tgtInput, { target: { value: '25000' } });
+    await fireEvent.input(curInput, { target: { value: '8000' } });
+    expect(inflateSwitch.checked).toBe(true); // default true for best practice
+    flushSync();
+
+    // Click "Save Goal"
+    const saveGoalBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save Goal');
+    await fireEvent.click(saveGoalBtn!);
+    flushSync();
+
+    // Now goal card 1 appears in the list
+    expect(r.container.textContent).toContain('Vehicle Replacement');
+    expect(r.container.textContent).toContain('$25,000');
+    expect(r.container.textContent).toContain('$8,000');
+    expect(r.container.textContent).toContain('Inflation-Adjusted');
+
+    // Add a second goal: Vacation Fund
+    const vacBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Vacation & Travel Fund'));
+    expect(vacBtn).toBeDefined();
+    await fireEvent.click(vacBtn!);
+    flushSync();
+
+    const tgtInput2 = r.container.querySelector('#int_goal_target') as HTMLInputElement;
+    const curInput2 = r.container.querySelector('#int_goal_cur') as HTMLInputElement;
+    const inflateSwitch2 = r.container.querySelector('#int_goal_auto_inflate') as HTMLInputElement;
+
+    await fireEvent.input(tgtInput2, { target: { value: '10000' } });
+    await fireEvent.input(curInput2, { target: { value: '4000' } });
+    await fireEvent.click(inflateSwitch2); // uncheck inflation for this one
+    flushSync();
+
+    const saveGoalBtn2 = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save Goal');
+    await fireEvent.click(saveGoalBtn2!);
+    flushSync();
+
+    // Both goals should now be listed
+    expect(r.container.textContent).toContain('Vehicle Replacement');
+    expect(r.container.textContent).toContain('Vacation & Travel Fund');
+
+    // Add a third goal using auto-save on Next: Custom Goal
+    const customBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Custom Savings Goal'));
+    expect(customBtn).toBeDefined();
+    await fireEvent.click(customBtn!);
+    flushSync();
+
+    const nameInput3 = r.container.querySelector('#int_goal_name') as HTMLInputElement;
+    const tgtInput3 = r.container.querySelector('#int_goal_target') as HTMLInputElement;
+    const curInput3 = r.container.querySelector('#int_goal_cur') as HTMLInputElement;
+
+    await fireEvent.input(nameInput3, { target: { value: 'College Tuition Sinking Fund' } });
+    await fireEvent.input(tgtInput3, { target: { value: '50000' } });
+    await fireEvent.input(curInput3, { target: { value: '15000' } });
+    flushSync();
+
+    // Click Next (advances and auto-saves the draft)
+    const nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    const bs = plan.balance_sheet as any;
+    const goals = bs.categories?.goals?.goal_groups ?? [];
+    const collegeGoal = goals.find((g: any) => g.name === 'College Tuition Sinking Fund');
+    expect(collegeGoal).toBeDefined();
+    expect(collegeGoal.target_amount).toBe(50000);
+    expect(collegeGoal.accounts[0].values[todayIso()]).toBe(15000);
+
+    cleanup();
+
+    // 3. Jump to Stage 6 and then return to nw_goals: ALL goals must be preserved!
+    wizard.goTo('review_summary');
+    wizard.goTo('nw_goals');
+
+    r = render(Stage5NetWorth, { wizard, plan });
+
+    expect(r.container.textContent).toContain('Vehicle Replacement');
+    expect(r.container.textContent).toContain('Vacation');
+    expect(r.container.textContent).toContain('College Tuition Sinking Fund');
+
+    // 4. Test Editing an existing goal
+    const editVacationBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.getAttribute('aria-label')?.includes('Vacation')
+    );
+    expect(editVacationBtn).toBeDefined();
+    await fireEvent.click(editVacationBtn!);
+    flushSync();
+
+    expect(r.container.textContent).toContain('Edit Savings Goal');
+    const editTgtInput = r.container.querySelector('#int_goal_target') as HTMLInputElement;
+    await fireEvent.input(editTgtInput, { target: { value: '12000' } });
+    flushSync();
+
+    const saveChangesBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save Changes');
+    await fireEvent.click(saveChangesBtn!);
+    flushSync();
+
+    // Target is now updated to $12,000
+    expect(r.container.textContent).toContain('$12,000');
+
+    // 5. Test Deleting a goal
+    const delCarBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.getAttribute('aria-label')?.includes('Delete Vehicle Replacement')
+    );
+    expect(delCarBtn).toBeDefined();
+    await fireEvent.click(delCarBtn!);
+    flushSync();
+
+    // Vehicle Replacement goal card is gone (delete button no longer exists)
+    const deletedBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.getAttribute('aria-label')?.includes('Delete Vehicle Replacement')
+    );
+    expect(deletedBtn).toBeUndefined();
+    expect(r.container.textContent).toContain('Vacation');
+    expect(r.container.textContent).toContain('College Tuition Sinking Fund');
+
+    cleanup();
+  });
+
+  it('preserves checking buffer, real estate, and debts when returning to Stage 5', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    const plan: Plan = { is_married: false };
+
+    // Fill checking
+    wizard.goTo('nw_cash');
+    let r = render(Stage5NetWorth, { wizard, plan });
+    const chkInput = r.container.querySelector('#int_checking_amt') as HTMLInputElement;
+    await fireEvent.input(chkInput, { target: { value: '8500' } });
+    flushSync();
+    let nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+    cleanup();
+
+    // Fill real estate
+    wizard.goTo('nw_real_estate');
+    r = render(Stage5NetWorth, { wizard, plan });
+    const propNameInput = r.container.querySelector('#int_prop_name') as HTMLInputElement;
+    const propValInput = r.container.querySelector('#int_prop_val') as HTMLInputElement;
+    await fireEvent.input(propNameInput, { target: { value: 'Lake House' } });
+    await fireEvent.input(propValInput, { target: { value: '550000' } });
+    flushSync();
+    nextBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn!);
+    flushSync();
+    cleanup();
+
+    // Jump to review and come back to checking & real estate
+    wizard.goTo('review_summary');
+    wizard.goTo('nw_cash');
+    r = render(Stage5NetWorth, { wizard, plan });
+    const remountChk = r.container.querySelector('#int_checking_amt') as HTMLInputElement;
+    expect(remountChk.value).toBe('8,500');
+    cleanup();
+
+    wizard.goTo('nw_real_estate');
+    r = render(Stage5NetWorth, { wizard, plan });
+    const remountPropName = r.container.querySelector('#int_prop_name') as HTMLInputElement;
+    const remountPropVal = r.container.querySelector('#int_prop_val') as HTMLInputElement;
+    expect(remountPropName.value).toBe('Lake House');
+    expect(remountPropVal.value).toBe('550,000');
     cleanup();
   });
 });
