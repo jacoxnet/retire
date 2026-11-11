@@ -202,10 +202,10 @@
   {/if}
 {/snippet}
 
-{#snippet retirementAccountsNote()}
+{#snippet retirementAccountsNote(pensionNote = false)}
   <div class="alert alert-light border small text-secondary mb-3 p-3 rounded-3" style="max-width: 650px;">
     <i class="fa-solid fa-circle-info text-primary me-2"></i>
-    <strong>Note:</strong> Enter only accounts intended to be used in retirement. Do not include accounts you plan to spend before retirement. Accounts intended to be spent before retirement can be tracked on the optional <strong>Balance Sheet</strong> page.
+    <strong>Note:</strong> Enter only accounts intended to be used in retirement. Do not include accounts you plan to spend before retirement. Accounts intended to be spent before retirement can be tracked on the optional <strong>Balance Sheet</strong> page.{#if pensionNote}{' '}Also, do not enter any defined benefit pension plans (e.g., plans that will pay you regular income after retirement) here; they will be added in the "Income" section.{/if}
   </div>
 {/snippet}
 
@@ -221,7 +221,7 @@
           : 'Workplace plans allow you to contribute directly from your paycheck. You can add each plan you currently have.'}
       </p>
 
-      {@render retirementAccountsNote()}
+      {@render retirementAccountsNote(true)}
 
       <!-- Account List -->
       {#if workplaceAccounts.length > 0}

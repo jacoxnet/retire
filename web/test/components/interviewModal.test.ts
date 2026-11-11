@@ -914,6 +914,11 @@ describe('Editing Items in Guided Walkthrough', () => {
       expect(text).toContain('Enter only accounts intended to be used in retirement');
       expect(text).toContain('Do not include accounts you plan to spend before retirement');
       expect(text).toContain('Accounts intended to be spent before retirement can be tracked on the optional Balance Sheet page');
+      if (qId === 'accounts_workplace') {
+        expect(text).toContain('page. Also, do not enter any defined benefit pension plans (e.g., plans that will pay you regular income after retirement) here; they will be added in the "Income" section.');
+      } else {
+        expect(text).not.toContain('defined benefit pension plans');
+      }
       r.unmount();
     }
   });
