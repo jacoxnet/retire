@@ -19,6 +19,11 @@
     plan.filing_status = val ? 'joint' : 'single';
     applyMarriageToAccounts(plan.accounts, val);
     applyMarriageToSchedules(plan, val);
+    if (val && plan.social_security && !plan.social_security.spouse_receiving && !plan.social_security.spouse_future_entitled && !plan.social_security.spouse_amount) {
+      plan.social_security.spouse_future_entitled = true;
+      plan.social_security.spouse_entitled = true;
+      plan.social_security.spouse_amount = 1500;
+    }
   }
 
   function onNext() {

@@ -16,8 +16,15 @@
   const people = $derived(personLabels(plan));
   const married = $derived(people.isMarried);
 
-  const userSS = $derived(ssView(plan.social_security, 'user'));
-  const spouseSS = $derived(ssView(plan.social_security, 'spouse'));
+  let ssVersion = $state(0);
+  const userSS = $derived.by(() => {
+    ssVersion;
+    return ssView(plan.social_security, 'user');
+  });
+  const spouseSS = $derived.by(() => {
+    ssVersion;
+    return ssView(plan.social_security, 'spouse');
+  });
 
   let addingStream = $state(false);
   let editingStreamIndex: number | null = $state(null);
@@ -124,14 +131,18 @@
         Social Security provides inflation-protected, guaranteed monthly retirement income for the rest of your life.
       </p>
 
-      <div class="d-flex flex-column flex-sm-row gap-3 mb-4" style="max-width: 500px;">
+      <div class="d-flex flex-column gap-3 mb-4" style="max-width: 580px;">
         <button
           type="button"
-          class="btn p-3 border rounded-3 text-start flex-fill {userSS.receiving ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
+          class="btn p-3 border rounded-3 text-start {userSS.receiving ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
           onclick={() => {
-            plan.social_security ??= {};
-            plan.social_security.user_receiving = true;
-            plan.social_security.user_future_entitled = false;
+            plan.social_security = {
+              ...(plan.social_security ?? {}),
+              user_receiving: true,
+              user_future_entitled: false,
+              user_entitled: true,
+            };
+            ssVersion++;
           }}
         >
           <div class="fw-bold fs-5 mb-1"><i class="fa-solid fa-check me-2"></i>Yes</div>
@@ -140,15 +151,36 @@
 
         <button
           type="button"
-          class="btn p-3 border rounded-3 text-start flex-fill {!userSS.receiving ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
+          class="btn p-3 border rounded-3 text-start {!userSS.receiving && userSS.future_entitled ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
           onclick={() => {
-            plan.social_security ??= {};
-            plan.social_security.user_receiving = false;
-            plan.social_security.user_future_entitled = true;
+            plan.social_security = {
+              ...(plan.social_security ?? {}),
+              user_receiving: false,
+              user_future_entitled: true,
+              user_entitled: true,
+            };
+            ssVersion++;
           }}
         >
           <div class="fw-bold fs-5 mb-1"><i class="fa-solid fa-clock me-2"></i>No</div>
           <div class="small opacity-75">I plan to claim in the future</div>
+        </button>
+
+        <button
+          type="button"
+          class="btn p-3 border rounded-3 text-start {!userSS.receiving && !userSS.future_entitled ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
+          onclick={() => {
+            plan.social_security = {
+              ...(plan.social_security ?? {}),
+              user_receiving: false,
+              user_future_entitled: false,
+              user_entitled: false,
+            };
+            ssVersion++;
+          }}
+        >
+          <div class="fw-bold fs-5 mb-1"><i class="fa-solid fa-ban me-2"></i>No</div>
+          <div class="small opacity-75">I will not be eligible to receive Social Security payments</div>
         </button>
       </div>
 
@@ -165,7 +197,7 @@
             <span class="input-group-text text-muted small">/ mo</span>
           </div>
         </div>
-      {:else}
+      {:else if userSS.future_entitled}
         <div class="card p-3 bg-light border rounded-3 mb-4" style="max-width: 600px;">
           <div class="row g-3">
             <div class="col-sm-6">
@@ -196,6 +228,11 @@
             </div>
           </div>
         </div>
+      {:else}
+        <div class="alert alert-light border small text-secondary mb-4 p-3 rounded-3" style="max-width: 600px;">
+          <i class="fa-solid fa-circle-info text-primary me-2"></i>
+          No Social Security benefit will be included in your retirement plan calculations.
+        </div>
       {/if}
     </div>
   {:else if wizard.currentQuestionId === 'income_spouse_ss'}
@@ -205,14 +242,18 @@
         Enter your spouse's claiming status and expected benefit amount.
       </p>
 
-      <div class="d-flex flex-column flex-sm-row gap-3 mb-4" style="max-width: 500px;">
+      <div class="d-flex flex-column gap-3 mb-4" style="max-width: 580px;">
         <button
           type="button"
-          class="btn p-3 border rounded-3 text-start flex-fill {spouseSS.receiving ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
+          class="btn p-3 border rounded-3 text-start {spouseSS.receiving ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
           onclick={() => {
-            plan.social_security ??= {};
-            plan.social_security.spouse_receiving = true;
-            plan.social_security.spouse_future_entitled = false;
+            plan.social_security = {
+              ...(plan.social_security ?? {}),
+              spouse_receiving: true,
+              spouse_future_entitled: false,
+              spouse_entitled: true,
+            };
+            ssVersion++;
           }}
         >
           <div class="fw-bold fs-5 mb-1"><i class="fa-solid fa-check me-2"></i>Yes</div>
@@ -221,15 +262,36 @@
 
         <button
           type="button"
-          class="btn p-3 border rounded-3 text-start flex-fill {!spouseSS.receiving ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
+          class="btn p-3 border rounded-3 text-start {!spouseSS.receiving && spouseSS.future_entitled ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
           onclick={() => {
-            plan.social_security ??= {};
-            plan.social_security.spouse_receiving = false;
-            plan.social_security.spouse_future_entitled = true;
+            plan.social_security = {
+              ...(plan.social_security ?? {}),
+              spouse_receiving: false,
+              spouse_future_entitled: true,
+              spouse_entitled: true,
+            };
+            ssVersion++;
           }}
         >
           <div class="fw-bold fs-5 mb-1"><i class="fa-solid fa-clock me-2"></i>No</div>
           <div class="small opacity-75">Plans to claim in the future</div>
+        </button>
+
+        <button
+          type="button"
+          class="btn p-3 border rounded-3 text-start {!spouseSS.receiving && !spouseSS.future_entitled ? 'btn-primary shadow-sm' : 'btn-outline-secondary'}"
+          onclick={() => {
+            plan.social_security = {
+              ...(plan.social_security ?? {}),
+              spouse_receiving: false,
+              spouse_future_entitled: false,
+              spouse_entitled: false,
+            };
+            ssVersion++;
+          }}
+        >
+          <div class="fw-bold fs-5 mb-1"><i class="fa-solid fa-ban me-2"></i>No</div>
+          <div class="small opacity-75">{people.spouseName} will not be eligible to receive Social Security payments</div>
         </button>
       </div>
 
@@ -246,7 +308,7 @@
             <span class="input-group-text text-muted small">/ mo</span>
           </div>
         </div>
-      {:else}
+      {:else if spouseSS.future_entitled}
         <div class="card p-3 bg-light border rounded-3 mb-4" style="max-width: 600px;">
           <div class="row g-3">
             <div class="col-sm-6">
@@ -274,6 +336,11 @@
               </div>
             </div>
           </div>
+        </div>
+      {:else}
+        <div class="alert alert-light border small text-secondary mb-4 p-3 rounded-3" style="max-width: 600px;">
+          <i class="fa-solid fa-circle-info text-primary me-2"></i>
+          No Social Security benefit will be modeled for {people.spouseName}.
         </div>
       {/if}
     </div>

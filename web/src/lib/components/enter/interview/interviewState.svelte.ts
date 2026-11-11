@@ -238,16 +238,18 @@ export class InterviewState {
         plan.social_security ??= {};
         plan.social_security.user_receiving ??= false;
         plan.social_security.user_future_entitled ??= true;
+        plan.social_security.user_entitled ??= true;
         plan.social_security.user_start_age ??= 67;
-        plan.social_security.user_amount ??= 2000;
+        plan.social_security.user_amount = Number(plan.social_security.user_amount) || 2000;
         plan.social_security.user_freq ||= 'monthly';
         break;
       case 'income_spouse_ss':
         plan.social_security ??= {};
         plan.social_security.spouse_receiving ??= false;
-        plan.social_security.spouse_future_entitled ??= true;
+        plan.social_security.spouse_future_entitled = true;
+        plan.social_security.spouse_entitled = true;
         plan.social_security.spouse_start_age ??= 67;
-        plan.social_security.spouse_amount ??= 1500;
+        plan.social_security.spouse_amount = Number(plan.social_security.spouse_amount) || 1500;
         plan.social_security.spouse_freq ||= 'monthly';
         break;
       case 'gateway_advanced':

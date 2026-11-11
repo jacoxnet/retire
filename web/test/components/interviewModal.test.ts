@@ -11,6 +11,8 @@ import Stage2Accounts from '../../src/lib/components/enter/interview/Stage2Accou
 import Stage3Spending from '../../src/lib/components/enter/interview/Stage3Spending.svelte';
 import Stage4Income from '../../src/lib/components/enter/interview/Stage4Income.svelte';
 import Stage5NetWorth from '../../src/lib/components/enter/interview/Stage5NetWorth.svelte';
+import Stage6Review from '../../src/lib/components/enter/interview/Stage6Review.svelte';
+import IncomeTab from '../../src/lib/components/enter/IncomeTab.svelte';
 import type { Plan } from '../../src/lib/plan/types';
 import { todayIso } from '../../src/lib/plan/pyutil';
 
@@ -1141,6 +1143,174 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     const remountPropVal = r.container.querySelector('#int_prop_val') as HTMLInputElement;
     expect(remountPropName.value).toBe('Lake House');
     expect(remountPropVal.value).toBe('550,000');
+    cleanup();
+  });
+
+  it('handles Option 3 (not eligible) for user Social Security in Stage 4 and syncs with IncomeTab', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('income_user_ss');
+    const plan: Plan = {
+      is_married: false,
+      social_security: {
+        user_receiving: false,
+        user_future_entitled: true,
+        user_entitled: true,
+        user_amount: 2000,
+        user_start_age: 67,
+      },
+    };
+
+    let r = render(Stage4Income, { wizard, plan });
+
+    // Buttons
+    const buttons = Array.from(r.container.querySelectorAll('button')).filter((b) =>
+      b.textContent?.includes('Yes') || b.textContent?.includes('No')
+    );
+    expect(buttons.length).toBeGreaterThanOrEqual(3);
+
+    const yesBtn = buttons.find((b) => b.textContent?.includes('already receiving'));
+    const futureBtn = buttons.find((b) => b.textContent?.includes('plan to claim'));
+    const notEligibleBtn = buttons.find((b) => b.textContent?.includes('not be eligible'));
+
+    expect(yesBtn).toBeDefined();
+    expect(futureBtn).toBeDefined();
+    expect(notEligibleBtn).toBeDefined();
+
+    // Initially future is selected
+    expect(futureBtn!.className).toContain('btn-primary');
+    expect(notEligibleBtn!.className).toContain('btn-outline-secondary');
+    expect(r.container.querySelector('#int_user_ss_start_age')).not.toBeNull();
+    expect(r.container.querySelector('#int_user_ss_est_amt')).not.toBeNull();
+
+    // Click Option 3: Not eligible
+    await fireEvent.click(notEligibleBtn!);
+    flushSync();
+
+    expect(plan.social_security?.user_receiving).toBe(false);
+    expect(plan.social_security?.user_future_entitled).toBe(false);
+    expect(plan.social_security?.user_entitled).toBe(false);
+
+    // Option 3 is now primary, age/amount inputs hidden, info note shown
+    expect(notEligibleBtn!.className).toContain('btn-primary');
+    expect(futureBtn!.className).toContain('btn-outline-secondary');
+    expect(r.container.querySelector('#int_user_ss_start_age')).toBeNull();
+    expect(r.container.querySelector('#int_user_ss_est_amt')).toBeNull();
+    expect(r.container.textContent).toContain('No Social Security benefit will be included in your retirement plan calculations.');
+    cleanup();
+
+    // Verify IncomeTab reflects this: #user_ss_future_entitled select has value 'false' ("No")
+    const incomeView = render(IncomeTab, { plan, mode: 'advanced', onSwitch: () => {} });
+    const receivingSelect = incomeView.container.querySelector('#user_ss_receiving') as HTMLSelectElement;
+    const futureSelect = incomeView.container.querySelector('#user_ss_future_entitled') as HTMLSelectElement;
+
+    expect(receivingSelect).not.toBeNull();
+    expect(receivingSelect.value).toBe('false');
+    expect(futureSelect).not.toBeNull();
+    expect(futureSelect.value).toBe('false');
+    // Amount field should not be rendered
+    expect(incomeView.container.querySelector('#user_ss_amount')).toBeNull();
+    cleanup();
+
+    // Returning to Stage 4 preserves Option 3 selection
+    r = render(Stage4Income, { wizard, plan });
+    const remountBtns = Array.from(r.container.querySelectorAll('button')).filter((b) =>
+      b.textContent?.includes('not be eligible')
+    );
+    expect(remountBtns[0].className).toContain('btn-primary');
+    expect(r.container.querySelector('#int_user_ss_start_age')).toBeNull();
+
+    // Switching back to Option 2 restores future entitlement
+    const remountFutureBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('plan to claim')
+    );
+    await fireEvent.click(remountFutureBtn!);
+    flushSync();
+
+    expect(plan.social_security?.user_receiving).toBe(false);
+    expect(plan.social_security?.user_future_entitled).toBe(true);
+    expect(plan.social_security?.user_entitled).toBe(true);
+    expect(r.container.querySelector('#int_user_ss_start_age')).not.toBeNull();
+    expect(r.container.querySelector('#int_user_ss_est_amt')).not.toBeNull();
+    cleanup();
+  });
+
+  it('handles Option 3 (not eligible) for spouse Social Security in Stage 4 and syncs with IncomeTab', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('income_spouse_ss');
+    const plan: Plan = {
+      is_married: true,
+      spouse_name: 'Alex',
+      social_security: {
+        user_receiving: false,
+        user_future_entitled: true,
+        user_entitled: true,
+        user_amount: 2000,
+        user_start_age: 67,
+        spouse_receiving: false,
+        spouse_future_entitled: true,
+        spouse_entitled: true,
+        spouse_amount: 1500,
+        spouse_start_age: 67,
+      },
+    };
+
+    const r = render(Stage4Income, { wizard, plan });
+
+    const notEligibleBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('will not be eligible')
+    );
+    expect(notEligibleBtn).toBeDefined();
+
+    await fireEvent.click(notEligibleBtn!);
+    flushSync();
+
+    expect(plan.social_security?.spouse_receiving).toBe(false);
+    expect(plan.social_security?.spouse_future_entitled).toBe(false);
+    expect(plan.social_security?.spouse_entitled).toBe(false);
+
+    expect(r.container.querySelector('#int_spouse_ss_start_age')).toBeNull();
+    expect(r.container.querySelector('#int_spouse_ss_est_amt')).toBeNull();
+    expect(r.container.textContent).toContain('No Social Security benefit will be modeled for Alex.');
+    cleanup();
+
+    // Verify IncomeTab reflects spouse as not entitled
+    const incomeView = render(IncomeTab, { plan, mode: 'advanced', onSwitch: () => {} });
+    const spouseRecSelect = incomeView.container.querySelector('#spouse_ss_receiving') as HTMLSelectElement;
+    const spouseFutSelect = incomeView.container.querySelector('#spouse_ss_future_entitled') as HTMLSelectElement;
+
+    expect(spouseRecSelect).not.toBeNull();
+    expect(spouseRecSelect.value).toBe('false');
+    expect(spouseFutSelect).not.toBeNull();
+    expect(spouseFutSelect.value).toBe('false');
+    expect(incomeView.container.querySelector('#spouse_ss_amount')).toBeNull();
+    cleanup();
+  });
+
+  it('displays not eligible in Stage 6 Review snapshot when Social Security is disabled', () => {
+    const wizard = new InterviewState();
+    const plan: Plan = {
+      is_married: false,
+      user_name: 'Taylor',
+      user_age: 50,
+      user_retirement_age: 65,
+      user_age_death: 90,
+      social_security: {
+        user_receiving: false,
+        user_future_entitled: false,
+        user_entitled: false,
+        user_amount: 0,
+      },
+    };
+
+    const r = render(Stage6Review, {
+      wizard,
+      plan,
+      onRun: () => {},
+      onClose: () => {},
+    });
+
+    expect(r.container.textContent).toContain('Not eligible for Social Security');
+    expect(r.container.textContent).toContain('$0 Social Security income');
     cleanup();
   });
 });

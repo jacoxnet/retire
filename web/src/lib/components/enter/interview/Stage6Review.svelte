@@ -122,14 +122,24 @@
           <div class="p-3 bg-white border rounded-3 h-100">
             <div class="text-muted small fw-semibold text-uppercase mb-1">Social Security & Income</div>
             <div class="fw-bold text-dark fs-6">
-              {#if plan.social_security?.user_amount}
-                {formatMoney(Number(plan.social_security.user_amount))}/mo
+              {#if plan.social_security?.user_receiving || plan.social_security?.user_future_entitled}
+                {#if plan.social_security?.user_amount}
+                  {formatMoney(Number(plan.social_security.user_amount))}/mo
+                {:else}
+                  Social Security modeled
+                {/if}
               {:else}
-                Social Security modeled
+                Not eligible for Social Security
               {/if}
             </div>
             <div class="small text-secondary">
-              Claiming at age {plan.social_security?.user_start_age ?? 67}
+              {#if plan.social_security?.user_receiving}
+                Currently receiving payments
+              {:else if plan.social_security?.user_future_entitled}
+                Claiming at age {plan.social_security?.user_start_age ?? 67}
+              {:else}
+                $0 Social Security income
+              {/if}
             </div>
             {#if (plan.income_sources ?? []).length > 0}
               <div class="small text-muted mt-1">{plan.income_sources?.length} additional income stream(s)</div>
