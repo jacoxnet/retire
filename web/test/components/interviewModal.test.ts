@@ -895,6 +895,28 @@ describe('Editing Items in Guided Walkthrough', () => {
     expect(r.container.querySelector('#int_acc_name')).toBeNull();
     cleanup();
   });
+
+  it('displays the retirement accounts note on all 5 pages of the Accounts section', async () => {
+    const stage2Questions = [
+      'accounts_workplace',
+      'accounts_ira',
+      'accounts_taxable',
+      'accounts_hsa',
+      'accounts_inherited',
+    ];
+    const wizard = new InterviewState();
+    const plan: Plan = { is_married: true, accounts: [] };
+
+    for (const qId of stage2Questions) {
+      wizard.goTo(qId);
+      const r = render(Stage2Accounts, { wizard, plan });
+      const text = r.container.textContent ?? '';
+      expect(text).toContain('Enter only accounts intended to be used in retirement');
+      expect(text).toContain('Do not include accounts you plan to spend before retirement');
+      expect(text).toContain('Accounts intended to be spent before retirement can be tracked on the optional Balance Sheet page');
+      r.unmount();
+    }
+  });
 });
 
 describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', () => {

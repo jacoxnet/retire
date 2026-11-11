@@ -157,6 +157,23 @@ describe('Enter page', () => {
     expect(byId('validationAlertContainer')!.textContent!.trim()).toBe('');
     stop();
   });
+
+  it('renders the Retirement Use Only popup note on the Accounts for Retirement subpage', async () => {
+    const { stop } = setup();
+    await fireEvent.click(byId('assets-tab')!);
+    flushSync();
+    const infoIcon = document.querySelector('h3 .help-popover') as HTMLElement | null;
+    expect(infoIcon).not.toBeNull();
+    expect(infoIcon?.getAttribute('aria-label')).toBe('Retirement Use Only');
+    await fireEvent.mouseEnter(infoIcon!);
+    flushSync();
+    const popover = document.querySelector('.help-popover-box');
+    expect(popover).not.toBeNull();
+    expect(popover?.textContent).toContain('Retirement Use Only');
+    expect(popover?.textContent).toContain('Only include accounts earmarked to fund your retirement');
+    expect(popover?.textContent).toContain('Balance Sheet');
+    stop();
+  });
 });
 
 describe('flash messages', () => {

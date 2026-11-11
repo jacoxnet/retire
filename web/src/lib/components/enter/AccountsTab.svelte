@@ -6,6 +6,7 @@
   import TaxAssumptionsModal from './TaxAssumptionsModal.svelte';
   import TabFooter from './TabFooter.svelte';
   import type { TabId } from '../../app/badges';
+  import HelpPopover from '../shared/HelpPopover.svelte';
 
   interface Props {
     plan: Plan;
@@ -32,7 +33,16 @@
 <div class="card p-4 mb-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h3 class="mb-1 text-primary">Accounts for Retirement</h3>
+      <h3 class="mb-1 text-primary d-flex align-items-center">
+        <span>Accounts for Retirement</span>
+        <span class="fs-6 fw-normal ms-1">
+          <HelpPopover
+            title="Retirement Use Only"
+            html
+            content="Only include accounts earmarked to fund your retirement. Do <b>not</b> include accounts you intend to spend before retirement (such as emergency savings or short-term goal funds). Accounts intended to be spent prior to retirement can be tracked on the optional <b>Balance Sheet</b> page."
+          />
+        </span>
+      </h3>
       <p class="text-secondary small mb-0">Configure your investment, retirement, brokerage, and HSA accounts.</p>
     </div>
   </div>

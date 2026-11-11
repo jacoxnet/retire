@@ -202,6 +202,13 @@
   {/if}
 {/snippet}
 
+{#snippet retirementAccountsNote()}
+  <div class="alert alert-light border small text-secondary mb-3 p-3 rounded-3" style="max-width: 650px;">
+    <i class="fa-solid fa-circle-info text-primary me-2"></i>
+    <strong>Note:</strong> Enter only accounts intended to be used in retirement. Do not include accounts you plan to spend before retirement. Accounts intended to be spent before retirement can be tracked on the optional <strong>Balance Sheet</strong> page.
+  </div>
+{/snippet}
+
 <div class="stage-container py-2">
   {#if wizard.currentQuestionId === 'accounts_workplace'}
     <div class="question-card">
@@ -213,6 +220,8 @@
           ? 'Workplace plans allow you to contribute directly from your paycheck. You can add each plan you or your spouse currently have.'
           : 'Workplace plans allow you to contribute directly from your paycheck. You can add each plan you currently have.'}
       </p>
+
+      {@render retirementAccountsNote()}
 
       <!-- Account List -->
       {#if workplaceAccounts.length > 0}
@@ -267,6 +276,8 @@
         IRAs are individual accounts you open yourself at a brokerage like Fidelity, Schwab, or Vanguard.
       </p>
 
+      {@render retirementAccountsNote()}
+
       {#if iraAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each iraAccounts as acc (acc.id ?? acc.name)}
@@ -318,6 +329,8 @@
         These are non-retirement accounts. You pay taxes on dividends and realized capital gains each year, but you can withdraw money anytime without age penalties.
       </div>
 
+      {@render retirementAccountsNote()}
+
       {#if taxableAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
           {#each taxableAccounts as acc (acc.id ?? acc.name)}
@@ -368,6 +381,8 @@
         <i class="fa-solid fa-heart-pulse text-primary me-2"></i>
         HSAs offer a triple tax advantage: money goes in tax-free, grows tax-free, and comes out 100% tax-free when used for eligible medical expenses.
       </div>
+
+      {@render retirementAccountsNote()}
 
       {#if hsaAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
@@ -421,6 +436,8 @@
         <i class="fa-solid fa-scale-balanced text-primary me-2"></i>
         Under IRS rules, you cannot make new contributions to an inherited account, and withdrawals are subject to specific deadlines (most commonly a 10-year rule). If you have one, we will guide you through setting up those distribution rules.
       </div>
+
+      {@render retirementAccountsNote()}
 
       {#if inheritedAccounts.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
