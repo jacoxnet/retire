@@ -17,7 +17,7 @@ import type { Plan } from '../../src/lib/plan/types';
 import { todayIso } from '../../src/lib/plan/pyutil';
 
 afterEach(cleanup);
-window.scrollTo = () => {};
+window.scrollTo = () => { };
 
 describe('InterviewState', () => {
   it('correctly filters questions based on marriage and stage 5 opt-in', () => {
@@ -864,6 +864,81 @@ describe('Editing Items in Guided Walkthrough', () => {
     cleanup();
   });
 
+  it('configures inflation and multi-period adjustments for income streams in Stage 4', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('income_streams');
+    const plan: Plan = {
+      is_married: false,
+      income_sources: [],
+    };
+
+    const r = render(Stage4Income, { wizard, plan });
+
+    // 1. Click Pension button to add a new pension stream
+    const pensionBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Pension'));
+    await fireEvent.click(pensionBtn!);
+    flushSync();
+
+    // Verify Adjustment Schedule section is present
+    expect(r.container.querySelector('.inc-adjustments-schedule-container')).not.toBeNull();
+    const period1 = r.container.querySelectorAll('.inc-period-row')[0];
+    expect(period1).toBeDefined();
+
+    // Change adjustment to fixed_pct with 3%
+    const adjSelect = period1.querySelector('.p-adj-type') as HTMLSelectElement;
+    await fireEvent.change(adjSelect, { target: { value: 'fixed_pct' } });
+    flushSync();
+
+    const valInput = period1.querySelector('.p-adj-val') as HTMLInputElement;
+    expect(valInput).not.toBeNull();
+    await fireEvent.input(valInput, { target: { value: '3' } });
+    flushSync();
+
+    // Add a second period
+    const addPeriodBtn = r.container.querySelector('.btnAddAdjustmentPeriod') as HTMLButtonElement;
+    await fireEvent.click(addPeriodBtn);
+    flushSync();
+
+    const periods = r.container.querySelectorAll('.inc-period-row');
+    expect(periods.length).toBe(2);
+
+    // Set second period adjustment to none
+    const adjSelect2 = periods[1].querySelector('.p-adj-type') as HTMLSelectElement;
+    await fireEvent.change(adjSelect2, { target: { value: 'none' } });
+    flushSync();
+
+    // Save income stream
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Income Stream'));
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    expect(plan.income_sources?.length).toBe(1);
+    expect(plan.income_sources![0].adjustments?.length).toBe(2);
+    expect(plan.income_sources![0].adjustments![0]).toMatchObject({ adjust_type: 'fixed_pct', adjust_val: 3 });
+    expect(plan.income_sources![0].adjustments![1]).toMatchObject({ adjust_type: 'none' });
+    expect(r.container.textContent).toContain('2 adjustment periods');
+
+    // 2. Add Fixed Annuity which defaults to 'none' adjustment
+    const annuityBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Annuity'));
+    await fireEvent.click(annuityBtn!);
+    flushSync();
+
+    const annuityPeriod = r.container.querySelectorAll('.inc-period-row')[0];
+    const annuityAdjSelect = annuityPeriod.querySelector('.p-adj-type') as HTMLSelectElement;
+    expect(annuityAdjSelect.value).toBe('none');
+
+    // Save annuity
+    const saveAnnuityBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Save Income Stream'));
+    await fireEvent.click(saveAnnuityBtn!);
+    flushSync();
+
+    expect(plan.income_sources?.length).toBe(2);
+    expect(plan.income_sources![1].adjustments![0].adjust_type).toBe('none');
+    expect(r.container.textContent).toContain('None (0%)');
+
+    cleanup();
+  });
+
   it('cleans up edit drawer state if an account is deleted while being edited', async () => {
     const wizard = new InterviewState();
     wizard.goTo('accounts_workplace');
@@ -910,7 +985,7 @@ describe('Editing Items in Guided Walkthrough', () => {
     for (const qId of stage2Questions) {
       wizard.goTo(qId);
       const r = render(Stage2Accounts, { wizard, plan });
-      const text = r.container.textContent ?? '';
+      const text = (r.container.textContent ?? '').replace(/\s+/g, ' ');
       expect(text).toContain('Enter only accounts intended to be used in retirement');
       expect(text).toContain('Do not include accounts you plan to spend before retirement');
       expect(text).toContain('Accounts intended to be spent before retirement can be tracked on the optional Balance Sheet page');
@@ -1226,7 +1301,7 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     cleanup();
 
     // Verify IncomeTab reflects this: #user_ss_future_entitled select has value 'false' ("No")
-    const incomeView = render(IncomeTab, { plan, mode: 'advanced', onSwitch: () => {} });
+    const incomeView = render(IncomeTab, { plan, mode: 'advanced', onSwitch: () => { } });
     const receivingSelect = incomeView.container.querySelector('#user_ss_receiving') as HTMLSelectElement;
     const futureSelect = incomeView.container.querySelector('#user_ss_future_entitled') as HTMLSelectElement;
 
@@ -1301,7 +1376,7 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     cleanup();
 
     // Verify IncomeTab reflects spouse as not entitled
-    const incomeView = render(IncomeTab, { plan, mode: 'advanced', onSwitch: () => {} });
+    const incomeView = render(IncomeTab, { plan, mode: 'advanced', onSwitch: () => { } });
     const spouseRecSelect = incomeView.container.querySelector('#spouse_ss_receiving') as HTMLSelectElement;
     const spouseFutSelect = incomeView.container.querySelector('#spouse_ss_future_entitled') as HTMLSelectElement;
 
@@ -1332,8 +1407,8 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     const r = render(Stage6Review, {
       wizard,
       plan,
-      onRun: () => {},
-      onClose: () => {},
+      onRun: () => { },
+      onClose: () => { },
     });
 
     expect(r.container.textContent).toContain('Not eligible for Social Security');

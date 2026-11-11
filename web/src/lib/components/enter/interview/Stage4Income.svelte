@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { InterviewState } from './interviewState.svelte';
-  import type { IncomeSource, Plan } from '../../../plan/types';
+  import type { Adjustment, IncomeSource, Plan } from '../../../plan/types';
   import MoneyInput from '../../shared/MoneyInput.svelte';
   import PercentInput from '../../shared/PercentInput.svelte';
   import { personLabels } from '../../../plan/accountCard';
-  import { newIncomeSource, ssView } from '../../../plan/scheduleRows';
+  import { editableSchedule, incomeView, newIncomeSource, periodView, ssView } from '../../../plan/scheduleRows';
   import { formatMoney } from '../../../app/format';
+  import AdjustmentSchedule from '../AdjustmentSchedule.svelte';
 
   interface Props {
     wizard: InterviewState;
@@ -26,12 +27,32 @@
     return ssView(plan.social_security, 'spouse');
   });
 
+  let streamVersion = $state(0);
+  const incomeSources = $derived.by(() => {
+    streamVersion;
+    return plan.income_sources ?? [];
+  });
+
   let addingStream = $state(false);
   let editingStreamIndex: number | null = $state(null);
   let draftStream: IncomeSource | null = $state(null);
   let streamOwner = $state<'user' | 'spouse'>('user');
 
-  function startAddingStream(name: string, defaultAmount: number) {
+  function adjustmentSummary(stream: IncomeSource): string {
+    const periods = incomeView(stream).periods;
+    if (!periods || periods.length === 0) return 'None (0%)';
+    if (periods.length === 1) {
+      const p = periods[0];
+      if (p.adjust_type === 'none') return 'None (0%)';
+      if (p.adjust_type === 'inflation') return 'Inflation';
+      if (p.adjust_type === 'fixed_pct') return `${p.adjust_val ?? 0}% Fixed`;
+      if (p.adjust_type === 'inflation_less_pct') return `Inflation less ${p.adjust_val ?? 0}%`;
+      return p.adjust_type;
+    }
+    return `${periods.length} adjustment periods`;
+  }
+
+  function startAddingStream(name: string, defaultAmount: number, defaultAdjType: string = 'inflation') {
     editingStreamIndex = null;
     const s = newIncomeSource();
     s.name = name;
@@ -42,7 +63,15 @@
     s.has_survivor_benefit = married;
     s.survivor_benefit_pct = 50;
     streamOwner = 'user';
-    draftStream = s;
+    const schedule = editableSchedule(s);
+    if (schedule.length > 0 && defaultAdjType !== 'inflation') {
+      schedule[0].adjust_type = defaultAdjType;
+    }
+    s.adjust_type = defaultAdjType;
+    draftStream = {
+      ...s,
+      adjustments: schedule.map((p, i) => ({ ...periodView(p, i) }) as Adjustment),
+    };
     addingStream = true;
   }
 
@@ -52,7 +81,11 @@
     addingStream = false;
     editingStreamIndex = index;
     streamOwner = (stream.start_age_type === 'spouse_retirement' || stream.end_age_type === 'spouse_death') ? 'spouse' : 'user';
-    draftStream = { ...stream };
+    const schedule = editableSchedule(stream);
+    draftStream = {
+      ...stream,
+      adjustments: schedule.map((p, i) => ({ ...periodView(p, i) }) as Adjustment),
+    };
   }
 
   function cancelStream() {
@@ -75,11 +108,17 @@
         draftStream.start_age_type = draftStream.start_age_type === 'spouse_retirement' ? 'retirement' : draftStream.start_age_type;
         draftStream.end_age_type = 'death';
       }
+      if (draftStream.adjustments && draftStream.adjustments.length > 0) {
+        draftStream.adjust_type = draftStream.adjustments[0].adjust_type;
+        draftStream.adjust_val = draftStream.adjustments[0].adjust_val;
+      }
       if (editingStreamIndex !== null) {
         Object.assign(plan.income_sources![editingStreamIndex], draftStream);
+        plan.income_sources = [...plan.income_sources!];
       } else {
-        (plan.income_sources ??= []).push(draftStream);
+        plan.income_sources = [...(plan.income_sources ?? []), draftStream];
       }
+      streamVersion++;
     }
     addingStream = false;
     editingStreamIndex = null;
@@ -93,6 +132,8 @@
       editingStreamIndex--;
     }
     plan.income_sources?.splice(index, 1);
+    plan.income_sources = [...(plan.income_sources ?? [])];
+    streamVersion++;
   }
 
   // Safety net: clean up draft state on question change
@@ -352,9 +393,9 @@
       </p>
 
       <!-- Current Income Streams List -->
-      {#if (plan.income_sources ?? []).length > 0}
+      {#if incomeSources.length > 0}
         <div class="d-flex flex-column gap-2 mb-3" style="max-width: 650px;">
-          {#each plan.income_sources ?? [] as stream, i (i)}
+          {#each incomeSources as stream, i (i)}
             <div class="card p-3 border shadow-sm rounded-3 d-flex flex-row justify-content-between align-items-center {editingStreamIndex === i ? 'border-primary bg-primary-subtle' : ''}">
               <div>
                 <div class="fw-bold text-dark">
@@ -364,7 +405,7 @@
                   {/if}
                 </div>
                 <div class="small text-muted">
-                  Amount: {formatMoney(Number(stream.amount) || 0)} ({stream.frequency ?? 'annual'}) &bull; Starts: {stream.start_age_type}{#if married} &bull; Survivor: {stream.has_survivor_benefit ? `${stream.survivor_benefit_pct}%` : 'None'}{/if}
+                  Amount: {formatMoney(Number(stream.amount) || 0)} ({stream.frequency ?? 'annual'}) &bull; Starts: {stream.start_age_type} &bull; Adjustment: {adjustmentSummary(stream)}{#if married} &bull; Survivor: {stream.has_survivor_benefit ? `${stream.survivor_benefit_pct}%` : 'None'}{/if}
                 </div>
               </div>
               <div class="d-flex align-items-center gap-1">
@@ -385,7 +426,7 @@
           <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Company Pension", 24000)}>
             🏛️ Company or Govt Pension
           </button>
-          <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Fixed Annuity", 12000)}>
+          <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Fixed Annuity", 12000, "none")}>
             📜 Annuity Payment
           </button>
           <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Rental Income", 18000)}>
@@ -455,6 +496,8 @@
               {/if}
             </div>
           {/if}
+
+          <AdjustmentSchedule bind:item={draftStream} {people} idPrefix="int_inc_adj" />
 
           <div class="d-flex justify-content-end gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick={cancelStream}>Cancel</button>
