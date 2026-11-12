@@ -167,4 +167,38 @@ describe('Rebalance tab', () => {
     expect(options).toContain('100% Collectibles');
     stop();
   });
+
+  it('supports dark mode theme for account cards in Step 3', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const css = fs.readFileSync(path.resolve(__dirname, '../../src/styles/style.css'), 'utf8');
+    const styleEl = document.createElement('style');
+    styleEl.textContent = css;
+    document.head.appendChild(styleEl);
+
+    const { store, stop } = setup(plan());
+    await fireEvent.click(document.getElementById('rebalance-tab')!);
+
+    const card = $$('.reb-acc-card')[0];
+    expect(card).not.toBeNull();
+    const nameEl = $('h5.text-dark', card);
+    expect(nameEl).not.toBeNull();
+
+    // Verify dark mode attributes and CSS rules
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.setAttribute('data-bs-theme', 'dark');
+    const darkStyle = window.getComputedStyle(card);
+    expect(darkStyle.backgroundColor).toBe('var(--bg-secondary)');
+
+    // Verify light mode fallback
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.setAttribute('data-bs-theme', 'light');
+    const lightStyle = window.getComputedStyle(card);
+    expect(lightStyle.backgroundColor).toBe('var(--bg-secondary, #ffffff)');
+
+    document.head.removeChild(styleEl);
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.removeAttribute('data-bs-theme');
+    stop();
+  });
 });

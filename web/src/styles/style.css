@@ -1779,9 +1779,9 @@ tbody tr:hover {
 }
 
 .reb-acc-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 0.5rem;
-  background-color: #ffffff;
+  background-color: var(--bg-secondary, #ffffff);
   transition: box-shadow 0.15s ease;
 }
 
@@ -1790,11 +1790,11 @@ tbody tr:hover {
 }
 
 .reb-acc-card.is-incomplete {
-  border-left: 4px solid #f59e0b;
+  border-left: 4px solid var(--warning, #f59e0b);
 }
 
 .reb-acc-card.is-complete {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid var(--success, #10b981);
 }
 
 .reb-trade-item {
@@ -2350,6 +2350,27 @@ tbody tr:hover {
 [data-theme="dark"] .reb-kpi-card {
   background-color: var(--bg-tertiary) !important;
   border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .reb-acc-card,
+[data-bs-theme="dark"] .reb-acc-card {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .reb-acc-card:hover,
+[data-bs-theme="dark"] .reb-acc-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .reb-acc-card.is-incomplete,
+[data-bs-theme="dark"] .reb-acc-card.is-incomplete {
+  border-left-color: var(--warning) !important;
+}
+
+[data-theme="dark"] .reb-acc-card.is-complete,
+[data-bs-theme="dark"] .reb-acc-card.is-complete {
+  border-left-color: var(--success) !important;
 }
 
 /* Period Controls and Sub-bars */
