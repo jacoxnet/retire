@@ -1,6 +1,8 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { page as pageState } from '$app/state';
+  import type { TabId } from '../lib/app/badges';
   import { planStore, uiPrefs } from '../lib/app/context';
   import EnterPage from '../lib/components/enter/EnterPage.svelte';
   import { prepareEnterPlan } from '../lib/plan/commit';
@@ -14,6 +16,15 @@
   let page: ReturnType<typeof EnterPage> | undefined = $state();
 
   const resultsPath = resolve('/results');
+
+  const VALID_TABS: TabId[] = ['demographics', 'assets', 'spending', 'income', 'balance-sheet', 'rebalance'];
+  const requestedTab = $derived.by(() => {
+    const fromQuery = pageState.url.searchParams.get('tab');
+    if (fromQuery && VALID_TABS.includes(fromQuery as TabId)) return fromQuery as TabId;
+    const fromHash = pageState.url.hash.replace(/^#/, '');
+    if (fromHash && VALID_TABS.includes(fromHash as TabId)) return fromHash as TabId;
+    return undefined;
+  });
 
   /** Save the plan as the Django Enter form did; returns the errors, if any. */
   function prepare(): string[] {
@@ -41,4 +52,4 @@
 
 <svelte:head><title>Enter Data - Retirement Calculator</title></svelte:head>
 
-<EnterPage bind:this={page} bind:plan={store.plan} bind:errors bind:messages mode={ui.mode} onModeChange={(m) => ui.setMode(m)} onRun={run} />
+<EnterPage bind:this={page} bind:plan={store.plan} bind:errors bind:messages mode={ui.mode} onModeChange={(m) => ui.setMode(m)} onRun={run} initialTab={requestedTab} />

@@ -8,6 +8,8 @@
   import type { DollarMode } from '../../app/resultCharts';
   import type { Results } from '../../app/results';
   import { djangoMoney, floatformat } from '../../app/resultsFormat';
+  import { uiPrefs } from '../../app/context';
+  import type { PlannerMode } from '../../app/ui.svelte';
   import type { StressSpec } from '../../engine/crisis';
   import type { ModeChangeInput } from '../../plan/modeChange';
   import ChartsTab from './ChartsTab.svelte';
@@ -20,6 +22,10 @@
   interface Props {
     results: Results;
     messages?: FlashMessage[];
+    /** Link target for "Enter Data". */
+    enterHref?: string;
+    /** Current planner mode ('advanced' | 'simple'). Defaults to uiPrefs().mode. */
+    plannerMode?: PlannerMode;
     /** Apply the Simulation Inputs / Mode edits and re-run. */
     onApply?: (input: ModeChangeInput) => void;
     /** Run the stress test for other selections. */
@@ -34,9 +40,14 @@
     onAdopt?: (type: 'spending' | 'retirement_age', value: any) => void;
   }
   let {
-    results, messages = $bindable([]), onApply = () => {}, onStressChange, stressBusy = false, stressProgress = null,
+    results, messages = $bindable([]), enterHref = '/', plannerMode = uiPrefs().mode, onApply = () => {}, onStressChange, stressBusy = false, stressProgress = null,
     stressError = null, busy = false, onAdopt,
   }: Props = $props();
+
+  function tabHref(tabId: 'balance-sheet' | 'rebalance'): string {
+    const base = enterHref.replace(/\/+$/, '');
+    return `${base}/?tab=${tabId}`;
+  }
 
   type TabId = 'stats' | 'projection' | 'cashflow' | 'charts' | 'stresstest';
   const TABS: { id: TabId; button: string; label: string; icon?: string }[] = [
@@ -91,12 +102,33 @@
 
 <svelte:window onbeforeprint={prepareForPrint} onafterprint={restoreAfterPrint} />
 
-<div class="mb-4 text-center">
-  <h1 class="pageheading mb-2">Retirement Simulation Results</h1>
-  <div class="d-inline-flex gap-2">
-    <button type="button" class="btn btn-outline-secondary btn-sm shadow-sm" id="btnPrintSummary" title="Print or export clean PDF executive report" onclick={print}>
-      <i class="fa-solid fa-print me-1"></i> Print / Export Report
-    </button>
+<div class="mb-4">
+  <h1 class="pageheading mb-2 text-center">Retirement Simulation Results</h1>
+  <div class="results-actions-bar d-flex flex-wrap justify-content-center justify-content-md-between align-items-center position-relative gap-2">
+    <div class="results-actions-spacer d-none d-md-block" style="flex: 1;"></div>
+    <div class="results-actions-center text-center">
+      <button type="button" class="btn btn-outline-secondary btn-sm shadow-sm" id="btnPrintSummary" title="Print or export clean PDF executive report" onclick={print}>
+        <i class="fa-solid fa-print me-1"></i> Print / Export Report
+      </button>
+    </div>
+    <div class="results-actions-right d-flex justify-content-center justify-content-md-end align-items-center d-print-none" style="flex: 1;">
+      {#if plannerMode === 'advanced'}
+        <ul class="nav nav-tabs border-bottom-0 results-subpage-tabs" id="resultsSubpageTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <a class="nav-link results-balance-sheet-tab" id="balance-sheet-tab" data-testid="results-balance-sheet-tab" href={tabHref('balance-sheet')} role="tab" aria-selected="false" title="Personal Balance Sheet (optional)">
+              <span class="tab-label-main">Balance Sheet</span>
+              <span class="tab-label-sub">(optional)</span>
+            </a>
+          </li>
+          <li class="nav-item" role="presentation">
+            <a class="nav-link results-rebalance-tab" id="rebalance-tab" data-testid="results-rebalance-tab" href={tabHref('rebalance')} role="tab" aria-selected="false" title="Portfolio Rebalance (optional)">
+              <span class="tab-label-main">Rebalance</span>
+              <span class="tab-label-sub">(optional)</span>
+            </a>
+          </li>
+        </ul>
+      {/if}
+    </div>
   </div>
 </div>
 

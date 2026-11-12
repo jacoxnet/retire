@@ -166,7 +166,7 @@
 </script>
 
 {#if view.kind === 'ready' && results}
-  <ResultsPage {results} bind:messages onApply={apply} onStressChange={changeStress} onAdopt={adoptSolved} {stressBusy} {stressProgress} {stressError} />
+  <ResultsPage {results} bind:messages onApply={apply} onStressChange={changeStress} onAdopt={adoptSolved} {stressBusy} {stressProgress} {stressError} {enterHref} />
 {:else}
   <div class="mb-4 text-center">
     <h1 class="pageheading mb-2">Retirement Simulation Results</h1>

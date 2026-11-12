@@ -23,6 +23,7 @@
   interface Props {
     plan: Plan;
     mode: PlannerMode;
+    initialTab?: TabId;
     /** Errors from the last run attempt, shown above the form. */
     errors?: string[];
     /** One-time messages (e.g. from an import), shown above the form. */
@@ -31,7 +32,7 @@
     /** Validate, save and go to the results; the page shows any errors it returns. */
     onRun: () => void;
   }
-  let { plan = $bindable(), mode, errors = $bindable([]), messages = $bindable([]), onModeChange, onRun }: Props = $props();
+  let { plan = $bindable(), mode, initialTab, errors = $bindable([]), messages = $bindable([]), onModeChange, onRun }: Props = $props();
 
   interface TabDef {
     id: TabId;
@@ -50,6 +51,7 @@
   ];
 
   let active: TabId = $state('demographics');
+  let currentTargetTab: TabId | undefined = $state();
   let interviewOpen = $state(false);
   let bannerDismissed = $state(false);
 
@@ -110,6 +112,15 @@
     subnavOpen = false;
     window.scrollTo(0, 0);
   }
+
+  $effect.pre(() => {
+    if (initialTab && initialTab !== currentTargetTab) {
+      currentTargetTab = initialTab;
+      switchTab(initialTab);
+    } else if (!initialTab) {
+      currentTargetTab = undefined;
+    }
+  });
 
   let healthBarCollapsed = $state(false);
 

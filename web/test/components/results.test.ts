@@ -292,4 +292,34 @@ describe('interactions', () => {
     flushSync();
     expect(page.container.querySelector('#projection')?.textContent).toContain('$60,000');
   });
+
+  it('renders Balance Sheet and Rebalance tabs on the right side of the Print button row in advanced mode', () => {
+    const page = render(ResultsPage, { results: r, enterHref: '/' });
+    const actionRow = page.container.querySelector('.results-actions-bar');
+    expect(actionRow).not.toBeNull();
+    const printBtn = actionRow?.querySelector('#btnPrintSummary');
+    expect(printBtn).not.toBeNull();
+
+    const tabsContainer = actionRow?.querySelector('#resultsSubpageTabs');
+    expect(tabsContainer).not.toBeNull();
+
+    const bsTab = actionRow?.querySelector('#balance-sheet-tab') as HTMLAnchorElement;
+    expect(bsTab).not.toBeNull();
+    expect(bsTab.getAttribute('href')).toBe('/?tab=balance-sheet');
+    expect(bsTab.textContent).toContain('Balance Sheet');
+    expect(bsTab.textContent).toContain('(optional)');
+
+    const rebTab = actionRow?.querySelector('#rebalance-tab') as HTMLAnchorElement;
+    expect(rebTab).not.toBeNull();
+    expect(rebTab.getAttribute('href')).toBe('/?tab=rebalance');
+    expect(rebTab.textContent).toContain('Rebalance');
+    expect(rebTab.textContent).toContain('(optional)');
+  });
+
+  it('hides Balance Sheet and Rebalance tabs on results page in simple mode', () => {
+    const page = render(ResultsPage, { results: r, plannerMode: 'simple' });
+    expect(page.container.querySelector('#resultsSubpageTabs')).toBeNull();
+    expect(page.container.querySelector('#balance-sheet-tab')).toBeNull();
+    expect(page.container.querySelector('#rebalance-tab')).toBeNull();
+  });
 });

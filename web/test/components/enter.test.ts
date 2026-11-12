@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODE_KEY, UiPrefs } from '../../src/lib/app/ui.svelte';
+import EnterPage from '../../src/lib/components/enter/EnterPage.svelte';
 import InstructionsModal from '../../src/lib/components/shared/InstructionsModal.svelte';
 import { memoryStorage, PlanStore } from '../../src/lib/plan/store.svelte';
 import EnterHarness from './EnterHarness.svelte';
@@ -173,6 +174,31 @@ describe('Enter page', () => {
     expect(popover?.textContent).toContain('Only include accounts earmarked to fund your retirement');
     expect(popover?.textContent).toContain('Balance Sheet');
     stop();
+  });
+
+  it('opens requested initialTab such as balance-sheet and rebalance', async () => {
+    const storage = memoryStorage();
+    const store = new PlanStore(storage);
+    const page = render(EnterPage, {
+      plan: store.plan,
+      mode: 'advanced',
+      initialTab: 'balance-sheet',
+      onModeChange: vi.fn(),
+      onRun: vi.fn(),
+    });
+    expect(page.container.querySelector('#balance-sheet-tab')?.classList.contains('active')).toBe(true);
+    expect(page.container.querySelector('#balance-sheet')?.classList.contains('active')).toBe(true);
+    cleanup();
+
+    const page2 = render(EnterPage, {
+      plan: store.plan,
+      mode: 'advanced',
+      initialTab: 'rebalance',
+      onModeChange: vi.fn(),
+      onRun: vi.fn(),
+    });
+    expect(page2.container.querySelector('#rebalance-tab')?.classList.contains('active')).toBe(true);
+    expect(page2.container.querySelector('#rebalance')?.classList.contains('active')).toBe(true);
   });
 });
 
