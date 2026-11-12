@@ -127,10 +127,24 @@
       </div>
 
       {#if !r.unreachable && r.achieved_user_ret_age}
-        <button type="button" class="btn btn-outline-primary btn-sm mb-3 w-100 shadow-sm" id="btnAdoptEarliestRet"
-          onclick={() => onAdopt?.('retirement_age', { user: r.achieved_user_ret_age, spouse: r.achieved_spouse_ret_age })}>
-          <i class="fa-solid fa-circle-check me-1"></i> Adopt Earliest Retirement Age ({r.achieved_user_ret_age}{#if r.is_married && r.achieved_spouse_ret_age !== undefined} / {r.achieved_spouse_ret_age}{/if}) into Plan
-        </button>
+        <div class="card bg-light border-primary-subtle p-3 mb-3 text-center shadow-sm">
+          <div class="fw-semibold text-dark mb-1 fs-6">
+            Adopt earliest retirement age ({#if r.is_married && r.achieved_spouse_ret_age !== undefined}{r.achieved_user_ret_age} / {r.achieved_spouse_ret_age}{:else}{r.achieved_user_ret_age}{/if}) into the Plan?
+          </div>
+          <p class="small text-secondary mb-3">
+            Applies this retirement age to your plan and switches back to a regular simulation.
+          </p>
+          <div>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm px-4 shadow-sm"
+              id="btnAdoptEarliestRet"
+              onclick={() => onAdopt?.('retirement_age', { user: r.achieved_user_ret_age, spouse: r.achieved_spouse_ret_age })}
+            >
+              <i class="fa-solid fa-circle-check me-1"></i> Adopt into Plan
+            </button>
+          </div>
+        </div>
       {/if}
 
       <hr>
@@ -250,10 +264,24 @@
       </div>
 
       {#if r.achieved_spending}
-        <button type="button" class="btn btn-outline-success btn-sm mb-3 w-100 shadow-sm" id="btnAdoptMaxSpending"
-          onclick={() => onAdopt?.('spending', r.achieved_spending)}>
-          <i class="fa-solid fa-circle-check me-1"></i> Adopt Solved Spending (${djangoMoney(r.achieved_spending)}/yr) into Plan
-        </button>
+        <div class="card bg-light border-success-subtle p-3 mb-3 text-center shadow-sm">
+          <div class="fw-semibold text-dark mb-1 fs-6">
+            Adopt Solved Spending (${djangoMoney(r.achieved_spending)}/yr) into the Plan?
+          </div>
+          <p class="small text-secondary mb-3">
+            Applies this annual spending amount to your plan and switches back to a regular simulation.
+          </p>
+          <div>
+            <button
+              type="button"
+              class="btn btn-success btn-sm px-4 shadow-sm"
+              id="btnAdoptMaxSpending"
+              onclick={() => onAdopt?.('spending', r.achieved_spending)}
+            >
+              <i class="fa-solid fa-circle-check me-1"></i> Adopt into Plan
+            </button>
+          </div>
+        </div>
       {/if}
     </div>
   {/if}

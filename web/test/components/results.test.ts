@@ -229,8 +229,10 @@ describe('interactions', () => {
       achieved_spending: 95000,
     };
     const page = render(ResultsPage, { results: custom, onAdopt });
+    expect(page.container.textContent).toContain('Adopt Solved Spending ($95,000/yr) into the Plan?');
     const btn = page.container.querySelector<HTMLButtonElement>('#btnAdoptMaxSpending');
     expect(btn).not.toBeNull();
+    expect(btn?.textContent).toContain('Adopt into Plan');
     btn?.click();
     expect(onAdopt).toHaveBeenCalledWith('spending', 95000);
   });
@@ -245,8 +247,10 @@ describe('interactions', () => {
       is_married: true,
     };
     const page = render(ResultsPage, { results: custom, onAdopt });
+    expect(page.container.textContent).toContain('Adopt earliest retirement age (62 / 60) into the Plan?');
     const btn = page.container.querySelector<HTMLButtonElement>('#btnAdoptEarliestRet');
     expect(btn).not.toBeNull();
+    expect(btn?.textContent).toContain('Adopt into Plan');
     btn?.click();
     expect(onAdopt).toHaveBeenCalledWith('retirement_age', { user: 62, spouse: 60 });
   });
