@@ -30,7 +30,7 @@ export function tabBadges(plan: Plan): Record<TabId, Badge | null> {
       : { text: '0 accounts', tone: 'warn' },
     spending: spend > 0 ? { text: `$${formatBadgeMoney(spend)}/yr`, tone: 'done' } : { text: 'Baseline', tone: 'muted' },
     income: streams > 0 ? { text: `${streams} stream${streams > 1 ? 's' : ''}`, tone: 'done' } : { text: 'None', tone: 'muted' },
-    'balance-sheet': { text: 'Optional', tone: 'muted' },
-    rebalance: { text: 'Optional', tone: 'muted' },
+    'balance-sheet': null,
+    rebalance: null,
   };
 }

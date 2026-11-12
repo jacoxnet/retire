@@ -186,7 +186,9 @@ describe('Enter page', () => {
       onModeChange: vi.fn(),
       onRun: vi.fn(),
     });
-    expect(page.container.querySelector('#balance-sheet-tab')?.classList.contains('active')).toBe(true);
+    const bsTab = page.container.querySelector('#balance-sheet-tab');
+    expect(bsTab?.classList.contains('active')).toBe(true);
+    expect(bsTab?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Balance Sheet (optional)');
     expect(page.container.querySelector('#balance-sheet')?.classList.contains('active')).toBe(true);
     cleanup();
 
@@ -197,7 +199,9 @@ describe('Enter page', () => {
       onModeChange: vi.fn(),
       onRun: vi.fn(),
     });
-    expect(page2.container.querySelector('#rebalance-tab')?.classList.contains('active')).toBe(true);
+    const rebTab = page2.container.querySelector('#rebalance-tab');
+    expect(rebTab?.classList.contains('active')).toBe(true);
+    expect(rebTab?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Rebalance (optional)');
     expect(page2.container.querySelector('#rebalance')?.classList.contains('active')).toBe(true);
   });
 });

@@ -51,7 +51,8 @@ describe('tab badges', () => {
     expect(b.assets).toEqual({ text: '2 accts • $500K', tone: 'done' });
     expect(b.spending).toEqual({ text: '$80K/yr', tone: 'done' });
     expect(b.income).toEqual({ text: '2 streams', tone: 'done' });
-    expect(b['balance-sheet']).toEqual({ text: 'Optional', tone: 'muted' });
+    expect(b['balance-sheet']).toBeNull();
+    expect(b.rebalance).toBeNull();
   });
 
   it('flags empty sections', () => {
