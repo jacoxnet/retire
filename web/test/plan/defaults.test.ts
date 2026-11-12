@@ -1,10 +1,16 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildDefaultRebalancing, getDefaultData, parseRebalancing } from '../../src/lib/plan/defaults';
-import { deepClose, loadFixture } from '../fixtures';
+import { deepClose, FIXTURES_DIR, loadFixture, stringifyFixture, UPDATING } from '../fixtures';
 
 describe('defaults', () => {
   const f = loadFixture('functions', 'plan_defaults.json');
   it('getDefaultData matches get_default_data, balance sheet included', () => {
+    if (UPDATING) {
+      f.default_data_full = getDefaultData('2026-01-15');
+      writeFileSync(join(FIXTURES_DIR, 'functions', 'plan_defaults.json'), stringifyFixture(f));
+    }
     expect(deepClose(getDefaultData('2026-01-15'), f.default_data_full, 0)).toBeNull();
   });
   it('rebalancing defaults and parsing', () => {

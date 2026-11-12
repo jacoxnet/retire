@@ -146,7 +146,7 @@ describe('edits and view state', () => {
     addMortgage(bs, bs.categories.real_estate.properties[1], 7);
     expect(bs.categories.real_estate.properties[1].mortgages.map((m: any) => m.name)).toEqual(['1st Mortgage', '2nd Mortgage / HELOC']);
     addDebt(bs, 'Card', 8);
-    expect(bs.categories.debts[1]).toMatchObject({ name: 'Card', institution: 'Lender / Bank' });
+    expect(bs.categories.debts[1]).toMatchObject({ name: 'Card', institution: '[To be added]' });
   });
 
   it('tracks collapsed sections', () => {

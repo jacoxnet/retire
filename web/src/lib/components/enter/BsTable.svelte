@@ -191,7 +191,7 @@
     'btn-outline-primary', () => addCategoryAccount(bs, key))}
   {#if !isCollapsed(bs, key)}
     {#each accounts as acc, i (acc)}
-      {@render accountRow(acc, accounts, i, 'ps-4', 'Account Name', 'Inst / Notes')}
+      {@render accountRow(acc, accounts, i, 'ps-4', 'Account Name', '[To be added]')}
     {:else}
       <tr><td colspan={span} class="text-muted small ps-4 py-2">No accounts in this category. Click "+ {addLabel}" to add one.</td></tr>
     {/each}
@@ -303,7 +303,11 @@
       </td>
     </tr>
     {#if !isCollapsed(bs, 'emergency')}
-      {#each emgAccounts as acc, i (acc)}{@render accountRow(acc, emgAccounts, i, 'ps-4', 'Emergency Account Name', 'HYSA / Bank')}{/each}
+      {#each emgAccounts as acc, i (acc)}
+        {@render accountRow(acc, emgAccounts, i, 'ps-4', 'Emergency Account Name', '[To be added]')}
+      {:else}
+        <tr><td colspan={span} class="text-muted small ps-4 py-2">No accounts in this category. Click "+ Add Emergency Account" to add one.</td></tr>
+      {/each}
     {/if}
     <tr class="bs-subtotal-row" id="subtotal_row_emergency">
       <td class="bs-sticky-col fw-bold ps-3">Total Emergency Funds</td>
@@ -361,9 +365,11 @@
         </tr>
         {#if !isGoalCollapsed(bs, gi)}
           {#each g.accounts ?? [] as acc, i (acc)}
-            {@render accountRow(acc, g.accounts, i, 'ps-5 text-muted', 'Account Name (e.g. HYSA / Bond)', 'Institution')}
+            {@render accountRow(acc, g.accounts, i, 'ps-5 text-muted', 'Account Name (e.g. HYSA / Bond)', '[To be added]')}
           {/each}
         {/if}
+      {:else}
+        <tr><td colspan={span} class="text-muted small ps-4 py-2">No savings goals have been established. Click "+ Add Sinking Fund / Goal" to add one.</td></tr>
       {/each}
     {/if}
     {@render subtotalRow('subtotal_row_goals', 'Total Sinking Fund Savings', totals.map((t) => t.goals))}
@@ -427,6 +433,8 @@
               onclick={() => prop.mortgages.splice(mi, 1)}><i class="fa fa-trash-can"></i></button></td>
           </tr>
         {/each}
+      {:else}
+        <tr><td colspan={span} class="text-muted small ps-4 py-2">No real estate properties have been added. Click "+ Add Property" to add one.</td></tr>
       {/each}
     {/if}
     {@render subtotalRow('net_home_equity_row', 'NET HOME EQUITY', totals.map((t) => t.netEquity), 'text-info', 'text-info', 'Market Value − Mortgages')}
@@ -443,7 +451,7 @@
               bind:value={() => d.name ?? '', (v) => (d.name = v)} />
           </td>
           <td class="bs-inst-col">
-            <input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" aria-label="Lender" placeholder="Lender / Card"
+            <input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" aria-label="Lender" placeholder="[To be added]"
               bind:value={() => d.institution ?? '', (v) => (d.institution = v)} />
           </td>
           {#each periods as p (p)}
@@ -457,6 +465,8 @@
           <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm p-1" title="Delete debt" aria-label="Delete debt"
             onclick={() => debtRows.splice(di, 1)}><i class="fa fa-trash-can"></i></button></td>
         </tr>
+      {:else}
+        <tr><td colspan={span} class="text-muted small ps-4 py-2">No debt accounts in this category. Click "+ Add Debt Account" to add one.</td></tr>
       {/each}
     {/if}
     {@render subtotalRow('subtotal_debts_row', 'Subtotal Non-Mortgage Debts', totals.map((t) => t.debts), 'text-danger', 'text-danger', '', true)}

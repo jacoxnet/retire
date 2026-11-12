@@ -451,7 +451,7 @@ export function addCategoryAccount(bs: BalanceSheetObj, key: string, now = Date.
   const acc = {
     id: `acc_${key}_${cat.accounts.length + 1}_${now}_${rand()}`,
     name: uniqueDefaultName(base, allAccountNames(bs)),
-    institution: 'Custodian / Bank',
+    institution: '[To be added]',
     owner: 'user',
     type: key === 'daily' || key === 'emergency' ? 'cash' : key === 'other' ? 'taxable' : key,
     include_in_retirement: retirement,
@@ -476,7 +476,7 @@ export function addGoalGroup(bs: BalanceSheetObj, name: string, target: number, 
     target_auto_inflate: false,
     target_base_date: bs.current_period,
     accounts: [{
-      id: `acc_g_${now}`, name: `${name} Savings Account`, institution: 'Bank / Custodian', owner: 'user', type: 'cash',
+      id: `acc_g_${now}`, name: `${name} Savings Account`, institution: '[To be added]', owner: 'user', type: 'cash',
       include_in_retirement: false, values: zeroValues(bs),
     }],
   });
@@ -487,7 +487,7 @@ export function addGoalAccount(bs: BalanceSheetObj, group: Obj, now = Date.now()
   group.accounts.push({
     id: `acc_g_${now}_${rand()}`,
     name: uniqueDefaultName(`Additional ${group.name} Account`, allAccountNames(bs)),
-    institution: 'Bank / Investment', owner: 'user', type: 'cash', include_in_retirement: false, values: zeroValues(bs),
+    institution: '[To be added]', owner: 'user', type: 'cash', include_in_retirement: false, values: zeroValues(bs),
   });
 }
 
@@ -509,7 +509,7 @@ export function addMortgage(bs: BalanceSheetObj, prop: Obj, now = Date.now()): v
 export function addDebt(bs: BalanceSheetObj, name: string, now = Date.now()): void {
   bs.categories ??= {};
   if (!Array.isArray(bs.categories.debts)) bs.categories.debts = [];
-  bs.categories.debts.push({ id: `debt_${now}`, name, institution: 'Lender / Bank', values: zeroValues(bs) });
+  bs.categories.debts.push({ id: `debt_${now}`, name, institution: '[To be added]', values: zeroValues(bs) });
 }
 
 /** Names used by more than one balance-sheet account (case-insensitive), as first typed. */

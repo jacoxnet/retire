@@ -15,21 +15,6 @@ import { isInheritedType } from './accountCard';
 const RETIREMENT_CATS = ['pretax', 'roth', 'taxable', 'hsa'];
 const nameKey = (o: Obj) => pyStr(get(o, 'name', '')).trim().toLowerCase();
 
-const cashAccount = (id: string, name: string, institution: string, period: string, type = 'cash'): Obj => ({
-  id, name, institution, owner: 'user', type, include_in_retirement: false, values: { [period]: 0.0 },
-});
-
-const goalGroup = (id: string, name: string, period: string, accounts: Obj[]): Obj => ({
-  id, name, target_amount: 0.0, target_auto_inflate: false, target_base_date: period, accounts,
-});
-
-const retirementPlaceholder = (id: string, name: string, institution: string, type: string, period: string,
-  mean: number, std: number): Obj => ({
-  id, name, institution, owner: 'user', type, include_in_retirement: true, values: { [period]: 0.0 },
-  contrib_amount: 0.0, contrib_freq: 'annual', contrib_start_age: 60, contrib_end_age_type: 'retirement',
-  contrib_end_age_specified: 65, contrib_adjust_inflation: true, return_mean: mean, return_std: std,
-});
-
 /**
  * A balance sheet with one column (today) holding the given accounts, plus default
  * placeholder accounts, goal groups, real estate and debts.
@@ -46,7 +31,7 @@ export function buildDefaultBalanceSheet(
     const accDict = {
       id: `acc_${n + 1}`,
       name: get(acc, 'name', 'Account'),
-      institution: get(acc, 'institution', 'Investment Custodian'),
+      institution: get(acc, 'institution', '[To be added]'),
       owner: get(acc, 'owner', 'user'),
       type: atype,
       include_in_retirement: true,
@@ -73,19 +58,6 @@ export function buildDefaultBalanceSheet(
     }
   }
 
-  if (!byType.pretax.length) {
-    byType.pretax.push(retirementPlaceholder('acc_pretax_1', 'Primary 401(k) / Traditional IRA', 'Fidelity', 'pretax', period, 6.0, 10.0));
-  }
-  if (!byType.roth.length) {
-    byType.roth.push(retirementPlaceholder('acc_roth_1', 'Roth IRA', 'Vanguard', 'roth', period, 6.0, 10.0));
-  }
-  if (!byType.taxable.length) {
-    byType.taxable.push({
-      ...retirementPlaceholder('acc_taxable_1', 'Taxable Brokerage Account', 'Charles Schwab', 'taxable', period, 5.0, 8.0),
-      dividend_yield: 2.0, qualified_dividend_pct: 85.0, interest_yield: 0.0, capital_gains_dist_rate: 0.5, cost_basis_ratio: 70.0,
-    });
-  }
-
   return {
     periods: [period],
     current_period: period,
@@ -102,44 +74,22 @@ export function buildDefaultBalanceSheet(
       emergency: {
         title: 'Emergency Fund Accounts', is_pretax: false, target_amount: 0.0, target_auto_inflate: false,
         target_base_date: period,
-        accounts: [cashAccount('acc_emg_1', 'High-Yield Emergency Savings', 'Marcus / Ally', period)],
+        accounts: [],
       },
       goals: {
         title: 'Goal Savings (Sinking Funds)',
         is_pretax: false,
-        goal_groups: [
-          goalGroup('goal_car', 'Next Vehicle Replacement', period, [
-            cashAccount('acc_g_car_1', 'Car Fund Savings (HYSA)', 'Ally Bank', period),
-            cashAccount('acc_g_car_2', 'Short-Term Bond Reserve (Brokerage)', 'Vanguard (BSV)', period, 'taxable'),
-          ]),
-          goalGroup('goal_hvac', 'Home Maintenance & HVAC Reserve', period, [
-            cashAccount('acc_g_hvac_1', 'Home Repair Sinking Fund', 'Capital One 360', period),
-          ]),
-          goalGroup('goal_travel', 'Vacation & Travel Fund', period, [
-            cashAccount('acc_g_trv_1', 'Travel Savings Account', 'Discover Bank', period),
-          ]),
-          goalGroup('goal_tech', 'Tech & Electronics Sinking Fund', period, [
-            cashAccount('acc_g_tech_1', 'Technology Reserve', 'Ally Bank', period),
-          ]),
-        ],
+        goal_groups: [],
       },
       daily: {
         title: 'Daily Spending Accounts (Checking & Cash)',
         is_pretax: false,
-        accounts: [cashAccount('acc_daily_1', 'Primary Checking', 'Chase Bank', period)],
+        accounts: [],
       },
       real_estate: {
-        properties: [{
-          id: 'prop_primary',
-          name: 'Primary Residence',
-          market_values: { [period]: 0.0 },
-          mortgages: [{ id: 'mort_primary', name: 'Primary 30-Yr Mortgage', balances: { [period]: 0.0 } }],
-        }],
+        properties: [],
       },
-      debts: [
-        { id: 'debt_auto', name: 'Auto Loan', institution: 'Toyota Financial Services', values: { [period]: 0.0 } },
-        { id: 'debt_cc', name: 'Credit Cards (Monthly Statement Balance)', institution: 'Chase / Amex', values: { [period]: 0.0 } },
-      ],
+      debts: [],
     },
   };
 }
@@ -482,7 +432,7 @@ export function syncAccountsToBalanceSheet(
       catAccs.push({
         id: or(get(acc, 'id'), `acc_${cat}_${catAccs.length + 1}`),
         name: get(acc, 'name', `${title(pyStr(get(acc, 'owner', 'User')))} ${title(String(atype))} Account`),
-        institution: get(acc, 'institution', 'Investment Custodian'),
+        institution: get(acc, 'institution', '[To be added]'),
         owner: get(acc, 'owner', 'user'),
         type: atype,
         include_in_retirement: true,

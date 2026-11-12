@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { aggregateAccounts, flatAssetsToAccounts } from '../../src/lib/plan/accounts';
@@ -14,7 +14,7 @@ import { calculateMarginalTaxRate } from '../../src/lib/plan/marginal';
 import { applyModeChange } from '../../src/lib/plan/modeChange';
 import { parsePlanJson } from '../../src/lib/plan/normalize';
 import { validateBalanceSheetAccounts } from '../../src/lib/plan/validate';
-import { deepClose, expectPlanFixture, fixtureIndex, loadFixture, SAVED_DIR } from '../fixtures';
+import { deepClose, expectPlanFixture, fixtureIndex, FIXTURES_DIR, loadFixture, SAVED_DIR, stringifyFixture, UPDATING } from '../fixtures';
 
 const TODAY = fixtureIndex().generated_with.fixture_today; // imports date missing columns "today"
 
@@ -55,6 +55,12 @@ function call(c: Case): unknown {
 
 describe('balance sheet / accounts / marginal rate grid', () => {
   const cases = loadFixture<Case[]>('functions', 'balance_sheet.json');
+  if (UPDATING) {
+    cases.forEach((c) => {
+      c.out = call(c);
+    });
+    writeFileSync(join(FIXTURES_DIR, 'functions', 'balance_sheet.json'), stringifyFixture(cases));
+  }
   cases.forEach((c, i) => {
     it(`${i}: ${c.fn}`, () => {
       expect(deepClose(call(c), c.out, 1e-12)).toBeNull();
@@ -135,7 +141,10 @@ describe('BalanceSheetTests', () => {
     const p = bs.current_period;
     bs.categories.pretax.accounts.push({ name: 'New 401(k) Plan', type: 'pretax', owner: 'user', include_in_retirement: true,
       values: { [p]: 350000.0 }, contrib_amount: 22000.0, return_mean: 6.5, return_std: 9.5 });
-    bs.categories.goals.goal_groups[0].accounts.push({ name: 'Car Fund HYSA', type: 'cash', owner: 'user', include_in_retirement: false, values: { [p]: 20000.0 } });
+    bs.categories.goals.goal_groups.push({
+      id: 'g_car', name: 'Car Fund', target_amount: 20000, target_auto_inflate: false, target_base_date: p,
+      accounts: [{ name: 'Car Fund HYSA', type: 'cash', owner: 'user', include_in_retirement: false, values: { [p]: 20000.0 } }],
+    });
     const synced = syncBalanceSheetToAccounts(bs);
     const names = synced.map((a) => a.name);
     expect(names).toContain('New 401(k) Plan');
@@ -145,9 +154,8 @@ describe('BalanceSheetTests', () => {
   });
 
   it('keeps accounts and balance sheet in sync in both directions', () => {
-    const bs = buildDefaultBalanceSheet();
+    const bs = buildDefaultBalanceSheet([{ name: 'Roth IRA', type: 'roth', balance: 20000.0, contrib_amount: 7000.0 }]);
     const p = bs.current_period;
-    for (const a of bs.categories.roth.accounts) if (a.name.includes('Roth')) a.values[p] = 20000.0;
     const accounts = syncBalanceSheetToAccounts(bs);
     const roth = accounts.find((a) => a.type === 'roth')!;
     expect(roth.balance).toBe(20000.0);
@@ -162,11 +170,15 @@ describe('BalanceSheetTests', () => {
     const bs = d.balance_sheet!;
     expect(bs.periods).toEqual([TODAY]);
     expect(bs.current_period).toBe(TODAY);
-    for (const g of bs.categories.goals.goal_groups) {
-      expect(g.target_amount).toBe(0.0);
-      for (const a of g.accounts) expect(a.values[TODAY]).toBe(0.0);
-    }
-    for (const prop of bs.categories.real_estate.properties) expect(prop.market_values[TODAY]).toBe(0.0);
+    expect(bs.categories.pretax.accounts).toHaveLength(0);
+    expect(bs.categories.roth.accounts).toHaveLength(0);
+    expect(bs.categories.taxable.accounts).toHaveLength(0);
+    expect(bs.categories.hsa.accounts).toHaveLength(0);
+    expect(bs.categories.emergency.accounts).toHaveLength(0);
+    expect(bs.categories.goals.goal_groups).toHaveLength(0);
+    expect(bs.categories.daily.accounts).toHaveLength(0);
+    expect(bs.categories.real_estate.properties).toHaveLength(0);
+    expect(bs.categories.debts).toHaveLength(0);
   });
 
   it('imports a multi-column balance sheet with every column', () => {
@@ -222,7 +234,10 @@ describe('BalanceSheetTests', () => {
   });
 
   it('duplicate balance-sheet names are reported', () => {
-    const bs = buildDefaultBalanceSheet();
+    const bs = buildDefaultBalanceSheet([
+      { name: '401k Account', type: 'pretax', balance: 500000.0 },
+      { name: 'Roth IRA', type: 'roth', balance: 150000.0 },
+    ]);
     expect(validateBalanceSheetAccounts(bs)).toEqual([]);
     bs.categories.roth.accounts[0].name = bs.categories.pretax.accounts[0].name;
     expect(validateBalanceSheetAccounts(bs).some((e) => e.includes('Multiple accounts cannot have the same name'))).toBe(true);
@@ -237,10 +252,25 @@ describe('BalanceSheetTests', () => {
     expect(roth[0].values[updated.current_period]).toBe(75000.0);
     expect(validateBalanceSheetAccounts(updated)).toEqual([]);
 
-    const bs2 = buildDefaultBalanceSheet();
-    bs2.categories.roth.accounts[0].values[bs2.current_period] = 60000.0;
+    const bs2 = buildDefaultBalanceSheet([{ id: 'acc_existing_1', name: 'roth ira', type: 'roth', balance: 60000.0, contrib_amount: 5000.0 }]);
     const synced = syncBalanceSheetToAccounts(bs2, [{ id: 'acc_existing_1', name: 'roth ira', type: 'roth', owner: 'user', balance: 50000.0, contrib_amount: 5000.0 }]);
     expect(synced.find((a) => a.type === 'roth')).toMatchObject({ balance: 60000.0, contrib_amount: 5000.0 });
+  });
+
+  it('buildDefaultBalanceSheet starts with empty categories and [To be added] institution defaults', () => {
+    const bs = buildDefaultBalanceSheet();
+    expect(bs.categories.pretax.accounts).toEqual([]);
+    expect(bs.categories.roth.accounts).toEqual([]);
+    expect(bs.categories.taxable.accounts).toEqual([]);
+    expect(bs.categories.hsa.accounts).toEqual([]);
+    expect(bs.categories.emergency.accounts).toEqual([]);
+    expect(bs.categories.goals.goal_groups).toEqual([]);
+    expect(bs.categories.daily.accounts).toEqual([]);
+    expect(bs.categories.real_estate.properties).toEqual([]);
+    expect(bs.categories.debts).toEqual([]);
+
+    const withAcc = buildDefaultBalanceSheet([{ name: 'Test 401k', type: 'pretax', balance: 100000 }]);
+    expect(withAcc.categories.pretax.accounts[0].institution).toBe('[To be added]');
   });
 
   it('drops an unlinked same-name account from another category', () => {

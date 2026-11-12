@@ -65,7 +65,7 @@
             name: rawName || defaultName,
             balance:
               val !== undefined && Number(val) > 0 ? Number(val) : undefined,
-            institution: a.institution || "Bank / Custodian",
+            institution: a.institution || "[To be added]",
             values: a.values ? { ...a.values } : undefined,
           };
         })
@@ -73,7 +73,7 @@
           {
             name: "High-Yield Savings",
             balance: undefined,
-            institution: "Bank / Custodian",
+            institution: "[To be added]",
           },
         ],
   );
@@ -100,7 +100,7 @@
     emergencyAccounts.push({
       name: `Emergency Savings ${emergencyAccounts.length + 1}`,
       balance: undefined,
-      institution: "Bank / Custodian",
+      institution: "[To be added]",
     });
   }
 
@@ -133,7 +133,7 @@
       validAccounts.push({
         name: "High-Yield Savings",
         balance: undefined,
-        institution: "Bank / Custodian",
+        institution: "[To be added]",
       });
     }
 
@@ -142,7 +142,7 @@
       return {
         id: a.id || `acc_emg_${Date.now()}_${idx}`,
         name: a.name?.trim() || `Emergency Savings ${idx + 1}`,
-        institution: a.institution || "Bank / Custodian",
+        institution: a.institution || "[To be added]",
         owner: "user",
         type: "cash",
         include_in_retirement: false,
@@ -213,7 +213,7 @@
       {
         name: name ? `${name} Account` : "Savings Account",
         balance: undefined,
-        institution: "Bank / Custodian",
+        institution: "[To be added]",
       },
     ];
     goalDraftAutoInflate = true; // default inflation adjustment on for best financial practice
@@ -234,7 +234,7 @@
           name: a.name || `${goalDraftName} Account ${idx + 1}`,
           balance:
             val !== undefined && Number(val) > 0 ? Number(val) : undefined,
-          institution: a.institution || "Bank / Custodian",
+          institution: a.institution || "[To be added]",
           values: a.values ? { ...a.values } : undefined,
         };
       });
@@ -243,7 +243,7 @@
         {
           name: `${goalDraftName} Account`,
           balance: undefined,
-          institution: "Bank / Custodian",
+          institution: "[To be added]",
         },
       ];
     }
@@ -266,7 +266,7 @@
     goalDraftAccounts.push({
       name: defaultName,
       balance: undefined,
-      institution: "Bank / Custodian",
+      institution: "[To be added]",
     });
   }
 
@@ -303,7 +303,7 @@
       validDraftAccounts.push({
         name: `${name} Account`,
         balance: undefined,
-        institution: "Bank / Custodian",
+        institution: "[To be added]",
       });
     }
 
@@ -312,7 +312,7 @@
       return {
         id: a.id || `acc_g_${Date.now()}_${idx}`,
         name: a.name?.trim() || `${name} Account ${idx + 1}`,
-        institution: a.institution || "Bank / Custodian",
+        institution: a.institution || "[To be added]",
         owner: "user",
         type: "cash",
         include_in_retirement: false,
@@ -450,7 +450,7 @@
           return {
             id: a.id,
             name: a.name || (idx === 0 ? "Non-Retirement Brokerage" : `Other Account ${idx + 1}`),
-            institution: a.institution || "Custodian / Bank",
+            institution: a.institution || "[To be added]",
             balance: val !== undefined && Number(val) > 0 ? Number(val) : undefined,
             values: a.values ? { ...a.values } : undefined,
           };
@@ -459,7 +459,7 @@
           {
             name: "Non-Retirement Brokerage",
             balance: undefined,
-            institution: "Custodian / Bank",
+            institution: "[To be added]",
           },
         ]
   );
@@ -474,7 +474,7 @@
     otherAccounts.push({
       name: `Other Account ${otherAccounts.length + 1}`,
       balance: undefined,
-      institution: "Custodian / Bank",
+      institution: "[To be added]",
     });
   }
 
@@ -484,7 +484,7 @@
     } else {
       otherAccounts[0].name = "Non-Retirement Brokerage";
       otherAccounts[0].balance = undefined;
-      otherAccounts[0].institution = "Custodian / Bank";
+      otherAccounts[0].institution = "[To be added]";
     }
   }
 
@@ -505,7 +505,7 @@
       validAccounts.push({
         name: "Non-Retirement Brokerage",
         balance: undefined,
-        institution: "Custodian / Bank",
+        institution: "[To be added]",
       });
     }
 
@@ -514,7 +514,7 @@
       return {
         id: a.id || `acc_other_${Date.now()}_${idx}`,
         name: a.name?.trim() || `Other Account ${idx + 1}`,
-        institution: a.institution || "Custodian / Bank",
+        institution: a.institution || "[To be added]",
         owner: "user",
         type: "taxable",
         include_in_retirement: false,
@@ -610,7 +610,7 @@
             id: d.id,
             name: d.name || (idx === 0 ? "Auto Loan" : `Loan ${idx + 1}`),
             balance: val !== undefined && Number(val) > 0 ? Number(val) : undefined,
-            institution: d.institution || "Lender / Bank",
+            institution: d.institution || "[To be added]",
             values: d.values ? { ...d.values } : undefined,
           };
         })
@@ -618,7 +618,7 @@
           {
             name: rawDebts[0]?.name || "Auto Loan",
             balance: undefined,
-            institution: rawDebts[0]?.institution || "Lender / Bank",
+            institution: rawDebts[0]?.institution || "[To be added]",
             id: rawDebts[0]?.id,
           },
         ]
@@ -634,7 +634,7 @@
     debtList.push({
       name: `Loan / Debt ${debtList.length + 1}`,
       balance: undefined,
-      institution: "Lender / Bank",
+      institution: "[To be added]",
     });
   }
 
@@ -659,7 +659,7 @@
       validDebts.push({
         name: "Auto Loan",
         balance: undefined,
-        institution: "Lender / Bank",
+        institution: "[To be added]",
       });
     }
 
@@ -668,7 +668,7 @@
       return {
         id: d.id || `debt_${Date.now()}_${idx}`,
         name: d.name?.trim() || `Loan ${idx + 1}`,
-        institution: d.institution || "Lender / Bank",
+        institution: d.institution || "[To be added]",
         values: {
           ...(d.values || {}),
           [currentPeriod]: bal,

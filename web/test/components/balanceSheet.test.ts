@@ -323,5 +323,62 @@ describe('editing', () => {
     expect(subtotalRow.textContent).toContain('$50,000');
     stop();
   });
+
+  it('displays empty state messages when balance sheet categories have no accounts', async () => {
+    const { stop } = setup();
+    await tab('balance-sheet');
+
+    const tableText = $('#balanceSheetTable').textContent;
+    expect(tableText).toContain('No accounts in this category. Click "+ Add Pretax Account" to add one.');
+    expect(tableText).toContain('No accounts in this category. Click "+ Add Roth Account" to add one.');
+    expect(tableText).toContain('No accounts in this category. Click "+ Add Brokerage Account" to add one.');
+    expect(tableText).toContain('No accounts in this category. Click "+ Add HSA Account" to add one.');
+    expect(tableText).toContain('No accounts in this category. Click "+ Add Emergency Account" to add one.');
+    expect(tableText).toContain('No savings goals have been established. Click "+ Add Sinking Fund / Goal" to add one.');
+    expect(tableText).toContain('No accounts in this category. Click "+ Add Checking Account" to add one.');
+    expect(tableText).toContain('No real estate properties have been added. Click "+ Add Property" to add one.');
+    expect(tableText).toContain('No debt accounts in this category. Click "+ Add Debt Account" to add one.');
+
+    stop();
+  });
+
+  it('defaults institution to "[To be added]" when adding accounts, goals, and debts', async () => {
+    window.prompt = (_msg, def) => def || 'Test Item';
+    const { stop } = setup();
+    await tab('balance-sheet');
+
+    // 1. Add Pretax Account
+    const pretaxHeader = $('tr[data-section="pretax"]');
+    await fireEvent.click($('button', pretaxHeader));
+    flushSync();
+    let rows = $$('.bs-account-row');
+    expect(rows.length).toBe(1);
+    expect($('.bs-inst-col input', rows[0]).value).toBe('[To be added]');
+
+    // 2. Add Emergency Account
+    const emgHeader = $('tr[data-section="emergency"]');
+    await fireEvent.click($('button.btn-outline-success', emgHeader));
+    flushSync();
+    rows = $$('.bs-account-row');
+    expect(rows.length).toBe(2);
+    expect($('.bs-inst-col input', rows[1]).value).toBe('[To be added]');
+
+    // 3. Add Sinking Fund / Goal
+    await fireEvent.click($('#bsAddGoalGroup'));
+    flushSync();
+    rows = $$('.bs-account-row');
+    expect(rows.length).toBe(3);
+    expect($('.bs-inst-col input', rows[2]).value).toBe('[To be added]');
+
+    // 4. Add Debt Account
+    const debtHeader = $('tr[data-section="debts"]');
+    await fireEvent.click($('button', debtHeader));
+    flushSync();
+    const debtRows = $$('.bs-debt-row');
+    expect(debtRows.length).toBe(1);
+    expect($('.bs-inst-col input', debtRows[0]).value).toBe('[To be added]');
+
+    stop();
+  });
 });
 
