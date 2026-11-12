@@ -57,7 +57,7 @@
     inherited_roth: 'badge-tax badge-tax-inherited',
   };
   const badge = (a: RebAccount) => BADGE[a.category] ?? 'badge-tax bg-secondary text-white';
-  const sortOrder: Record<string, number> = { pretax: 1, roth: 2, hsa: 3, taxable: 4, emergency: 5, goals: 6, daily: 7 };
+  const sortOrder: Record<string, number> = { pretax: 1, roth: 2, hsa: 3, taxable: 4, emergency: 5, goals: 6, daily: 7, other: 8 };
   const hasTaxable = $derived(results.included.some((a) => a.category === 'taxable'));
 
   function refresh() {

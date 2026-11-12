@@ -280,5 +280,48 @@ describe('editing', () => {
 
     stop();
   });
+
+  it('renders Other Accounts section, allows adding an account, and updates liquid net worth', async () => {
+    const { store, stop } = setup(loadSaved('sept27'));
+    await tab('balance-sheet');
+
+    const otherHeader = $('tr[data-section="other"]');
+    expect(otherHeader).not.toBeNull();
+    expect(otherHeader.textContent).toContain('Other Accounts');
+
+    // Subtotal row initially 0
+    const subtotalRow = $('#subtotal_row_other');
+    expect(subtotalRow).not.toBeNull();
+    expect(subtotalRow.textContent).toContain('Total Other Accounts');
+
+    // Click "+ Add Account" on Other Accounts section
+    const addBtn = $('button', otherHeader);
+    expect(addBtn.textContent).toContain('Add Account');
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    const bs = bsOf(store);
+    const otherAccounts = bs.categories?.other?.accounts ?? [];
+    expect(otherAccounts.length).toBe(1);
+    expect(otherAccounts[0].name).toBe('New Other Account');
+    expect(otherAccounts[0].include_in_retirement).toBe(false);
+
+    // Find the newly added row
+    const rows = $$('.bs-account-row');
+    const newRow = rows[rows.length - 1];
+    const nameInput = $('.bs-acc-name-input', newRow);
+    expect(nameInput.value).toBe('New Other Account');
+
+    const retireCheck = $('.bs-retire-check', newRow);
+    expect(retireCheck.checked).toBe(false);
+
+    // Enter a balance
+    const valInput = $('.bs-input-val', newRow);
+    await type(valInput, '50000');
+    flushSync();
+
+    expect(subtotalRow.textContent).toContain('$50,000');
+    stop();
+  });
 });
 

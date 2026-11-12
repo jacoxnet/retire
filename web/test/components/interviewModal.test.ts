@@ -45,8 +45,12 @@ describe('InterviewState', () => {
     list = wizard.activeQuestionList(marriedPlan);
     expect(list).toContain('nw_emergency');
     expect(list).toContain('nw_goals');
+    expect(list).toContain('nw_cash');
+    expect(list).toContain('nw_other');
     expect(list).toContain('nw_real_estate');
     expect(list).toContain('nw_debts');
+    expect(list.indexOf('nw_other')).toBe(list.indexOf('nw_real_estate') - 1);
+    expect(list.indexOf('nw_other')).toBe(list.indexOf('nw_cash') + 1);
     expect(list).not.toContain('nw_rebalance');
     expect(ALL_QUESTIONS.some((q) => q.id === 'nw_rebalance')).toBe(false);
   });
@@ -1587,6 +1591,140 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     // Now 2 debts remain: $15,000 + $25,000 = $40,000
     expect(r.container.textContent).toContain('Total Debts Across All 2 Accounts');
     expect(r.container.textContent).toContain('$40,000');
+
+    cleanup();
+  });
+
+  it('supports adding multiple other accounts in Stage 5, saves them, and preserves them on return', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_other');
+    const plan: Plan = { is_married: false };
+
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    expect(r.container.textContent).toContain('Do you have any other accounts not intended for retirement?');
+
+    // Account 1: Personal Brokerage, Schwab, $60,000
+    const a1Name = r.container.querySelector('#int_other_name') as HTMLInputElement;
+    const a1Inst = r.container.querySelector('#int_other_inst') as HTMLInputElement;
+    const a1Bal = r.container.querySelector('#int_other_bal') as HTMLInputElement;
+    await fireEvent.input(a1Name, { target: { value: 'Personal Brokerage' } });
+    await fireEvent.input(a1Inst, { target: { value: 'Charles Schwab' } });
+    await fireEvent.input(a1Bal, { target: { value: '60000' } });
+    flushSync();
+
+    // Add Account 2: Child Trust Fund, Fidelity, $40,000
+    const addAccBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Add Another Account')
+    );
+    expect(addAccBtn).toBeDefined();
+    await fireEvent.click(addAccBtn!);
+    flushSync();
+
+    const a2Name = r.container.querySelector('#int_other_name_1') as HTMLInputElement;
+    const a2Inst = r.container.querySelector('#int_other_inst_1') as HTMLInputElement;
+    const a2Bal = r.container.querySelector('#int_other_bal_1') as HTMLInputElement;
+    expect(a2Name).not.toBeNull();
+    expect(a2Inst).not.toBeNull();
+    expect(a2Bal).not.toBeNull();
+    await fireEvent.input(a2Name, { target: { value: 'Child Trust Fund' } });
+    await fireEvent.input(a2Inst, { target: { value: 'Fidelity' } });
+    await fireEvent.input(a2Bal, { target: { value: '40000' } });
+    flushSync();
+
+    // Total across all accounts: $60,000 + $40,000 = $100,000
+    expect(r.container.textContent).toContain('Total Saved Across All 2 Accounts');
+    expect(r.container.textContent).toContain('$100,000');
+
+    // Click Save Accounts
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Save Accounts')
+    );
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    // Verify stored in plan.balance_sheet.categories.other
+    const bs = plan.balance_sheet as any;
+    expect(bs).toBeDefined();
+    expect(bs.categories?.other?.accounts?.length).toBe(2);
+    expect(bs.categories.other.accounts[0].name).toBe('Personal Brokerage');
+    expect(bs.categories.other.accounts[0].institution).toBe('Charles Schwab');
+    expect(bs.categories.other.accounts[0].include_in_retirement).toBe(false);
+    expect(bs.categories.other.accounts[0].type).toBe('taxable');
+    expect(bs.categories.other.accounts[0].values[bs.current_period]).toBe(60000);
+    expect(bs.categories.other.accounts[1].name).toBe('Child Trust Fund');
+    expect(bs.categories.other.accounts[1].institution).toBe('Fidelity');
+    expect(bs.categories.other.accounts[1].include_in_retirement).toBe(false);
+    expect(bs.categories.other.accounts[1].values[bs.current_period]).toBe(40000);
+
+    cleanup();
+
+    // Navigate to review summary and return to nw_other: all accounts preserved!
+    wizard.goTo('review_summary');
+    wizard.goTo('nw_other');
+    r = render(Stage5NetWorth, { wizard, plan });
+
+    const remountA1Name = r.container.querySelector('#int_other_name') as HTMLInputElement;
+    const remountA1Inst = r.container.querySelector('#int_other_inst') as HTMLInputElement;
+    const remountA1Bal = r.container.querySelector('#int_other_bal') as HTMLInputElement;
+    const remountA2Name = r.container.querySelector('#int_other_name_1') as HTMLInputElement;
+    const remountA2Inst = r.container.querySelector('#int_other_inst_1') as HTMLInputElement;
+    const remountA2Bal = r.container.querySelector('#int_other_bal_1') as HTMLInputElement;
+
+    expect(remountA1Name.value).toBe('Personal Brokerage');
+    expect(remountA1Inst.value).toBe('Charles Schwab');
+    expect(remountA1Bal.value).toBe('60,000');
+    expect(remountA2Name.value).toBe('Child Trust Fund');
+    expect(remountA2Inst.value).toBe('Fidelity');
+    expect(remountA2Bal.value).toBe('40,000');
+
+    // Test removing Account 2
+    const removeBtn = r.container.querySelector('button[aria-label="Remove other account 2"]') as HTMLButtonElement;
+    expect(removeBtn).not.toBeNull();
+    await fireEvent.click(removeBtn);
+    flushSync();
+
+    // Now 1 account remains
+    expect(r.container.querySelector('#int_other_name_1')).toBeNull();
+    expect(remountA1Bal.value).toBe('60,000');
+
+    cleanup();
+  });
+
+  it('navigates from nw_cash to nw_other to nw_real_estate with Next button and auto-saves', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_cash');
+    const plan: Plan = { is_married: false };
+
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    // On nw_cash, advance to next question
+    const nextBtn1 = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn1!);
+    flushSync();
+
+    expect(wizard.currentQuestionId).toBe('nw_other');
+    cleanup();
+
+    // On nw_other, enter an account balance and click Next
+    r = render(Stage5NetWorth, { wizard, plan });
+    const otherBal = r.container.querySelector('#int_other_bal') as HTMLInputElement;
+    await fireEvent.input(otherBal, { target: { value: '75000' } });
+    flushSync();
+
+    const nextBtn2 = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Next'));
+    await fireEvent.click(nextBtn2!);
+    flushSync();
+
+    // Verify it advances to nw_real_estate
+    expect(wizard.currentQuestionId).toBe('nw_real_estate');
+
+    // Verify auto-save stored the account in plan.balance_sheet
+    const bs = plan.balance_sheet as any;
+    expect(bs.categories?.other?.accounts?.length).toBe(1);
+    expect(bs.categories.other.accounts[0].values[bs.current_period]).toBe(75000);
 
     cleanup();
   });

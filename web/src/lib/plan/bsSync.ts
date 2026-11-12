@@ -6,7 +6,7 @@ import { getBool, getInt } from './coerce';
 import { isObj, type Obj, todayIso } from './pyutil';
 import type { Account, Plan } from './types';
 
-const ACCOUNT_CATS = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'];
+const ACCOUNT_CATS = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily', 'other'];
 
 /** Every balance-sheet account, in category order, goal accounts last. */
 export function balanceSheetAccounts(bs: unknown): Obj[] {

@@ -46,6 +46,7 @@
               { label: 'Roth Accounts', data: series.roth, backgroundColor: '#8b5cf6', stack: 'assets' },
               { label: 'Taxable & HSA', data: series.taxableHsa, backgroundColor: '#06b6d4', stack: 'assets' },
               { label: 'Cash, Goals & Emergency', data: series.cash, backgroundColor: '#10b981', stack: 'assets' },
+              { label: 'Other Accounts', data: series.other, backgroundColor: '#64748b', stack: 'assets' },
               { label: 'Home Equity', data: series.homeEquity, backgroundColor: '#f59e0b', stack: 'assets' },
             ],
           },

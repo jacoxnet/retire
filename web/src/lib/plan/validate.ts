@@ -62,7 +62,7 @@ export function validateBalanceSheetAccounts(balanceSheet: BalanceSheet | null |
       seen.add(k);
     }
   };
-  for (const cat of ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily']) {
+  for (const cat of ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily', 'other']) {
     for (const acc of get(get(cats, cat, {}), 'accounts', [])) check(acc);
   }
   for (const group of get(get(cats, 'goals', {}), 'goal_groups', [])) {

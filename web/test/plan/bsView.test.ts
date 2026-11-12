@@ -88,7 +88,25 @@ describe('totals', () => {
     const s = chartSeries(sheet(), 25);
     expect(s.labels).toEqual(['Mar 2025', 'Jun 2025', 'Dec 2025']);
     expect(s.cash).toEqual([0, 0, 28000]);
+    expect(s.other).toEqual([0, 0, 0]);
     expect(s.gross[1]).toBe(100000 - 10000);
+  });
+
+  it('includes other accounts in liquid and gross net worth but excludes them from net retirement', () => {
+    const bs = sheet();
+    bs.categories.other = {
+      title: 'Other Accounts',
+      accounts: [{ name: 'Taxable Non-Retirement', values: { '2025-12-31': 45000 } }],
+    };
+    const t = periodTotals(bs, '2025-12-31', 25);
+    expect(t.byCategory.other).toBe(45000);
+    expect(t.liquid).toBe(203000 + 45000);
+    expect(t.grossNetWorth).toBe(203000 + 45000 + 150000 - 8000);
+    // netRetirement remains roth (50k) + hsa (5k) + netPretax (90k) = 145000
+    expect(t.netRetirement).toBe(145000);
+
+    const s = chartSeries(bs, 25);
+    expect(s.other).toEqual([0, 0, 45000]);
   });
 });
 
@@ -118,6 +136,7 @@ describe('edits and view state', () => {
     expect(Object.keys(a.values)).toEqual(bs.periods);
     expect(addCategoryAccount(bs, 'taxable', 2).name).toBe('New Investment / Taxable Brokerage Account 2');
     expect(addCategoryAccount(bs, 'daily', 3)).toMatchObject({ type: 'cash', include_in_retirement: false });
+    expect(addCategoryAccount(bs, 'other', 31)).toMatchObject({ name: 'New Other Account', type: 'taxable', include_in_retirement: false });
     addGoalGroup(bs, 'Wedding', 15000, 4);
     const g = bs.categories.goals.goal_groups[1];
     expect(g).toMatchObject({ name: 'Wedding', target_amount: 15000, target_base_date: '2025-12-31' });

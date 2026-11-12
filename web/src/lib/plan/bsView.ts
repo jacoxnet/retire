@@ -8,8 +8,8 @@ import type { Obj } from './pyutil';
 export type BalanceSheetObj = Obj;
 type Values = Record<string, number>;
 
-export const ACCOUNT_CATEGORIES = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily'] as const;
-export const COLLAPSIBLE = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'goals', 'daily', 'real_estate', 'debts'] as const;
+export const ACCOUNT_CATEGORIES = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily', 'other'] as const;
+export const COLLAPSIBLE = ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'goals', 'daily', 'other', 'real_estate', 'debts'] as const;
 
 export const CATEGORY_TITLES: Record<string, string> = {
   pretax: 'Pretax Retirement Accounts',
@@ -19,6 +19,7 @@ export const CATEGORY_TITLES: Record<string, string> = {
   emergency: 'Emergency Fund Accounts',
   goals: 'Goal Savings (Sinking Funds)',
   daily: 'Daily Spending Accounts (Checking & Cash)',
+  other: 'Other Accounts',
 };
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -314,13 +315,14 @@ export interface ChartSeries {
   roth: number[];
   taxableHsa: number[];
   cash: number[];
+  other: number[];
   homeEquity: number[];
 }
 
 /** Every column's chart values (renderBsHistoricalChart). */
 export function chartSeries(bs: BalanceSheetObj, taxRatePct: number): ChartSeries {
   const periods: string[] = Array.isArray(bs?.periods) ? bs.periods : [];
-  const s: ChartSeries = { labels: [], gross: [], liquid: [], netRetirement: [], pretax: [], roth: [], taxableHsa: [], cash: [], homeEquity: [] };
+  const s: ChartSeries = { labels: [], gross: [], liquid: [], netRetirement: [], pretax: [], roth: [], taxableHsa: [], cash: [], other: [], homeEquity: [] };
   for (const p of periods) {
     const t = periodTotals(bs, p, taxRatePct);
     s.labels.push(chartLabel(p));
@@ -331,6 +333,7 @@ export function chartSeries(bs: BalanceSheetObj, taxRatePct: number): ChartSerie
     s.roth.push(t.byCategory.roth);
     s.taxableHsa.push(t.byCategory.taxable + t.byCategory.hsa);
     s.cash.push(t.byCategory.emergency + t.goals + t.byCategory.daily);
+    s.other.push(t.byCategory.other);
     s.homeEquity.push(t.netEquity);
   }
   return s;
@@ -443,14 +446,14 @@ function ensureCategory(bs: BalanceSheetObj, key: string): Obj {
 export function addCategoryAccount(bs: BalanceSheetObj, key: string, now = Date.now()): Obj {
   const cat = ensureCategory(bs, key);
   const retirement = ['pretax', 'roth', 'taxable', 'hsa'].includes(key);
-  const base = `New ${categoryTitle(bs, key).replace(' Accounts', '').replace(' (HSA)', '')} Account`;
+  const base = key === 'other' ? 'New Other Account' : `New ${categoryTitle(bs, key).replace(' Accounts', '').replace(' (HSA)', '')} Account`;
   const growth = key === 'pretax' || key === 'roth';
   const acc = {
     id: `acc_${key}_${cat.accounts.length + 1}_${now}_${rand()}`,
     name: uniqueDefaultName(base, allAccountNames(bs)),
     institution: 'Custodian / Bank',
     owner: 'user',
-    type: key === 'daily' || key === 'emergency' ? 'cash' : key,
+    type: key === 'daily' || key === 'emergency' ? 'cash' : key === 'other' ? 'taxable' : key,
     include_in_retirement: retirement,
     values: zeroValues(bs),
     contrib_amount: 0.0,

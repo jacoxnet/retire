@@ -293,7 +293,7 @@ export function syncBalanceSheetToAccounts(
     });
   };
 
-  for (const cat of ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily']) {
+  for (const cat of ['pretax', 'roth', 'taxable', 'hsa', 'emergency', 'daily', 'other']) {
     for (const acc of get(get(categories, cat, {}), 'accounts', [])) {
       processAccount(acc, RETIREMENT_CATS.includes(cat) ? cat : 'taxable');
     }

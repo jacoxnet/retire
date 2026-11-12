@@ -430,6 +430,105 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Other Accounts (Accounts Not Intended for Retirement)
+  // ---------------------------------------------------------------------------
+  interface OtherAccountDraft {
+    id?: string;
+    name: string;
+    institution?: string;
+    balance: number | undefined;
+    values?: Record<string, number>;
+  }
+
+  const otherCat = bs.categories?.other;
+  const existingOtherAccounts: any[] = otherCat?.accounts ?? [];
+
+  let otherAccounts = $state<OtherAccountDraft[]>(
+    existingOtherAccounts.length > 0
+      ? existingOtherAccounts.map((a: any, idx: number) => {
+          const val = a.values?.[today] ?? a.values?.[currentPeriod];
+          return {
+            id: a.id,
+            name: a.name || (idx === 0 ? "Non-Retirement Brokerage" : `Other Account ${idx + 1}`),
+            institution: a.institution || "Custodian / Bank",
+            balance: val !== undefined && Number(val) > 0 ? Number(val) : undefined,
+            values: a.values ? { ...a.values } : undefined,
+          };
+        })
+      : [
+          {
+            name: "Non-Retirement Brokerage",
+            balance: undefined,
+            institution: "Custodian / Bank",
+          },
+        ]
+  );
+
+  const initTotalOther = otherAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+  const totalOtherBalance = $derived(
+    otherAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
+  );
+  let otherSaved = $state(initTotalOther > 0);
+
+  function addOtherAccount() {
+    otherAccounts.push({
+      name: `Other Account ${otherAccounts.length + 1}`,
+      balance: undefined,
+      institution: "Custodian / Bank",
+    });
+  }
+
+  function removeOtherAccount(index: number) {
+    if (otherAccounts.length > 1) {
+      otherAccounts.splice(index, 1);
+    } else {
+      otherAccounts[0].name = "Non-Retirement Brokerage";
+      otherAccounts[0].balance = undefined;
+      otherAccounts[0].institution = "Custodian / Bank";
+    }
+  }
+
+  function saveOtherAccounts() {
+    const b = ensureBs();
+    b.categories ??= {};
+    b.categories.other ??= {
+      title: "Other Accounts",
+      is_pretax: false,
+      accounts: [],
+    };
+
+    const validAccounts = otherAccounts.filter(
+      (a) => (a.name && a.name.trim().length > 0) || (Number(a.balance) || 0) > 0
+    );
+
+    if (validAccounts.length === 0) {
+      validAccounts.push({
+        name: "Non-Retirement Brokerage",
+        balance: undefined,
+        institution: "Custodian / Bank",
+      });
+    }
+
+    b.categories.other.accounts = validAccounts.map((a, idx) => {
+      const bal = Number(a.balance) || 0;
+      return {
+        id: a.id || `acc_other_${Date.now()}_${idx}`,
+        name: a.name?.trim() || `Other Account ${idx + 1}`,
+        institution: a.institution || "Custodian / Bank",
+        owner: "user",
+        type: "taxable",
+        include_in_retirement: false,
+        values: {
+          ...(a.values || {}),
+          [currentPeriod]: bal,
+          [today]: bal,
+        },
+      };
+    });
+    otherSaved = true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Real Estate
   // ---------------------------------------------------------------------------
   const propCat = bs.categories?.real_estate;
@@ -606,6 +705,16 @@
       }
     } else if (wizard.currentQuestionId === "nw_cash") {
       if ((Number(checkingBalance) || 0) > 0) saveChecking();
+    } else if (wizard.currentQuestionId === "nw_other") {
+      if (
+        totalOtherBalance > 0 ||
+        otherAccounts.some(
+          (a) =>
+            (a.name && a.name.trim().length > 0) || (Number(a.balance) || 0) > 0,
+        )
+      ) {
+        saveOtherAccounts();
+      }
     } else if (wizard.currentQuestionId === "nw_real_estate") {
       if ((Number(propertyValue) || 0) > 0) saveProperty();
     } else if (wizard.currentQuestionId === "nw_debts") {
@@ -635,6 +744,16 @@
         } else {
           cancelGoal();
         }
+      }
+    } else if (wizard.currentQuestionId === "nw_other") {
+      if (
+        totalOtherBalance > 0 ||
+        otherAccounts.some(
+          (a) =>
+            (a.name && a.name.trim().length > 0) || (Number(a.balance) || 0) > 0,
+        )
+      ) {
+        saveOtherAccounts();
       }
     } else if (wizard.currentQuestionId === "nw_debts") {
       if (totalDebtBalance > 0) saveDebt();
@@ -1265,6 +1384,129 @@
             type="button"
             class="btn btn-sm btn-primary"
             onclick={saveChecking}>Save</button
+          >
+        </div>
+      </div>
+    </div>
+  {:else if wizard.currentQuestionId === "nw_other"}
+    <div class="question-card">
+      <h4 class="fw-bold text-primary mb-2">
+        Do you have any other accounts not intended for retirement?
+      </h4>
+      <div
+        class="alert alert-light border small text-secondary mb-4 p-3 rounded-3"
+        style="max-width: 650px;"
+      >
+        <i class="fa-solid fa-wallet text-primary me-2"></i>
+        These are accounts you own that are not intended for retirement, emergency reserves, savings goals, or everyday checking (for example: a personal taxable brokerage account, child's trust, or separate investment). They appear on your Balance Sheet but are excluded from retirement simulations.
+      </div>
+
+      <div
+        class="card p-3 p-md-4 bg-light border rounded-3 mb-4"
+        style="max-width: 650px;"
+      >
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="form-label small fw-semibold mb-0">Other Accounts</div>
+            <div class="small text-muted">Accounts not intended to fund retirement:</div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-outline-primary btn-sm"
+            onclick={addOtherAccount}
+          >
+            <i class="fa fa-plus me-1"></i>Add Another Account
+          </button>
+        </div>
+
+        <div class="d-flex flex-column gap-2 mb-3">
+          {#each otherAccounts as a, idx (a.id || idx)}
+            <div class="p-3 bg-white border rounded-3">
+              <div class="row g-2 align-items-center">
+                <div class="col-sm-4">
+                  <label
+                    for={idx === 0 ? "int_other_name" : `int_other_name_${idx}`}
+                    class="form-label small text-secondary mb-1"
+                  >
+                    Account Name {otherAccounts.length > 1 ? `#${idx + 1}` : ""}
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id={idx === 0 ? "int_other_name" : `int_other_name_${idx}`}
+                    bind:value={a.name}
+                    placeholder="e.g. Non-Retirement Brokerage"
+                  />
+                </div>
+                <div class="col-sm-3">
+                  <label
+                    for={idx === 0 ? "int_other_inst" : `int_other_inst_${idx}`}
+                    class="form-label small text-secondary mb-1"
+                  >
+                    Institution
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id={idx === 0 ? "int_other_inst" : `int_other_inst_${idx}`}
+                    bind:value={a.institution}
+                    placeholder="e.g. Charles Schwab"
+                  />
+                </div>
+                <div class="col-sm-4">
+                  <label
+                    for={idx === 0 ? "int_other_bal" : `int_other_bal_${idx}`}
+                    class="form-label small text-secondary mb-1"
+                  >
+                    Current Balance ($)
+                  </label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <MoneyInput
+                      id={idx === 0 ? "int_other_bal" : `int_other_bal_${idx}`}
+                      class="form-control form-control-sm"
+                      bind:value={a.balance}
+                      placeholder="e.g. 50,000"
+                    />
+                  </div>
+                </div>
+                <div class="col-sm-1 d-flex justify-content-end align-items-end pt-sm-4">
+                  {#if otherAccounts.length > 1}
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger btn-sm"
+                      title="Remove account"
+                      aria-label="Remove other account {idx + 1}"
+                      onclick={() => removeOtherAccount(idx)}
+                    >
+                      <i class="fa fa-trash"></i>
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+
+        {#if otherAccounts.length > 1}
+          <div class="d-flex justify-content-between align-items-center px-3 py-2 mb-3 bg-light-subtle border rounded-2 small">
+            <span class="text-secondary fw-semibold">Total Saved Across All {otherAccounts.length} Accounts:</span>
+            <span class="fw-bold fs-6 text-dark">${formatMoney(totalOtherBalance)}</span>
+          </div>
+        {/if}
+
+        <div class="d-flex justify-content-between align-items-center">
+          {#if otherSaved}
+            <span class="text-success small fw-semibold">
+              <i class="fa-solid fa-circle-check me-1"></i> {otherAccounts.length > 1 ? "Other accounts recorded" : "Other account recorded"}
+            </span>
+          {:else}
+            <span></span>
+          {/if}
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            onclick={saveOtherAccounts}>Save {otherAccounts.length > 1 ? "Accounts" : "Account"}</button
           >
         </div>
       </div>

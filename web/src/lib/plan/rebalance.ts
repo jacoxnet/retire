@@ -31,6 +31,7 @@ const CATEGORIES: [string, string, boolean][] = [
   ['emergency', 'Emergency Fund', false],
   ['goals', 'Goal Sinking Fund', false],
   ['daily', 'Daily Spending', false],
+  ['other', 'Other Accounts', false],
 ];
 
 /** Every balance-sheet account with its balance in the latest column (getLatestBsAccounts). */

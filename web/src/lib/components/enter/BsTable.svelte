@@ -47,6 +47,7 @@
   const SUBTOTAL_LABELS: Record<string, string> = {
     pretax: 'Subtotal Pretax Retirement Accounts', roth: 'Total Roth', taxable: 'Total Taxable', hsa: 'Total HSA',
     daily: 'Total Spending Accounts',
+    other: 'Total Other Accounts',
   };
 
   // The tax-rate box shows the effective rate, editable to override it.
@@ -369,6 +370,9 @@
     {@render spacer()}
 
     {@render category('daily', 'Add Checking Account')}
+    {@render spacer()}
+
+    {@render category('other', 'Add Account')}
     {@render spacer()}
 
     {@render netRow('liquid_net_tax_and_goals_row', 'Liquid Net Worth (net of estimated deferred income tax and savings goal savings)',

@@ -42,6 +42,7 @@ export const ALL_QUESTIONS: QuestionMeta[] = [
   { id: 'nw_emergency', stage: 5, title: 'Emergency Fund', defaultDescription: 'No emergency fund recorded' },
   { id: 'nw_goals', stage: 5, title: 'Non-Retirement Savings Goals', defaultDescription: 'No goal sinking funds recorded' },
   { id: 'nw_cash', stage: 5, title: 'Daily Cash & Checking Buffer', defaultDescription: '$0 cash buffer' },
+  { id: 'nw_other', stage: 5, title: 'Other Accounts', defaultDescription: 'No other accounts recorded' },
   { id: 'nw_real_estate', stage: 5, title: 'Real Estate & Home Equity', defaultDescription: 'No real estate recorded' },
   { id: 'nw_debts', stage: 5, title: 'Loans & Other Debts', defaultDescription: 'No loans/debts recorded' },
 
@@ -97,7 +98,12 @@ export class InterviewState {
         const val = (period && d.values?.[period] !== undefined) ? d.values[period] : (d.values ? Object.values(d.values)[0] : 0);
         return (parseFloat(val) || 0) > 0;
       });
-      if (emgTarget > 0 || emgBal > 0 || hasGoals || hasDebts) {
+      const otherAccounts = bs.categories?.other?.accounts ?? [];
+      const hasOther = otherAccounts.some((a: any) => {
+        const val = (period && a.values?.[period] !== undefined) ? a.values[period] : (a.values ? Object.values(a.values)[0] : 0);
+        return (parseFloat(val) || 0) > 0;
+      });
+      if (emgTarget > 0 || emgBal > 0 || hasGoals || hasDebts || hasOther) {
         this.optedInStage5 = true;
       }
     }
@@ -112,7 +118,7 @@ export class InterviewState {
         return false;
       }
       // Stage 5 sub-questions only if user opted in at gateway
-      if (['nw_emergency', 'nw_goals', 'nw_cash', 'nw_real_estate', 'nw_debts'].includes(q.id) && !this.optedInStage5) {
+      if (['nw_emergency', 'nw_goals', 'nw_cash', 'nw_other', 'nw_real_estate', 'nw_debts'].includes(q.id) && !this.optedInStage5) {
         return false;
       }
       return true;
