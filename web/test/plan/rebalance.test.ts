@@ -86,14 +86,29 @@ describe('targets and allocations', () => {
     a = accountAllocation(reb, acc);
     expect([a.total, a.complete, a.sole]).toEqual([100, true, 'ac_us_stocks']);
     applyPreset(reb, 'p1', 'ac_bonds');
-    expect(reb.account_allocations.p1).toEqual({ ac_us_stocks: 0, ac_intl_stocks: 0, ac_bonds: 100, ac_cash: 0 });
+    expect(reb.account_allocations.p1).toEqual({ ac_us_stocks: 0, ac_intl_stocks: 0, ac_bonds: 100, ac_cash: 0, ac_other: 0 });
     expect(nextColor(reb)).toBe('#ec4899');
     addAssetClass(reb, 'Gold', -3, '#ff0000', 7);
     expect(reb.asset_classes.at(-1)).toEqual({ id: 'ac_7', name: 'Gold', target_percent: 0, color: '#ff0000' });
+    addAssetClass(reb, 'Collectibles', 5, '#10b981', 7);
+    expect(reb.asset_classes.at(-1)).toEqual({ id: 'ac_7_1', name: 'Collectibles', target_percent: 5, color: '#10b981' });
+    addAssetClass(reb, 'Large Cap Value', 15, '#6366f1', 7);
+    expect(reb.asset_classes.at(-1)).toEqual({ id: 'ac_7_2', name: 'Large Cap Value', target_percent: 15, color: '#6366f1' });
     expect(deleteAssetClass(reb, 'ac_bonds')).toBe(true);
     expect('ac_bonds' in (reb.account_allocations.p1 as object)).toBe(false);
     reb.asset_classes = reb.asset_classes.slice(0, 1);
     expect(deleteAssetClass(reb, reb.asset_classes[0].id)).toBe(false);
+  });
+
+  it('includes 5 default classes and seeds other accounts', () => {
+    const reb = fresh();
+    expect(reb.asset_classes.map((c) => c.name)).toEqual(['US Stocks', 'International Stocks', 'Bonds', 'Cash / Short-Term', 'Other']);
+    expect(reb.asset_classes.map((c) => c.target_percent)).toEqual([40, 20, 30, 10, 0]);
+    expect(targetSum(reb)).toEqual({ total: 100, state: 'balanced' });
+
+    const otherAcc: RebAccount = { id: 'o1', name: 'Art Collection', institution: '', category: 'other', category_title: 'Other Accounts', is_investment: false, balance: 50000 };
+    seedRebalancing(reb, [otherAcc]);
+    expect(reb.account_allocations.o1).toEqual({ ac_other: 100 });
   });
 });
 

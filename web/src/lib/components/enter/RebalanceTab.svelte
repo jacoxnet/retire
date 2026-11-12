@@ -35,7 +35,7 @@
   const tol = $derived(tolerance(reb));
   const sum = $derived(targetSum(reb));
   const results = $derived(rebalanceResults(reb, accounts));
-  const plan4 = $derived(tradePlan(results.classes, reb.rebalance_mode));
+  const trades = $derived(tradePlan(results.classes, reb.rebalance_mode));
   const included = $derived(new Set(reb.included_account_ids ?? []));
   let addOpen = $state(false);
 
@@ -185,7 +185,7 @@
 <div class="card p-4 mb-4 shadow-sm border">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     {@render step(2, 'Set Your Target Asset Allocation & Tolerance', 'Customize your desired asset classes and specify your rebalancing tolerance band.')}
-    <button type="button" class="btn btn-primary btn-sm" id="rebAddClass" onclick={() => (addOpen = true)}><i class="fa fa-plus me-1"></i> Add Custom Asset Class</button>
+    <button type="button" class="btn btn-primary btn-sm" id="rebAddClass" onclick={() => (addOpen = true)}><i class="fa fa-plus me-1"></i> +Add Investment Class</button>
   </div>
 
   <div class="p-3 mb-4 rounded bg-light border">
@@ -298,6 +298,9 @@
 <div class="card p-4 mb-4 shadow-sm border">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     {@render step(3, 'Enter What You Currently Own in Each Included Account', 'Specify how the balance of each account is divided across your asset classes. For single-fund accounts, use the convenient 1-click preset.')}
+    <button type="button" class="btn btn-outline-primary btn-sm" id="rebAddClassStep3" onclick={() => (addOpen = true)}>
+      <i class="fa fa-plus me-1"></i> +Add Investment Class
+    </button>
   </div>
   <div id="rebAccountBreakdownsContainer">
     {#each results.included as acc (acc.id)}
@@ -439,8 +442,8 @@
           </div>
         </div>
         <div class="row g-3 mb-3">
-          {#each [{ list: plan4.sells, title: 'Assets to Sell (Overweight)', tone: 'danger', icon: 'fa-circle-arrow-down', none: 'No sales required.', id: 'rebSells' },
-                  { list: plan4.buys, title: 'Assets to Buy (Underweight)', tone: 'success', icon: 'fa-circle-arrow-up', none: 'No purchases required.', id: 'rebBuys' }] as side (side.id)}
+          {#each [{ list: trades.sells, title: 'Assets to Sell (Overweight)', tone: 'danger', icon: 'fa-circle-arrow-down', none: 'No sales required.', id: 'rebSells' },
+                  { list: trades.buys, title: 'Assets to Buy (Underweight)', tone: 'success', icon: 'fa-circle-arrow-up', none: 'No purchases required.', id: 'rebBuys' }] as side (side.id)}
             <div class="col-md-6">
               <div class="card p-3 border-{side.tone}-subtle bg-{side.tone}-subtle bg-opacity-10 h-100" id={side.id}>
                 <h6 class="fw-bold text-{side.tone} mb-2"><i class="fa-solid {side.icon} me-1"></i> {side.title}</h6>

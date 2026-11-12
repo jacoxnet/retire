@@ -15,6 +15,7 @@ export function buildDefaultRebalancing(): Rebalancing {
       { id: 'ac_intl_stocks', name: 'International Stocks', target_percent: 20.0, color: '#10b981' },
       { id: 'ac_bonds', name: 'Bonds', target_percent: 30.0, color: '#8b5cf6' },
       { id: 'ac_cash', name: 'Cash / Short-Term', target_percent: 10.0, color: '#f59e0b' },
+      { id: 'ac_other', name: 'Other', target_percent: 0.0, color: '#64748b' },
     ],
     account_allocations: {},
   };

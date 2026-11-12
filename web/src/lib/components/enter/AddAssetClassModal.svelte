@@ -9,13 +9,13 @@
   }
   let { open = $bindable(), color: suggested, onAdd }: Props = $props();
   let name = $state('');
-  let target = $state('10.0');
+  let target = $state('0.0');
   let color = $state('#3b82f6');
 
   $effect.pre(() => {
     if (open) {
       name = '';
-      target = '10.0';
+      target = '0.0';
       color = suggested;
     }
   });
@@ -32,15 +32,15 @@
 </script>
 
 <Modal id="addAssetClassModal" bind:open>
-  {#snippet title()}<i class="fa-solid fa-plus-circle me-2"></i>Add Custom Asset Class{/snippet}
+  {#snippet title()}<i class="fa-solid fa-plus-circle me-2"></i>Add Investment Class{/snippet}
   <div class="mb-3">
-    <label for="newAssetClassName" class="form-label fw-semibold">Asset Class Name</label>
-    <input type="text" class="form-control" id="newAssetClassName" placeholder="e.g. Small Cap Value, Commodities, Crypto, Beanie Babies..." bind:value={name} />
+    <label for="newAssetClassName" class="form-label fw-semibold">Investment Class Name</label>
+    <input type="text" class="form-control" id="newAssetClassName" placeholder="e.g. Gold, Collectibles, Large Cap Value Stocks, Crypto..." bind:value={name} />
   </div>
   <div class="mb-3">
     <label for="newAssetClassTarget" class="form-label fw-semibold">Target Allocation %</label>
     <div class="input-group">
-      <input type="number" class="form-control" id="newAssetClassTarget" min="0" max="100" step="0.5" placeholder="10.0" bind:value={target} />
+      <input type="number" class="form-control" id="newAssetClassTarget" min="0" max="100" step="0.5" placeholder="0.0" bind:value={target} />
       <span class="input-group-text">%</span>
     </div>
   </div>
@@ -53,6 +53,6 @@
   </div>
   {#snippet footer()}
     <button type="button" class="btn btn-secondary btn-sm" onclick={() => (open = false)}>Cancel</button>
-    <button type="button" class="btn btn-primary btn-sm px-3" id="confirmAddAssetClass" onclick={add}>Add Class</button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="confirmAddAssetClass" onclick={add}>Add Investment Class</button>
   {/snippet}
 </Modal>

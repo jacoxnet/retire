@@ -97,6 +97,8 @@ export function seedRebalancing(reb: Rebalancing, accounts: RebAccount[], force 
       pick = find((c) => c.id === 'ac_cash' || c.name.toLowerCase().includes('cash'));
     } else if (acc.category === 'roth') {
       pick = find((c) => c.id === 'ac_intl_stocks' || /intl|international/.test(c.name.toLowerCase()));
+    } else if (acc.category === 'other') {
+      pick = find((c) => c.id === 'ac_other' || c.name.toLowerCase().includes('other'));
     }
     reb.account_allocations[acc.id] = { [pick]: 100 };
     changed = true;
@@ -192,11 +194,15 @@ export function assignRemaining(reb: Rebalancing, accId: string, remaining: numb
   alloc[first] = pct(alloc[first]) + remaining;
 }
 
-export const COLOR_PALETTE = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6'];
+export const COLOR_PALETTE = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#64748b', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6'];
 export const nextColor = (reb: Rebalancing): string => COLOR_PALETTE[(reb.asset_classes ?? []).length % COLOR_PALETTE.length];
 
 export function addAssetClass(reb: Rebalancing, name: string, target: number, color: string, now = Date.now()): void {
-  (reb.asset_classes ??= []).push({ id: `ac_${now}`, name, target_percent: Number.isNaN(target) || target < 0 ? 0 : target, color });
+  let id = `ac_${now}`;
+  let i = 1;
+  const existing = new Set((reb.asset_classes ?? []).map((c) => c.id));
+  while (existing.has(id)) id = `ac_${now}_${i++}`;
+  (reb.asset_classes ??= []).push({ id, name, target_percent: Number.isNaN(target) || target < 0 ? 0 : target, color });
 }
 
 /** Remove a class and its share of every allocation; the last class can't be removed. */

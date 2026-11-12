@@ -120,4 +120,51 @@ describe('Rebalance tab', () => {
     expect(rebOf(store).cash_flow).toBe(25000);
     stop();
   });
+
+  it('renders 5 default classes and allows adding investment classes from Step 2 and Step 3', async () => {
+    const p = structuredClone(loadPlanFixture<{ plan: Plan }>('sept27', 'imported').plan);
+    delete p.rebalancing;
+    const { store, stop } = setup(p);
+    await fireEvent.click(document.getElementById('rebalance-tab')!);
+
+    const reb = rebOf(store);
+    expect(reb.asset_classes.map((c) => c.name)).toEqual([
+      'US Stocks', 'International Stocks', 'Bonds', 'Cash / Short-Term', 'Other',
+    ]);
+    expect($$('.reb-class-row').length).toBe(5);
+
+    // Step 2 button label check
+    const step2Btn = $('#rebAddClass');
+    expect(step2Btn.textContent).toContain('+Add Investment Class');
+
+    // Add class via Step 2 button: "Gold"
+    await fireEvent.click(step2Btn);
+    await fireEvent.input($('#newAssetClassName'), { target: { value: 'Gold' } });
+    await fireEvent.click($('#confirmAddAssetClass'));
+    expect(rebOf(store).asset_classes.map((c) => c.name)).toEqual([
+      'US Stocks', 'International Stocks', 'Bonds', 'Cash / Short-Term', 'Other', 'Gold',
+    ]);
+    expect($$('.reb-class-row').length).toBe(6);
+
+    // Step 3 button check and add class: "Collectibles"
+    const step3Btn = $('#rebAddClassStep3');
+    expect(step3Btn).not.toBeNull();
+    expect(step3Btn.textContent).toContain('+Add Investment Class');
+    await fireEvent.click(step3Btn);
+    await fireEvent.input($('#newAssetClassName'), { target: { value: 'Collectibles' } });
+    await fireEvent.click($('#confirmAddAssetClass'));
+
+    expect(rebOf(store).asset_classes.map((c) => c.name)).toEqual([
+      'US Stocks', 'International Stocks', 'Bonds', 'Cash / Short-Term', 'Other', 'Gold', 'Collectibles',
+    ]);
+    expect($$('.reb-class-row').length).toBe(7);
+
+    // Preset dropdown in Step 3 reflects all custom classes
+    const card = $$('.reb-acc-card')[0];
+    const options = $$<HTMLOptionElement>('option', $('.reb-preset', card)).map((o) => o.textContent);
+    expect(options).toContain('100% Other');
+    expect(options).toContain('100% Gold');
+    expect(options).toContain('100% Collectibles');
+    stop();
+  });
 });
