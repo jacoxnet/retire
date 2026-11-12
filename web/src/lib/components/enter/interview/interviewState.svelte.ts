@@ -44,7 +44,6 @@ export const ALL_QUESTIONS: QuestionMeta[] = [
   { id: 'nw_cash', stage: 5, title: 'Daily Cash & Checking Buffer', defaultDescription: '$0 cash buffer' },
   { id: 'nw_real_estate', stage: 5, title: 'Real Estate & Home Equity', defaultDescription: 'No real estate recorded' },
   { id: 'nw_debts', stage: 5, title: 'Loans & Other Debts', defaultDescription: 'No loans/debts recorded' },
-  { id: 'nw_rebalance', stage: 5, title: 'Portfolio Rebalancing', defaultDescription: 'Default 60/40 balanced allocation' },
 
   // Stage 6
   { id: 'review_skipped', stage: 6, title: 'Review Skipped Questions', defaultDescription: 'Review and confirm' },
@@ -113,7 +112,7 @@ export class InterviewState {
         return false;
       }
       // Stage 5 sub-questions only if user opted in at gateway
-      if (['nw_emergency', 'nw_goals', 'nw_cash', 'nw_real_estate', 'nw_debts', 'nw_rebalance'].includes(q.id) && !this.optedInStage5) {
+      if (['nw_emergency', 'nw_goals', 'nw_cash', 'nw_real_estate', 'nw_debts'].includes(q.id) && !this.optedInStage5) {
         return false;
       }
       return true;

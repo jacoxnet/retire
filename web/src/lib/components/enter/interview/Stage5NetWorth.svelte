@@ -1473,59 +1473,6 @@
         </div>
       </div>
     </div>
-  {:else if wizard.currentQuestionId === "nw_rebalance"}
-    <div class="question-card">
-      <h4 class="fw-bold text-primary mb-2">
-        Would you like to set a target investment mix (Stocks vs. Bonds vs.
-        Cash) to keep your portfolio balanced?
-      </h4>
-      <div
-        class="alert alert-light border small text-secondary mb-4 p-3 rounded-3"
-        style="max-width: 650px;"
-      >
-        <i class="fa-solid fa-arrows-rotate text-primary me-2"></i>
-        Over time, stock market gains can make your portfolio riskier than you intended.
-        The Rebalance tool checks your current holdings against this target and shows
-        you exactly what to buy or sell to restore balance.
-      </div>
-
-      <div class="d-flex flex-column gap-2 mb-4" style="max-width: 500px;">
-        <button
-          type="button"
-          class="btn p-3 border rounded-3 text-start btn-outline-secondary hover-primary"
-          onclick={onNext}
-        >
-          <div class="fw-bold">
-            60% Stocks / 40% Bonds (Traditional Balanced - Recommended)
-          </div>
-          <div class="small opacity-75">
-            Standard growth with bond stability for retirement
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="btn p-3 border rounded-3 text-start btn-outline-secondary hover-primary"
-          onclick={onNext}
-        >
-          <div class="fw-bold">80% Stocks / 20% Bonds (Growth Focus)</div>
-          <div class="small opacity-75">
-            Higher long-term growth with higher volatility
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="btn p-3 border rounded-3 text-start btn-outline-secondary hover-primary"
-          onclick={onNext}
-        >
-          <div class="fw-bold">40% Stocks / 60% Bonds (Conservative)</div>
-          <div class="small opacity-75">
-            Lower volatility focused on capital preservation
-          </div>
-        </button>
-      </div>
-    </div>
   {/if}
 
   <!-- Footer Actions -->

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UiPrefs } from '../../src/lib/app/ui.svelte';
 import { memoryStorage, PlanStore } from '../../src/lib/plan/store.svelte';
 import EnterHarness from './EnterHarness.svelte';
-import { InterviewState } from '../../src/lib/components/enter/interview/interviewState.svelte';
+import { ALL_QUESTIONS, InterviewState } from '../../src/lib/components/enter/interview/interviewState.svelte';
 import Stage1Household from '../../src/lib/components/enter/interview/Stage1Household.svelte';
 import Stage2Accounts from '../../src/lib/components/enter/interview/Stage2Accounts.svelte';
 import Stage3Spending from '../../src/lib/components/enter/interview/Stage3Spending.svelte';
@@ -47,6 +47,8 @@ describe('InterviewState', () => {
     expect(list).toContain('nw_goals');
     expect(list).toContain('nw_real_estate');
     expect(list).toContain('nw_debts');
+    expect(list).not.toContain('nw_rebalance');
+    expect(ALL_QUESTIONS.some((q) => q.id === 'nw_rebalance')).toBe(false);
   });
 
   it('tracks skipped questions and applies safe defaults', () => {
@@ -1754,6 +1756,35 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
 
     expect(r.container.textContent).toContain('Not eligible for Social Security');
     expect(r.container.textContent).toContain('$0 Social Security income');
+    cleanup();
+  });
+
+  it('advances directly from nw_debts to Stage 6 review without rebalancing prompt', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_debts');
+    const plan: Plan = {
+      user_name: 'Alex',
+      user_age: 60,
+      user_retirement_age: 65,
+      is_married: false,
+    };
+
+    const r = render(Stage5NetWorth, { wizard, plan });
+    expect(r.container.textContent).toContain('Do you have any other outstanding loans or debts?');
+    expect(r.container.textContent).not.toContain('Would you like to set a target investment mix');
+
+    // Click Next on nw_debts
+    const nextBtns = r.container.querySelectorAll('.btn-primary');
+    const nextBtn = Array.from(nextBtns).find((b) => b.textContent?.includes('Next'));
+    expect(nextBtn).toBeDefined();
+
+    await fireEvent.click(nextBtn!);
+    flushSync();
+
+    // Confirm wizard advanced directly to review_skipped (Stage 6), skipping any rebalancing question
+    expect(wizard.currentQuestionId).toBe('review_skipped');
+    expect(wizard.currentStage(plan)).toBe(6);
     cleanup();
   });
 });
