@@ -422,18 +422,41 @@
       {/if}
 
       {#if !addingStream && editingStreamIndex === null}
-        <div class="d-flex flex-wrap gap-2 mb-4" style="max-width: 650px;">
-          <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Company Pension", 24000)}>
-            🏛️ Company or Govt Pension
+        <div class="d-flex flex-column gap-3 mb-4" style="max-width: 580px;">
+          <button
+            type="button"
+            class="btn p-3 border rounded-3 text-start btn-outline-primary"
+            onclick={() => startAddingStream("Company Pension", 24000)}
+          >
+            <div class="fw-bold fs-5 mb-1">🏛️ Company or Govt Pension</div>
+            <div class="small opacity-75">Defined-benefit pension from an employer or government service</div>
           </button>
-          <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Fixed Annuity", 12000, "none")}>
-            📜 Annuity Payment
+
+          <button
+            type="button"
+            class="btn p-3 border rounded-3 text-start btn-outline-primary"
+            onclick={() => startAddingStream("Fixed Annuity", 12000, "none")}
+          >
+            <div class="fw-bold fs-5 mb-1">📜 Annuity Payment</div>
+            <div class="small opacity-75">Guaranteed regular payments from an insurance or annuity contract</div>
           </button>
-          <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick={() => startAddingStream("Rental Income", 18000)}>
-            🏢 Rental Property Income
+
+          <button
+            type="button"
+            class="btn p-3 border rounded-3 text-start btn-outline-primary"
+            onclick={() => startAddingStream("Rental Income", 18000)}
+          >
+            <div class="fw-bold fs-5 mb-1">🏢 Rental Property Income</div>
+            <div class="small opacity-75">Net rental profits or regular cash flow from investment real estate</div>
           </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick={() => startAddingStream("Consulting / Work", 15000)}>
-            ➕ Custom Income Stream
+
+          <button
+            type="button"
+            class="btn p-3 border rounded-3 text-start btn-outline-primary"
+            onclick={() => startAddingStream("Consulting / Work", 15000)}
+          >
+            <div class="fw-bold fs-5 mb-1">➕ Custom Income Stream</div>
+            <div class="small opacity-75">Part-time consulting, royalties, business distributions, or other income</div>
           </button>
         </div>
       {/if}

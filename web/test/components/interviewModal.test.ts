@@ -939,6 +939,47 @@ describe('Editing Items in Guided Walkthrough', () => {
     cleanup();
   });
 
+  it('renders steady income buttons with the same large card sizing as social security buttons', () => {
+    const wizard = new InterviewState();
+    wizard.goTo('income_streams');
+    const plan: Plan = {
+      is_married: false,
+    };
+
+    const r = render(Stage4Income, { wizard, plan });
+
+    const pensionBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Pension'));
+    const annuityBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Annuity'));
+    const rentalBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Rental'));
+    const customBtn = Array.from(r.container.querySelectorAll('button')).find((b) => b.textContent?.includes('Custom'));
+
+    expect(pensionBtn).toBeDefined();
+    expect(annuityBtn).toBeDefined();
+    expect(rentalBtn).toBeDefined();
+    expect(customBtn).toBeDefined();
+
+    for (const btn of [pensionBtn!, annuityBtn!, rentalBtn!, customBtn!]) {
+      expect(btn.className).toContain('p-3');
+      expect(btn.className).toContain('border');
+      expect(btn.className).toContain('rounded-3');
+      expect(btn.className).toContain('text-start');
+
+      const title = btn.querySelector('.fw-bold.fs-5.mb-1');
+      expect(title).not.toBeNull();
+
+      const subtitle = btn.querySelector('.small.opacity-75');
+      expect(subtitle).not.toBeNull();
+    }
+
+    const container = pensionBtn!.parentElement;
+    expect(container?.className).toContain('d-flex');
+    expect(container?.className).toContain('flex-column');
+    expect(container?.className).toContain('gap-3');
+    expect(container?.getAttribute('style')).toContain('max-width: 580px');
+
+    cleanup();
+  });
+
   it('cleans up edit drawer state if an account is deleted while being edited', async () => {
     const wizard = new InterviewState();
     wizard.goTo('accounts_workplace');
