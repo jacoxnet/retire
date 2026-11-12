@@ -72,14 +72,25 @@ export class InterviewState {
   constructor(plan?: Plan) {
     if (plan?.balance_sheet) {
       const bs = plan.balance_sheet as any;
+      const period = bs.current_period || (Array.isArray(bs.periods) ? bs.periods[bs.periods.length - 1] : undefined);
       const emgTarget = parseFloat(bs.categories?.emergency?.target_amount ?? bs.emergency_goal_amount ?? 0);
-      const emgBal = parseFloat(bs.categories?.emergency?.accounts?.[0]?.values?.[bs.current_period] ?? 0);
+      const emgAccounts = bs.categories?.emergency?.accounts ?? [];
+      const emgBal = emgAccounts.reduce(
+        (sum: number, a: any) => {
+          const val = (period && a.values?.[period] !== undefined) ? a.values[period] : (a.values ? Object.values(a.values)[0] : 0);
+          return sum + (parseFloat(val) || 0);
+        },
+        0
+      );
       const goals = bs.categories?.goals?.goal_groups ?? [];
       const hasGoals = goals.some(
         (g: any) =>
           g.is_configured === true ||
           parseFloat(g.target_amount || 0) > 0 ||
-          parseFloat(g.accounts?.[0]?.values?.[bs.current_period] || 0) > 0 ||
+          (g.accounts ?? []).some((a: any) => {
+            const val = (period && a.values?.[period] !== undefined) ? a.values[period] : (a.values ? Object.values(a.values)[0] : 0);
+            return (parseFloat(val) || 0) > 0;
+          }) ||
           g.target_auto_inflate === true
       );
       if (emgTarget > 0 || emgBal > 0 || hasGoals) {

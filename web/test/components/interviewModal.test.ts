@@ -1243,6 +1243,207 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     cleanup();
   });
 
+  it('displays Emergency Fund Goal box before Current Balance box in the DOM', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_emergency');
+    const plan: Plan = { is_married: false };
+
+    const r = render(Stage5NetWorth, { wizard, plan });
+
+    const tgtInput = r.container.querySelector('#int_em_target') as HTMLInputElement;
+    const balInput = r.container.querySelector('#int_em_bal') as HTMLInputElement;
+
+    expect(tgtInput).not.toBeNull();
+    expect(balInput).not.toBeNull();
+
+    // Verify Target Goal is rendered before Current Balance in the DOM tree
+    const position = tgtInput.compareDocumentPosition(balInput);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    cleanup();
+  });
+
+  it('supports multiple accounts for emergency fund ($12k + $8k + $32k = $52k toward $50k goal) and preserves them', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_emergency');
+    const plan: Plan = { is_married: false };
+
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    // Set Target Goal: 50,000
+    const tgtInput = r.container.querySelector('#int_em_target') as HTMLInputElement;
+    await fireEvent.input(tgtInput, { target: { value: '50000' } });
+
+    // Account 1: Ally HYSA, $12,000
+    const acc1Name = r.container.querySelector('#int_em_name') as HTMLInputElement;
+    const acc1Bal = r.container.querySelector('#int_em_bal') as HTMLInputElement;
+    await fireEvent.input(acc1Name, { target: { value: 'Ally HYSA' } });
+    await fireEvent.input(acc1Bal, { target: { value: '12000' } });
+    flushSync();
+
+    // Add Account 2: Marcus Savings, $8,000
+    const addAccBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Add Another Account')
+    );
+    expect(addAccBtn).toBeDefined();
+    await fireEvent.click(addAccBtn!);
+    flushSync();
+
+    const acc2Name = r.container.querySelector('#int_em_name_1') as HTMLInputElement;
+    const acc2Bal = r.container.querySelector('#int_em_bal_1') as HTMLInputElement;
+    expect(acc2Name).not.toBeNull();
+    expect(acc2Bal).not.toBeNull();
+    await fireEvent.input(acc2Name, { target: { value: 'Marcus Savings' } });
+    await fireEvent.input(acc2Bal, { target: { value: '8000' } });
+    flushSync();
+
+    // Add Account 3: Vanguard Cash, $32,000
+    await fireEvent.click(addAccBtn!);
+    flushSync();
+
+    const acc3Name = r.container.querySelector('#int_em_name_2') as HTMLInputElement;
+    const acc3Bal = r.container.querySelector('#int_em_bal_2') as HTMLInputElement;
+    expect(acc3Name).not.toBeNull();
+    expect(acc3Bal).not.toBeNull();
+    await fireEvent.input(acc3Name, { target: { value: 'Vanguard Cash' } });
+    await fireEvent.input(acc3Bal, { target: { value: '32000' } });
+    flushSync();
+
+    // Summary reflects total across all 3 accounts: $12k + $8k + $32k = $52k
+    expect(r.container.textContent).toContain('Total Saved Across All 3 Accounts');
+    expect(r.container.textContent).toContain('$52,000');
+    expect(r.container.textContent).toContain('100% of target funded');
+    expect(r.container.textContent).toContain('$52,000 of $50,000');
+    expect(r.container.textContent).toContain('Goal fully funded!');
+
+    // Click Save Emergency Fund
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Save Emergency Fund')
+    );
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    // Verify stored correctly in plan.balance_sheet
+    const bs = plan.balance_sheet as any;
+    expect(bs).toBeDefined();
+    expect(bs.categories?.emergency?.target_amount).toBe(50000);
+    const emgAccounts = bs.categories?.emergency?.accounts;
+    expect(emgAccounts.length).toBe(3);
+    expect(emgAccounts[0].name).toBe('Ally HYSA');
+    expect(emgAccounts[0].values[bs.current_period]).toBe(12000);
+    expect(emgAccounts[1].name).toBe('Marcus Savings');
+    expect(emgAccounts[1].values[bs.current_period]).toBe(8000);
+    expect(emgAccounts[2].name).toBe('Vanguard Cash');
+    expect(emgAccounts[2].values[bs.current_period]).toBe(32000);
+
+    cleanup();
+
+    // Navigate to review and return to nw_emergency: all 3 accounts preserved!
+    wizard.goTo('review_summary');
+    wizard.goTo('nw_emergency');
+    r = render(Stage5NetWorth, { wizard, plan });
+
+    const remountTgt = r.container.querySelector('#int_em_target') as HTMLInputElement;
+    const remountAcc1Name = r.container.querySelector('#int_em_name') as HTMLInputElement;
+    const remountAcc1Bal = r.container.querySelector('#int_em_bal') as HTMLInputElement;
+    const remountAcc2Name = r.container.querySelector('#int_em_name_1') as HTMLInputElement;
+    const remountAcc2Bal = r.container.querySelector('#int_em_bal_1') as HTMLInputElement;
+    const remountAcc3Name = r.container.querySelector('#int_em_name_2') as HTMLInputElement;
+    const remountAcc3Bal = r.container.querySelector('#int_em_bal_2') as HTMLInputElement;
+
+    expect(remountTgt.value).toBe('50,000');
+    expect(remountAcc1Name.value).toBe('Ally HYSA');
+    expect(remountAcc1Bal.value).toBe('12,000');
+    expect(remountAcc2Name.value).toBe('Marcus Savings');
+    expect(remountAcc2Bal.value).toBe('8,000');
+    expect(remountAcc3Name.value).toBe('Vanguard Cash');
+    expect(remountAcc3Bal.value).toBe('32,000');
+
+    // Test removing Account 3
+    const removeBtn = r.container.querySelector('button[aria-label="Remove emergency account 3"]') as HTMLButtonElement;
+    expect(removeBtn).not.toBeNull();
+    await fireEvent.click(removeBtn);
+    flushSync();
+
+    // Now 2 accounts remain: $12k + $8k = $20k
+    expect(r.container.textContent).toContain('Total Saved Across All 2 Accounts');
+    expect(r.container.textContent).toContain('$20,000');
+    expect(r.container.textContent).toContain('40% of target funded');
+
+    cleanup();
+  });
+
+  it('supports multiple accounts for a savings goal and displays account count', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_goals');
+    const plan: Plan = { is_married: false };
+
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    // Click Custom Savings Goal
+    const customBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Custom Savings Goal')
+    );
+    await fireEvent.click(customBtn!);
+    flushSync();
+
+    const nameInput = r.container.querySelector('#int_goal_name') as HTMLInputElement;
+    const tgtInput = r.container.querySelector('#int_goal_target') as HTMLInputElement;
+    await fireEvent.input(nameInput, { target: { value: 'Home Renovation' } });
+    await fireEvent.input(tgtInput, { target: { value: '40000' } });
+
+    // Account 1: $15,000
+    const acc1Name = r.container.querySelector('#int_goal_acc_name') as HTMLInputElement;
+    const acc1Bal = r.container.querySelector('#int_goal_cur') as HTMLInputElement;
+    await fireEvent.input(acc1Name, { target: { value: 'Home Depot Savings' } });
+    await fireEvent.input(acc1Bal, { target: { value: '15000' } });
+    flushSync();
+
+    // Add Account 2: $10,000
+    const addGoalAccBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Add Another Account')
+    );
+    await fireEvent.click(addGoalAccBtn!);
+    flushSync();
+
+    const acc2Name = r.container.querySelector('#int_goal_acc_name_1') as HTMLInputElement;
+    const acc2Bal = r.container.querySelector('#int_goal_cur_1') as HTMLInputElement;
+    await fireEvent.input(acc2Name, { target: { value: 'Credit Union High Yield' } });
+    await fireEvent.input(acc2Bal, { target: { value: '10000' } });
+    flushSync();
+
+    expect(r.container.textContent).toContain('Total Saved Across All 2 Accounts');
+    expect(r.container.textContent).toContain('$25,000');
+
+    // Click Save Goal
+    const saveGoalBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.trim() === 'Save Goal'
+    );
+    await fireEvent.click(saveGoalBtn!);
+    flushSync();
+
+    // Verify card in list
+    expect(r.container.textContent).toContain('Home Renovation');
+    expect(r.container.textContent).toContain('$40,000');
+    expect(r.container.textContent).toContain('$25,000');
+    expect(r.container.textContent).toContain('(2 accounts)');
+
+    // Check balance sheet object
+    const bs = plan.balance_sheet as any;
+    const goal = bs.categories?.goals?.goal_groups?.find((g: any) => g.name === 'Home Renovation');
+    expect(goal).toBeDefined();
+    expect(goal.accounts.length).toBe(2);
+    expect(goal.accounts[0].name).toBe('Home Depot Savings');
+    expect(goal.accounts[0].values[bs.current_period]).toBe(15000);
+    expect(goal.accounts[1].name).toBe('Credit Union High Yield');
+    expect(goal.accounts[1].values[bs.current_period]).toBe(10000);
+
+    cleanup();
+  });
+
   it('preserves checking buffer, real estate, and debts when returning to Stage 5', async () => {
     const wizard = new InterviewState();
     wizard.optedInStage5 = true;
