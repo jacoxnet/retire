@@ -242,18 +242,55 @@ export function planErrors(data: Plan | Obj): string[] {
     if (a < 62 || a > 70) errors.push("Spouse's Social Security Claiming Age must be between 62 and 70.");
   }
 
-  if (getFloat(data.user_life_insurance_amount, 0.0) < 0) errors.push('Your Life Insurance Death Benefit must be a non-negative number.');
-  if (data.user_life_insurance_type === 'term') {
-    const a = getInt(data.user_life_insurance_term_age, 70);
-    if (a < 18 || a > 120) errors.push('Your Term Life Policy Expiration Age must be between 18 and 120.');
-  }
-  if (isMarried) {
-    if (getFloat(data.spouse_life_insurance_amount, 0.0) < 0) {
-      errors.push("Spouse's Life Insurance Death Benefit must be a non-negative number.");
+  if (Array.isArray(data.life_insurance_policies) && data.life_insurance_policies.length > 0) {
+    const userPols = (data.life_insurance_policies as any[]).filter((p) => p && p.owner !== 'spouse');
+    const spousePols = isMarried ? (data.life_insurance_policies as any[]).filter((p) => p && p.owner === 'spouse') : [];
+
+    userPols.forEach((p, idx) => {
+      const label = userPols.length === 1 ? 'Your Life Insurance' : `Your Life Insurance Policy ${idx + 1}`;
+      if (getFloat(p.amount, 0.0) < 0) {
+        errors.push(`${label} Death Benefit must be a non-negative number.`);
+      }
+      if (p.type === 'term') {
+        const a = getInt(p.term_age, 70);
+        if (a < 18 || a > 120) {
+          errors.push(userPols.length === 1
+            ? 'Your Term Life Policy Expiration Age must be between 18 and 120.'
+            : `${label} Term Policy Expiration Age must be between 18 and 120.`);
+        }
+      }
+    });
+
+    if (isMarried) {
+      spousePols.forEach((p, idx) => {
+        const label = spousePols.length === 1 ? "Spouse's Life Insurance" : `Spouse's Life Insurance Policy ${idx + 1}`;
+        if (getFloat(p.amount, 0.0) < 0) {
+          errors.push(`${label} Death Benefit must be a non-negative number.`);
+        }
+        if (p.type === 'term') {
+          const a = getInt(p.term_age, 70);
+          if (a < 18 || a > 120) {
+            errors.push(spousePols.length === 1
+              ? "Spouse's Term Life Policy Expiration Age must be between 18 and 120."
+              : `${label} Term Policy Expiration Age must be between 18 and 120.`);
+          }
+        }
+      });
     }
-    if (data.spouse_life_insurance_type === 'term') {
-      const a = getInt(data.spouse_life_insurance_term_age, 70);
-      if (a < 18 || a > 120) errors.push("Spouse's Term Life Policy Expiration Age must be between 18 and 120.");
+  } else {
+    if (getFloat(data.user_life_insurance_amount, 0.0) < 0) errors.push('Your Life Insurance Death Benefit must be a non-negative number.');
+    if (data.user_life_insurance_type === 'term') {
+      const a = getInt(data.user_life_insurance_term_age, 70);
+      if (a < 18 || a > 120) errors.push('Your Term Life Policy Expiration Age must be between 18 and 120.');
+    }
+    if (isMarried) {
+      if (getFloat(data.spouse_life_insurance_amount, 0.0) < 0) {
+        errors.push("Spouse's Life Insurance Death Benefit must be a non-negative number.");
+      }
+      if (data.spouse_life_insurance_type === 'term') {
+        const a = getInt(data.spouse_life_insurance_term_age, 70);
+        if (a < 18 || a > 120) errors.push("Spouse's Term Life Policy Expiration Age must be between 18 and 120.");
+      }
     }
   }
 

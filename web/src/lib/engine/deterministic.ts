@@ -825,8 +825,14 @@ export function runDeterministic(plan: Dict): Dict[] {
     if (userAlive && userAgeT === inputs.user_age_death) milestones.push(`Your Final Year (${userAgeT})`);
     if (spouseAlive && spouseAgeT === inputs.spouse_age_death) milestones.push(`Spouse Final Year (${spouseAgeT})`);
     if (t === depositT && depositAmt > 0) {
-      if (userAlive && !spouseAlive) milestones.push(`Life Insurance Payout from Spouse Policy (+$${fmtCommas0(depositAmt)})`);
-      else if (spouseAlive && !userAlive) milestones.push(`Life Insurance Payout to Spouse (+$${fmtCommas0(depositAmt)})`);
+      if (userAlive && !spouseAlive) {
+        const rawPols = Array.isArray(inputs.life_insurance_policies) ? inputs.life_insurance_policies : [];
+        const activeSpousePols = rawPols.filter((p: any) => p && p.owner === 'spouse' && (p.type === 'permanent' || (inputs.spouse_age_death <= (p.term_age ?? 70))) && (p.amount ?? 0) > 0);
+        const plural = activeSpousePols.length > 1;
+        milestones.push(`Life Insurance Payout from Spouse ${plural ? 'Policies' : 'Policy'} (+$${fmtCommas0(depositAmt)})`);
+      } else if (spouseAlive && !userAlive) {
+        milestones.push(`Life Insurance Payout to Spouse (+$${fmtCommas0(depositAmt)})`);
+      }
     }
     if (t === years - 1 && terminal > 0) milestones.push(`Life Insurance Payout to Estate / Heirs (+$${fmtCommas0(terminal)})`);
 

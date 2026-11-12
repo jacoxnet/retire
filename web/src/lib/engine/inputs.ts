@@ -274,15 +274,48 @@ export function getLifeInsuranceRouting(inputs: Dict): LifeInsuranceRouting {
   const spouseSpan = isMarried ? spouseAgeDeath - spouseAge + 1 : 0;
   const totalYears = Math.max(userSpan, spouseSpan);
 
-  const userAmt = pyFloat(get(inputs, 'user_life_insurance_amount', 0.0));
-  const userType = String(get(inputs, 'user_life_insurance_type', 'permanent'));
-  const userTermAge = pyInt(get(inputs, 'user_life_insurance_term_age', 70));
-  const userPolicyActive = userType === 'permanent' || userAgeDeath <= userTermAge;
+  let userAmt = 0.0;
+  let userPolicyActive = false;
+  let spouseAmt = 0.0;
+  let spousePolicyActive = false;
 
-  const spouseAmt = isMarried ? pyFloat(get(inputs, 'spouse_life_insurance_amount', 0.0)) : 0.0;
-  const spouseType = isMarried ? String(get(inputs, 'spouse_life_insurance_type', 'permanent')) : 'permanent';
-  const spouseTermAge = isMarried ? pyInt(get(inputs, 'spouse_life_insurance_term_age', 70)) : 70;
-  const spousePolicyActive = isMarried && (spouseType === 'permanent' || spouseAgeDeath <= spouseTermAge);
+  const rawPolicies = get(inputs, 'life_insurance_policies', null);
+  if (Array.isArray(rawPolicies) && rawPolicies.length > 0) {
+    for (const p of rawPolicies) {
+      if (!p || typeof p !== 'object') continue;
+      const owner = String(p.owner || 'user');
+      const amt = pyFloat(p.amount ?? 0.0);
+      const type = String(p.type || 'permanent');
+      const termAge = pyInt(p.term_age ?? 70);
+
+      if (owner === 'spouse') {
+        if (!isMarried) continue;
+        const active = type === 'permanent' || spouseAgeDeath <= termAge;
+        if (active) {
+          spousePolicyActive = true;
+          if (amt > 0.0) spouseAmt += amt;
+        }
+      } else {
+        const active = type === 'permanent' || userAgeDeath <= termAge;
+        if (active) {
+          userPolicyActive = true;
+          if (amt > 0.0) userAmt += amt;
+        }
+      }
+    }
+  } else {
+    const rawUserAmt = pyFloat(get(inputs, 'user_life_insurance_amount', 0.0));
+    const userType = String(get(inputs, 'user_life_insurance_type', 'permanent'));
+    const userTermAge = pyInt(get(inputs, 'user_life_insurance_term_age', 70));
+    userPolicyActive = userType === 'permanent' || userAgeDeath <= userTermAge;
+    if (userPolicyActive && rawUserAmt > 0.0) userAmt = rawUserAmt;
+
+    const rawSpouseAmt = isMarried ? pyFloat(get(inputs, 'spouse_life_insurance_amount', 0.0)) : 0.0;
+    const spouseType = isMarried ? String(get(inputs, 'spouse_life_insurance_type', 'permanent')) : 'permanent';
+    const spouseTermAge = isMarried ? pyInt(get(inputs, 'spouse_life_insurance_term_age', 70)) : 70;
+    spousePolicyActive = isMarried && (spouseType === 'permanent' || spouseAgeDeath <= spouseTermAge);
+    if (spousePolicyActive && rawSpouseAmt > 0.0) spouseAmt = rawSpouseAmt;
+  }
 
   let taxableDepositT = -1;
   let taxableDepositAmt = 0.0;
@@ -374,6 +407,7 @@ export interface SimInputs {
   spouse_life_insurance_amount: number;
   spouse_life_insurance_type: string;
   spouse_life_insurance_term_age: number;
+  life_insurance_policies?: Dict[];
 }
 
 /**
@@ -529,6 +563,9 @@ export function extractSimInputs(plan: Dict | null | undefined): SimInputs {
     spouse_life_insurance_amount: married('spouse_life_insurance_amount', 0.0, pyFloat, 0.0),
     spouse_life_insurance_type: married('spouse_life_insurance_type', 'permanent', String, 'permanent'),
     spouse_life_insurance_term_age: married('spouse_life_insurance_term_age', 70, pyInt, 70),
+    ...(Array.isArray(raw?.life_insurance_policies) && raw.life_insurance_policies.length > 0
+      ? { life_insurance_policies: raw.life_insurance_policies }
+      : {}),
   };
 }
 

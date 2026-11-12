@@ -122,6 +122,18 @@ export interface IncomeSource extends ScheduledItem {
 
 export type OtherTax = ScheduledItem;
 
+export type LifeInsuranceType = 'permanent' | 'term';
+
+export interface LifeInsurancePolicy {
+  id?: string;
+  name?: string;
+  owner?: 'user' | 'spouse' | string;
+  amount?: number;
+  type?: LifeInsuranceType | string;
+  term_age?: number;
+  [key: string]: unknown;
+}
+
 export interface AssetClass {
   id: string;
   name: string;
@@ -173,6 +185,7 @@ export interface Plan {
   spouse_life_insurance_amount?: number;
   spouse_life_insurance_type?: 'permanent' | 'term' | string;
   spouse_life_insurance_term_age?: number;
+  life_insurance_policies?: LifeInsurancePolicy[];
   marginal_tax_rate?: number;
   social_security?: SocialSecurity;
   accounts?: Account[];

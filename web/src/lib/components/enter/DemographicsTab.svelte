@@ -2,9 +2,9 @@
 <script lang="ts">
   import { applyMarriageToAccounts } from '../../plan/accountCard';
   import { applyMarriageToSchedules } from '../../plan/scheduleRows';
-  import { ensureTaxableAccountForLifeInsurance } from '../../plan/commit';
+  import { ensureTaxableAccountForLifeInsurance, newLifeInsurancePolicy, newPolicyId } from '../../plan/commit';
   import { getFloat } from '../../plan/coerce';
-  import type { Plan } from '../../plan/types';
+  import type { LifeInsurancePolicy, LifeInsuranceType, Plan } from '../../plan/types';
   import HelpPopover from '../shared/HelpPopover.svelte';
   import MoneyInput from '../shared/MoneyInput.svelte';
   import PercentInput from '../shared/PercentInput.svelte';
@@ -41,10 +41,154 @@
     return { ok: d <= t, termAge: t, deathAge: d };
   }
 
-  const userPolicy = $derived(policyStatus(
-    plan.user_life_insurance_amount, plan.user_life_insurance_type, plan.user_life_insurance_term_age, plan.user_age_death));
-  const spousePolicy = $derived(married ? policyStatus(
-    plan.spouse_life_insurance_amount, plan.spouse_life_insurance_type, plan.spouse_life_insurance_term_age, plan.spouse_age_death) : null);
+  const userPolicies = $derived.by<LifeInsurancePolicy[]>(() => {
+    if (Array.isArray(plan.life_insurance_policies)) {
+      const filtered = plan.life_insurance_policies.filter((p) => p.owner !== 'spouse');
+      if (filtered.length > 0) return filtered;
+    }
+    return [
+      {
+        id: 'user_policy_1',
+        name: '',
+        owner: 'user',
+        amount: getFloat(plan.user_life_insurance_amount, 0),
+        type: (plan.user_life_insurance_type as LifeInsuranceType) || 'permanent',
+        term_age: Math.trunc(Number(plan.user_life_insurance_term_age)) || 70,
+      },
+    ];
+  });
+
+  const spousePolicies = $derived.by<LifeInsurancePolicy[]>(() => {
+    if (!married) return [];
+    if (Array.isArray(plan.life_insurance_policies)) {
+      const filtered = plan.life_insurance_policies.filter((p) => p.owner === 'spouse');
+      if (filtered.length > 0) return filtered;
+    }
+    return [
+      {
+        id: 'spouse_policy_1',
+        name: '',
+        owner: 'spouse',
+        amount: getFloat(plan.spouse_life_insurance_amount, 0),
+        type: (plan.spouse_life_insurance_type as LifeInsuranceType) || 'permanent',
+        term_age: Math.trunc(Number(plan.spouse_life_insurance_term_age)) || 70,
+      },
+    ];
+  });
+
+  function ensurePolicies(): LifeInsurancePolicy[] {
+    if (!Array.isArray(plan.life_insurance_policies)) {
+      const pols: LifeInsurancePolicy[] = [
+        {
+          id: 'user_policy_1',
+          name: '',
+          owner: 'user',
+          amount: getFloat(plan.user_life_insurance_amount, 0),
+          type: (plan.user_life_insurance_type as LifeInsuranceType) || 'permanent',
+          term_age: Math.trunc(Number(plan.user_life_insurance_term_age)) || 70,
+        },
+      ];
+      if (married || getFloat(plan.spouse_life_insurance_amount, 0) > 0) {
+        pols.push({
+          id: 'spouse_policy_1',
+          name: '',
+          owner: 'spouse',
+          amount: getFloat(plan.spouse_life_insurance_amount, 0),
+          type: (plan.spouse_life_insurance_type as LifeInsuranceType) || 'permanent',
+          term_age: Math.trunc(Number(plan.spouse_life_insurance_term_age)) || 70,
+        });
+      }
+      plan.life_insurance_policies = pols;
+    }
+    return plan.life_insurance_policies;
+  }
+
+  function addUserPolicy() {
+    const current = ensurePolicies();
+    plan.life_insurance_policies = [
+      ...current,
+      newLifeInsurancePolicy('user'),
+    ];
+    syncLegacyUser();
+  }
+
+  function addSpousePolicy() {
+    const current = ensurePolicies();
+    plan.life_insurance_policies = [
+      ...current,
+      newLifeInsurancePolicy('spouse'),
+    ];
+    syncLegacySpouse();
+  }
+
+  function removePolicy(id?: string) {
+    if (!id || !Array.isArray(plan.life_insurance_policies)) return;
+    plan.life_insurance_policies = plan.life_insurance_policies.filter((p) => p.id !== id);
+    syncLegacyUser();
+    syncLegacySpouse();
+  }
+
+  function updateUserPolicy(
+    id: string | undefined,
+    update: (p: LifeInsurancePolicy) => void,
+    updateLegacy?: (val: any) => void,
+    val?: any
+  ) {
+    if (!Array.isArray(plan.life_insurance_policies)) {
+      if (updateLegacy) {
+        updateLegacy(val);
+        return;
+      }
+      ensurePolicies();
+    }
+    const p = id ? plan.life_insurance_policies?.find((x) => x.id === id) : plan.life_insurance_policies?.[0];
+    if (p) {
+      update(p);
+      syncLegacyUser();
+    }
+  }
+
+  function updateSpousePolicy(
+    id: string | undefined,
+    update: (p: LifeInsurancePolicy) => void,
+    updateLegacy?: (val: any) => void,
+    val?: any
+  ) {
+    if (!Array.isArray(plan.life_insurance_policies)) {
+      if (updateLegacy) {
+        updateLegacy(val);
+        return;
+      }
+      ensurePolicies();
+    }
+    const p = id
+      ? plan.life_insurance_policies?.find((x) => x.id === id)
+      : plan.life_insurance_policies?.filter((x) => x.owner === 'spouse')[0];
+    if (p) {
+      update(p);
+      syncLegacySpouse();
+    }
+  }
+
+  function syncLegacyUser() {
+    if (!Array.isArray(plan.life_insurance_policies)) return;
+    const up = plan.life_insurance_policies.filter((p) => p.owner !== 'spouse');
+    plan.user_life_insurance_amount = up.reduce((sum, p) => sum + getFloat(p.amount, 0), 0);
+    if (up[0]) {
+      plan.user_life_insurance_type = up[0].type || 'permanent';
+      plan.user_life_insurance_term_age = up[0].term_age || 70;
+    }
+  }
+
+  function syncLegacySpouse() {
+    if (!Array.isArray(plan.life_insurance_policies)) return;
+    const sp = plan.life_insurance_policies.filter((p) => p.owner === 'spouse');
+    plan.spouse_life_insurance_amount = married ? sp.reduce((sum, p) => sum + getFloat(p.amount, 0), 0) : 0;
+    if (sp[0]) {
+      plan.spouse_life_insurance_type = sp[0].type || 'permanent';
+      plan.spouse_life_insurance_term_age = sp[0].term_age || 70;
+    }
+  }
 
   const ensureTaxable = () => ensureTaxableAccountForLifeInsurance(plan);
 
@@ -173,74 +317,164 @@
     </div>
 
     <div class="card p-3 mb-3 bg-light border">
-      <h5 class="text-secondary mb-3">Your Life Insurance Policy</h5>
-      <div class="row">
-        <div class="col-md-6 mb-3">
-          <label for="user_life_insurance_amount" class="form-label">
-            <span id="user_life_insurance_label_text">
-              {married
-                ? 'Lump-sum death benefit paid to surviving spouse upon your death'
-                : 'Lump-sum death benefit paid upon your death (to heirs / estate)'}
-            </span>
-            <HelpPopover title="Life Insurance Death Benefit"
-              content="Fixed nominal lump-sum benefit payable upon your death. If your spouse survives you, this amount is deposited into Taxable Brokerage assets in the year after your death to support ongoing retirement expenses. If no spouse survives (or you are unmarried), this amount is added to your terminal estate / legacy at death." />
-          </label>
-          <div class="input-group">
-            <span class="input-group-text">$</span>
-            <MoneyInput id="user_life_insurance_amount" class="form-control dollar-input"
-              bind:value={plan.user_life_insurance_amount} onblur={ensureTaxable} />
-          </div>
-        </div>
-        <div class="col-md-3 mb-3">
-          <label for="user_life_insurance_type" class="form-label">Policy Type</label>
-          <select class="form-select" id="user_life_insurance_type" bind:value={() => policyType(plan.user_life_insurance_type), (v) => (plan.user_life_insurance_type = v)}>
-            <option value="permanent">Permanent / Whole Life</option>
-            <option value="term">Term Life</option>
-          </select>
-        </div>
-        {#if plan.user_life_insurance_type === 'term'}
-          <div class="col-md-3 mb-3" id="user_term_age_group">
-            <label for="user_life_insurance_term_age" class="form-label">Term Expiration Age</label>
-            <input type="number" class="form-control" id="user_life_insurance_term_age"
-              bind:value={plan.user_life_insurance_term_age} min="18" max="120" />
-          </div>
-        {/if}
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="text-secondary mb-0">
+          <i class="fa-solid fa-user me-2"></i>{married ? 'Your Life Insurance Policies' : 'Life Insurance Policies'}
+        </h5>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick={addUserPolicy} id="add_user_life_insurance_btn">
+          <i class="fa-solid fa-plus me-1"></i>Add Policy
+        </button>
       </div>
-      <div id="user_life_ins_badge_container">{@render policyBadge(userPolicy, 'your')}</div>
+
+      {#each userPolicies as policy, i (policy.id || i)}
+        <div class="p-3 mb-3 bg-white rounded border {i > 0 ? 'mt-2' : ''}" id={`user_policy_card_${i}`}>
+          <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-secondary-subtle text-secondary fw-semibold">Policy #{i + 1}</span>
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="Optional policy name / description"
+                style="max-width: 250px;"
+                bind:value={() => policy.name ?? '', (v) => updateUserPolicy(policy.id, (p) => { p.name = v; })}
+              />
+            </div>
+            {#if userPolicies.length > 1}
+              <button
+                type="button"
+                class="btn btn-outline-danger btn-sm py-0 px-2"
+                onclick={() => removePolicy(policy.id)}
+                title="Remove policy"
+                aria-label="Remove policy"
+              >
+                <i class="fa-solid fa-trash me-1"></i>Remove
+              </button>
+            {/if}
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for={i === 0 ? 'user_life_insurance_amount' : `user_life_insurance_amount_${i}`} class="form-label">
+                <span id={i === 0 ? 'user_life_insurance_label_text' : `user_life_insurance_label_text_${i}`}>
+                  {married
+                    ? 'Lump-sum death benefit paid to surviving spouse upon your death'
+                    : 'Lump-sum death benefit paid upon your death (to heirs / estate)'}
+                </span>
+                <HelpPopover title="Life Insurance Death Benefit"
+                  content="Fixed nominal lump-sum benefit payable upon your death. If your spouse survives you, this amount is deposited into Taxable Brokerage assets in the year after your death to support ongoing retirement expenses. If no spouse survives (or you are unmarried), this amount is added to your terminal estate / legacy at death." />
+              </label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <MoneyInput id={i === 0 ? 'user_life_insurance_amount' : `user_life_insurance_amount_${i}`} class="form-control dollar-input"
+                  bind:value={() => policy.amount, (v) => updateUserPolicy(policy.id, (p) => { p.amount = v; }, (v) => { plan.user_life_insurance_amount = v; }, v)} onblur={ensureTaxable} />
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <label for={i === 0 ? 'user_life_insurance_type' : `user_life_insurance_type_${i}`} class="form-label">Policy Type</label>
+              <select class="form-select" id={i === 0 ? 'user_life_insurance_type' : `user_life_insurance_type_${i}`}
+                bind:value={() => policyType(policy.type), (v) => updateUserPolicy(policy.id, (p) => { p.type = v as LifeInsuranceType; }, (v) => { plan.user_life_insurance_type = v; }, v)}>
+                <option value="permanent">Permanent / Whole Life</option>
+                <option value="term">Term Life</option>
+              </select>
+            </div>
+            {#if policy.type === 'term'}
+              <div class="col-md-3 mb-3" id={i === 0 ? 'user_term_age_group' : `user_term_age_group_${i}`}>
+                <label for={i === 0 ? 'user_life_insurance_term_age' : `user_life_insurance_term_age_${i}`} class="form-label">Term Expiration Age</label>
+                <input type="number" class="form-control" id={i === 0 ? 'user_life_insurance_term_age' : `user_life_insurance_term_age_${i}`}
+                  bind:value={() => policy.term_age, (v) => updateUserPolicy(policy.id, (p) => { p.term_age = v; }, (v) => { plan.user_life_insurance_term_age = v; }, v)} min="18" max="120" />
+              </div>
+            {/if}
+          </div>
+          <div id={i === 0 ? 'user_life_ins_badge_container' : `user_life_ins_badge_container_${i}`}>
+            {@render policyBadge(policyStatus(policy.amount, policy.type, policy.term_age, plan.user_age_death), 'your')}
+          </div>
+        </div>
+      {/each}
+
+      <div class="text-end">
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick={addUserPolicy}>
+          <i class="fa-solid fa-plus me-1"></i>Add Another Policy
+        </button>
+      </div>
     </div>
 
     {#if married}
       <div id="spouse_life_insurance_section" class="card p-3 mb-3 bg-light border">
-        <h5 class="text-secondary mb-3">Spouse's Life Insurance Policy</h5>
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label for="spouse_life_insurance_amount" class="form-label">
-              Lump-sum death benefit paid to surviving spouse upon spouse's death
-              <HelpPopover title="Spouse Life Insurance Benefit"
-                content="Fixed nominal lump-sum benefit payable upon your spouse's death. If you survive your spouse, this amount is deposited into your Taxable Brokerage assets in the year after death to support ongoing retirement expenses. If both pass together or you predecease, this amount flows to your estate / heirs." />
-            </label>
-            <div class="input-group">
-              <span class="input-group-text">$</span>
-              <MoneyInput id="spouse_life_insurance_amount" class="form-control dollar-input"
-                bind:value={plan.spouse_life_insurance_amount} onblur={ensureTaxable} />
-            </div>
-          </div>
-          <div class="col-md-3 mb-3">
-            <label for="spouse_life_insurance_type" class="form-label">Policy Type</label>
-            <select class="form-select" id="spouse_life_insurance_type" bind:value={() => policyType(plan.spouse_life_insurance_type), (v) => (plan.spouse_life_insurance_type = v)}>
-              <option value="permanent">Permanent / Whole Life</option>
-              <option value="term">Term Life</option>
-            </select>
-          </div>
-          {#if plan.spouse_life_insurance_type === 'term'}
-            <div class="col-md-3 mb-3" id="spouse_term_age_group">
-              <label for="spouse_life_insurance_term_age" class="form-label">Term Expiration Age</label>
-              <input type="number" class="form-control" id="spouse_life_insurance_term_age"
-                bind:value={plan.spouse_life_insurance_term_age} min="18" max="120" />
-            </div>
-          {/if}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="text-secondary mb-0">
+            <i class="fa-solid fa-user-group me-2"></i>Spouse's Life Insurance Policies
+          </h5>
+          <button type="button" class="btn btn-outline-primary btn-sm" onclick={addSpousePolicy} id="add_spouse_life_insurance_btn">
+            <i class="fa-solid fa-plus me-1"></i>Add Policy
+          </button>
         </div>
-        <div id="spouse_life_ins_badge_container">{@render policyBadge(spousePolicy, "spouse's")}</div>
+
+        {#each spousePolicies as policy, i (policy.id || i)}
+          <div class="p-3 mb-3 bg-white rounded border {i > 0 ? 'mt-2' : ''}" id={`spouse_policy_card_${i}`}>
+            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-secondary-subtle text-secondary fw-semibold">Policy #{i + 1}</span>
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  placeholder="Optional policy name / description"
+                  style="max-width: 250px;"
+                  bind:value={() => policy.name ?? '', (v) => updateSpousePolicy(policy.id, (p) => { p.name = v; })}
+                />
+              </div>
+              {#if spousePolicies.length > 1}
+                <button
+                  type="button"
+                  class="btn btn-outline-danger btn-sm py-0 px-2"
+                  onclick={() => removePolicy(policy.id)}
+                  title="Remove policy"
+                  aria-label="Remove policy"
+                >
+                  <i class="fa-solid fa-trash me-1"></i>Remove
+                </button>
+              {/if}
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for={i === 0 ? 'spouse_life_insurance_amount' : `spouse_life_insurance_amount_${i}`} class="form-label">
+                  Lump-sum death benefit paid to surviving spouse upon spouse's death
+                  <HelpPopover title="Spouse Life Insurance Benefit"
+                    content="Fixed nominal lump-sum benefit payable upon your spouse's death. If you survive your spouse, this amount is deposited into your Taxable Brokerage assets in the year after death to support ongoing retirement expenses. If both pass together or you predecease, this amount flows to your estate / heirs." />
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <MoneyInput id={i === 0 ? 'spouse_life_insurance_amount' : `spouse_life_insurance_amount_${i}`} class="form-control dollar-input"
+                    bind:value={() => policy.amount, (v) => updateSpousePolicy(policy.id, (p) => { p.amount = v; }, (v) => { plan.spouse_life_insurance_amount = v; }, v)} onblur={ensureTaxable} />
+                </div>
+              </div>
+              <div class="col-md-3 mb-3">
+                <label for={i === 0 ? 'spouse_life_insurance_type' : `spouse_life_insurance_type_${i}`} class="form-label">Policy Type</label>
+                <select class="form-select" id={i === 0 ? 'spouse_life_insurance_type' : `spouse_life_insurance_type_${i}`}
+                  bind:value={() => policyType(policy.type), (v) => updateSpousePolicy(policy.id, (p) => { p.type = v as LifeInsuranceType; }, (v) => { plan.spouse_life_insurance_type = v; }, v)}>
+                  <option value="permanent">Permanent / Whole Life</option>
+                  <option value="term">Term Life</option>
+                </select>
+              </div>
+              {#if policy.type === 'term'}
+                <div class="col-md-3 mb-3" id={i === 0 ? 'spouse_term_age_group' : `spouse_term_age_group_${i}`}>
+                  <label for={i === 0 ? 'spouse_life_insurance_term_age' : `spouse_life_insurance_term_age_${i}`} class="form-label">Term Expiration Age</label>
+                  <input type="number" class="form-control" id={i === 0 ? 'spouse_life_insurance_term_age' : `spouse_life_insurance_term_age_${i}`}
+                    bind:value={() => policy.term_age, (v) => updateSpousePolicy(policy.id, (p) => { p.term_age = v; }, (v) => { plan.spouse_life_insurance_term_age = v; }, v)} min="18" max="120" />
+                </div>
+              {/if}
+            </div>
+            <div id={i === 0 ? 'spouse_life_ins_badge_container' : `spouse_life_ins_badge_container_${i}`}>
+              {@render policyBadge(policyStatus(policy.amount, policy.type, policy.term_age, plan.spouse_age_death), "spouse's")}
+            </div>
+          </div>
+        {/each}
+
+        <div class="text-end">
+          <button type="button" class="btn btn-outline-primary btn-sm" onclick={addSpousePolicy}>
+            <i class="fa-solid fa-plus me-1"></i>Add Another Policy
+          </button>
+        </div>
       </div>
     {/if}
   </div>

@@ -34,7 +34,10 @@ export function completeImport(data: Obj, today = todayIso()): void {
   data.rebalancing = isObj(data.rebalancing) ? parseRebalancing(data.rebalancing) : buildDefaultRebalancing();
 
   const hasTaxable = (get(data, 'accounts', []) as Obj[]).some((a) => get(a, 'type') === 'taxable');
-  if (!hasTaxable && (pyFloat(get(data, 'user_life_insurance_amount', 0.0)) > 0 || pyFloat(get(data, 'spouse_life_insurance_amount', 0.0)) > 0)) {
+  const pols = get(data, 'life_insurance_policies', []);
+  const hasPols = Array.isArray(pols) && pols.some((p: any) => pyFloat(p?.amount ?? 0.0) > 0 && (p?.owner !== 'spouse' || married));
+  const hasLegacy = pyFloat(get(data, 'user_life_insurance_amount', 0.0)) > 0 || (married && pyFloat(get(data, 'spouse_life_insurance_amount', 0.0)) > 0);
+  if (!hasTaxable && (hasPols || hasLegacy)) {
     data.accounts ??= [];
     data.accounts.push({
       name: 'Taxable Brokerage (Life Insurance Proceeds)',

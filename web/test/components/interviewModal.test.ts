@@ -183,6 +183,32 @@ describe('Single vs Married Phrasing in Guided Walkthrough', () => {
     expect(r1.container.textContent).toContain('heirs upon your death');
     cleanup();
 
+    // Stage 1 Life Insurance multiple policies
+    const marriedPlan: Plan = {
+      is_married: true,
+      user_name: 'Alex',
+      user_age: 50,
+      user_retirement_age: 65,
+      spouse_name: 'Jordan',
+      spouse_age: 48,
+    };
+    wizard.goTo('life_insurance');
+    const r1m = render(Stage1Household, { wizard, plan: marriedPlan });
+    expect(r1m.container.textContent).toContain('Do you or your spouse have life insurance policies that would pay out upon death?');
+    const addUserBtn = r1m.container.querySelector('#int_add_user_life_btn') as HTMLButtonElement;
+    await fireEvent.click(addUserBtn);
+    flushSync();
+    expect(r1m.container.querySelector('#int_user_policy_card_1')).not.toBeNull();
+    const addSpouseBtn = r1m.container.querySelector('#int_add_spouse_life_btn') as HTMLButtonElement;
+    await fireEvent.click(addSpouseBtn);
+    flushSync();
+    expect(r1m.container.querySelector('#int_spouse_policy_card_1')).not.toBeNull();
+    const removeBtn = r1m.container.querySelector('#int_user_policy_card_1 button.btn-outline-danger') as HTMLButtonElement;
+    await fireEvent.click(removeBtn);
+    flushSync();
+    expect(r1m.container.querySelector('#int_user_policy_card_1')).toBeNull();
+    cleanup();
+
     // Stage 2 Workplace Accounts (Q2.1)
     wizard.goTo('accounts_workplace');
     const r2 = render(Stage2Accounts, { wizard, plan: singlePlan });

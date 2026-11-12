@@ -122,12 +122,16 @@ const INCOME_SOURCE_KINDS: Kinds = {
   ...ADJUST_KINDS,
 };
 const OTHER_TAX_KINDS: Kinds = { ...SCHEDULE_KINDS, ...ADJUST_KINDS };
+const LIFE_INSURANCE_POLICY_KINDS: Kinds = {
+  id: 'str', name: 'str', owner: 'str', amount: 'float', type: 'str', term_age: 'int',
+};
 
 export const PLAN_ROW_KINDS: Record<string, Kinds> = {
   accounts: ACCOUNT_KINDS,
   additional_spending: ADDITIONAL_SPENDING_KINDS,
   income_sources: INCOME_SOURCE_KINDS,
   other_taxes: OTHER_TAX_KINDS,
+  life_insurance_policies: LIFE_INSURANCE_POLICY_KINDS,
 };
 
 export const PLAN_KEYS = new Set<string>([

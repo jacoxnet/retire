@@ -120,6 +120,45 @@ describe('Enter page', () => {
     stop();
   });
 
+  it('allows adding and removing multiple life insurance policies for user and spouse', async () => {
+    const { store, stop } = setup();
+    store.plan.user_age_death = 90;
+    store.plan.is_married = true;
+    store.plan.spouse_age_death = 85;
+    flushSync();
+
+    // Policy 1 for user
+    await type('user_life_insurance_amount', '250000');
+    expect(byId('user_life_ins_badge_container')!.textContent).toMatch(/Permanent policy/);
+
+    // Add Policy 2 for user
+    await fireEvent.click(byId('add_user_life_insurance_btn')!);
+    flushSync();
+    expect(byId('user_policy_card_1')).not.toBeNull();
+    await type('user_life_insurance_amount_1', '100000');
+    await fireEvent.change(byId('user_life_insurance_type_1')!, { target: { value: 'term' } });
+    await type('user_life_insurance_term_age_1', '75');
+    expect(byId('user_life_ins_badge_container_1')!.textContent).toMatch(/expires at age 75.*\(90\)/s);
+
+    // Policy 1 remains permanent
+    expect(byId('user_life_ins_badge_container')!.textContent).toMatch(/Permanent policy/);
+
+    // Add Policy 2 for spouse
+    await type('spouse_life_insurance_amount', '150000');
+    await fireEvent.click(byId('add_spouse_life_insurance_btn')!);
+    flushSync();
+    expect(byId('spouse_policy_card_1')).not.toBeNull();
+    await type('spouse_life_insurance_amount_1', '50000');
+
+    // Remove Policy 2 from user
+    const removeBtn = byId('user_policy_card_1')!.querySelector('button.btn-outline-danger') as HTMLButtonElement;
+    await fireEvent.click(removeBtn);
+    flushSync();
+    expect(byId('user_policy_card_1')).toBeNull();
+
+    stop();
+  });
+
   it('adds a taxable account for life insurance when moving to Accounts', async () => {
     const { store, stop } = setup();
     store.plan.accounts = (store.plan.accounts ?? []).filter((a) => a.type !== 'taxable');

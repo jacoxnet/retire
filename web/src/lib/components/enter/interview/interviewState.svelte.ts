@@ -244,6 +244,7 @@ export class InterviewState {
       case 'life_insurance':
         plan.user_life_insurance_amount ??= 0;
         plan.spouse_life_insurance_amount ??= 0;
+        plan.life_insurance_policies ??= [];
         break;
       case 'spending_start':
         plan.begin_spending_age_type ||= 'retirement';

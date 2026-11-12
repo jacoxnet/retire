@@ -10,11 +10,26 @@ import { buildDefaultRebalancing, parseRebalancing } from './defaults';
 import { getBool, getFloat, getInt } from './coerce';
 import { calculateMarginalTaxRate } from './marginal';
 import { isObj, type Obj, todayIso } from './pyutil';
-import type { Account, Plan } from './types';
+import type { Account, LifeInsurancePolicy, Plan } from './types';
 import { commitSchedules, rowNameErrors } from './scheduleRows';
 import { planErrors } from './validate';
 
 const LIFE_INSURANCE_TYPES = ['permanent', 'term'];
+
+export function newPolicyId(): string {
+  return `pol_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function newLifeInsurancePolicy(owner: 'user' | 'spouse' = 'user'): LifeInsurancePolicy {
+  return {
+    id: newPolicyId(),
+    name: '',
+    owner,
+    amount: 0,
+    type: 'permanent',
+    term_age: 70,
+  };
+}
 
 /** The account enter_view adds to receive life-insurance proceeds. */
 export function lifeInsuranceAccount(plan: Plan): Account {
@@ -41,8 +56,20 @@ export function lifeInsuranceAccount(plan: Plan): Account {
 
 /** True when a life-insurance benefit is entered (the spouse's only counts if married). */
 export function hasLifeInsurance(plan: Plan): boolean {
-  return getFloat(plan.user_life_insurance_amount, 0) > 0
-    || (getBool(plan.is_married) && getFloat(plan.spouse_life_insurance_amount, 0) > 0);
+  const married = getBool(plan.is_married);
+  if (getFloat(plan.user_life_insurance_amount, 0) > 0
+    || (married && getFloat(plan.spouse_life_insurance_amount, 0) > 0)) {
+    return true;
+  }
+  if (Array.isArray(plan.life_insurance_policies) && plan.life_insurance_policies.length > 0) {
+    return plan.life_insurance_policies.some((p) => {
+      const amt = getFloat(p?.amount, 0);
+      if (amt <= 0) return false;
+      if (p?.owner === 'spouse' && !married) return false;
+      return true;
+    });
+  }
+  return false;
 }
 
 /**
@@ -159,17 +186,55 @@ export function commitEnterPlan(plan: Plan, today = todayIso(), makeId: IdMaker 
     });
   }
 
-  plan.user_life_insurance_amount = getFloat(plan.user_life_insurance_amount, 0.0);
-  if (!LIFE_INSURANCE_TYPES.includes(plan.user_life_insurance_type as string)) plan.user_life_insurance_type = 'permanent';
-  plan.user_life_insurance_term_age = getInt(plan.user_life_insurance_term_age, 70);
-  if (married) {
-    plan.spouse_life_insurance_amount = getFloat(plan.spouse_life_insurance_amount, 0.0);
-    if (!LIFE_INSURANCE_TYPES.includes(plan.spouse_life_insurance_type as string)) plan.spouse_life_insurance_type = 'permanent';
-    plan.spouse_life_insurance_term_age = getInt(plan.spouse_life_insurance_term_age, 70);
+  if (Array.isArray(plan.life_insurance_policies)) {
+    const pols: LifeInsurancePolicy[] = [];
+    for (const p of plan.life_insurance_policies) {
+      if (!p || typeof p !== 'object') continue;
+      const owner = p.owner === 'spouse' ? 'spouse' : 'user';
+      if (owner === 'spouse' && !married) continue;
+      const amt = getFloat(p.amount, 0.0);
+      const type = LIFE_INSURANCE_TYPES.includes(p.type as string) ? (p.type as string) : 'permanent';
+      const termAge = getInt(p.term_age, 70);
+      const name = String(p.name ?? '').trim();
+      pols.push({
+        id: String(p.id || makeId('pol')),
+        ...(name ? { name } : {}),
+        owner,
+        amount: amt,
+        type,
+        term_age: termAge,
+      });
+    }
+    plan.life_insurance_policies = pols;
+
+    const userPols = pols.filter((p) => p.owner === 'user');
+    const spousePols = pols.filter((p) => p.owner === 'spouse');
+    plan.user_life_insurance_amount = userPols.reduce((s, p) => s + (p.amount ?? 0), 0);
+    plan.user_life_insurance_type = userPols[0]?.type ?? 'permanent';
+    plan.user_life_insurance_term_age = userPols[0]?.term_age ?? 70;
+
+    if (married) {
+      plan.spouse_life_insurance_amount = spousePols.reduce((s, p) => s + (p.amount ?? 0), 0);
+      plan.spouse_life_insurance_type = spousePols[0]?.type ?? 'permanent';
+      plan.spouse_life_insurance_term_age = spousePols[0]?.term_age ?? 70;
+    } else {
+      plan.spouse_life_insurance_amount = 0.0;
+      plan.spouse_life_insurance_type = 'permanent';
+      plan.spouse_life_insurance_term_age = 70;
+    }
   } else {
-    plan.spouse_life_insurance_amount = 0.0;
-    plan.spouse_life_insurance_type = 'permanent';
-    plan.spouse_life_insurance_term_age = 70;
+    plan.user_life_insurance_amount = getFloat(plan.user_life_insurance_amount, 0.0);
+    if (!LIFE_INSURANCE_TYPES.includes(plan.user_life_insurance_type as string)) plan.user_life_insurance_type = 'permanent';
+    plan.user_life_insurance_term_age = getInt(plan.user_life_insurance_term_age, 70);
+    if (married) {
+      plan.spouse_life_insurance_amount = getFloat(plan.spouse_life_insurance_amount, 0.0);
+      if (!LIFE_INSURANCE_TYPES.includes(plan.spouse_life_insurance_type as string)) plan.spouse_life_insurance_type = 'permanent';
+      plan.spouse_life_insurance_term_age = getInt(plan.spouse_life_insurance_term_age, 70);
+    } else {
+      plan.spouse_life_insurance_amount = 0.0;
+      plan.spouse_life_insurance_type = 'permanent';
+      plan.spouse_life_insurance_term_age = 70;
+    }
   }
 
   commitAccounts(plan, makeId);
