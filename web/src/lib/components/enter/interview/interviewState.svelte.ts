@@ -93,7 +93,12 @@ export class InterviewState {
           }) ||
           g.target_auto_inflate === true
       );
-      if (emgTarget > 0 || emgBal > 0 || hasGoals) {
+      const debts = Array.isArray(bs.categories?.debts) ? bs.categories.debts : [];
+      const hasDebts = debts.some((d: any) => {
+        const val = (period && d.values?.[period] !== undefined) ? d.values[period] : (d.values ? Object.values(d.values)[0] : 0);
+        return (parseFloat(val) || 0) > 0;
+      });
+      if (emgTarget > 0 || emgBal > 0 || hasGoals || hasDebts) {
         this.optedInStage5 = true;
       }
     }

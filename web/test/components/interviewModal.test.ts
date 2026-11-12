@@ -1490,6 +1490,105 @@ describe('Stage 5 Guided Walkthrough Fixes (Emergency Fund & Savings Goals)', ()
     cleanup();
   });
 
+  it('supports adding multiple debts in Stage 5, saves them, and preserves them on return', async () => {
+    const wizard = new InterviewState();
+    wizard.optedInStage5 = true;
+    wizard.goTo('nw_debts');
+    const plan: Plan = { is_married: false };
+
+    let r = render(Stage5NetWorth, { wizard, plan });
+
+    // Debt 1: Auto Loan, $15,000
+    const d1Name = r.container.querySelector('#int_debt_name') as HTMLInputElement;
+    const d1Bal = r.container.querySelector('#int_debt_bal') as HTMLInputElement;
+    await fireEvent.input(d1Name, { target: { value: 'Auto Loan' } });
+    await fireEvent.input(d1Bal, { target: { value: '15000' } });
+    flushSync();
+
+    // Add Debt 2: Student Loan, $25,000
+    const addDebtBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Add Another Debt')
+    );
+    expect(addDebtBtn).toBeDefined();
+    await fireEvent.click(addDebtBtn!);
+    flushSync();
+
+    const d2Name = r.container.querySelector('#int_debt_name_1') as HTMLInputElement;
+    const d2Bal = r.container.querySelector('#int_debt_bal_1') as HTMLInputElement;
+    expect(d2Name).not.toBeNull();
+    expect(d2Bal).not.toBeNull();
+    await fireEvent.input(d2Name, { target: { value: 'Federal Student Loan' } });
+    await fireEvent.input(d2Bal, { target: { value: '25000' } });
+    flushSync();
+
+    // Add Debt 3: Credit Card, $3,500
+    await fireEvent.click(addDebtBtn!);
+    flushSync();
+
+    const d3Name = r.container.querySelector('#int_debt_name_2') as HTMLInputElement;
+    const d3Bal = r.container.querySelector('#int_debt_bal_2') as HTMLInputElement;
+    expect(d3Name).not.toBeNull();
+    expect(d3Bal).not.toBeNull();
+    await fireEvent.input(d3Name, { target: { value: 'Chase Credit Card' } });
+    await fireEvent.input(d3Bal, { target: { value: '3500' } });
+    flushSync();
+
+    // Verify subtotal across all 3 debts: $15,000 + $25,000 + $3,500 = $43,500
+    expect(r.container.textContent).toContain('Total Debts Across All 3 Accounts');
+    expect(r.container.textContent).toContain('$43,500');
+
+    // Click Save Debts
+    const saveBtn = Array.from(r.container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Save Debts')
+    );
+    await fireEvent.click(saveBtn!);
+    flushSync();
+
+    // Verify saved to plan.balance_sheet
+    const bs = plan.balance_sheet as any;
+    expect(bs).toBeDefined();
+    expect(bs.categories?.debts?.length).toBe(3);
+    expect(bs.categories.debts[0].name).toBe('Auto Loan');
+    expect(bs.categories.debts[0].values[bs.current_period]).toBe(15000);
+    expect(bs.categories.debts[1].name).toBe('Federal Student Loan');
+    expect(bs.categories.debts[1].values[bs.current_period]).toBe(25000);
+    expect(bs.categories.debts[2].name).toBe('Chase Credit Card');
+    expect(bs.categories.debts[2].values[bs.current_period]).toBe(3500);
+
+    cleanup();
+
+    // Navigate to review summary and return to nw_debts
+    wizard.goTo('review_summary');
+    wizard.goTo('nw_debts');
+    r = render(Stage5NetWorth, { wizard, plan });
+
+    const remountD1Name = r.container.querySelector('#int_debt_name') as HTMLInputElement;
+    const remountD1Bal = r.container.querySelector('#int_debt_bal') as HTMLInputElement;
+    const remountD2Name = r.container.querySelector('#int_debt_name_1') as HTMLInputElement;
+    const remountD2Bal = r.container.querySelector('#int_debt_bal_1') as HTMLInputElement;
+    const remountD3Name = r.container.querySelector('#int_debt_name_2') as HTMLInputElement;
+    const remountD3Bal = r.container.querySelector('#int_debt_bal_2') as HTMLInputElement;
+
+    expect(remountD1Name.value).toBe('Auto Loan');
+    expect(remountD1Bal.value).toBe('15,000');
+    expect(remountD2Name.value).toBe('Federal Student Loan');
+    expect(remountD2Bal.value).toBe('25,000');
+    expect(remountD3Name.value).toBe('Chase Credit Card');
+    expect(remountD3Bal.value).toBe('3,500');
+
+    // Test removing Debt 3
+    const removeBtn = r.container.querySelector('button[aria-label="Remove debt 3"]') as HTMLButtonElement;
+    expect(removeBtn).not.toBeNull();
+    await fireEvent.click(removeBtn);
+    flushSync();
+
+    // Now 2 debts remain: $15,000 + $25,000 = $40,000
+    expect(r.container.textContent).toContain('Total Debts Across All 2 Accounts');
+    expect(r.container.textContent).toContain('$40,000');
+
+    cleanup();
+  });
+
   it('handles Option 3 (not eligible) for user Social Security in Stage 4 and syncs with IncomeTab', async () => {
     const wizard = new InterviewState();
     wizard.goTo('income_user_ss');

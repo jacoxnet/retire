@@ -487,34 +487,96 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Debts
+  // Debts (Multiple Debts Supported)
   // ---------------------------------------------------------------------------
-  const debt0 = bs.categories?.debts?.[0];
-  let debtName = $state(debt0?.name || "Auto Loan");
-  const initDebtBal = debt0?.values?.[today] ?? debt0?.values?.[currentPeriod];
-  let debtBalance = $state<number | undefined>(
-    initDebtBal !== undefined && Number(initDebtBal) > 0
-      ? Number(initDebtBal)
-      : undefined,
+  interface DebtDraft {
+    id?: string;
+    name: string;
+    balance: number | undefined;
+    institution?: string;
+    values?: Record<string, number>;
+  }
+
+  const rawDebts: any[] = Array.isArray(bs.categories?.debts) ? bs.categories.debts : [];
+  const activeDebts = rawDebts.filter((d: any) => {
+    const val = d.values?.[today] ?? d.values?.[currentPeriod];
+    return val !== undefined && Number(val) > 0;
+  });
+
+  let debtList = $state<DebtDraft[]>(
+    activeDebts.length > 0
+      ? activeDebts.map((d: any, idx: number) => {
+          const val = d.values?.[today] ?? d.values?.[currentPeriod];
+          return {
+            id: d.id,
+            name: d.name || (idx === 0 ? "Auto Loan" : `Loan ${idx + 1}`),
+            balance: val !== undefined && Number(val) > 0 ? Number(val) : undefined,
+            institution: d.institution || "Lender / Bank",
+            values: d.values ? { ...d.values } : undefined,
+          };
+        })
+      : [
+          {
+            name: rawDebts[0]?.name || "Auto Loan",
+            balance: undefined,
+            institution: rawDebts[0]?.institution || "Lender / Bank",
+            id: rawDebts[0]?.id,
+          },
+        ]
   );
-  let debtSaved = $state(initDebtBal !== undefined && Number(initDebtBal) > 0);
+
+  const initTotalDebt = debtList.reduce((sum, d) => sum + (Number(d.balance) || 0), 0);
+  const totalDebtBalance = $derived(
+    debtList.reduce((sum, d) => sum + (Number(d.balance) || 0), 0)
+  );
+  let debtSaved = $state(initTotalDebt > 0);
+
+  function addDebtItem() {
+    debtList.push({
+      name: `Loan / Debt ${debtList.length + 1}`,
+      balance: undefined,
+      institution: "Lender / Bank",
+    });
+  }
+
+  function removeDebtItem(index: number) {
+    if (debtList.length > 1) {
+      debtList.splice(index, 1);
+    } else {
+      debtList[0].name = "Auto Loan";
+      debtList[0].balance = undefined;
+    }
+  }
 
   function saveDebt() {
     const b = ensureBs();
-    const debts = b.categories?.debts;
-    let d: any;
-    if (debts && debts.length > 0) {
-      d = debts[0];
-    } else {
-      addDebt(b, debtName || "Loan");
-      d = b.categories?.debts?.[0];
+    b.categories.debts ??= [];
+
+    const validDebts = debtList.filter(
+      (d) => (d.name && d.name.trim().length > 0) || (Number(d.balance) || 0) > 0
+    );
+
+    if (validDebts.length === 0) {
+      validDebts.push({
+        name: "Auto Loan",
+        balance: undefined,
+        institution: "Lender / Bank",
+      });
     }
-    d.name = debtName || "Loan";
-    d.values = {
-      ...(d.values || {}),
-      [currentPeriod]: Number(debtBalance) || 0,
-      [today]: Number(debtBalance) || 0,
-    };
+
+    b.categories.debts = validDebts.map((d, idx) => {
+      const bal = Number(d.balance) || 0;
+      return {
+        id: d.id || `debt_${Date.now()}_${idx}`,
+        name: d.name?.trim() || `Loan ${idx + 1}`,
+        institution: d.institution || "Lender / Bank",
+        values: {
+          ...(d.values || {}),
+          [currentPeriod]: bal,
+          [today]: bal,
+        },
+      };
+    });
     debtSaved = true;
   }
 
@@ -547,7 +609,7 @@
     } else if (wizard.currentQuestionId === "nw_real_estate") {
       if ((Number(propertyValue) || 0) > 0) saveProperty();
     } else if (wizard.currentQuestionId === "nw_debts") {
-      if ((Number(debtBalance) || 0) > 0) saveDebt();
+      if (totalDebtBalance > 0) saveDebt();
     }
     wizard.markAnswered(wizard.currentQuestionId);
     wizard.next(plan);
@@ -574,6 +636,8 @@
           cancelGoal();
         }
       }
+    } else if (wizard.currentQuestionId === "nw_debts") {
+      if (totalDebtBalance > 0) saveDebt();
     }
     wizard.prev(plan);
   }
@@ -1316,41 +1380,87 @@
 
       <div
         class="card p-3 p-md-4 bg-light border rounded-3 mb-4"
-        style="max-width: 550px;"
+        style="max-width: 650px;"
       >
-        <div class="row g-3 mb-3">
-          <div class="col-sm-7">
-            <label for="int_debt_name" class="form-label small fw-semibold"
-              >Debt / Loan Name</label
-            >
-            <input
-              type="text"
-              class="form-control"
-              id="int_debt_name"
-              bind:value={debtName}
-              placeholder="e.g. Auto Loan, Student Loan"
-            />
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="form-label small fw-semibold mb-0">Outstanding Loans & Debts</div>
+            <div class="small text-muted">Auto loans, student loans, personal loans, or credit card balances:</div>
           </div>
-          <div class="col-sm-5">
-            <label for="int_debt_bal" class="form-label small fw-semibold"
-              >Balance Owed</label
-            >
-            <div class="input-group">
-              <span class="input-group-text">$</span>
-              <MoneyInput
-                id="int_debt_bal"
-                class="form-control"
-                bind:value={debtBalance}
-                placeholder="e.g. 12,000"
-              />
-            </div>
-          </div>
+          <button
+            type="button"
+            class="btn btn-outline-primary btn-sm"
+            onclick={addDebtItem}
+          >
+            <i class="fa fa-plus me-1"></i>Add Another Debt
+          </button>
         </div>
+
+        <div class="d-flex flex-column gap-2 mb-3">
+          {#each debtList as d, idx (d.id || idx)}
+            <div class="p-3 bg-white border rounded-3">
+              <div class="row g-2 align-items-center">
+                <div class="col-sm-6">
+                  <label
+                    for={idx === 0 ? "int_debt_name" : `int_debt_name_${idx}`}
+                    class="form-label small text-secondary mb-1"
+                  >
+                    Debt / Loan Name {debtList.length > 1 ? `#${idx + 1}` : ""}
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id={idx === 0 ? "int_debt_name" : `int_debt_name_${idx}`}
+                    bind:value={d.name}
+                    placeholder="e.g. Auto Loan, Student Loan"
+                  />
+                </div>
+                <div class="col-sm-5">
+                  <label
+                    for={idx === 0 ? "int_debt_bal" : `int_debt_bal_${idx}`}
+                    class="form-label small text-secondary mb-1"
+                  >
+                    Balance Owed ($)
+                  </label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <MoneyInput
+                      id={idx === 0 ? "int_debt_bal" : `int_debt_bal_${idx}`}
+                      class="form-control form-control-sm"
+                      bind:value={d.balance}
+                      placeholder="e.g. 12,000"
+                    />
+                  </div>
+                </div>
+                <div class="col-sm-1 d-flex justify-content-end align-items-end pt-sm-4">
+                  {#if debtList.length > 1}
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger btn-sm"
+                      title="Remove debt"
+                      aria-label="Remove debt {idx + 1}"
+                      onclick={() => removeDebtItem(idx)}
+                    >
+                      <i class="fa fa-trash"></i>
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+
+        {#if debtList.length > 1}
+          <div class="d-flex justify-content-between align-items-center px-3 py-2 mb-3 bg-light-subtle border rounded-2 small">
+            <span class="text-secondary fw-semibold">Total Debts Across All {debtList.length} Accounts:</span>
+            <span class="fw-bold fs-6 text-danger">${formatMoney(totalDebtBalance)}</span>
+          </div>
+        {/if}
 
         <div class="d-flex justify-content-between align-items-center">
           {#if debtSaved}
             <span class="text-success small fw-semibold">
-              <i class="fa-solid fa-circle-check me-1"></i> Debt recorded
+              <i class="fa-solid fa-circle-check me-1"></i> {debtList.length > 1 ? "Debts recorded" : "Debt recorded"}
             </span>
           {:else}
             <span></span>
@@ -1358,7 +1468,7 @@
           <button
             type="button"
             class="btn btn-sm btn-primary"
-            onclick={saveDebt}>Save Debt</button
+            onclick={saveDebt}>Save {debtList.length > 1 ? "Debts" : "Debt"}</button
           >
         </div>
       </div>
