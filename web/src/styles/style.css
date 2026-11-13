@@ -8,6 +8,7 @@
   --accent-primary: #2563eb;
   --accent-hover: #1d4ed8;
   --border-color: #e2e8f0;
+  --navbar-height: 64px;
 
   --success: #10b981;
   --danger: #ef4444;
@@ -2010,6 +2011,38 @@ tbody tr:hover {
 [data-theme="dark"] .table-hover tbody tr:hover td {
   background-color: #27374d !important;
   color: var(--text-primary) !important;
+}
+
+/* ==========================================================================
+   Item 2C-1: Sticky Table Headers for Projection & Cash Flow (Page Scrolling)
+   ========================================================================== */
+#projection .table-container,
+#cashflow .table-container {
+  overflow: visible !important;
+}
+
+#projection .table-sticky-cols thead th,
+#cashflow .table-sticky-cols thead th {
+  position: sticky !important;
+  top: var(--navbar-height, 64px) !important;
+  z-index: 100 !important;
+  background-color: var(--bg-primary) !important;
+  border-bottom: 2px solid var(--border-color) !important;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+}
+
+#projection .table-sticky-cols thead th:nth-child(1),
+#projection .table-sticky-cols thead th:nth-child(2),
+#cashflow .table-sticky-cols thead th:nth-child(1),
+#cashflow .table-sticky-cols thead th:nth-child(2) {
+  z-index: 105 !important;
+}
+
+[data-theme="dark"] #projection .table-sticky-cols thead th,
+[data-theme="dark"] #cashflow .table-sticky-cols thead th {
+  background-color: var(--bg-tertiary) !important;
+  border-bottom: 2px solid var(--border-color) !important;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.3);
 }
 
 /* ==========================================================================

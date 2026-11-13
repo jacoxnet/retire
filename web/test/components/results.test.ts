@@ -326,4 +326,19 @@ describe('interactions', () => {
     expect(page.container.querySelector('#balance-sheet-tab')).toBeNull();
     expect(page.container.querySelector('#rebalance-tab')).toBeNull();
   });
+
+  it('renders projection and cashflow tables with sticky-cols class for sticky header rows', () => {
+    const page = render(ResultsPage, { results: r });
+    const projTable = page.container.querySelector('#projection .table-container table');
+    expect(projTable).not.toBeNull();
+    expect(projTable?.classList.contains('table-sticky-cols')).toBe(true);
+    const projHeaders = projTable?.querySelectorAll('thead th');
+    expect(projHeaders?.length).toBeGreaterThan(5);
+
+    const cfTable = page.container.querySelector('#cashflow .table-container table');
+    expect(cfTable).not.toBeNull();
+    expect(cfTable?.classList.contains('table-sticky-cols')).toBe(true);
+    const cfHeaders = cfTable?.querySelectorAll('thead th');
+    expect(cfHeaders?.length).toBeGreaterThan(5);
+  });
 });

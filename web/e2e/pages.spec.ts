@@ -76,6 +76,23 @@ test('Enter -> Results: runs on the workers, re-runs, and caches', async ({ page
   expect(Math.abs(rate - expected)).toBeLessThan(1.5);
   await expect(page.locator('#projection tbody tr')).toHaveCount(51);
 
+  // Sticky header rows on Projection and Cash Flow remain docked under the top navbar when scrolling
+  await page.click('#projection-tab');
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 600);
+  });
+  const projTh = await page.locator('#projection th').first().boundingBox();
+  expect(projTh?.y).toBeCloseTo(64, 0);
+
+  await page.click('#cashflow-tab');
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 600);
+  });
+  const cfTh = await page.locator('#cashflow th').first().boundingBox();
+  expect(cfTh?.y).toBeCloseTo(64, 0);
+
   await page.click('#charts-tab');
   for (const id of ['spaghettiChartCanvas', 'trajectoryChartCanvas', 'assetBreakdownChartCanvas', 'incomeSpendingChartCanvas', 'taxLiabilityChartCanvas']) {
     await expect.poll(() => page.evaluate((i) => document.getElementById(i)!.getBoundingClientRect().height, id)).toBeGreaterThan(100);
