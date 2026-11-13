@@ -171,7 +171,7 @@ describe('Part 3: Sticky Summary Bar on EnterPage', () => {
     expect(container.querySelector('.sticky-health-bar')?.textContent).toContain('Duplicate');
   });
 
-  it('toggles collapsed state when chevron toggle is clicked', async () => {
+  it('always displays expanded summary metrics without toggle button', () => {
     const plan = getDefaultData();
     const { container } = render(EnterPage, {
       plan,
@@ -181,16 +181,15 @@ describe('Part 3: Sticky Summary Bar on EnterPage', () => {
     });
 
     const healthBar = container.querySelector('.sticky-health-bar');
-    expect(healthBar?.classList.contains('is-collapsed')).toBe(false);
+    expect(healthBar).not.toBeNull();
 
-    const toggleBtn = healthBar?.querySelector('button[aria-label*="Summary Bar"]') as HTMLButtonElement;
-    expect(toggleBtn).not.toBeNull();
+    // Toggle button should not be present
+    const toggleBtn = healthBar?.querySelector('button[aria-label*="Summary Bar"]');
+    expect(toggleBtn).toBeNull();
 
-    await fireEvent.click(toggleBtn);
-    expect(healthBar?.classList.contains('is-collapsed')).toBe(true);
-
-    await fireEvent.click(toggleBtn);
-    expect(healthBar?.classList.contains('is-collapsed')).toBe(false);
+    // Summary metrics should always be visible
+    expect(healthBar?.textContent).toContain('Total Assets for Retirement');
+    expect(healthBar?.textContent).toContain('Desired Recurring Spending');
   });
 });
 

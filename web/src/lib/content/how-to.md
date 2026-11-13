@@ -99,7 +99,7 @@ When working directly with the page tabs, you can toggle between two view modes:
 ### 1. Enter Data Page
 
 #### Interface Controls: Sticky Plan Summary Bar & Tab Badges
-- **Sticky Plan Summary & Run Bar:** Pinned to the bottom of the screen on the Enter Data page. It displays live summary metric chips for **Total Assets for Retirement** and **Desired Recurring Spending**, an expand/minimize toggle, and the primary green **Run Simulation** button. If duplicate account names exist, the button is disabled and an alert guides you to correct them.
+- **Sticky Plan Summary & Run Bar:** Pinned to the bottom of the screen on the Enter Data page. It displays live summary metric chips for **Total Assets for Retirement** and **Desired Recurring Spending** and the primary green **Run Simulation** button. If duplicate account names exist, the button is disabled and an alert guides you to correct them.
 - **Tab Badges:** Each tab header displays real-time status indicators (e.g., `Age 60→65`, `3 accts • $1.5M`, `$60k/yr`, `2 streams`) with green completion checks or warning badges to help you verify completeness at a glance.
 
 #### Tab 1: Demographics & Plan Details

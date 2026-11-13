@@ -2851,14 +2851,10 @@ tbody tr:hover {
   -webkit-backdrop-filter: blur(8px);
   border-top: 1px solid var(--border-color);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.25s ease;
 }
 [data-theme="dark"] .sticky-health-bar {
   background-color: rgba(30, 41, 59, 0.94);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
-}
-.sticky-health-bar.is-collapsed {
-  transform: translateY(calc(100% - 34px));
 }
 .health-metric-chip {
   display: flex;

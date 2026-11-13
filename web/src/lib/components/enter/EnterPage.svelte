@@ -122,8 +122,6 @@
     }
   });
 
-  let healthBarCollapsed = $state(false);
-
   const totalAssets = $derived(
     (plan.accounts ?? []).reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
   );
@@ -246,39 +244,26 @@
       </div>
     </div>
 
-    <aside class="sticky-health-bar mt-4 px-3 py-2 rounded-top-3 border" class:is-collapsed={healthBarCollapsed} aria-label="Plan Summary & Run Simulation">
+    <aside class="sticky-health-bar mt-4 px-3 py-2 rounded-top-3 border" aria-label="Plan Summary & Run Simulation">
       <div class="d-flex justify-content-between align-items-center">
         <!-- Metric Summary Chips -->
         <div class="d-flex align-items-center flex-wrap gap-2 gap-md-4 py-1">
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill me-1"
-            title={healthBarCollapsed ? 'Expand Summary Bar' : 'Minimize Summary Bar'}
-            aria-label={healthBarCollapsed ? 'Expand Summary Bar' : 'Minimize Summary Bar'}
-            onclick={() => (healthBarCollapsed = !healthBarCollapsed)}
-          >
-            <i class="fa-solid {healthBarCollapsed ? 'fa-chevron-up' : 'fa-chevron-down'} small"></i>
-            <span class="small ms-1 d-none d-sm-inline">{healthBarCollapsed ? 'Expand' : 'Summary'}</span>
-          </button>
+          <div class="health-metric-chip">
+            <span class="text-secondary small fw-semibold text-uppercase" style="font-size: 0.72rem;">Total Assets for Retirement</span>
+            <span class="fw-bold text-dark">${formatMoney(totalAssets)}</span>
+          </div>
 
-          {#if !healthBarCollapsed}
-            <div class="health-metric-chip">
-              <span class="text-secondary small fw-semibold text-uppercase" style="font-size: 0.72rem;">Total Assets for Retirement</span>
-              <span class="fw-bold text-dark">${formatMoney(totalAssets)}</span>
+          <div class="health-metric-chip">
+            <span class="text-secondary small fw-semibold text-uppercase" style="font-size: 0.72rem;">Desired Recurring Spending</span>
+            <span class="fw-bold text-dark">${formatMoney(desiredSpend)}/yr</span>
+          </div>
+
+          {#if duplicates.length}
+            <div class="d-none d-lg-flex align-items-center">
+              <span class="badge bg-danger text-white">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>Duplicate name
+              </span>
             </div>
-
-            <div class="health-metric-chip">
-              <span class="text-secondary small fw-semibold text-uppercase" style="font-size: 0.72rem;">Desired Recurring Spending</span>
-              <span class="fw-bold text-dark">${formatMoney(desiredSpend)}/yr</span>
-            </div>
-
-            {#if duplicates.length}
-              <div class="d-none d-lg-flex align-items-center">
-                <span class="badge bg-danger text-white">
-                  <i class="fa-solid fa-triangle-exclamation me-1"></i>Duplicate name
-                </span>
-              </div>
-            {/if}
           {/if}
         </div>
 
