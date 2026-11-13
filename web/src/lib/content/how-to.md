@@ -295,7 +295,7 @@ Each modeled year, the app balances inflows and outflows in the following specif
 
 ### Helpful Tips
 
-- **Start with the Guided Walkthrough:** If you are new to the calculator, click **"Start Guided Walkthrough"** at the top of the Enter Data page for an approachable 5–10 minute guided setup.
+- **Start with the Guided Walkthrough:** If you are new to the calculator, click **"Start Guided Walkthrough"** at the top of the Enter Data page for an approachable 5–20 minute guided setup.
 - **Check Your Baseline in Regular Mode:** Enter your realistic spending expectations to check your initial Probability of Plan Success and inspect your Plan Assessment tier.
 - **Explore Alternative Modes:** Use **Maximum Spending Simulation** to find the spending level that matches your desired confidence level (e.g. 85%), or use **Earliest Retirement Age Simulation** to explore how soon you (and your spouse) can stop working. Click **"Adopt into Plan"** to lock in those results.
 - **Inspect Solved vs. Baseline Projections:** When using solved modes, toggle between **Solved Scenario** and **Original Baseline Plan** on the Projection, Cash Flow, and Charts tabs to see the tangible impact of the solved changes.

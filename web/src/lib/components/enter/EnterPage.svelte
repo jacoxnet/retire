@@ -172,7 +172,7 @@
             <div class="fw-bold fs-6 text-primary">New to retirement planning?</div>
             <div class="text-secondary small">
               We can walk you through your setup step-by-step with plain-English questions.
-              <span class="text-muted ms-1">(Takes ~5–10 minutes &bull; Skip any question anytime)</span>
+              <span class="text-muted ms-1">(Takes ~5–20 minutes &bull; Skip any question anytime)</span>
             </div>
           </div>
         </div>
