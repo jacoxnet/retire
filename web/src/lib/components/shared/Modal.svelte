@@ -15,6 +15,19 @@
   }
   let { open = $bindable(), id, size = '', scrollable = false, title, children, footer }: Props = $props();
   const close = () => (open = false);
+
+  let mouseDownOnBackdrop = false;
+
+  function handleMouseDown(e: MouseEvent) {
+    mouseDownOnBackdrop = e.target === e.currentTarget;
+  }
+
+  function handleClick(e: MouseEvent) {
+    if (mouseDownOnBackdrop && e.target === e.currentTarget) {
+      close();
+    }
+    mouseDownOnBackdrop = false;
+  }
 </script>
 
 <svelte:window onkeydown={(e) => open && e.key === 'Escape' && close()} />
@@ -22,7 +35,7 @@
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="modal fade show" {id} tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="{id}Label"
-    style="display: block; z-index: 1065;" onclick={(e) => e.target === e.currentTarget && close()}
+    style="display: block; z-index: 1065;" onmousedown={handleMouseDown} onclick={handleClick}
     onkeydown={(e) => e.key === 'Enter' && e.target instanceof HTMLInputElement && e.preventDefault()}>
     <div class={['modal-dialog modal-dialog-centered', size && `modal-${size}`, scrollable && 'modal-dialog-scrollable']}>
       <div class="modal-content shadow-lg border-0 rounded-4">

@@ -270,4 +270,22 @@ describe('InstructionsModal', () => {
     expect(document.getElementById('howToModal')).toBeNull();
     r.unmount();
   });
+
+  it('does not close when dragging selection from inside content to the backdrop', async () => {
+    const r = render(InstructionsModal, { open: true });
+    const modal = document.getElementById('howToModal')!;
+    const body = document.getElementById('howToBody')!;
+    expect(modal).not.toBeNull();
+
+    // Mousedown inside modal content, release outside on backdrop
+    await fireEvent.mouseDown(body);
+    await fireEvent.click(modal);
+    expect(document.getElementById('howToModal')).not.toBeNull();
+
+    // Genuine backdrop click closes modal
+    await fireEvent.mouseDown(modal);
+    await fireEvent.click(modal);
+    expect(document.getElementById('howToModal')).toBeNull();
+    r.unmount();
+  });
 });

@@ -113,8 +113,25 @@ describe('Accounts tab editing', () => {
     expect(store.plan.accounts![i].is_community_property).toBe(true);
 
     await fireEvent.click(q(card(), '.btn-link'));
+    const taxModal = document.getElementById('tier1TaxAssumptionsModal')!;
+    expect(taxModal).not.toBeNull();
+
+    // Drag from inside content to backdrop should not close
+    const modalBody = taxModal.querySelector('.modal-body')!;
+    await fireEvent.mouseDown(modalBody);
+    await fireEvent.click(taxModal);
     expect(document.getElementById('tier1TaxAssumptionsModal')).not.toBeNull();
+
+    // Got It button closes
     await fireEvent.click(screen.getByText('Got It'));
+    expect(document.getElementById('tier1TaxAssumptionsModal')).toBeNull();
+
+    // Reopen and test genuine backdrop click
+    await fireEvent.click(q(card(), '.btn-link'));
+    const reopenedModal = document.getElementById('tier1TaxAssumptionsModal')!;
+    expect(reopenedModal).not.toBeNull();
+    await fireEvent.mouseDown(reopenedModal);
+    await fireEvent.click(reopenedModal);
     expect(document.getElementById('tier1TaxAssumptionsModal')).toBeNull();
 
     await fireEvent.change(q(card(), '.acc-type-select'), { target: { value: 'hsa' } });

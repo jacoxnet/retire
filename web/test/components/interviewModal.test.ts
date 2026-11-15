@@ -101,6 +101,39 @@ describe('Interview Modal Integration', () => {
     expect(modal?.textContent).toContain("Let's start with the basics. Who are we planning for?");
   });
 
+  it('does not close the modal when dragging text selection from an input to the backdrop', async () => {
+    setup();
+
+    // Open interview modal
+    await fireEvent.click(byId('btnStartInterview')!);
+    flushSync();
+
+    const modal = document.getElementById('guidedInterviewModal')!;
+    expect(modal).not.toBeNull();
+
+    const nameInput = byId('int_user_name')!;
+    expect(nameInput).not.toBeNull();
+
+    // 1. Simulate mouse drag starting on input and releasing outside on backdrop:
+    // Mousedown on the input inside the modal
+    await fireEvent.mouseDown(nameInput);
+    // Mouseup / click event dispatched on the backdrop (common ancestor)
+    await fireEvent.click(modal);
+    flushSync();
+
+    // The modal MUST remain open
+    expect(document.getElementById('guidedInterviewModal')).not.toBeNull();
+
+    // 2. Simulate genuine backdrop click:
+    // Both mousedown and click originate directly on the backdrop
+    await fireEvent.mouseDown(modal);
+    await fireEvent.click(modal);
+    flushSync();
+
+    // The modal should now close
+    expect(document.getElementById('guidedInterviewModal')).toBeNull();
+  });
+
   it('updates plan data immediately and preserves it across modal interactions', async () => {
     const { store } = setup();
 

@@ -10,8 +10,21 @@
   // Local, trusted markdown bundled with the app.
   const html = howToHtml();
 
+  let mouseDownOnBackdrop = false;
+
   function close() {
     open = false;
+  }
+
+  function handleMouseDown(e: MouseEvent) {
+    mouseDownOnBackdrop = e.target === e.currentTarget;
+  }
+
+  function handleClick(e: MouseEvent) {
+    if (mouseDownOnBackdrop && e.target === e.currentTarget) {
+      close();
+    }
+    mouseDownOnBackdrop = false;
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -31,7 +44,8 @@
     aria-labelledby="howToModalTitle"
     tabindex="-1"
     style="display: block;"
-    onclick={(e) => e.target === e.currentTarget && close()}
+    onmousedown={handleMouseDown}
+    onclick={handleClick}
   >
     <div class="modal-content">
       <span
