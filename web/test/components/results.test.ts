@@ -327,6 +327,17 @@ describe('interactions', () => {
     expect(page.container.querySelector('#rebalance-tab')).toBeNull();
   });
 
+  it('defaults Target Success Rate % to 85% for goal seeking and earliest retirement modes', async () => {
+    const page = show(r);
+    await fireEvent.click(page.container.querySelector('#results_sim_type_goal')!);
+    const targetGoal = page.container.querySelector('#results_target_success_rate') as HTMLInputElement;
+    expect(targetGoal.value).toBe('85%');
+
+    await fireEvent.click(page.container.querySelector('#results_sim_type_earliest')!);
+    const targetEarliest = page.container.querySelector('#results_target_success_rate') as HTMLInputElement;
+    expect(targetEarliest.value).toBe('85%');
+  });
+
   it('renders projection and cashflow tables with sticky-cols class for sticky header rows', () => {
     const page = render(ResultsPage, { results: r });
     const projTable = page.container.querySelector('#projection .table-container table');

@@ -45,7 +45,7 @@ export async function earliestRetirementSearch(
   const userDeath = getInt(plan.user_age_death, 90);
   const spouseDeath = isMarried ? getInt(plan.spouse_age_death, 90) : 90;
   const currentYear = getInt(plan.current_year, 2026);
-  const targetRate = getFloat(plan.target_success_rate, 80.0) / 100.0;
+  const targetRate = getFloat(plan.target_success_rate, 85.0) / 100.0;
   const strategy: EarliestRetirementStrategy = isMarried
     ? ((get(plan, 'earliest_retirement_strategy', 'simultaneous') as EarliestRetirementStrategy) || 'simultaneous')
     : 'simultaneous';

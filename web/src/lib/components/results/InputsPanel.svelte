@@ -42,7 +42,7 @@
     const currentSimType = r.simulation_type || (r.goal_seeking ? 'goal_seeking' : 'regular');
     const v: Record<string, string> = {
       simulation_type: currentSimType,
-      target_success_rate: percentText(floatformat(r.target_success_rate || 80.0, -2)),
+      target_success_rate: percentText(floatformat(r.target_success_rate || 85.0, -2)),
       inflation_rate: floatformat(r.inflation_rate, 1),
       user_age_death: pyStr(r.user_age_death),
       pretax_return_mean: floatformat(r.pretax_assets?.return_mean, 1),
@@ -176,7 +176,7 @@
             <span class="small fw-bold text-success"><i class="fa-solid fa-calculator me-1"></i>Desired Annual Spending (Solved)</span>
             <span class="badge bg-success fs-6">${djangoMoney(r.achieved_spending || r.desired_spending)}/yr</span>
           </div>
-          <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 80.0, 1)}% confidence.</small>
+          <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 85.0, 1)}% confidence.</small>
         </div>
       {/if}
       {#if r.simulation_type === 'earliest_retirement' && r.achieved_user_ret_age}
@@ -185,7 +185,7 @@
             <span class="small fw-bold text-primary"><i class="fa-solid fa-clock me-1"></i>Earliest Retirement (Solved)</span>
             <span class="badge bg-primary fs-6">Age {r.achieved_user_ret_age}{#if r.is_married && r.achieved_spouse_ret_age !== undefined} / {r.achieved_spouse_ret_age}{/if}</span>
           </div>
-          <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 80.0, 1)}% confidence.</small>
+          <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 85.0, 1)}% confidence.</small>
         </div>
       {/if}
 
@@ -224,14 +224,20 @@
     </div>
     <div class="form-check mb-2">
       <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_goal" value="goal_seeking"
-        checked={values.simulation_type === 'goal_seeking'} onchange={set('simulation_type')} {disabled}>
+        checked={values.simulation_type === 'goal_seeking'} onchange={(e) => {
+          set('simulation_type')(e);
+          if (!values.target_success_rate) values.target_success_rate = '85%';
+        }} {disabled}>
       <label class="form-check-label fw-semibold" for="results_sim_type_goal">
         Maximum Spending Simulation <span class="text-muted fw-normal small">(Solves for Spending)</span>
       </label>
     </div>
     <div class="form-check mb-3">
       <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_earliest" value="earliest_retirement"
-        checked={values.simulation_type === 'earliest_retirement'} onchange={set('simulation_type')} {disabled}>
+        checked={values.simulation_type === 'earliest_retirement'} onchange={(e) => {
+          set('simulation_type')(e);
+          if (!values.target_success_rate) values.target_success_rate = '85%';
+        }} {disabled}>
       <label class="form-check-label fw-semibold" for="results_sim_type_earliest">
         Earliest Retirement Age Simulation <span class="text-secondary fw-normal small">(Solves for Retirement Age)</span>
       </label>

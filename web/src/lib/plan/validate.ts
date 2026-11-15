@@ -195,7 +195,7 @@ export function planErrors(data: Plan | Obj): string[] {
   const isGoalSeeking = getBool(data.goal_seeking);
   const isEarliestRet = data.simulation_type === 'earliest_retirement';
   const runs = getInt(data.runs, 50000);
-  const target = getFloat(data.target_success_rate, 80.0);
+  const target = getFloat(data.target_success_rate, 85.0);
   const userRetirementAge = getInt(data.user_retirement_age, 65);
   const spouseRetirementAge = getInt(data.spouse_retirement_age, 65);
   const ss: Obj = data.social_security && typeof data.social_security === 'object' && !Array.isArray(data.social_security)

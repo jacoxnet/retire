@@ -445,7 +445,7 @@ export function extractSimInputs(plan: Dict | null | undefined): SimInputs {
 
   const inflationRate = pyFloat(get(raw, 'inflation_rate', 2.5));
   const runs = pyInt(get(raw, 'runs', 50000));
-  const targetSuccessRate = pyFloat(get(raw, 'target_success_rate', 80.0));
+  const targetSuccessRate = pyFloat(get(raw, 'target_success_rate', 85.0));
 
   // Assets: pretax user, pretax spouse, Roth, taxable, HSA user, HSA spouse, inherited accounts
   const pretaxData = get(raw, 'pretax_assets', {});

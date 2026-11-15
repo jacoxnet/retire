@@ -1105,7 +1105,7 @@
             />
           </div>
           <span class="small text-muted"
-            >(e.g. 4.5% conservative, 6.0% moderate, 7.5% growth)</span
+            >(e.g. 4.5% for a conservative (mostly bonds) portfolio, 6.0% for a moderate (about half bonds and half stocks) portfolio, 7.5% for a growth (mostly stocks) portfolio)</span
           >
         </div>
       </div>

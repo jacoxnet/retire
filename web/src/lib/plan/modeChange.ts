@@ -39,7 +39,7 @@ export function applyModeChange(plan: Plan, input: ModeChangeInput): ModeChangeM
 
   if (isGoal || isEarliestRet) {
     const modeName = isGoal ? 'Maximum Spending' : 'Earliest Retirement Age';
-    const target = getFloat(post('target_success_rate'), data.target_success_rate ?? 80.0);
+    const target = getFloat(post('target_success_rate'), data.target_success_rate ?? 85.0);
     if (target < 1.0 || target > 99.0) {
       error(`Target Success Rate must be between 1% and 99% for ${modeName} simulation.`);
       data.target_success_rate = Math.min(99.0, Math.max(1.0, target));

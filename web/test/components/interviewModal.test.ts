@@ -641,6 +641,22 @@ describe('Smart Auto-Save on Next in Guided Walkthrough', () => {
     expect(wizard.isSkipped('accounts_workplace')).toBe(true);
     cleanup();
   });
+
+  it('displays descriptive portfolio examples for expected annual growth rate', async () => {
+    const wizard = new InterviewState();
+    wizard.goTo('accounts_workplace');
+    const plan: Plan = { is_married: false, accounts: [] };
+    const r = render(Stage2Accounts, { wizard, plan });
+
+    const addBtn = r.container.querySelector('button.btn-outline-primary') as HTMLButtonElement;
+    await fireEvent.click(addBtn);
+    flushSync();
+
+    expect(r.container.textContent).toContain(
+      '(e.g. 4.5% for a conservative (mostly bonds) portfolio, 6.0% for a moderate (about half bonds and half stocks) portfolio, 7.5% for a growth (mostly stocks) portfolio)'
+    );
+    cleanup();
+  });
 });
 
 describe('Editing Items in Guided Walkthrough', () => {

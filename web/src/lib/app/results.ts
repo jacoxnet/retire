@@ -79,7 +79,7 @@ export function resultsContext(
     runs: get(data, 'runs', 50000),
     inflation_rate: get(data, 'inflation_rate', 2.5),
     desired_spending: get(data, 'desired_spending', 0.0),
-    target_success_rate: get(data, 'target_success_rate', 80.0),
+    target_success_rate: get(data, 'target_success_rate', 85.0),
     user_name: get(data, 'user_name', 'You'),
     user_age: get(data, 'user_age', 60),
     user_retirement_age: get(data, 'user_retirement_age', 65),

@@ -75,7 +75,7 @@ export function getDefaultData(today = todayIso()): Plan {
     adjust_spending_inflation: true,
     inflation_rate: 3.5,
     runs: 50000,
-    target_success_rate: 80.0,
+    target_success_rate: 85.0,
     user_life_insurance_amount: 0.0,
     user_life_insurance_type: 'permanent',
     user_life_insurance_term_age: 70,
