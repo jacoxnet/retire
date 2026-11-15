@@ -121,11 +121,11 @@ When working directly with the page tabs, you can toggle between two view modes:
   - Accounts not held for retirement (e.g., personal non-retirement brokerage accounts, trust funds) belong on the **Balance Sheet** under **Other Accounts**.
 - **Supported Account Types:**
   - **Pre-Tax (IRA / 401k / 403b):** Traditional tax-deferred accounts.
-  - **Roth (Roth IRA / Roth 401k):** Tax-free growth and tax-free withdrawals for life.
+  - **Roth (Roth IRA / Roth 401k / Roth 403b):** Tax-free growth and tax-free withdrawals for life.
   - **Taxable (Brokerage / Savings):** Standard non-retirement investment accounts earmarked for retirement.
   - **Health Savings Account (HSA):** Triple-tax-advantaged medical savings accounts.
   - **Inherited Pre-Tax (Traditional / 401k / 403b):** Tax-deferred accounts inherited from another individual.
-  - **Inherited Roth (Roth IRA / Roth 401k / 403b):** Roth accounts inherited from another individual.
+  - **Inherited Roth (Roth IRA / Roth 401k / Roth 403b):** Roth accounts inherited from another individual.
 - **Standard Account Card Fields:**
   - **Owner:** You or your spouse.
   - **Present Balance:** Current market value.

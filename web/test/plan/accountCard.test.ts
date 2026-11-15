@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACCOUNT_TYPE_OPTIONS,
   applyMarriageToAccounts, cardAccount, commitAccounts, duplicateAccountNames, newAccount, personLabels,
   setAccountOwner, uniqueDefaultName, volatilityChoice, yearAtAge,
 } from '../../src/lib/plan/accountCard';
@@ -139,3 +140,13 @@ describe('commitAccounts (parse_account_rows)', () => {
     expect(p.accounts![0]).toMatchObject({ owner: 'spouse', contrib_start_age: 50, contrib_end_age_type: 'spouse_retirement' });
   });
 });
+
+describe('ACCOUNT_TYPE_OPTIONS', () => {
+  it('has expected dropdown labels for roth and inherited roth', () => {
+    const rothOpt = ACCOUNT_TYPE_OPTIONS.find((o) => o.value === 'roth');
+    const inhRothOpt = ACCOUNT_TYPE_OPTIONS.find((o) => o.value === 'inherited_roth');
+    expect(rothOpt?.label).toBe('Roth (Roth IRA / Roth 401k / Roth 403b)');
+    expect(inhRothOpt?.label).toBe('Inherited Roth (Roth IRA / Roth 401k / Roth 403b)');
+  });
+});
+

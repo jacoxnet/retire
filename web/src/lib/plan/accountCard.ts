@@ -44,11 +44,11 @@ export type CardType = 'pretax' | 'roth' | 'taxable' | 'hsa' | 'inherited_pretax
 
 export const ACCOUNT_TYPE_OPTIONS: { value: CardType; label: string }[] = [
   { value: 'pretax', label: 'Pre-Tax (IRA / 401k / 403b)' },
-  { value: 'roth', label: 'Roth (Roth IRA / Roth 401k)' },
+  { value: 'roth', label: 'Roth (Roth IRA / Roth 401k / Roth 403b)' },
   { value: 'taxable', label: 'Taxable (Brokerage / Savings)' },
   { value: 'hsa', label: 'Health Savings Account (HSA)' },
   { value: 'inherited_pretax', label: 'Inherited Pre-Tax (Traditional / 401k / 403b)' },
-  { value: 'inherited_roth', label: 'Inherited Roth (Roth IRA / Roth 401k / 403b)' },
+  { value: 'inherited_roth', label: 'Inherited Roth (Roth IRA / Roth 401k / Roth 403b)' },
 ];
 
 export const isInheritedType = (type: unknown): boolean => type === 'inherited_pretax' || type === 'inherited_roth';
