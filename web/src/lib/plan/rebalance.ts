@@ -14,6 +14,7 @@ export interface RebAccount {
   category_title: string;
   is_investment: boolean;
   balance: number;
+  raw?: Obj;
 }
 
 const toNumber = (v: unknown): number => {
@@ -43,29 +44,65 @@ export function latestSheetAccounts(bs: Obj | undefined, today: string): { lates
   for (const [key, title, investment] of CATEGORIES) {
     if (!bs?.categories?.[key]) continue;
     if (key === 'goals') {
-      goalGroups(bs).forEach((g, gi) => (g.accounts ?? []).forEach((a: Obj, ai: number) => accounts.push({
-        id: a.id || `acc_goal_${gi + 1}_${ai + 1}`,
-        name: a.name || (g.name ? `${g.name} Fund` : 'Goal Account'),
-        institution: a.institution || '',
-        category: key,
-        category_title: g.name || 'Goal Savings',
-        is_investment: false,
-        balance: valueOf(a),
-      })));
+      goalGroups(bs).forEach((g, gi) => (g.accounts ?? []).forEach((a: Obj, ai: number) => {
+        a.id ||= `acc_goal_${gi + 1}_${ai + 1}`;
+        accounts.push({
+          id: a.id,
+          name: a.name || (g.name ? `${g.name} Fund` : 'Goal Account'),
+          institution: a.institution || '',
+          category: key,
+          category_title: g.name || 'Goal Savings',
+          is_investment: false,
+          balance: valueOf(a),
+          raw: a,
+        });
+      }));
       continue;
     }
     const cat = bs.categories[key];
-    categoryAccounts(bs, key).forEach((a, i) => accounts.push({
-      id: a.id || `acc_${key}_${i + 1}`,
-      name: a.name || `${title} Account`,
-      institution: a.institution || '',
-      category: key,
-      category_title: cat.title || title,
-      is_investment: investment,
-      balance: valueOf(a),
-    }));
+    categoryAccounts(bs, key).forEach((a, i) => {
+      a.id ||= `acc_${key}_${i + 1}`;
+      accounts.push({
+        id: a.id,
+        name: a.name || `${title} Account`,
+        institution: a.institution || '',
+        category: key,
+        category_title: cat.title || title,
+        is_investment: investment,
+        balance: valueOf(a),
+        raw: a,
+      });
+    });
   }
   return { latestPeriod, accounts };
+}
+
+/**
+ * Update an account's institution in the balance sheet by account ID.
+ * Searches across all categories and goal groups. Returns true if updated.
+ */
+export function setSheetAccountInstitution(bs: Obj | undefined, id: string, institution: string): boolean {
+  if (!bs?.categories) return false;
+  for (const key of Object.keys(bs.categories)) {
+    if (key === 'goals') {
+      for (const g of goalGroups(bs)) {
+        for (const a of g.accounts ?? []) {
+          if (a.id === id) {
+            a.institution = institution;
+            return true;
+          }
+        }
+      }
+    } else {
+      for (const a of categoryAccounts(bs, key)) {
+        if (a.id === id) {
+          a.institution = institution;
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**

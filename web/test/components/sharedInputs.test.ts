@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import DecimalInput from '../../src/lib/components/shared/DecimalInput.svelte';
+import InstitutionInput from '../../src/lib/components/shared/InstitutionInput.svelte';
 import MoneyInput from '../../src/lib/components/shared/MoneyInput.svelte';
 import PercentInput from '../../src/lib/components/shared/PercentInput.svelte';
 
@@ -141,6 +142,76 @@ describe('shared input auto-selection and replacement', () => {
       expect(input.value).toBe('25.4');
       await fireEvent.blur(input);
       expect(input.value).toBe('25.4');
+    });
+  });
+
+  describe('InstitutionInput', () => {
+    it('calls select on focus and mouseup with preventDefault for initial click', async () => {
+      const { container } = render(InstitutionInput, { value: '[To be added]' });
+      const input = container.querySelector('input')!;
+      expect(input.value).toBe('[To be added]');
+
+      const selectSpy = vi.spyOn(input, 'select');
+      await fireEvent.focus(input);
+      expect(selectSpy).toHaveBeenCalledTimes(1);
+
+      const mouseUpEvent = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+      input.dispatchEvent(mouseUpEvent);
+      expect(mouseUpEvent.defaultPrevented).toBe(true);
+      expect(selectSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('selects entire [To be added] on click/mouseup even when already focused', async () => {
+      const { container } = render(InstitutionInput, { value: '[To be added]' });
+      const input = container.querySelector('input')!;
+      const selectSpy = vi.spyOn(input, 'select');
+
+      // Initial focus
+      await fireEvent.focus(input);
+      const firstMouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+      input.dispatchEvent(firstMouseUp);
+      expect(selectSpy).toHaveBeenCalledTimes(2);
+
+      // Second click while already focused: because value is still "[To be added]", should select again
+      const secondMouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+      input.dispatchEvent(secondMouseUp);
+      expect(secondMouseUp.defaultPrevented).toBe(true);
+      expect(selectSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('allows typing a new institution name to replace [To be added]', async () => {
+      let val = '[To be added]';
+      const { container } = render(InstitutionInput, {
+        value: val,
+      });
+      const input = container.querySelector('input')!;
+      expect(input.value).toBe('[To be added]');
+
+      await fireEvent.focus(input);
+      await fireEvent.input(input, { target: { value: 'Fidelity' } });
+      expect(input.value).toBe('Fidelity');
+
+      await fireEvent.blur(input);
+      expect(input.value).toBe('Fidelity');
+    });
+
+    it('allows normal cursor positioning on subsequent clicks once a custom institution is typed', async () => {
+      const { container } = render(InstitutionInput, { value: 'Vanguard' });
+      const input = container.querySelector('input')!;
+      const selectSpy = vi.spyOn(input, 'select');
+
+      // Initial focus: selects all
+      await fireEvent.focus(input);
+      const firstMouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+      input.dispatchEvent(firstMouseUp);
+      expect(firstMouseUp.defaultPrevented).toBe(true);
+      expect(selectSpy).toHaveBeenCalledTimes(2);
+
+      // Subsequent click while focused: normal cursor placement (no preventDefault, no force-select)
+      const secondMouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+      input.dispatchEvent(secondMouseUp);
+      expect(secondMouseUp.defaultPrevented).toBe(false);
+      expect(selectSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

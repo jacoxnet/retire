@@ -201,4 +201,49 @@ describe('Rebalance tab', () => {
     document.documentElement.removeAttribute('data-bs-theme');
     stop();
   });
+
+  it('renders editable Institution / Notes and synchronizes bidirectionally with Balance Sheet', async () => {
+    const { store, stop } = setup(plan());
+    await fireEvent.click(document.getElementById('rebalance-tab')!);
+
+    const instInputs = $$<HTMLInputElement>('.reb-inst-input');
+    expect(instInputs.length).toBeGreaterThan(0);
+
+    // Initial institution value check
+    const firstAcc = latestSheetAccounts(store.plan.balance_sheet as Record<string, unknown>, '2026-01-15').accounts[0];
+    expect(instInputs[0].value).toBe(firstAcc.institution || '');
+
+    // Edit institution on Rebalance tab
+    await fireEvent.focus(instInputs[0]);
+    await fireEvent.input(instInputs[0], { target: { value: 'Charles Schwab' } });
+    await fireEvent.blur(instInputs[0]);
+
+    // Check Step 3 preview updates
+    const firstCard = $$('.reb-acc-card')[0];
+    expect(firstCard.textContent).toContain('(Charles Schwab)');
+
+    // Check store balance sheet is updated
+    const updatedAcc = latestSheetAccounts(store.plan.balance_sheet as Record<string, unknown>, '2026-01-15').accounts[0];
+    expect(updatedAcc.institution).toBe('Charles Schwab');
+
+    // Switch to Balance Sheet tab and verify it displays "Charles Schwab"
+    await fireEvent.click(document.getElementById('balance-sheet-tab')!);
+    const bsInstInputs = $$<HTMLInputElement>('input[aria-label="Institution"]');
+    expect(bsInstInputs.length).toBeGreaterThan(0);
+    expect(bsInstInputs[0].value).toBe('Charles Schwab');
+
+    // Edit institution on Balance Sheet tab to "Fidelity Investments"
+    await fireEvent.focus(bsInstInputs[0]);
+    await fireEvent.input(bsInstInputs[0], { target: { value: 'Fidelity Investments' } });
+    await fireEvent.blur(bsInstInputs[0]);
+
+    // Switch back to Rebalance tab and verify it displays "Fidelity Investments"
+    await fireEvent.click(document.getElementById('rebalance-tab')!);
+    const recheckedRebInputs = $$<HTMLInputElement>('.reb-inst-input');
+    expect(recheckedRebInputs[0].value).toBe('Fidelity Investments');
+    const recheckedCard = $$('.reb-acc-card')[0];
+    expect(recheckedCard.textContent).toContain('(Fidelity Investments)');
+
+    stop();
+  });
 });

@@ -8,6 +8,7 @@
     isGoalCollapsed, periodLabel, periodTotals, properties, debts as debtList, toggleCategory, toggleGoalGroup,
   } from '../../plan/bsView';
   import type { Obj } from '../../plan/pyutil';
+  import InstitutionInput from '../shared/InstitutionInput.svelte';
   import MoneyInput from '../shared/MoneyInput.svelte';
   import type { CpiTarget } from './TargetCpiModal.svelte';
 
@@ -135,7 +136,7 @@
         aria-label="Account name" placeholder={namePlaceholder} bind:value={() => acc.name ?? '', (v) => (acc.name = v)} />
     </td>
     <td class="bs-inst-col">
-      <input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" aria-label="Institution" placeholder={instPlaceholder}
+      <InstitutionInput class="form-control form-control-sm bs-seamless-input text-secondary" ariaLabel="Institution" placeholder={instPlaceholder}
         bind:value={() => acc.institution ?? '', (v) => (acc.institution = v)} />
     </td>
     {#each periods as p (p)}
@@ -451,7 +452,7 @@
               bind:value={() => d.name ?? '', (v) => (d.name = v)} />
           </td>
           <td class="bs-inst-col">
-            <input type="text" class="form-control form-control-sm bs-seamless-input text-secondary" aria-label="Lender" placeholder="[To be added]"
+            <InstitutionInput class="form-control form-control-sm bs-seamless-input text-secondary" ariaLabel="Lender" placeholder="[To be added]"
               bind:value={() => d.institution ?? '', (v) => (d.institution = v)} />
           </td>
           {#each periods as p (p)}

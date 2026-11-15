@@ -10,12 +10,13 @@
   import { todayIso } from '../../plan/pyutil';
   import {
     accountAllocation, addAssetClass, applyPreset, assignRemaining, corridor, deleteAssetClass, latestSheetAccounts, nextColor,
-    type RebAccount, rebalanceResults, seedRebalancing, selectAccounts, setAllocation, targetPortfolio, targetSum, toggleAccount,
+    type RebAccount, rebalanceResults, seedRebalancing, selectAccounts, setAllocation, setSheetAccountInstitution, targetPortfolio, targetSum, toggleAccount,
     tolerance, tradePlan,
   } from '../../plan/rebalance';
   import type { Plan, Rebalancing } from '../../plan/types';
   import DecimalInput from '../shared/DecimalInput.svelte';
   import HelpPopover from '../shared/HelpPopover.svelte';
+  import InstitutionInput from '../shared/InstitutionInput.svelte';
   import MoneyInput from '../shared/MoneyInput.svelte';
   import AddAssetClassModal from './AddAssetClassModal.svelte';
   import RebChart from './RebChart.svelte';
@@ -62,6 +63,12 @@
 
   function refresh() {
     seedRebalancing(reb, accounts, true);
+  }
+
+  function updateAccountInstitution(acc: RebAccount, val: string) {
+    acc.institution = val;
+    if (acc.raw) acc.raw.institution = val;
+    setSheetAccountInstitution(plan.balance_sheet as Obj, acc.id, val);
   }
 </script>
 
@@ -151,7 +158,7 @@
           <th style="width: 48px;" class="text-center">Include?</th>
           <th>Account Name</th>
           <th>Account Type</th>
-          <th>Institution / Notes</th>
+          <th style="min-width: 160px;">Institution / Notes</th>
           <th class="text-end">Balance (Latest Snapshot)</th>
         </tr>
       </thead>
@@ -164,7 +171,14 @@
             </td>
             <td><strong class="text-dark">{acc.name || 'Account'}</strong></td>
             <td><span class={['badge', badge(acc)]}>{acc.category_title}</span></td>
-            <td class="text-secondary small">{acc.institution || '—'}</td>
+            <td>
+              <InstitutionInput
+                class="form-control form-control-sm bs-seamless-input text-secondary reb-inst-input"
+                ariaLabel="Institution / Notes"
+                placeholder="[To be added]"
+                bind:value={() => acc.institution ?? '', (v) => updateAccountInstitution(acc, v)}
+              />
+            </td>
             <td class="text-end fw-semibold">{money(acc.balance)}</td>
           </tr>
         {:else}

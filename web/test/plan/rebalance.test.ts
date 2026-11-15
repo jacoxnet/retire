@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildDefaultRebalancing } from '../../src/lib/plan/defaults';
 import {
   accountAllocation, addAssetClass, applyPreset, assignRemaining, corridor, deleteAssetClass, latestSheetAccounts, nextColor,
-  type RebAccount, rebalanceResults, seedRebalancing, selectAccounts, setAllocation, targetPortfolio, targetSum, toggleAccount,
+  type RebAccount, rebalanceResults, seedRebalancing, selectAccounts, setAllocation, setSheetAccountInstitution, targetPortfolio, targetSum, toggleAccount,
   tradePlan,
 } from '../../src/lib/plan/rebalance';
 import type { Rebalancing } from '../../src/lib/plan/types';
@@ -10,11 +10,11 @@ import type { Rebalancing } from '../../src/lib/plan/types';
 const sheet = {
   periods: ['2025-06-30', '2025-12-31'],
   categories: {
-    pretax: { title: 'Pretax Retirement Accounts', accounts: [{ id: 'p1', name: 'IRA', values: { '2025-12-31': 60000 } }] },
-    roth: { accounts: [{ id: 'r1', name: 'Roth', values: { '2025-12-31': 20000 } }] },
-    taxable: { accounts: [{ id: 't1', name: 'Brokerage', values: { '2025-12-31': 0 } }] },
-    emergency: { title: 'Emergency Fund Accounts', accounts: [{ id: 'e1', name: 'HYSA', values: { '2025-12-31': 20000 } }] },
-    goals: { goal_groups: [{ name: 'Car', accounts: [{ name: 'Car Fund', values: { '2025-06-30': 500 } }] }] },
+    pretax: { title: 'Pretax Retirement Accounts', accounts: [{ id: 'p1', name: 'IRA', institution: '[To be added]', values: { '2025-12-31': 60000 } }] },
+    roth: { accounts: [{ id: 'r1', name: 'Roth', institution: '', values: { '2025-12-31': 20000 } }] },
+    taxable: { accounts: [{ id: 't1', name: 'Brokerage', institution: '', values: { '2025-12-31': 0 } }] },
+    emergency: { title: 'Emergency Fund Accounts', accounts: [{ id: 'e1', name: 'HYSA', institution: '', values: { '2025-12-31': 20000 } }] },
+    goals: { goal_groups: [{ name: 'Car', accounts: [{ name: 'Car Fund', institution: '[To be added]', values: { '2025-06-30': 500 } }] }] },
   },
 };
 
@@ -58,6 +58,23 @@ describe('accounts and defaults', () => {
     expect(reb.included_account_ids).toEqual(['r1', 't1', 'e1']);
     selectAccounts(reb, accounts(), 'none');
     expect(reb.included_account_ids).toEqual([]);
+  });
+
+  it('updates account institution in balance sheet by account id', () => {
+    const testSheet = structuredClone(sheet);
+    // Category account
+    expect(setSheetAccountInstitution(testSheet, 'p1', 'Vanguard')).toBe(true);
+    expect(testSheet.categories.pretax.accounts[0].institution).toBe('Vanguard');
+
+    // Goal account (after latestSheetAccounts assigns stable ID if missing)
+    const { accounts: accs } = latestSheetAccounts(testSheet, '2026-01-15');
+    const goalAcc = accs.find((a) => a.category === 'goals')!;
+    expect(goalAcc.id).toBeDefined();
+    expect(setSheetAccountInstitution(testSheet, goalAcc.id, 'Ally Bank')).toBe(true);
+    expect(testSheet.categories.goals.goal_groups[0].accounts[0].institution).toBe('Ally Bank');
+
+    // Unknown ID
+    expect(setSheetAccountInstitution(testSheet, 'nonexistent', 'None')).toBe(false);
   });
 });
 
