@@ -380,5 +380,28 @@ describe('editing', () => {
 
     stop();
   });
+
+  it('renders balance sheet table header with sticky column classes and container for sticky header support', async () => {
+    const { stop } = setup(loadSaved('sept27'));
+    await tab('balance-sheet');
+
+    const container = $('.bs-table-container');
+    expect(container).not.toBeNull();
+
+    const table = $('#balanceSheetTable');
+    expect(table).not.toBeNull();
+    expect(container.contains(table)).toBe(true);
+
+    const thead = $('#bsTableHead');
+    expect(thead).not.toBeNull();
+
+    const headers = $$('th', thead);
+    expect(headers.length).toBeGreaterThanOrEqual(6);
+    expect(headers[0].classList.contains('bs-sticky-col')).toBe(true);
+    expect(headers[0].textContent).toContain('Account / Category Name');
+    expect(headers[1].textContent).toContain('Institution / Notes');
+
+    stop();
+  });
 });
 

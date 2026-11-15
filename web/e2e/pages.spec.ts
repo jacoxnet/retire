@@ -41,6 +41,15 @@ test('simple mode hides the advanced tabs', async ({ page }) => {
   await expect(page.locator('#balance-sheet-tab')).toHaveCount(0);
   await page.click('label[for="mode_advanced"]');
   await expect(page.locator('#balance-sheet-tab')).toBeVisible();
+
+  // Sticky header row on Balance Sheet remains docked under the top navbar when scrolling
+  await page.click('#balance-sheet-tab');
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 600);
+  });
+  const bsTh = await page.locator('#balance-sheet th').first().boundingBox();
+  expect(bsTh?.y).toBeCloseTo(64, 0);
 });
 
 test('Save / Load / Clear', async ({ page }) => {

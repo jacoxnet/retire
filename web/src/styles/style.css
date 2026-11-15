@@ -2046,6 +2046,41 @@ tbody tr:hover {
 }
 
 /* ==========================================================================
+   Item 2C-2: Sticky Table Header for Balance Sheet (Page Scrolling)
+   ========================================================================== */
+#balance-sheet .bs-table-container {
+  overflow: visible !important;
+}
+
+#balance-sheet .bs-scroll-proxy {
+  display: none !important;
+}
+
+#balance-sheet .bs-table thead th {
+  position: sticky !important;
+  top: var(--navbar-height, 64px) !important;
+  z-index: 100 !important;
+  background-color: #f1f5f9 !important;
+  border-bottom: 2px solid var(--border-color) !important;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+}
+
+#balance-sheet .bs-table thead .bs-sticky-col {
+  z-index: 105 !important;
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] #balance-sheet .bs-table thead th {
+  background-color: var(--bg-tertiary) !important;
+  border-bottom: 2px solid var(--border-color) !important;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] #balance-sheet .bs-table thead .bs-sticky-col {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* ==========================================================================
    Item 2E: Stale Results Amber Alert Banner
    ========================================================================== */
 #staleResultsBanner {
