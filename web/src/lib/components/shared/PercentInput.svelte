@@ -15,19 +15,53 @@
 
   let focused = $state(false);
   let text = $state('');
+  let hasJustFocused = false;
 
   $effect.pre(() => {
     const v = value;
     if (!focused) text = formatPercent(v ?? emptyValue);
   });
 
+  function handleFocus(e: FocusEvent) {
+    focused = true;
+    hasJustFocused = true;
+    const target = e.currentTarget as HTMLInputElement;
+    target.select?.();
+    setTimeout(() => {
+      if (document.activeElement === target) {
+        target.select?.();
+      }
+    }, 0);
+  }
+
+  function handleMouseUp(e: MouseEvent) {
+    if (hasJustFocused) {
+      hasJustFocused = false;
+      e.preventDefault();
+      (e.currentTarget as HTMLInputElement).select?.();
+    }
+  }
+
+  function handleClick(e: MouseEvent) {
+    if (hasJustFocused) {
+      hasJustFocused = false;
+      (e.currentTarget as HTMLInputElement).select?.();
+    }
+  }
+
   function oninput(e: Event) {
-    text = (e.currentTarget as HTMLInputElement).value;
+    const input = e.currentTarget as HTMLInputElement;
+    const sanitized = input.value.replace(/^(-?)0+(\d)/, '$1$2');
+    if (sanitized !== input.value) {
+      input.value = sanitized;
+    }
+    text = sanitized;
     value = parseNumberText(text) ?? emptyValue;
   }
 
   function onblur() {
     focused = false;
+    hasJustFocused = false;
     text = formatPercent(value ?? emptyValue);
   }
 </script>
@@ -39,7 +73,9 @@
   {id}
   {title}
   value={text}
-  onfocus={() => (focused = true)}
+  onfocus={handleFocus}
+  onmouseup={handleMouseUp}
+  onclick={handleClick}
   {oninput}
   {onblur}
 />

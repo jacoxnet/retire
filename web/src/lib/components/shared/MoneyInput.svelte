@@ -17,6 +17,7 @@
 
   let focused = $state(false);
   let text = $state('');
+  let hasJustFocused = false;
 
   // Re-format from the value unless the user is typing in the field.
   $effect.pre(() => {
@@ -24,14 +25,47 @@
     if (!focused) text = (v === null || v === undefined) && placeholder ? '' : formatMoney(v ?? 0, dollarSign);
   });
 
+  function handleFocus(e: FocusEvent) {
+    focused = true;
+    hasJustFocused = true;
+    const target = e.currentTarget as HTMLInputElement;
+    target.select?.();
+    setTimeout(() => {
+      if (document.activeElement === target) {
+        target.select?.();
+      }
+    }, 0);
+  }
+
+  function handleMouseUp(e: MouseEvent) {
+    if (hasJustFocused) {
+      hasJustFocused = false;
+      e.preventDefault();
+      (e.currentTarget as HTMLInputElement).select?.();
+    }
+  }
+
+  function handleClick(e: MouseEvent) {
+    if (hasJustFocused) {
+      hasJustFocused = false;
+      (e.currentTarget as HTMLInputElement).select?.();
+    }
+  }
+
   function oninput(e: Event) {
-    text = (e.currentTarget as HTMLInputElement).value;
+    const input = e.currentTarget as HTMLInputElement;
+    const sanitized = input.value.replace(/^(-?\$?)0+(\d)/, '$1$2');
+    if (sanitized !== input.value) {
+      input.value = sanitized;
+    }
+    text = sanitized;
     const parsed = parseNumberText(text);
     value = parsed ?? (placeholder ? undefined : 0);
   }
 
   function handleBlur() {
     focused = false;
+    hasJustFocused = false;
     text = (value === null || value === undefined) && placeholder ? '' : formatMoney(value ?? 0, dollarSign);
     onblur?.();
   }
@@ -44,7 +78,9 @@
   {id}
   value={text}
   {placeholder}
-  onfocus={() => (focused = true)}
+  onfocus={handleFocus}
+  onmouseup={handleMouseUp}
+  onclick={handleClick}
   {oninput}
   onblur={handleBlur}
 />
