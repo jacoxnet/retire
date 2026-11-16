@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeResults, runStressTest, type RunProgress } from '../../src/lib/app/runResults';
 import { resultsContext } from '../../src/lib/app/results';
+import { runDeterministic } from '../../src/lib/engine/deterministic';
 import { type ChunkRunner, localRunner } from '../../src/lib/engine/mc';
 import { deepClose, FIXTURE_TOL, fixtureIndex, loadPlanFixture } from '../fixtures';
 
@@ -80,6 +81,76 @@ describe('computeResults', () => {
     expect(r.stress_test.desired_spending).toBe(r.achieved_spending);
     expect(r.stress_test.regular_results.run_success).toBe(r.run_success);
     checkProgress(seen, ['search', 'mc', 'stress']);
+  }, 60_000);
+
+  it('a guardrails plan solving its starting spending: search at 99%, full run and stress test under the rules', async () => {
+    const { plan } = loadPlanFixture('sept27', 'imported');
+    // The plan's own target (and a stale goal-seeking flag) must not matter in this mode.
+    const gk = { ...plan, runs: 600, simulation_type: 'guyton_klinger', goal_seeking: true, target_success_rate: 50 };
+    const { runner, jobs } = countingRunner();
+    const seen: RunProgress[] = [];
+    const r = await computeResults(gk, { runner, chunks: 2, seed: 3, goalSeekRunsCap: 200, onProgress: (p) => seen.push(p) });
+
+    expect(r.simulation_type).toBe('guyton_klinger');
+    expect(r.achieved_spending).toBeGreaterThan(0);
+    expect(r.achieved_success_rate).toBeGreaterThanOrEqual(99);
+    const search = jobs.slice(0, r.searches!);
+    expect(search.every((j) => j.paths === 200 && j.testSpending !== null && !j.stress)).toBe(true);
+    expect(jobs.slice(r.searches!)).toEqual([
+      { paths: 600, testSpending: r.achieved_spending, stress: false },
+      { paths: 600, testSpending: null, stress: true },
+    ]);
+    checkProgress(seen, ['search', 'mc', 'stress']);
+
+    // The page's plan carries the solved spending, with the survivor's in proportion.
+    expect(r.desired_spending).toBe(r.achieved_spending);
+    expect(r.plan_data_json.desired_spending).toBe(r.achieved_spending);
+    expect(r.plan_data_json.survivor_spending / r.achieved_spending!).toBeCloseTo(plan.survivor_spending / plan.desired_spending, 12);
+    expect(r.original_plan_data_json?.desired_spending).toBe(plan.desired_spending);
+
+    // Monte Carlo, the projection and the stress test all ran under the rules from that spending.
+    const g = r.guardrails!;
+    const inf = 1 + plan.inflation_rate / 100;
+    expect(g.starting_withdrawal).toBeCloseTo(r.achieved_spending! * inf ** g.start_year_index, 6);
+    expect(g.starting_withdrawal_real).toBeCloseTo(r.achieved_spending!, 6);
+    expect(r.run_success).toBeGreaterThan(95);
+    expect(r.det_rows).toEqual(runDeterministic(r.plan_data_json));
+    expect(r.det_rows[g.start_year_index].desired_spending).toBeCloseTo(g.starting_withdrawal, 6);
+    expect(r.det_rows.some((row) => row.milestones.some((m: string) => m.startsWith('Guardrails: Spending')))).toBe(true);
+    expect(r.baseline_det_rows?.[g.start_year_index].desired_spending).toBeCloseTo(plan.desired_spending * inf ** g.start_year_index, 6);
+    expect(r.stress_test.stress_results.guardrails?.starting_withdrawal).toBeCloseTo(g.starting_withdrawal, 6);
+    expect(r.stress_test.regular_results.guardrails).toEqual(g);
+    expect(r.stress_test.desired_spending).toBe(r.achieved_spending);
+
+    // Another scenario keeps the rules and the baseline.
+    const again = await runStressTest(r.plan_data_json, { scenarioKey: '1973_stagflation', assetAllocation: 'matched', crisisTiming: 'retirement' },
+      r.stress_test.regular_results, { runner: localRunner, chunks: 1, seed: 9 });
+    expect(again.regular_results.guardrails).toEqual(g);
+    expect(again.stress_results.guardrails?.pct_runs_freeze).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('a guardrails plan with its own spending: no search, the rules run from the plan\'s spending', async () => {
+    const { plan } = loadPlanFixture('sept27', 'imported');
+    const gk = { ...plan, runs: 400, simulation_type: 'guyton_klinger', gk_spending_mode: 'specified' };
+    const { runner, jobs } = countingRunner();
+    const seen: RunProgress[] = [];
+    const r = await computeResults(gk, { runner, chunks: 2, seed: 3, onProgress: (p) => seen.push(p) });
+
+    expect(jobs).toEqual([{ paths: 400, testSpending: null, stress: false }, { paths: 400, testSpending: null, stress: true }]);
+    checkProgress(seen, ['mc', 'stress']);
+    expect(r.achieved_spending).toBeUndefined();
+    expect(r.baseline_det_rows).toBeUndefined();
+    expect(r.desired_spending).toBe(plan.desired_spending);
+    const g = r.guardrails!;
+    expect(g.starting_withdrawal_real).toBeCloseTo(plan.desired_spending, 6);
+    expect(r.det_rows[g.start_year_index].desired_spending).toBeCloseTo(g.starting_withdrawal, 6);
+    expect(r.stress_test.stress_results.guardrails).toBeDefined();
+
+    // The same plan in the regular mode has no guardrail statistics.
+    const regular = await computeResults({ ...gk, simulation_type: 'regular' }, { runner: localRunner, chunks: 2, seed: 3 });
+    expect(regular.guardrails).toBeUndefined();
+    expect(regular.stress_test.regular_results.guardrails).toBeUndefined();
+    expect(regular.det_rows.every((row) => !row.milestones.some((m: string) => m.startsWith('Guardrails')))).toBe(true);
   }, 60_000);
 
   it('a stress test for another scenario reuses the given baseline', async () => {

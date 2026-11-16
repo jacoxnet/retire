@@ -120,6 +120,59 @@ test('Enter -> Results: runs on the workers, re-runs, and caches', async ({ page
   await expect(page.locator('#input_desired_spending')).toHaveValue('120000');
 });
 
+test('Guardrails mode: solves the starting spending on the workers, then runs from the plan\'s own', async ({ page }) => {
+  await page.goto('/manage/');
+  await page.setInputFiles('#jsonFileInput', join(SAVED_DIR, 'sept27.json'));
+  await page.waitForURL((u) => u.pathname === '/');
+  await page.click('#viewResultsNav');
+  await page.waitForURL('**/results/');
+  await expect(page.locator('#mcResultsCard')).toBeVisible({ timeout: 60_000 });
+
+  // Switch modes; the starting spending is solved for a 99% success rate by default.
+  // (Fewer paths, so the search's ~20 Monte Carlo runs stay quick.)
+  await page.fill('#input_runs', '5000');
+  await page.check('#results_sim_type_guardrails');
+  await expect(page.locator('#results_gk_solve')).toBeChecked();
+  await expect(page.locator('#results_target_success_group')).toBeHidden();
+  await page.click('#btnStaleReRun');
+  await expect(page.locator('#gkStartingWithdrawal')).toBeVisible({ timeout: 60_000 });
+  const plan = await savedPlan(page);
+  expect(plan.simulation_type).toBe('guyton_klinger');
+  expect(plan.gk_spending_mode).toBe('solve');
+  expect(plan.desired_spending).toBe(144000); // solving doesn't touch the plan's own spending
+
+  const rate = parseFloat((await page.locator('#mcResultsCard .display-5').first().textContent())!);
+  expect(rate).toBeGreaterThan(97); // solved on other random paths, so close to 99 rather than exactly
+  await expect(page.locator('#gkStartingWithdrawal')).toContainText('Solved for a 99% success rate');
+  await expect(page.locator('#gkWithdrawalTable tbody tr')).toHaveCount(7);
+  for (const id of ['#gkPctCut', '#gkPctRaise', '#gkPctFreeze']) {
+    const pct = parseFloat((await page.textContent(id))!);
+    expect(pct).toBeGreaterThan(0);
+    expect(pct).toBeLessThanOrEqual(100);
+  }
+  await expect(page.locator('#input_desired_spending')).toHaveCount(0);
+
+  // The projection applies the rules too, and the stress test compares spending.
+  await page.click('#projection-tab');
+  await expect(page.locator('#projection #scenarioComparisonBar')).toContainText('Solved Starting Spending under Guardrails');
+  await expect(page.locator('#projection tbody .badge', { hasText: 'Guardrails Set' })).toHaveCount(1);
+  expect(await page.locator('#projection tbody .badge', { hasText: 'Guardrails: Spending' }).count()).toBeGreaterThan(0);
+  await page.click('#stress-tab');
+  await expect(page.locator('#stressGuardrailsTable tbody tr')).toHaveCount(6);
+  await page.selectOption('#stressScenarioSelect', '1973_stagflation');
+  await expect(page.locator('#stressScenarioTitle')).toContainText('Stagflation', { timeout: 60_000 });
+  await expect(page.locator('#stressGuardrailsTable tbody tr')).toHaveCount(6);
+
+  // The plan's own spending instead: no search, and the amount can be edited again.
+  await page.click('#stats-tab');
+  await page.check('#results_gk_specified');
+  await page.click('#btnStaleReRun');
+  await expect(page.locator('#gkStartingWithdrawal')).toContainText('as entered', { timeout: 60_000 });
+  await expect(page.locator('#input_desired_spending')).toHaveValue('144000');
+  await expect(page.locator('#scenarioComparisonBar')).toHaveCount(0);
+  expect((await savedPlan(page)).gk_spending_mode).toBe('specified');
+});
+
 test('Results lists the errors of an invalid plan instead of running', async ({ page }) => {
   const plan = richPlan();
   plan.user_age = 10;

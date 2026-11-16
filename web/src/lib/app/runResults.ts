@@ -4,6 +4,7 @@
 import type { StressSpec } from '../engine/crisis';
 import { runDeterministic } from '../engine/deterministic';
 import { earliestRetirementSearch, type EarliestRetirementResult } from '../engine/earliestRetirement';
+import { GK_TARGET_SUCCESS_RATE, guardrailSolves, isGuardrailPlan } from '../engine/guardrails';
 import { binarySearch, type ChunkRunner, generateRuns, type GoalSeekResult, type McStats } from '../engine/mc';
 import type { Dict } from '../engine/py';
 import { runHistoricalStressTest } from '../engine/stress';
@@ -50,7 +51,10 @@ const stripSpaghetti = ({ mc_spaghetti_paths: _, ...rest }: McStats) => rest;
 /** Everything the Results page shows for a plan (a plain, cloneable plan object). */
 export async function computeResults(plan: Dict, opts: RunOptions): Promise<Results> {
   const { runner, chunks } = opts;
-  const goal = Boolean(plan.goal_seeking);
+  // Under the guardrail rules the starting spending is solved for unless the plan supplies it.
+  const guardrails = isGuardrailPlan(plan);
+  const solveGuardrails = guardrailSolves(plan);
+  const goal = (Boolean(plan.goal_seeking) && !guardrails) || solveGuardrails;
   const isEarliestRet = plan.simulation_type === 'earliest_retirement';
   const hasSearch = goal || isEarliestRet;
   const stages: RunStage[] = hasSearch ? ['search', 'mc', 'stress'] : ['mc', 'stress'];
@@ -79,7 +83,9 @@ export async function computeResults(plan: Dict, opts: RunOptions): Promise<Resu
   } else if (goal) {
     const cap = opts.goalSeekRunsCap ?? GOAL_SEEK_RUNS_CAP;
     const searchPlan = Number(plan.runs) > cap ? { ...plan, runs: cap } : plan;
-    const found = await stage('search', (onProgress) => binarySearch(searchPlan, { runner, chunks, seed: seed(1), onProgress }));
+    const found = await stage('search', (onProgress) => binarySearch(searchPlan, {
+      runner, chunks, seed: seed(1), onProgress, ...(solveGuardrails && { targetSuccessRate: GK_TARGET_SUCCESS_RATE }),
+    }));
     solved = found;
     const origSpending = Number(plan.desired_spending) || 0;
     const survivorSpending = origSpending > 0 && plan.survivor_spending

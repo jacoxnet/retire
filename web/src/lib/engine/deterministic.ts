@@ -3,6 +3,9 @@
 // tables. Shares the RMD/tax/withdrawal waterfall with the Monte Carlo kernel.
 import { FILING_STATUS_MAP } from './constants';
 import {
+  GK_EVENT_CUT, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START, guardrailConfig, guardrailYear, newGuardrailState,
+} from './guardrails';
+import {
   INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, inheritedLedger, ledgerRequired, ledgerSettle,
   ledgerTotals, ledgerTransfer,
 } from './inherited';
@@ -13,6 +16,7 @@ import {
   getContributionsForYear,
   getLifeInsuranceRouting,
   inheritedAccounts,
+  prepareNumbaInputs,
   resolveAge,
   type SimInputs,
 } from './inputs';
@@ -53,6 +57,8 @@ export interface StepParams {
   desired_spending_start_age: number;
   desired_spending: number;
   survivor_spending: number | null;
+  /** This year's regular spending as decided by the guardrails, replacing the indexed desired spending. */
+  regular_spending?: number | null;
   adjust_spending_inflation: boolean;
   inflation_rate: number;
   additional_spending_list: Dict[];
@@ -286,7 +292,9 @@ export function simulateStep(p: StepParams): StepResult {
 
   // 4. Desired spending
   let desiredSpendingT = 0.0;
-  if (userAgeT >= desiredSpendingStartAge) {
+  if (p.regular_spending !== null && p.regular_spending !== undefined) {
+    desiredSpendingT = p.regular_spending;
+  } else if (userAgeT >= desiredSpendingStartAge) {
     let baseSpending = desiredSpending;
     if (isMarried && t > tFirstDeath) baseSpending = survivorSpending !== null ? survivorSpending : desiredSpending;
     desiredSpendingT = baseSpending * (adjustSpendingInflation ? inflPow(t) : 1.0);
@@ -591,6 +599,8 @@ type Series = ArrayLike<number>;
 /**
  * Run one path of per-year returns through simulateStep. testSpending overrides
  * desired spending (goal seeking) and scales survivor spending in proportion.
+ * Under the guardrail rules each year's result also carries `guardrail`: the year's
+ * events (GK_EVENT_* flags) and the initial withdrawal rate once established.
  */
 export function runSimulationPath(
   inputs: SimInputs, returnsPretax: Series, returnsRoth: Series, returnsTaxable: Series, returnsHsa: Series,
@@ -643,6 +653,10 @@ export function runSimulationPath(
   const { user_age: userAge, spouse_age: spouseAge, current_year: currentYear } = inputs;
   const contrib = (t: number, d: Dict) => getContributionsForYear(t, userAge, isMarried, spouseAge, currentYear, d);
 
+  const gk = inputs.guardrails ? guardrailConfig(inputs, prepareNumbaInputs(inputs, testSpending)) : null;
+  const gkState = newGuardrailState();
+  let priorGrowth = 0.0;
+
   const results: StepResult[] = [];
   for (let t = 0; t < inputs.total_years; t++) {
     const userAlive = userAge + t <= inputs.user_age_death;
@@ -655,6 +669,15 @@ export function runSimulationPath(
     inhRet[INH_ROTH_SPOUSE] = rInhRothSpouse[t];
     ledgerRequired(inhLedger, t, inhRet, userAlive, spouseAlive, inhReq);
 
+    const lifeInsurancePayout = t === routing.taxable_deposit_t ? routing.taxable_deposit_amt : 0.0;
+    let regularSpending: number | null = null;
+    if (gk !== null) {
+      const portfolioStart = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse
+        + inhBal[INH_PRE_USER] + inhBal[INH_PRE_SPOUSE] + inhBal[INH_ROTH_USER] + inhBal[INH_ROTH_SPOUSE]
+        + Math.max(0.0, lifeInsurancePayout);
+      regularSpending = guardrailYear(gk, gkState, t, portfolioStart, priorGrowth);
+    }
+
     const res = simulateStep({
       t,
       user_age: userAge,
@@ -666,6 +689,7 @@ export function runSimulationPath(
       desired_spending_start_age: inputs.desired_spending_start_age,
       desired_spending: desiredSpending,
       survivor_spending: survivorSpending,
+      regular_spending: regularSpending,
       adjust_spending_inflation: inputs.adjust_spending_inflation,
       inflation_rate: inputs.inflation_rate,
       additional_spending_list: inputs.additional_spending,
@@ -698,7 +722,7 @@ export function runSimulationPath(
       contrib_hsa_spouse: isMarried ? contrib(t, inputs.spouse_hsa_data) : 0.0,
       user_ret_age: get(inputs, 'user_ret_age', 65),
       spouse_ret_age: get(inputs, 'spouse_ret_age', 65),
-      life_insurance_payout: t === routing.taxable_deposit_t ? routing.taxable_deposit_amt : 0.0,
+      life_insurance_payout: lifeInsurancePayout,
       taxable_dividend_yield: divYield,
       taxable_qualified_dividend_pct: qualPct,
       taxable_interest_yield: intYield,
@@ -719,6 +743,10 @@ export function runSimulationPath(
       inh_roth_user_req: inhReq[INH_ROTH_USER],
       inh_roth_spouse_req: inhReq[INH_ROTH_SPOUSE],
     });
+    if (gk !== null) {
+      res.guardrail = { event: gkState.event, initial_withdrawal_rate: gkState.iwr };
+      priorGrowth = get(get(res, 'growth', {}), 'total', 0.0);
+    }
     results.push(res);
     const end = res.ending_assets;
     pretaxUser = end.pretax_user;
@@ -835,6 +863,14 @@ export function runDeterministic(plan: Dict): Dict[] {
       }
     }
     if (t === years - 1 && terminal > 0) milestones.push(`Life Insurance Payout to Estate / Heirs (+$${fmtCommas0(terminal)})`);
+    const guardrail: Dict | undefined = res.guardrail;
+    if (guardrail) {
+      const event: number = guardrail.event;
+      if (event & GK_EVENT_START) milestones.push(`Guardrails Set (Initial Withdrawal Rate ${(guardrail.initial_withdrawal_rate * 100.0).toFixed(1)}%)`);
+      if (event & GK_EVENT_FREEZE) milestones.push('Guardrails: Inflation Raise Skipped');
+      if (event & GK_EVENT_CUT) milestones.push('Guardrails: Spending Cut 10%');
+      if (event & GK_EVENT_RAISE) milestones.push('Guardrails: Spending Raised 10%');
+    }
 
     rows.push({
       year_index: t,
@@ -860,6 +896,7 @@ export function runDeterministic(plan: Dict): Dict[] {
       ending_assets: res.ending_assets,
       withdrawals: res.withdrawals,
       shortfall: get(res, 'shortfall', 0.0),
+      ...(guardrail ? { guardrail } : {}),
     });
   }
   return rows;

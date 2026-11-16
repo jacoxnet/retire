@@ -107,6 +107,36 @@ describe('ResultsView', () => {
     expect((store.cachedResults as Results).achieved_spending).toBeGreaterThan(0);
   }, 60_000);
 
+  it('switches to the guardrails mode from the mode card, then to the plan\'s own spending', async () => {
+    const { store, q } = setup({ runs: 200 });
+    await ready(q);
+    const entered = store.plan.desired_spending;
+    await fireEvent.click(q('#results_sim_type_guardrails')!);
+    await fireEvent.submit(q('#resultsInputsForm')!);
+    expect(store.plan.simulation_type).toBe('guyton_klinger');
+    expect(store.plan.gk_spending_mode).toBe('solve');
+    expect(store.plan.goal_seeking).toBe(false);
+    // While it runs, the progress card says a search is under way.
+    expect(q('#runProgressCard')?.textContent).toContain('solving for the target goal');
+    await waitFor(() => expect(q('#gkStartingWithdrawal')).not.toBeNull(), { timeout: 30_000 });
+    const solved = store.cachedResults as Results;
+    expect(solved.achieved_spending).toBeGreaterThan(0);
+    expect(solved.guardrails?.starting_withdrawal_real).toBeCloseTo(solved.achieved_spending!, 6);
+    // Solving leaves the plan's own spending alone.
+    expect(store.plan.desired_spending).toBe(entered);
+    expect(q('#input_desired_spending')).toBeNull();
+
+    await fireEvent.click(q('#results_gk_specified')!);
+    await fireEvent.submit(q('#resultsInputsForm')!);
+    expect(store.plan.gk_spending_mode).toBe('specified');
+    expect(q('#runProgressCard')?.textContent).not.toContain('solving for the target goal');
+    await waitFor(() => expect(q('#gkStartingWithdrawal')?.textContent).toContain('as entered'), { timeout: 30_000 });
+    const own = store.cachedResults as Results;
+    expect(own.achieved_spending).toBeUndefined();
+    expect(own.guardrails?.starting_withdrawal_real).toBeCloseTo(entered!, 6);
+    expect((q('#input_desired_spending') as HTMLInputElement).value).toBe(String(entered));
+  }, 60_000);
+
   it('adopts solved spending into plan when clicking adopt button', async () => {
     const { store, q } = setup({ runs: 200 });
     await ready(q);

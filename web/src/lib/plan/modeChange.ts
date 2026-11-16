@@ -1,5 +1,6 @@
 // Results-page edits: the simulation mode switch and the Simulation Inputs card
 // (apply_mode_change in core/views.py). Inputs arrive as entered (strings or numbers).
+import { GK_SIMULATION_TYPE } from '../engine/guardrails';
 import { pyRound } from '../engine/py';
 import { syncAccountsToBalanceSheet } from './balanceSheet';
 import { getFloat, getInt } from './coerce';
@@ -34,8 +35,16 @@ export function applyModeChange(plan: Plan, input: ModeChangeInput): ModeChangeM
   const requestedType = has('simulation_type') ? input.simulation_type : 'regular';
   const isGoal = requestedType === 'goal_seeking';
   const isEarliestRet = requestedType === 'earliest_retirement';
-  data.simulation_type = isGoal ? 'goal_seeking' : isEarliestRet ? 'earliest_retirement' : 'regular';
+  const isGuardrails = requestedType === GK_SIMULATION_TYPE;
+  data.simulation_type = isGoal ? 'goal_seeking' : isEarliestRet ? 'earliest_retirement' : isGuardrails ? GK_SIMULATION_TYPE : 'regular';
   data.goal_seeking = isGoal;
+
+  // Guardrails: solve the starting spending (the default) or use the plan's desired spending.
+  if (has('gk_spending_mode')) {
+    data.gk_spending_mode = input.gk_spending_mode === 'specified' ? 'specified' : 'solve';
+  } else if (isGuardrails && data.gk_spending_mode !== 'specified') {
+    data.gk_spending_mode = 'solve';
+  }
 
   if (isGoal || isEarliestRet) {
     const modeName = isGoal ? 'Maximum Spending' : 'Earliest Retirement Age';

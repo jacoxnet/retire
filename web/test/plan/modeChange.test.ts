@@ -65,6 +65,27 @@ describe('change_mode tests', () => {
     expect(plan.earliest_retirement_strategy).toBe('same_age');
   });
 
+  it('switches to the guardrails mode, solving the starting spending unless told to use the plan\'s', () => {
+    const plan = { ...getDefaultData(), target_success_rate: 85.0, desired_spending: 60000 };
+    expect(applyModeChange(plan, { simulation_type: 'guyton_klinger' })).toEqual([]);
+    expect(plan.simulation_type).toBe('guyton_klinger');
+    expect(plan.goal_seeking).toBe(false);
+    expect(plan.gk_spending_mode).toBe('solve');
+    // The mode has its own fixed target; the plan's is left for the other modes.
+    applyModeChange(plan, { simulation_type: 'guyton_klinger', gk_spending_mode: 'specified', target_success_rate: '150', desired_spending: '72000' });
+    expect(plan.gk_spending_mode).toBe('specified');
+    expect(plan.target_success_rate).toBe(85.0);
+    expect(plan.desired_spending).toBe(72000);
+    // The choice is remembered when the form doesn't send it, and through other modes.
+    applyModeChange(plan, { simulation_type: 'guyton_klinger' });
+    expect(plan.gk_spending_mode).toBe('specified');
+    applyModeChange(plan, { simulation_type: 'regular' });
+    expect(plan.simulation_type).toBe('regular');
+    expect(plan.gk_spending_mode).toBe('specified');
+    applyModeChange(plan, { simulation_type: 'guyton_klinger', gk_spending_mode: 'anything else' });
+    expect(plan.gk_spending_mode).toBe('solve');
+  });
+
   it('clamps invalid target success rate for earliest_retirement with message', () => {
     const plan = getDefaultData();
     const notes = applyModeChange(plan, { simulation_type: 'earliest_retirement', target_success_rate: '0.5' });

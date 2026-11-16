@@ -79,6 +79,7 @@ export async function runHistoricalStressTest(
       mc_p10: regular.mc_p10,
       mc_p50: regular.mc_p50,
       mc_p90: regular.mc_p90,
+      ...(regular.guardrails && { guardrails: regular.guardrails }),
     },
     deltas,
     chart_labels: chartLabels,

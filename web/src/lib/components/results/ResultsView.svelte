@@ -8,6 +8,7 @@
   import { djangoMoney } from '../../app/resultsFormat';
   import { computeResults, type RunEngine, type RunProgress, runStressTest } from '../../app/runResults';
   import type { StressSpec } from '../../engine/crisis';
+  import { guardrailSolves, isGuardrailPlan } from '../../engine/guardrails';
   import type { ModeChangeInput } from '../../plan/modeChange';
   import type { PlanStore } from '../../plan/store.svelte';
   import type { Plan } from '../../plan/types';
@@ -175,7 +176,7 @@
     {#each messages as m, i (i)}
       <div class="alert alert-{m.level === 'error' ? 'danger' : m.level} text-center" role="alert">{m.text}</div>
     {/each}
-    <RunProgressCard progress={view.progress} runs={Number(store.plan.runs) || 50000} goalSeeking={Boolean(store.plan.goal_seeking || store.plan.simulation_type === 'earliest_retirement')} onCancel={stop} />
+    <RunProgressCard progress={view.progress} runs={Number(store.plan.runs) || 50000} goalSeeking={isGuardrailPlan(store.plan) ? guardrailSolves(store.plan) : Boolean(store.plan.goal_seeking || store.plan.simulation_type === 'earliest_retirement')} onCancel={stop} />
   {:else if view.kind === 'invalid'}
     <div class="alert alert-danger" role="alert" id="resultsPlanErrors">
       <p class="mb-2 fw-semibold">The plan needs a few corrections before it can be simulated:</p>
