@@ -1,0 +1,32 @@
+Add a fourth simulation mode called "Guyton-Klinger Guardrails" to the existing three modes.
+
+- Timeline & Activation (Pre-Retirement vs. Retirement Horizon):
+  - Pre-Retirement Phase: If the plan begins prior to retirement, run all pre-retirement years under standard accumulation rules (savings, growth, scheduled pre-retirement expenses). Guardrail rules remain inactive during accumulation.
+  - Retirement Year 0: The first year of retirement decumulation is designated as "Retirement Year 0". Establish the Initial Withdrawal Rate (IWR) at the beginning of this year based on the portfolio value at that time.
+  - Horizon Definition: The "last 15 years" refers strictly to the final 15 years of the retirement decumulation phase (e.g., from retirement age to the terminal plan age).
+- Determining Initial Retirement Spending (Goal-Seeking with Guardrails):
+  - To determine the initial regular retirement spending in Retirement Year 0, perform a binary search across test Monte Carlo runs to find the maximum starting spending that achieves a 99% success rate (portfolio balance > $0 at end of plan).
+  - \[Optional toggle\]: If the user enters a specific spending amount rather than goal-seeking, bypass the binary search and run the guardrails forward using that spending as the Retirement Year 0 baseline.
+- Annual Guardrail Rules (Retirement Year +1 and Afterwards): At the beginning of each retirement year following Year 0, evaluate adjustments in the following sequence:
+  - Step 1: Inflation Adjustment (Guyton-Klinger 2006 Withdrawal Rule)
+    - Calculate the prior year's total nominal portfolio return.
+    - If the prior year's return was negative AND the current withdrawal rate (before this year's inflation adjustment) is higher than the initial withdrawal rate (IWR), freeze regular retirement spending (skip the inflation increase for this year).
+    - In all other cases, increase regular retirement spending by the full annual inflation rate (with no 6% cap).
+    - Skipped inflation increases are permanent and never retroactively caught up in future years.
+  - Step 2: Calculate Current Withdrawal Rate on Net Portfolio Demand
+    - Calculate Net Portfolio Demand for the year: Net Demand = (Regular Retirement Spending after Step 1) + (Other Scheduled Expenses) - (Guaranteed Non-Portfolio Income such as Social Security and Pensions).
+    - Current Withdrawal Rate (CWR) = max(0, Net Demand) / Beginning-of-Year Portfolio Assets.
+  - Step 3: Guardrail Triggers (Capital Preservation & Prosperity Rules)
+    - Upper Guardrail (Cut): If CWR > 1.20 \* IWR, reduce regular retirement spending by 10%. *Exception:*Do NOT apply this cut during the last 15 years of the retirement planning horizon.
+    - Lower Guardrail (Raise): If CWR < 0.80 \* IWR, increase regular retirement spending by 10%. *Note:*This raise applies in all retirement years, including the final 15 years.
+    - Boundary Application: The 10% cut or raise adjusts only the baseline "regular retirement spending" component; non-portfolio income, tax calculations, and scheduled one-off items are applied independently as entered by the user.
+- Results & Presentation:
+  - Results Card: Display the achieved success rate along with dynamic guardrail metrics:
+    - Starting regular withdrawal ($ and % of initial portfolio)
+    - Mean, max, and min final-year withdrawal across runs
+    - Mean, max, and min peak-year withdrawal across runs
+    - Mean lowest-year withdrawal across runs
+    - Percentage of runs experiencing at least one cut, and percentage experiencing at least one raise
+  - Other tabs
+    - Deterministic Projection: Apply the guardrail sequence along the single deterministic expected-return path starting from the calculated Year 0 spending.
+    - Historical Stress Test: Run a Monte Carlo simulation overlaying the selected historical crisis return and inflation series, applying the identical guardrail rules throughout.
