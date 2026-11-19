@@ -27,7 +27,6 @@ function config(over: Partial<GuardrailConfig> = {}): GuardrailConfig {
     survivorScale: 1,
     adjustInflation: true,
     infFactors: Float64Array.from({ length: years }, (_, t) => INF ** t),
-    otherNet: new Float64Array(years),
     ...over,
   };
 }
@@ -134,47 +133,19 @@ describe('guardrailYear', () => {
     expect(s.cuts).toBe(1);
   });
 
-  it('measures the withdrawal rate on net demand: other expenses in, non-portfolio income out', () => {
-    const otherNet = new Float64Array(30);
-    otherNet[1] = -11200; // income of 11,200 in Retirement Year 0: net demand 30,000
-    otherNet[2] = 20000; // a one-off expense: 42,436 + 20,000 = 62,436
-    otherNet[3] = -60000; // income above spending: nothing drawn from the portfolio
-    const c = config({ otherNet });
-    const s = started(c);
-    expect(s.iwr).toBeCloseTo(0.03, 12);
-    // 62,436 / 1,000,000 = 6.24% > 3.6%: cut. Only regular spending is cut.
-    expect(guardrailYear(c, s, 2, 1000000, 1)).toBeCloseTo(41200 * INF * 0.9, 9);
-    // Net demand <= 0 is a 0% rate: raise.
-    const prior = s.spending;
-    expect(guardrailYear(c, s, 3, 1000000, 1)).toBeCloseTo(prior * INF * 1.1, 9);
-  });
-
-  it('a negative return with nothing drawn from the portfolio does not skip the raise', () => {
-    const otherNet = new Float64Array(30);
-    otherNet[2] = -60000;
-    const c = config({ otherNet });
-    const s = started(c);
-    guardrailYear(c, s, 2, 500000, -400000);
-    expect(s.event & GK_EVENT_FREEZE).toBe(0);
-  });
-
-  it('with income covering Retirement Year 0, the initial rate is set in the first year the portfolio is drawn on', () => {
-    const otherNet = new Float64Array(30);
-    otherNet[1] = -50000;
-    otherNet[2] = -45000;
-    otherNet[3] = -20000;
-    const c = config({ otherNet });
+  it('with no portfolio in Retirement Year 0, the initial rate is set in the first year there is one', () => {
+    const c = config();
     const s = newGuardrailState();
-    expect(guardrailYear(c, s, 1, 1000000, 1)).toBeCloseTo(41200, 9);
+    expect(guardrailYear(c, s, 1, 0, 1)).toBeCloseTo(41200, 9);
     expect([s.iwr, s.event]).toEqual([0, 0]);
-    // Until then spending follows inflation, even after a loss on a shrunken portfolio.
-    expect(guardrailYear(c, s, 2, 10000, -1)).toBeCloseTo(41200 * INF, 9);
+    // Until then spending follows inflation, even after a loss.
+    expect(guardrailYear(c, s, 2, 0, -1)).toBeCloseTo(41200 * INF, 9);
     expect([s.iwr, s.event]).toEqual([0, 0]);
     const y3 = guardrailYear(c, s, 3, 800000, 1);
     expect(y3).toBeCloseTo(41200 * INF * INF, 9);
     expect(s.event).toBe(GK_EVENT_START);
-    expect(s.iwr).toBeCloseTo((y3 - 20000) / 800000, 12);
-    expect(s.startPortfolio).toBe(1000000);
+    expect(s.iwr).toBeCloseTo(y3 / 800000, 12);
+    expect(s.startPortfolio).toBe(0);
   });
 
   it('an empty portfolio is an unbounded withdrawal rate: cuts until the final 15 years', () => {
@@ -235,14 +206,6 @@ describe('guardrailConfig', () => {
     expect(c.noCutFromT).toBe(inputs.total_years - 15);
     expect(c.baseSpending).toBe(inputs.desired_spending);
     expect(c.survivorScale).toBeCloseTo(inputs.survivor_spending / inputs.desired_spending, 12);
-  });
-
-  it('net of regular spending: additional spending and other taxes, less every income source', () => {
-    for (let t = 0; t < inputs.total_years; t++) {
-      expect(c.otherNet[t]).toBe(nb.add_spending_arr[t] + nb.other_taxes_arr[t]
-        - (nb.inc_taxable_arr[t] + nb.inc_ss_arr[t] + nb.inc_nontaxable_arr[t]));
-    }
-    expect(c.otherNet.some((v) => v < 0)).toBe(true);
   });
 
   it('a candidate spending keeps the survivor proportion', () => {
@@ -368,6 +331,25 @@ describe('deterministic projection under guardrails', () => {
     const regular = runDeterministic(loadPlanFixture('sept27', 'imported').plan);
     expect(deepClose(regular, loadPlanFixture('sept27', 'det_rows'), 1e-6)).toBeNull();
     expect(regular.every((r) => !('guardrail' in r))).toBe(true);
+  });
+
+  it('the withdrawal rate is regular spending only: a lumpy expense or a one-time receipt acts only through the portfolio', () => {
+    // Retire at 65 on $40,000 from $1,000,000 (4%). At 67 a one-time $200,000 expense; at 70 a $300,000 inheritance.
+    const quiet = runDeterministic(simplePlan());
+    const lumpy = runDeterministic(simplePlan({
+      additional_spending: [{ name: 'Roof', amount: 200000, start_age: 67, start_age_type: 'user', interval: 0, adjust_inflation: false }],
+      income_sources: [{
+        name: 'Inheritance', amount: 300000, frequency: 'one_time', start_age_type: 'user_specified', start_age_specified: 70,
+        end_age_type: 'user_specified', end_age_specified: 70, subject_to_tax: false, adjust_type: 'none', adjust_val: 0,
+      }],
+    }));
+    expect([2, 3, 4, 5].map((t) => quiet[t].guardrail.event)).toEqual([0, 0, 0, 0]);
+    // In their own year neither moves the rate (the year's beginning portfolio is the same as without them)...
+    expect(lumpy[2].guardrail.event).toBe(0);
+    expect(lumpy[2].desired_spending).toBeCloseTo(quiet[2].desired_spending, 6);
+    expect(lumpy[5].guardrail.event & GK_EVENT_RAISE).toBe(0);
+    // ...but the smaller portfolio after the expense does.
+    expect(lumpy[3].guardrail.event & GK_EVENT_CUT).toBe(GK_EVENT_CUT);
   });
 });
 

@@ -266,7 +266,7 @@
       <p class="mb-3 small text-secondary" id="gkInitialRate">
         <strong>Initial withdrawal rate the guardrails are measured against:</strong>
         {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
-        <span class="text-muted">(regular spending plus other scheduled expenses, less Social Security and other income, over the portfolio).</span>
+        <span class="text-muted">(regular spending over the portfolio; other expenses and income count only through their effect on the portfolio).</span>
       </p>
 
       <h5 class="text-secondary mt-3 border-bottom pb-2">Regular Withdrawal Across Runs</h5>

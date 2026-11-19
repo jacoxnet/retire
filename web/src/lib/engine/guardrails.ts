@@ -6,8 +6,10 @@
 //   1. Inflation rule: raise it by the year's inflation, unless the prior year's total
 //      portfolio return was negative and the withdrawal rate (before the raise) is above
 //      the initial withdrawal rate. A skipped raise is never made up.
-//   2. Current withdrawal rate = max(0, net portfolio demand) / beginning-of-year portfolio,
-//      where net demand = regular spending + other scheduled outflows - non-portfolio income.
+//   2. Current withdrawal rate = regular spending / beginning-of-year portfolio. Additional
+//      spending, other taxes and non-portfolio income are left out: they reach the rules
+//      only through their effect on the portfolio, so a lumpy expense, a one-time receipt,
+//      or the start or end of an income stream doesn't by itself trigger a cut or raise.
 //   3. Guardrails: above 120% of the initial rate, cut regular spending 10% (never in the
 //      final 15 years of the plan); below 80%, raise it 10%.
 // Years before Retirement Year 0 run under the ordinary accumulation rules.
@@ -60,17 +62,10 @@ export interface GuardrailConfig {
   adjustInflation: boolean;
   /** Cumulative inflation factor of each year. */
   infFactors: Float64Array;
-  /** Each year's additional spending + other scheduled taxes - non-portfolio income. */
-  otherNet: Float64Array;
 }
 
 export function guardrailConfig(inputs: SimInputs, nb: NumbaInputs): GuardrailConfig {
   const years = inputs.total_years;
-  const otherNet = new Float64Array(years);
-  for (let t = 0; t < years; t++) {
-    otherNet[t] = nb.add_spending_arr[t] + nb.other_taxes_arr[t]
-      - (nb.inc_taxable_arr[t] + nb.inc_ss_arr[t] + nb.inc_nontaxable_arr[t]);
-  }
   return {
     startT: Math.max(0, inputs.desired_spending_start_age - inputs.user_age),
     noCutFromT: years - GK_NO_CUT_YEARS,
@@ -81,7 +76,6 @@ export function guardrailConfig(inputs: SimInputs, nb: NumbaInputs): GuardrailCo
     survivorScale: nb.desired_spending > 0.0 ? nb.survivor_spending / nb.desired_spending : 1.0,
     adjustInflation: inputs.adjust_spending_inflation,
     infFactors: nb.inf_factors,
-    otherNet,
   };
 }
 
@@ -125,10 +119,10 @@ export function resetGuardrailState(s: GuardrailState): void {
   s.event = s.cuts = s.raises = s.freezes = 0;
 }
 
-/** Withdrawal rate of a net demand on a portfolio (unbounded when the portfolio is gone). */
-function withdrawalRate(netDemand: number, portfolio: number): number {
-  if (netDemand <= 0.0) return 0.0;
-  return portfolio > 0.0 ? netDemand / portfolio : Infinity;
+/** Withdrawal rate of regular spending on a portfolio (unbounded when the portfolio is gone). */
+function withdrawalRate(spending: number, portfolio: number): number {
+  if (spending <= 0.0) return 0.0;
+  return portfolio > 0.0 ? spending / portfolio : Infinity;
 }
 
 /**
@@ -137,22 +131,21 @@ function withdrawalRate(netDemand: number, portfolio: number): number {
  * the prior year's total investment growth in dollars (its sign is the sign of the
  * prior year's portfolio return). Call once per year, in order.
  *
- * The initial withdrawal rate is established in Retirement Year 0. If the portfolio
- * isn't drawn on that year (income covers spending), it is established in the first
- * year that it is; until then spending just follows inflation.
+ * The initial withdrawal rate is established in Retirement Year 0. (Should there be no
+ * regular spending or no portfolio that year, it is established in the first year there
+ * are both; until then spending just follows inflation.)
  */
 export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, portfolio: number, priorGrowth: number): number {
   s.event = 0;
   if (t < c.startT) return 0.0;
   const scale = t > c.tFirstDeath ? c.survivorScale : 1.0;
-  const other = c.otherNet[t];
 
   if (t === c.startT) {
     s.spending = c.baseSpending * (c.adjustInflation ? c.infFactors[t] : 1.0);
     s.startPortfolio = portfolio;
   } else if (c.adjustInflation) {
     // Step 1: the inflation rule
-    if (s.iwr > 0.0 && priorGrowth < 0.0 && withdrawalRate(s.spending * scale + other, portfolio) > s.iwr) {
+    if (s.iwr > 0.0 && priorGrowth < 0.0 && withdrawalRate(s.spending * scale, portfolio) > s.iwr) {
       s.event |= GK_EVENT_FREEZE;
       s.freezes += 1;
     } else {
@@ -162,7 +155,7 @@ export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, 
 
   if (s.iwr > 0.0) {
     // Steps 2 and 3: the current withdrawal rate against the guardrails
-    const cwr = withdrawalRate(s.spending * scale + other, portfolio);
+    const cwr = withdrawalRate(s.spending * scale, portfolio);
     if (cwr > GK_UPPER_GUARDRAIL * s.iwr) {
       if (t < c.noCutFromT) {
         s.spending *= 1.0 - GK_CUT;
@@ -175,9 +168,9 @@ export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, 
       s.raises += 1;
     }
   } else {
-    const net = s.spending * scale + other;
-    if (net > 0.0 && portfolio > 0.0) {
-      s.iwr = net / portfolio;
+    const spending = s.spending * scale;
+    if (spending > 0.0 && portfolio > 0.0) {
+      s.iwr = spending / portfolio;
       s.event |= GK_EVENT_START;
     }
   }
@@ -219,7 +212,7 @@ export interface GuardrailStats {
   starting_portfolio: number;
   /** starting_withdrawal as a percentage of starting_portfolio. */
   starting_withdrawal_pct: number;
-  /** Mean initial withdrawal rate (%) the guardrails are measured against (net of income). */
+  /** Mean initial withdrawal rate (%) the guardrails are measured against (regular spending only). */
   initial_withdrawal_rate: number;
   final_withdrawal: WithdrawalStat;
   final_withdrawal_real: WithdrawalStat;
