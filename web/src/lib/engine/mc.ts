@@ -7,6 +7,7 @@
 // `spaghetti` paths. Chunks run in-process (localRunner) or on the worker pool.
 import { crisisSetup, type CrisisSetup, type StressSpec } from './crisis';
 import { meanReturns, runSimulationPath } from './deterministic';
+import { addGuardrailPath, type GuardrailStats, guardrailStats, newGuardrailTotals } from './guardrails';
 import { extractSimInputs, prepareNumbaInputs, type SimInputs } from './inputs';
 import { type KernelParams, kernelParams, simulatePath } from './montecarlo';
 import { type Dict, get } from './py';
@@ -58,6 +59,8 @@ export interface ChunkResult {
   /** Float64 rows for paths start..start+spaghettiRows-1. */
   spaghetti: Float64Array | null;
   spaghettiRows: number;
+  /** The chunk's guardrail totals (guardrails.ts) when the plan runs under the guardrail rules. */
+  guardrails?: Float64Array | null;
 }
 
 const BUCKETS = ['preUser', 'preSpouse', 'roth', 'taxable', 'hsaUser', 'hsaSpouse'] as const;
@@ -78,6 +81,7 @@ export function runChunk(
   const rowBuf = new Float64Array(width);
   const buf = pathBuffers(years);
   const rng = new Rng();
+  const guardrails = params.gk ? newGuardrailTotals(params.gk.startT) : null;
   let successes = 0;
   const progressEvery = 2000;
 
@@ -94,12 +98,13 @@ export function runChunk(
     const res = simulatePath(params, buf, wantRow ? rowBuf : null);
     if (endings) endings[k] = res.terminalEstate;
     successes += res.success;
+    if (guardrails && res.guardrails) addGuardrailPath(guardrails, res.guardrails);
     if (k < trajRows) traj!.set(rowBuf, k * width);
     if (k < spaghettiRows) spaghetti!.set(rowBuf, k * width);
     if (onProgress && (k + 1) % progressEvery === 0) onProgress(k + 1);
   }
   onProgress?.(count);
-  return { start, count, successes, endings, traj, trajRows, spaghetti, spaghettiRows };
+  return { start, count, successes, endings, traj, trajRows, spaghetti, spaghettiRows, ...(guardrails && { guardrails }) };
 }
 
 /** Runs a job's chunks somewhere (in-process, or on the worker pool). */
@@ -161,6 +166,8 @@ export interface McStats {
   mc_p50: number[];
   mc_p90: number[];
   mc_spaghetti_paths: number[][];
+  /** Spending statistics of a run under the guardrail rules (absent otherwise). */
+  guardrails?: GuardrailStats;
 }
 
 /** Combine chunk results into generate_runs' statistics. */
@@ -211,6 +218,9 @@ export function summarize(chunks: ChunkResult[], runs: number, years: number): M
     mc_p50: p50,
     mc_p90: p90,
     mc_spaghetti_paths: spaghetti,
+    ...(sorted.some((c) => c.guardrails) && {
+      guardrails: guardrailStats(sorted.flatMap((c) => (c.guardrails ? [c.guardrails] : []))),
+    }),
   };
 }
 
@@ -261,8 +271,9 @@ export interface GoalSeekResult {
 /**
  * binary_search: the highest desired spending whose success rate meets the target.
  * Every iteration reuses the same seed, so all candidates see the same paths.
+ * `targetSuccessRate` (percent) replaces the plan's target.
  */
-export async function binarySearch(plan: Dict, opts: RunOptions = {}): Promise<GoalSeekResult> {
+export async function binarySearch(plan: Dict, opts: RunOptions & { targetSuccessRate?: number } = {}): Promise<GoalSeekResult> {
   const inputs = extractSimInputs(plan);
   const runs = inputs.runs;
   const years = inputs.total_years;
@@ -277,7 +288,7 @@ export async function binarySearch(plan: Dict, opts: RunOptions = {}): Promise<G
 
   let lower = 0.0;
   let upper = Math.max(1000000.0, totalWealth);
-  const target = inputs.target_success_rate / 100.0;
+  const target = (opts.targetSuccessRate ?? inputs.target_success_rate) / 100.0;
   let bestMid = 0.0;
   let bestRate = 0.0;
   let rate = 0.0;

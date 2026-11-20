@@ -7,10 +7,12 @@ import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Results } from '../../src/lib/app/results';
+import { computeResults } from '../../src/lib/app/runResults';
+import { localRunner } from '../../src/lib/engine/mc';
 import { djangoMoney, realValue, stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
 import ResultsPage from '../../src/lib/components/results/ResultsPage.svelte';
 import { fixtureResults } from '../resultsFixture';
-import { expectPlanFixture, fixtureIndex } from '../fixtures';
+import { expectPlanFixture, fixtureIndex, loadPlanFixture } from '../fixtures';
 
 const plans = fixtureIndex().plans.map((p) => p.name);
 // Real dollars are checked on a few plans; re-rendering every cell is slow in jsdom.
@@ -351,5 +353,147 @@ describe('interactions', () => {
     expect(cfTable?.classList.contains('table-sticky-cols')).toBe(true);
     const cfHeaders = cfTable?.querySelectorAll('thead th');
     expect(cfHeaders?.length).toBeGreaterThan(5);
+  });
+});
+
+describe('guardrails mode', () => {
+  const { plan } = loadPlanFixture('sept27', 'imported');
+  const base = { ...plan, runs: 300, goal_seeking: false, simulation_type: 'guyton_klinger' };
+  let solved: Results;
+  let specified: Results;
+  beforeAll(async () => {
+    solved = await computeResults(base, { runner: localRunner, chunks: 1, seed: 11, goalSeekRunsCap: 200 });
+    specified = await computeResults({ ...base, gk_spending_mode: 'specified' }, { runner: localRunner, chunks: 1, seed: 11 });
+  }, 60_000);
+
+  const text = (root: ParentNode, sel: string) => root.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const rowsOf = (root: ParentNode, sel: string) =>
+    [...root.querySelectorAll(`${sel} tbody tr`)].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()));
+
+  it('shows the success rate, the starting withdrawal and the withdrawal statistics', () => {
+    const page = show(solved);
+    const c = page.container;
+    const g = solved.guardrails!;
+    const card = c.querySelector('#mcResultsCard')!;
+    expect(card.querySelector('.radial-gauge-center')?.textContent).toContain(`${solved.run_success.toFixed(1)}%`);
+    expect(card.textContent).toContain('Probability of Plan Success');
+
+    const start = text(c, '#gkStartingWithdrawal');
+    expect(start).toContain(`$${djangoMoney(g.starting_withdrawal)} /yr`);
+    expect(start).toContain(`${g.starting_withdrawal_pct.toFixed(1)}% of the portfolio at retirement ($${djangoMoney(g.starting_portfolio)}, the average across runs)`);
+    expect(start).toContain(`Retirement Year 0 is ${solved.current_year + g.start_year_index}; $${djangoMoney(g.starting_withdrawal_real)}/yr in today's dollars.`);
+    expect(start).toContain('Solved for a 99% success rate under the guardrail rules.');
+    expect(text(c, '#gkInitialRate')).toContain(`${g.initial_withdrawal_rate.toFixed(1)}% on average`);
+
+    const money = (v: number) => `$${djangoMoney(v)}`;
+    expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([
+      ['Final-Year Withdrawal: Mean', money(g.final_withdrawal.mean), money(g.final_withdrawal_real.mean)],
+      ['Final-Year Withdrawal: Maximum', money(g.final_withdrawal.max), money(g.final_withdrawal_real.max)],
+      ['Final-Year Withdrawal: Minimum', money(g.final_withdrawal.min), money(g.final_withdrawal_real.min)],
+      ['Peak-Year Withdrawal: Mean', money(g.peak_withdrawal.mean), money(g.peak_withdrawal_real.mean)],
+      ['Peak-Year Withdrawal: Maximum', money(g.peak_withdrawal.max), money(g.peak_withdrawal_real.max)],
+      ['Peak-Year Withdrawal: Minimum', money(g.peak_withdrawal.min), money(g.peak_withdrawal_real.min)],
+      ['Lowest-Year Withdrawal: Mean', money(g.lowest_withdrawal.mean), money(g.lowest_withdrawal_real.mean)],
+    ]);
+    expect(text(c, '#gkPctCut')).toBe(`${g.pct_runs_cut.toFixed(1)}%`);
+    expect(text(c, '#gkPctRaise')).toBe(`${g.pct_runs_raise.toFixed(1)}%`);
+    expect(text(c, '#gkPctFreeze')).toBe(`${g.pct_runs_freeze.toFixed(1)}%`);
+
+    // Ending wealth as in the other modes; no "adopt" card.
+    expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1].slice(0, 2)).toEqual(['Median Ending Wealth', money(solved.run_median)]);
+    expect(c.querySelector('#btnAdoptMaxSpending')).toBeNull();
+    expect(text(c, '.print-only-header .badge')).toBe(`Guardrails: $${djangoMoney(g.starting_withdrawal)}/yr to start, ${solved.run_success.toFixed(1)}% success`);
+  });
+
+  it('a solved run has no spending to edit, shows the solved amount and compares with the original plan', async () => {
+    const page = show(solved);
+    const c = page.container;
+    expect(c.querySelector('#input_desired_spending')).toBeNull();
+    expect(text(c, '#results_solved_guardrails_display')).toContain(`$${djangoMoney(solved.achieved_spending)}/yr`);
+    expect((c.querySelector('#results_sim_type_guardrails') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#results_gk_solve') as HTMLInputElement).checked).toBe(true);
+    expect(text(c, 'label[for=results_gk_specified]')).toContain(`($${djangoMoney(plan.desired_spending)}/yr)`);
+    // The mode has a fixed target, so the target field is hidden.
+    expect((c.querySelector('#results_target_success_group') as HTMLElement).style.display).toBe('none');
+
+    expect(text(c, '#projection #scenarioComparisonBar')).toContain(`Solved Starting Spending under Guardrails: $${djangoMoney(solved.achieved_spending)}/yr`);
+    const startRow = solved.guardrails!.start_year_index;
+    const spendingCell = () => text(c, `#projection tbody tr:nth-child(${startRow + 1}) td:nth-child(9)`);
+    expect(spendingCell()).toBe(`$${djangoMoney(solved.det_rows[startRow].desired_spending)}`);
+    await fireEvent.click(c.querySelector('#projection #scenario_view_baseline')!);
+    flushSync();
+    expect(text(c, '#projection #scenarioComparisonBar')).toContain(`Original Baseline Plan under Guardrails: $${djangoMoney(plan.desired_spending)}/yr`);
+    expect(spendingCell()).toBe(`$${djangoMoney(solved.baseline_det_rows![startRow].desired_spending)}`);
+  });
+
+  it('the projection marks the years the guardrails acted', () => {
+    const page = show(solved);
+    const badges = [...page.container.querySelectorAll('#projection tbody .badge')].map((b) => b.textContent ?? '');
+    expect(badges.filter((b) => b.startsWith('Guardrails Set (Initial Withdrawal Rate')).length).toBe(1);
+    const acted = solved.det_rows.flatMap((row) => row.milestones as string[]).filter((m) => m.startsWith('Guardrails: Spending'));
+    expect(acted.length).toBeGreaterThan(0);
+    expect(badges.filter((b) => b.startsWith('Guardrails: Spending'))).toEqual(acted);
+  });
+
+  it('with the plan\'s own spending: the amount is editable and nothing was solved', async () => {
+    const onApply = vi.fn();
+    const page = render(ResultsPage, { results: specified, onApply });
+    const c = page.container;
+    expect(text(c, '#gkStartingWithdrawal')).toContain('Your Desired Annual Recurring Spending, as entered.');
+    expect(c.querySelector('#results_solved_guardrails_display')).toBeNull();
+    expect(c.querySelector('#scenarioComparisonBar')).toBeNull();
+    expect((c.querySelector('#results_gk_specified') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#input_desired_spending') as HTMLInputElement).value).toBe(String(plan.desired_spending));
+
+    // Editing the amount, or switching to solving, are both changes to apply.
+    expect(c.querySelector('#staleResultsBanner')).toBeNull();
+    await fireEvent.click(c.querySelector('#results_gk_solve')!);
+    expect(c.querySelector('#staleResultsBanner')).not.toBeNull();
+    await fireEvent.click(c.querySelector('#results_gk_specified')!);
+    expect(c.querySelector('#staleResultsBanner')).toBeNull();
+    await fireEvent.input(c.querySelector('#input_desired_spending')!, { target: { value: '120000' } });
+    await fireEvent.submit(c.querySelector('#resultsInputsForm')!);
+    expect(onApply.mock.calls[0][0]).toMatchObject({ simulation_type: 'guyton_klinger', gk_spending_mode: 'specified', desired_spending: '120000' });
+  });
+
+  it('the mode card switches a regular plan to the guardrails, solving by default', async () => {
+    const onApply = vi.fn();
+    const regular = fixtureResults('sept27');
+    const page = render(ResultsPage, { results: regular, onApply });
+    const c = page.container;
+    expect(c.querySelector('#results_guardrails_group')).toBeNull();
+    await fireEvent.click(c.querySelector('#results_sim_type_guardrails')!);
+    expect(c.querySelector('#results_guardrails_group')).not.toBeNull();
+    expect((c.querySelector('#results_gk_solve') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#results_target_success_group') as HTMLElement).style.display).toBe('none');
+    expect(c.querySelector('#staleResultsBanner')).not.toBeNull();
+    await fireEvent.submit(c.querySelector('#resultsInputsForm')!);
+    expect(onApply.mock.calls[0][0]).toMatchObject({ simulation_type: 'guyton_klinger', gk_spending_mode: 'solve' });
+
+    // Back to a regular simulation: the guardrails option is not sent.
+    await fireEvent.click(c.querySelector('#results_sim_type_regular')!);
+    await fireEvent.submit(c.querySelector('#resultsInputsForm')!);
+    expect(onApply.mock.calls[1][0].simulation_type).toBe('regular');
+    expect('gk_spending_mode' in onApply.mock.calls[1][0]).toBe(false);
+  });
+
+  it('the stress test compares spending under the guardrails', () => {
+    const page = show(solved);
+    const c = page.container;
+    const reg = solved.stress_test.regular_results.guardrails!;
+    const st = solved.stress_test.stress_results.guardrails!;
+    const rows = rowsOf(c, '#stressGuardrailsTable');
+    expect(rows.map((r) => r[0])).toEqual([
+      'Runs with at Least One 10% Cut', 'Runs with at Least One 10% Raise', 'Runs that Skipped an Inflation Raise',
+      'Mean Lowest-Year Withdrawal (Real)', 'Mean Peak-Year Withdrawal (Real)', 'Mean Final-Year Withdrawal (Real)',
+    ]);
+    expect(rows[0].slice(1, 3)).toEqual([`${reg.pct_runs_cut.toFixed(1)}%`, `${st.pct_runs_cut.toFixed(1)}%`]);
+    expect(rows[3].slice(1)).toEqual([
+      stressMoney(reg.lowest_withdrawal_real.mean), stressMoney(st.lowest_withdrawal_real.mean),
+      stressDeltaMoney(st.lowest_withdrawal_real.mean - reg.lowest_withdrawal_real.mean),
+    ]);
+    // Not shown outside the guardrails mode.
+    cleanup();
+    expect(show(fixtureResults('sept27')).container.querySelector('#stressGuardrailsTable')).toBeNull();
   });
 });

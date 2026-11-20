@@ -28,6 +28,27 @@ describe('stage-1 import of every saved plan', () => {
   }
 });
 
+describe('the guardrails mode in an imported plan', () => {
+  it('keeps the mode and its starting-spending choice', () => {
+    const data: any = { simulation_type: 'guyton_klinger', gk_spending_mode: 'specified', desired_spending: '50000' };
+    expect(normalizePlanFields(data)).toEqual([]);
+    expect(data).toMatchObject({ simulation_type: 'guyton_klinger', gk_spending_mode: 'specified', goal_seeking: false, desired_spending: 50000 });
+  });
+
+  it('defaults to solving the starting spending, and is never goal seeking', () => {
+    const data: any = { simulation_type: 'guyton_klinger', goal_seeking: true, gk_spending_mode: 'bogus' };
+    normalizePlanFields(data);
+    expect(data).toMatchObject({ simulation_type: 'guyton_klinger', gk_spending_mode: 'solve', goal_seeking: false });
+  });
+
+  it('other modes are left alone', () => {
+    const data: any = { simulation_type: 'goal_seeking' };
+    normalizePlanFields(data);
+    expect(data.goal_seeking).toBe(true);
+    expect('gk_spending_mode' in data).toBe(false);
+  });
+});
+
 // Input-validation cases
 describe('NormalizeImportedPlanTests', () => {
   it('non-list rows and non-dict items', () => {

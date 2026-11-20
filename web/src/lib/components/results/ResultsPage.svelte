@@ -11,6 +11,7 @@
   import { uiPrefs } from '../../app/context';
   import type { PlannerMode } from '../../app/ui.svelte';
   import type { StressSpec } from '../../engine/crisis';
+  import { GK_SIMULATION_TYPE, guardrailSolves } from '../../engine/guardrails';
   import type { ModeChangeInput } from '../../plan/modeChange';
   import ChartsTab from './ChartsTab.svelte';
   import DetTable from './DetTable.svelte';
@@ -67,8 +68,10 @@
   let withdrawalsOpen = $state(false);
   let inputs: ReturnType<typeof InputsPanel> | undefined = $state();
 
+  const isGuardrails = $derived(results.simulation_type === GK_SIMULATION_TYPE && Boolean(results.guardrails));
   const isSolvedMode = $derived(
-    Boolean((results.simulation_type === 'goal_seeking' || results.simulation_type === 'earliest_retirement' || results.goal_seeking) && results.baseline_det_rows)
+    Boolean((results.simulation_type === 'goal_seeking' || results.simulation_type === 'earliest_retirement' || results.goal_seeking
+      || guardrailSolves(results.plan_data_json)) && results.baseline_det_rows)
   );
   const activeRows = $derived(
     viewScenario === 'baseline' && results.baseline_det_rows ? results.baseline_det_rows : results.det_rows
@@ -140,7 +143,7 @@
     </div>
     <div class="text-end">
       <span class="badge bg-primary fs-6 px-3 py-2">
-        {#if results.simulation_type === 'earliest_retirement'}Earliest Ret: Age {results.achieved_user_ret_age}{#if results.is_married} / {results.achieved_spouse_ret_age}{/if}{:else if !results.goal_seeking}Success Rate: {floatformat(results.run_success, 1)}%{:else}Max Spending: ${djangoMoney(results.achieved_spending)}/yr{/if}
+        {#if results.simulation_type === 'earliest_retirement'}Earliest Ret: Age {results.achieved_user_ret_age}{#if results.is_married} / {results.achieved_spouse_ret_age}{/if}{:else if isGuardrails}Guardrails: ${djangoMoney(results.guardrails?.starting_withdrawal)}/yr to start, {floatformat(results.run_success, 1)}% success{:else if !results.goal_seeking}Success Rate: {floatformat(results.run_success, 1)}%{:else}Max Spending: ${djangoMoney(results.achieved_spending)}/yr{/if}
       </span>
     </div>
   </div>
@@ -203,6 +206,8 @@
             {#if viewScenario === 'solved'}
               {#if results.simulation_type === 'earliest_retirement'}
                 Solved Earliest Retirement: <strong>Age {results.achieved_user_ret_age}{#if results.is_married && results.achieved_spouse_ret_age !== undefined} / {results.achieved_spouse_ret_age}{/if}</strong>
+              {:else if isGuardrails}
+                Solved Starting Spending under Guardrails: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
               {:else}
                 Solved Maximum Spending: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
               {/if}
@@ -210,7 +215,7 @@
               {#if results.simulation_type === 'earliest_retirement'}
                 Original Baseline Plan: <strong>Age {results.original_plan_data_json?.user_retirement_age ?? results.user_retirement_age}</strong>
               {:else}
-                Original Baseline Plan: <strong>${djangoMoney(results.original_plan_data_json?.desired_spending ?? results.desired_spending)}/yr</strong>
+                Original Baseline Plan{isGuardrails ? ' under Guardrails' : ''}: <strong>${djangoMoney(results.original_plan_data_json?.desired_spending ?? results.desired_spending)}/yr</strong>
               {/if}
             {/if}
           </span>
@@ -243,7 +248,7 @@
   </div>
 
   <div class={paneClass('stresstest')} id="stresstest" role="tabpanel" aria-labelledby="stress-tab">
-    <StressTest stress={results.stress_test} terminalLifeInsurance={results.terminal_life_insurance} onChange={onStressChange}
+    <StressTest stress={results.stress_test} terminalLifeInsurance={results.terminal_life_insurance} guardrails={isGuardrails} onChange={onStressChange}
       busy={stressBusy} progress={stressProgress} error={stressError} />
   </div>
 </div>

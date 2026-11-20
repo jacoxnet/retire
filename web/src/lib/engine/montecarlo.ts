@@ -1,6 +1,7 @@
 // Monte Carlo path kernel: njit_simulate_path / njit_simulate_all_paths (core/runs.py)
 // over typed arrays. One call simulates one path of per-year returns; the worker pool
 // (C4) generates returns path by path, so no runs x years matrices are needed.
+import { type GuardrailConfig, guardrailConfig, type GuardrailState, guardrailYear, newGuardrailState, resetGuardrailState } from './guardrails';
 import {
   INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, type InheritedAccounts, type InheritedLedger,
   inheritedLedger, ledgerRequired, ledgerSettle, ledgerTotals, ledgerTransfer, resetLedger,
@@ -57,6 +58,8 @@ export interface KernelParams {
   taxableBasisInit: number;
   isCommunityPropertyCode: number;
   inherited: InheritedAccounts;
+  /** The guardrail rules' set-up when regular spending follows them, else null/absent. */
+  gk?: GuardrailConfig | null;
 }
 
 const f64 = (a: ArrayLike<number>) => (a instanceof Float64Array ? a : Float64Array.from(a));
@@ -110,6 +113,7 @@ export function kernelParams(inputs: SimInputs, nb: NumbaInputs): KernelParams {
     taxableBasisInit: nb.taxable_basis_init,
     isCommunityPropertyCode: nb.is_community_property_code,
     inherited: { bucket: f64(nb.inh_acct_bucket), balance: f64(nb.inh_acct_balance), frac: f64(nb.inh_acct_frac) },
+    gk: inputs.guardrails ? guardrailConfig(inputs, nb) : null,
   };
 }
 
@@ -132,6 +136,8 @@ export interface PathResult {
   terminalEstate: number;
   /** 1 when the plan never had a shortfall and ended non-negative, else 0. */
   success: number;
+  /** The path's guardrail spending record (reused between calls); null without guardrails. */
+  guardrails: GuardrailState | null;
 }
 
 const rtw = new Float64Array(RTW_LEN);
@@ -140,13 +146,14 @@ const inhRet = new Float64Array(4);
 const inhReq = new Float64Array(4);
 const inhEnd = new Float64Array(4);
 let ledger: InheritedLedger | null = null;
+const gkState = newGuardrailState();
 
 /**
  * Simulate one path. When `trajectory` is given (length totalYears + 1) it receives the
  * start-of-plan total, each year's ending total, and finally the terminal estate.
  * The returned object is reused between calls.
  */
-const result: PathResult = { terminalEstate: 0, success: 0 };
+const result: PathResult = { terminalEstate: 0, success: 0, guardrails: null };
 export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float64Array | null = null): PathResult {
   const { totalYears, userAge, isMarried, spouseAge, userAgeDeath, spouseAgeDeath } = p;
   let pretaxUser = p.pretaxUserInit;
@@ -163,6 +170,10 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
   let inhPreSpouse = inhBal[INH_PRE_SPOUSE];
   let inhRothUser = inhBal[INH_ROTH_USER];
   let inhRothSpouse = inhBal[INH_ROTH_SPOUSE];
+
+  const gk = p.gk ?? null;
+  if (gk !== null) resetGuardrailState(gkState);
+  let priorGrowth = 0.0;
 
   let everDepleted = false;
   if (trajectory) trajectory[0] = pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse;
@@ -220,6 +231,11 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
       taxableBasis += p.taxableDepositAmt;
     }
 
+    // Beginning-of-year portfolio, which the guardrails measure the withdrawal rate against
+    const portfolioStart = gk !== null
+      ? pretaxUser + pretaxSpouse + roth + taxable + hsaUser + hsaSpouse + inhPreUser + inhPreSpouse + inhRothUser + inhRothSpouse
+      : 0.0;
+
     const pretaxUserPrior = Math.max(0.0, pretaxUser);
     const pretaxSpousePrior = isMarried ? Math.max(0.0, pretaxSpouse) : 0.0;
     const inhPreUserPrior = Math.max(0.0, inhPreUser);
@@ -268,7 +284,15 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
     const infFactor = p.infFactors !== null ? p.infFactors[t] : (1.0 + p.inflationRate / 100.0) ** t;
 
     let desiredSpendingT = 0.0;
-    if (userAgeT >= p.desiredSpendingStartAge) {
+    if (gk !== null) {
+      desiredSpendingT = guardrailYear(gk, gkState, t, portfolioStart, priorGrowth);
+      // Same terms, in the same order, as simulateStep's growth total
+      priorGrowth = pretaxUserBefore * r.preUser[t] + (isMarried ? pretaxSpouseBefore * r.preSpouse[t] : 0.0)
+        + rothBefore * r.roth[t] + (taxableBefore > 0.0 ? taxableBefore * r.taxable[t] : 0.0)
+        + hsaUserBefore * r.hsaUser[t] + (isMarried ? hsaSpouseBefore * r.hsaSpouse[t] : 0.0)
+        + inhPreUserPrior * rInhPreU + (isMarried ? inhPreSpousePrior * rInhPreS : 0.0)
+        + inhRothUserPrior * rInhRothU + (isMarried ? inhRothSpousePrior * rInhRothS : 0.0);
+    } else if (userAgeT >= p.desiredSpendingStartAge) {
       const baseSpending = isMarried && t > tFirstDeath ? p.survivorSpending : p.desiredSpending;
       desiredSpendingT = baseSpending * (p.adjustSpendingInflation ? infFactor : 1.0);
     }
@@ -323,6 +347,7 @@ export function simulatePath(p: KernelParams, r: PathReturns, trajectory: Float6
   if (trajectory) trajectory[totalYears] = terminalEstate;
   result.terminalEstate = terminalEstate;
   result.success = !everDepleted && endingPortfolio >= 0.0 ? 1.0 : 0.0;
+  result.guardrails = gk !== null ? gkState : null;
   return result;
 }
 

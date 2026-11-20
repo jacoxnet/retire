@@ -1,8 +1,10 @@
 <!-- The Results card on the Monte Carlo tab: success rate and ending-wealth
-     percentiles, or the solved maximum spending for a goal-seeking run. -->
+     percentiles, the solved maximum spending for a goal-seeking run, the solved
+     retirement age, or the spending statistics of a run under the guardrail rules. -->
 <script lang="ts">
   import type { Results } from '../../app/results';
   import { djangoMoney, floatformat, realValue } from '../../app/resultsFormat';
+  import { GK_SIMULATION_TYPE, GK_TARGET_SUCCESS_RATE, guardrailSolves, type GuardrailStats } from '../../engine/guardrails';
   import RetirementFrontierExplorer from './RetirementFrontierExplorer.svelte';
 
   interface Props {
@@ -57,7 +59,80 @@
       summary: 'High probability of outliving your assets under historical market scenarios. Revision of spending or timing recommended.'
     };
   });
+
+  const solvedGuardrails = $derived(guardrailSolves(r.plan_data_json));
+  /** The withdrawal table: each amount's statistics across runs, nominal and real. */
+  function withdrawalRows(g: GuardrailStats) {
+    const row = (label: string, nominal: number, real: number, first = false, bold = false) => ({ label, nominal, real, first, bold });
+    return [
+      row('Final-Year Withdrawal: Mean', g.final_withdrawal.mean, g.final_withdrawal_real.mean, true, true),
+      row('Final-Year Withdrawal: Maximum', g.final_withdrawal.max, g.final_withdrawal_real.max),
+      row('Final-Year Withdrawal: Minimum', g.final_withdrawal.min, g.final_withdrawal_real.min),
+      row('Peak-Year Withdrawal: Mean', g.peak_withdrawal.mean, g.peak_withdrawal_real.mean, true, true),
+      row('Peak-Year Withdrawal: Maximum', g.peak_withdrawal.max, g.peak_withdrawal_real.max),
+      row('Peak-Year Withdrawal: Minimum', g.peak_withdrawal.min, g.peak_withdrawal_real.min),
+      row('Lowest-Year Withdrawal: Mean', g.lowest_withdrawal.mean, g.lowest_withdrawal_real.mean, true, true),
+    ];
+  }
 </script>
+
+{#snippet gauge()}
+  <div class="card bg-light-subtle border text-center p-3 mb-4 shadow-sm rounded-3">
+    <div class="radial-gauge-wrapper">
+      <svg viewBox="0 10 200 105" class="radial-gauge-svg" role="meter" aria-valuenow={successRate} aria-valuemin="0" aria-valuemax="100" aria-label="Probability of Plan Success">
+        <path class="radial-gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" />
+        <path class="radial-gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100"
+          stroke={assessment.color}
+          stroke-dasharray="251.33"
+          stroke-dashoffset={251.33 * (1 - successRate / 100)} />
+      </svg>
+      <div class="radial-gauge-center">
+        <span class="display-5 font-weight-bold {sign(r.run_success)}">{floatformat(r.run_success, 1)}%</span>
+        <div class="text-secondary small fw-semibold">Probability of Plan Success</div>
+      </div>
+    </div>
+    <div class="mt-1">
+      <span class="badge {assessment.badgeClass} border px-3 py-2 fs-6 rounded-pill">
+        <i class="fa-solid {assessment.icon} me-1"></i>{assessment.label}
+      </span>
+      <p class="small text-secondary mt-2 mb-0 px-2" style="max-width: 520px; margin-left: auto; margin-right: auto;">
+        {assessment.summary}
+      </p>
+    </div>
+  </div>
+{/snippet}
+
+{#snippet endingWealth(id: string)}
+  <hr>
+  <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
+  {#if r.terminal_life_insurance > 0}
+    <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
+      <i class="fa-solid fa-shield-halved me-2 text-info"></i>
+      <span>Includes <strong>${djangoMoney(r.terminal_life_insurance)}</strong> life insurance death benefit paid to estate/heirs.</span>
+    </div>
+  {/if}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" {id}>
+      <thead class="table-light">
+        <tr>
+          <th>Metric</th>
+          <th class="text-end">Nominal</th>
+          <th class="text-end">Real</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as row (row.label)}
+          {@const real = realValue(row.value, r.years ?? 0, r.inflation_rate ?? 0)}
+          <tr>
+            <td><strong>{row.label}</strong></td>
+            <td class={['text-end', row.bold && 'font-weight-bold', sign(row.value)]}>${djangoMoney(row.value)}</td>
+            <td class={['text-end', row.bold && 'font-weight-bold', sign(real)]}>${djangoMoney(real)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/snippet}
 
 <div class="card p-4 h-100" id="mcResultsCard">
   {#if r.simulation_type === 'earliest_retirement'}
@@ -147,35 +222,7 @@
         </div>
       {/if}
 
-      <hr>
-      <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
-      {#if r.terminal_life_insurance > 0}
-        <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
-          <i class="fa-solid fa-shield-halved me-2 text-info"></i>
-          <span>Includes <strong>${djangoMoney(r.terminal_life_insurance)}</strong> life insurance death benefit paid to estate/heirs.</span>
-        </div>
-      {/if}
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="mcEndingWealthTableEarliest">
-          <thead class="table-light">
-            <tr>
-              <th>Metric</th>
-              <th class="text-end">Nominal</th>
-              <th class="text-end">Real</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each rows as row (row.label)}
-              {@const real = realValue(row.value, r.years ?? 0, r.inflation_rate ?? 0)}
-              <tr>
-                <td><strong>{row.label}</strong></td>
-                <td class={['text-end', row.bold && 'font-weight-bold', sign(row.value)]}>${djangoMoney(row.value)}</td>
-                <td class={['text-end', row.bold && 'font-weight-bold', sign(real)]}>${djangoMoney(real)}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
+      {@render endingWealth('mcEndingWealthTableEarliest')}
 
       {#if r.is_married && r.frontier && r.frontier.length > 0}
         <RetirementFrontierExplorer
@@ -188,44 +235,43 @@
         />
       {/if}
     </div>
-  {:else if !r.goal_seeking}
+  {:else if r.simulation_type === GK_SIMULATION_TYPE && r.guardrails}
+    {@const g = r.guardrails}
+    {@const startYear = (r.current_year ?? 2026) + g.start_year_index}
     <h3 class="border-bottom pb-2 text-success">Results</h3>
     <div class="mt-3">
-      <div class="card bg-light-subtle border text-center p-3 mb-4 shadow-sm rounded-3">
-        <div class="radial-gauge-wrapper">
-          <svg viewBox="0 10 200 105" class="radial-gauge-svg" role="meter" aria-valuenow={successRate} aria-valuemin="0" aria-valuemax="100" aria-label="Probability of Plan Success">
-            <path class="radial-gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" />
-            <path class="radial-gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100"
-              stroke={assessment.color}
-              stroke-dasharray="251.33"
-              stroke-dashoffset={251.33 * (1 - successRate / 100)} />
-          </svg>
-          <div class="radial-gauge-center">
-            <span class="display-5 font-weight-bold {sign(r.run_success)}">{floatformat(r.run_success, 1)}%</span>
-            <div class="text-secondary small fw-semibold">Probability of Plan Success</div>
-          </div>
-        </div>
-        <div class="mt-1">
-          <span class="badge {assessment.badgeClass} border px-3 py-2 fs-6 rounded-pill">
-            <i class="fa-solid {assessment.icon} me-1"></i>{assessment.label}
-          </span>
-          <p class="small text-secondary mt-2 mb-0 px-2" style="max-width: 520px; margin-left: auto; margin-right: auto;">
-            {assessment.summary}
-          </p>
-        </div>
+      {@render gauge()}
+
+      <div class="alert alert-primary border text-center py-3 mb-3" id="gkStartingWithdrawal">
+        <h4 class="mb-1">Starting Regular Withdrawal</h4>
+        <span class="display-5 font-weight-bold">${djangoMoney(g.starting_withdrawal)}</span>
+        <span class="fs-5 text-secondary">/yr</span>
+        <p class="mb-0 mt-1">
+          <strong id="gkStartingPct">{floatformat(g.starting_withdrawal_pct, 1)}%</strong> of the
+          {#if g.start_year_index > 0}portfolio at retirement{:else}initial portfolio{/if}
+          (${djangoMoney(g.starting_portfolio)}{g.start_year_index > 0 ? ', the average across runs' : ''})
+        </p>
+        <p class="small text-muted mb-0 mt-1">
+          {#if g.start_year_index > 0}
+            Retirement Year 0 is {startYear}; ${djangoMoney(g.starting_withdrawal_real)}/yr in today's dollars.
+          {/if}
+          {#if solvedGuardrails}
+            Solved for a {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success rate under the guardrail rules.
+          {:else}
+            Your Desired Annual Recurring Spending, as entered.
+          {/if}
+        </p>
       </div>
 
-      <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span></p>
-      <hr>
-      <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
-      {#if r.terminal_life_insurance > 0}
-        <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
-          <i class="fa-solid fa-shield-halved me-2 text-info"></i>
-          <span>Includes <strong>${djangoMoney(r.terminal_life_insurance)}</strong> life insurance death benefit paid to estate/heirs.</span>
-        </div>
-      {/if}
+      <p class="mb-3 small text-secondary" id="gkInitialRate">
+        <strong>Initial withdrawal rate the guardrails are measured against:</strong>
+        {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
+        <span class="text-muted">(regular spending over the portfolio; other expenses and income count only through their effect on the portfolio).</span>
+      </p>
+
+      <h5 class="text-secondary mt-3 border-bottom pb-2">Regular Withdrawal Across Runs</h5>
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="mcEndingWealthTable">
+        <table class="table table-hover align-middle mb-0" id="gkWithdrawalTable">
           <thead class="table-light">
             <tr>
               <th>Metric</th>
@@ -234,17 +280,52 @@
             </tr>
           </thead>
           <tbody>
-            {#each rows as row (row.label)}
-              {@const real = realValue(row.value, r.years ?? 0, r.inflation_rate ?? 0)}
-              <tr>
+            {#each withdrawalRows(g) as row (row.label)}
+              <tr class={[row.first && 'table-group-divider']}>
                 <td><strong>{row.label}</strong></td>
-                <td class={['text-end', row.bold && 'font-weight-bold', sign(row.value)]}>${djangoMoney(row.value)}</td>
-                <td class={['text-end', row.bold && 'font-weight-bold', sign(real)]}>${djangoMoney(real)}</td>
+                <td class={['text-end', row.bold && 'font-weight-bold']}>${djangoMoney(row.nominal)}</td>
+                <td class={['text-end', row.bold && 'font-weight-bold']}>${djangoMoney(row.real)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
+      <p class="small text-muted mt-2 mb-3">
+        Regular retirement spending per year, from Retirement Year 0 to the plan's final year{r.is_married ? " (the surviving spouse's spending after a first death)" : ''}.
+        Real amounts are in today's dollars.
+      </p>
+
+      <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
+      <div class="row g-2 text-center mb-3" id="gkActivity">
+        <div class="col-sm-4">
+          <div class="p-2 bg-light rounded border h-100">
+            <div class="fs-4 fw-bold text-danger" id="gkPctCut">{floatformat(g.pct_runs_cut, 1)}%</div>
+            <div class="small text-secondary">of runs had at least one 10% cut</div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="p-2 bg-light rounded border h-100">
+            <div class="fs-4 fw-bold text-success" id="gkPctRaise">{floatformat(g.pct_runs_raise, 1)}%</div>
+            <div class="small text-secondary">of runs had at least one 10% raise</div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="p-2 bg-light rounded border h-100">
+            <div class="fs-4 fw-bold text-secondary" id="gkPctFreeze">{floatformat(g.pct_runs_freeze, 1)}%</div>
+            <div class="small text-secondary">of runs skipped at least one inflation raise</div>
+          </div>
+        </div>
+      </div>
+
+      {@render endingWealth('mcEndingWealthTableGuardrails')}
+    </div>
+  {:else if !r.goal_seeking}
+    <h3 class="border-bottom pb-2 text-success">Results</h3>
+    <div class="mt-3">
+      {@render gauge()}
+
+      <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span></p>
+      {@render endingWealth('mcEndingWealthTable')}
     </div>
   {:else}
     <h3 class="border-bottom pb-2 text-primary">Results</h3>

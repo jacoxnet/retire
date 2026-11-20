@@ -30,6 +30,29 @@ describe('McPool', () => {
     pool.terminate();
   }, 60_000);
 
+  it('a guardrails plan: the workers apply the rules and their spending totals survive the trip back', async () => {
+    const { plan } = loadPlanFixture('sept27', 'imported');
+    const small = { ...plan, runs: 3000, goal_seeking: false, simulation_type: 'guyton_klinger', gk_spending_mode: 'specified' };
+    // Results are cloned on the way back too, as postMessage does.
+    const cloningWorker = (): WorkerLike => {
+      const w: WorkerLike = {
+        onmessage: null,
+        postMessage(msg: ToWorker) {
+          setTimeout(() => handle(structuredClone(msg)), 0);
+        },
+        terminate() {},
+      };
+      const handle = createHandler((msg: FromWorker) => setTimeout(() => w.onmessage?.({ data: structuredClone(msg) }), 0));
+      return w;
+    };
+    const pool = new McPool(3, cloningWorker);
+    const viaPool = await generateRuns(small, { seed: 5, runner: pool.runner, chunks: pool.chunks });
+    const local = await generateRuns(small, { seed: 5, runner: localRunner, chunks: pool.chunks });
+    expect(viaPool.guardrails?.pct_runs_cut).toBeGreaterThan(0);
+    expect(deepClose(viaPool, local, 0)).toBeNull();
+    pool.terminate();
+  }, 60_000);
+
   it('rejects when a worker fails, and can run again afterwards', async () => {
     const pool = new McPool(2, fakeWorker);
     const job = { plan: { user_age: 'x' }, seed: 1, testSpending: null, stress: null, collect: { endings: true, trajCap: 0, spaghetti: 0 } };

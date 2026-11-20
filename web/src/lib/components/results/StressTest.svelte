@@ -5,10 +5,13 @@
   import type { StressSpec } from '../../engine/crisis';
   import type { StressData } from '../../app/results';
   import { djangoMoney, stressDeltaMoney, stressDeltaPercent, stressMoney } from '../../app/resultsFormat';
+  import type { GuardrailStats } from '../../engine/guardrails';
 
   interface Props {
     stress: StressData;
     terminalLifeInsurance: number;
+    /** The plan runs under the guardrail rules: compare how spending fared as well. */
+    guardrails?: boolean;
     /** Run the stress test for new selections (the page shows `busy` meanwhile). */
     onChange?: (spec: StressSpec) => void;
     busy?: boolean;
@@ -16,7 +19,7 @@
     progress?: number | null;
     error?: string | null;
   }
-  let { stress, terminalLifeInsurance, onChange, busy = false, progress = null, error = null }: Props = $props();
+  let { stress, terminalLifeInsurance, guardrails = false, onChange, busy = false, progress = null, error = null }: Props = $props();
 
   const SCENARIOS: [string, string][] = [
     ['2000_dotcom', 'The Dot-Com Crash & "Lost Decade" (2000–2012)'],
@@ -64,6 +67,20 @@
     { label: '10th Percentile Ending Wealth', reg: 'run_10', delta: 'delta_10', bold: true },
     { label: 'Maximum Wealth', reg: 'run_max', delta: 'delta_max', bold: false },
     { label: 'Minimum Wealth', reg: 'run_min', delta: 'delta_min', bold: false },
+  ];
+
+  // Under the guardrail rules a crisis shows up in spending more than in the success rate.
+  const gkReg = $derived(guardrails ? reg.guardrails : undefined);
+  const gkStress = $derived(guardrails ? st.guardrails : undefined);
+  const pct = (v: number) => v.toFixed(1) + '%';
+  const pctDelta = (v: number) => (v > 0 ? '+' : '') + v.toFixed(1) + ' pts';
+  const GK_ROWS: Array<{ label: string; value: (g: GuardrailStats) => number; money: boolean; moreIsBetter: boolean }> = [
+    { label: 'Runs with at Least One 10% Cut', value: (g) => g.pct_runs_cut, money: false, moreIsBetter: false },
+    { label: 'Runs with at Least One 10% Raise', value: (g) => g.pct_runs_raise, money: false, moreIsBetter: true },
+    { label: 'Runs that Skipped an Inflation Raise', value: (g) => g.pct_runs_freeze, money: false, moreIsBetter: false },
+    { label: 'Mean Lowest-Year Withdrawal (Real)', value: (g) => g.lowest_withdrawal_real.mean, money: true, moreIsBetter: true },
+    { label: 'Mean Peak-Year Withdrawal (Real)', value: (g) => g.peak_withdrawal_real.mean, money: true, moreIsBetter: true },
+    { label: 'Mean Final-Year Withdrawal (Real)', value: (g) => g.final_withdrawal_real.mean, money: true, moreIsBetter: true },
   ];
 </script>
 
@@ -179,6 +196,38 @@
           </tbody>
         </table>
       </div>
+
+      {#if gkReg && gkStress}
+        <h5 class="text-secondary mt-4 border-bottom pb-2">Spending Under the Guardrails</h5>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="stressGuardrailsTable">
+            <thead class="table-light">
+              <tr>
+                <th>Metric</th>
+                <th class="text-end">Regular Sim</th>
+                <th class="text-end">Stress Test</th>
+                <th class="text-end">Difference (Impact)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each GK_ROWS as row (row.label)}
+                {@const a = row.value(gkReg)}
+                {@const b = row.value(gkStress)}
+                <tr>
+                  <td><strong>{row.label}</strong></td>
+                  <td class="text-end">{row.money ? stressMoney(a) : pct(a)}</td>
+                  <td class="text-end fw-semibold">{row.money ? stressMoney(b) : pct(b)}</td>
+                  <td class={['text-end fw-bold', (b - a >= 0) === row.moreIsBetter || b === a ? 'text-success' : 'text-danger']}>{row.money ? stressDeltaMoney(b - a) : pctDelta(b - a)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+          Regular retirement spending per year in today's dollars; the stress test deflates by the crisis years' own inflation.
+          Both simulations start from the same spending and apply the same guardrail rules.
+        </p>
+      {/if}
 
       <div class="alert alert-light border p-3 mt-4 mb-0">
         <p class="mb-0 text-secondary small">

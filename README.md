@@ -1,6 +1,6 @@
 # Retirement Calculator
 
-A retirement planner that runs entirely in your browser: enter your accounts, spending, Social Security and other income, then see a Monte Carlo success rate (or the maximum spending that meets a target success rate), year-by-year deterministic projections and cash flows, charts, and historical crisis stress tests. It also tracks a personal balance sheet and plans portfolio rebalancing.
+A retirement planner that runs entirely in your browser: enter your accounts, spending, Social Security and other income, then see a Monte Carlo success rate (or the maximum spending that meets a target success rate, the earliest retirement age, or how spending fares under Guyton-Klinger guardrails), year-by-year deterministic projections and cash flows, charts, and historical crisis stress tests. It also tracks a personal balance sheet and plans portfolio rebalancing.
 
 There is no server. The site is static files on GitHub Pages; the simulations run in Web Workers on your own machine, and your plan is kept in your browser's local storage. Use **Save / Load / Clear Data** to export or import a plan as a `.json` file.
 
@@ -9,7 +9,7 @@ There is no server. The site is static files on GitHub Pages; the simulations ru
 | Path | What it is |
 |---|---|
 | `web/` | The app: SvelteKit 3 (`adapter-static`) + TypeScript + Vite. |
-| `web/src/lib/engine/` | The simulation engine (tax, RMDs, withdrawal order, deterministic projection, Monte Carlo kernel, seeded RNG, goal seek, stress test). Pure TS, no DOM. |
+| `web/src/lib/engine/` | The simulation engine (tax, RMDs, withdrawal order, deterministic projection, Monte Carlo kernel, seeded RNG, goal seek, guardrail spending rules, stress test). Pure TS, no DOM. |
 | `web/src/lib/plan/` | The plan model: defaults, import and validation, save rules, balance sheet, rebalancing, the localStorage-backed store. |
 | `web/src/lib/workers/` | The Monte Carlo worker pool. |
 | `web/src/lib/components/`, `web/src/routes/` | The Enter Data, Results and Save/Load/Clear pages. |

@@ -4,6 +4,7 @@ import { getLifeInsuranceRouting } from '../engine/inputs';
 import { CRISIS_SCENARIOS } from '../engine/historicalData';
 import type { GoalSeekResult, McStats } from '../engine/mc';
 import type { EarliestRetirementResult } from '../engine/earliestRetirement';
+import { guardrailSolves } from '../engine/guardrails';
 import { get, type Dict } from '../engine/py';
 import type { StressResult } from '../engine/stress';
 
@@ -65,6 +66,8 @@ export function resultsContext(
 ): Results {
   const isGoal = get(data, 'goal_seeking', false);
   const simType = get(data, 'simulation_type', isGoal ? 'goal_seeking' : 'regular');
+  // A solved run: its solved values, and the original plan to compare them with.
+  const isSolved = isGoal || simType === 'earliest_retirement' || guardrailSolves(data);
   const married = get(data, 'is_married');
   const bal = (key: string, onlyIfMarried = false) =>
     onlyIfMarried && !married ? 0.0 : get(get(data, key, {}), 'present_balance', 0.0);
@@ -109,13 +112,9 @@ export function resultsContext(
     taxable_deposit_amt: 0,
     taxable_deposit_t: -1,
   };
-  if (baselineDetRows && (isGoal || simType === 'earliest_retirement')) {
-    results.baseline_det_rows = baselineDetRows;
-  }
-  if (originalPlan && (isGoal || simType === 'earliest_retirement')) {
-    results.original_plan_data_json = originalPlan;
-  }
-  if (isGoal && goal) Object.assign(results, goal);
+  if (baselineDetRows && isSolved) results.baseline_det_rows = baselineDetRows;
+  if (originalPlan && isSolved) results.original_plan_data_json = originalPlan;
+  if ((isGoal || guardrailSolves(data)) && goal) Object.assign(results, goal);
   if (simType === 'earliest_retirement' && earliestRet) Object.assign(results, earliestRet);
 
   const routing = getLifeInsuranceRouting(data);

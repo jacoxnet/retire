@@ -5,6 +5,7 @@
 import {
   FILING_STATUS_MAP, getRmdStartAge, getSingleLifeDivisor, RMD_TABLE_ARR, SINGLE_LIFE_TABLE_ARR,
 } from './constants';
+import { isGuardrailPlan } from './guardrails';
 import {
   INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, type InheritedAccounts,
 } from './inherited';
@@ -408,6 +409,8 @@ export interface SimInputs {
   spouse_life_insurance_type: string;
   spouse_life_insurance_term_age: number;
   life_insurance_policies?: Dict[];
+  /** Present (true) when regular spending follows the Guyton-Klinger guardrails (guardrails.ts). */
+  guardrails?: boolean;
 }
 
 /**
@@ -566,6 +569,7 @@ export function extractSimInputs(plan: Dict | null | undefined): SimInputs {
     ...(Array.isArray(raw?.life_insurance_policies) && raw.life_insurance_policies.length > 0
       ? { life_insurance_policies: raw.life_insurance_policies }
       : {}),
+    ...(isGuardrailPlan(raw) ? { guardrails: true } : {}),
   };
 }
 

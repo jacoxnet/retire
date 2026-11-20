@@ -2,7 +2,9 @@
 // plans round-trip unchanged. Loose index signatures keep unknown-but-harmless keys
 // (e.g. engine metadata) from failing type checks.
 
-export type SimulationType = 'regular' | 'goal_seeking' | 'earliest_retirement';
+export type SimulationType = 'regular' | 'goal_seeking' | 'earliest_retirement' | 'guyton_klinger';
+/** Guardrails mode: solve the starting spending for a 99% success rate, or use the plan's desired spending. */
+export type GuardrailSpendingMode = 'solve' | 'specified';
 export type EarliestRetirementStrategy = 'simultaneous' | 'same_age' | 'solve_user' | 'solve_spouse';
 export type FilingStatus = 'single' | 'joint' | 'married_filing_jointly' | 'hoh' | 'head_of_household';
 export type Frequency = 'monthly' | 'annual' | 'one_time' | 'one-time';
@@ -158,6 +160,7 @@ export interface Plan {
   goal_seeking?: boolean;
   simulation_type?: SimulationType | string;
   earliest_retirement_strategy?: EarliestRetirementStrategy | string;
+  gk_spending_mode?: GuardrailSpendingMode | string;
   user_name?: string;
   user_age?: number;
   user_retirement_age?: number;

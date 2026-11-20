@@ -2,6 +2,7 @@
 // stage-1 migrations of import_plan_data (normalize_plan_fields in core/views.py).
 // A loaded file bypasses the Enter form, so its fields are coerced to the types the
 // form would produce, unknown keys are dropped and bad values are reported.
+import { isGuardrailPlan } from '../engine/guardrails';
 import { getBool, getFloat, getInt, pyStr } from './coerce';
 import type { Plan } from './types';
 
@@ -12,6 +13,7 @@ type Obj = Record<string, any>;
 export const PLAN_SCALAR_KINDS: Kinds = {
   goal_seeking: 'bool',
   simulation_type: 'str',
+  gk_spending_mode: 'str',
   user_name: 'str',
   user_age: 'int',
   user_retirement_age: 'int',
@@ -240,6 +242,10 @@ export function normalizePlanFields(data: Obj): string[] {
   }
   if (data.simulation_type === 'earliest_retirement' && !data.earliest_retirement_strategy) {
     data.earliest_retirement_strategy = 'simultaneous';
+  }
+  if (isGuardrailPlan(data)) {
+    data.goal_seeking = false;
+    if (data.gk_spending_mode !== 'specified') data.gk_spending_mode = 'solve';
   }
 
   if (isObj(data.social_security)) {

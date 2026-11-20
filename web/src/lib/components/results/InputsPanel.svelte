@@ -5,6 +5,7 @@
   import { untrack } from 'svelte';
   import type { Results } from '../../app/results';
   import { djangoMoney, floatformat } from '../../app/resultsFormat';
+  import { GK_SIMULATION_TYPE, GK_TARGET_SUCCESS_RATE, guardrailSolves } from '../../engine/guardrails';
   import { pyStr } from '../../plan/coerce';
   import type { ModeChangeInput } from '../../plan/modeChange';
 
@@ -37,9 +38,16 @@
     return str + '%';
   }
 
+  /** The results' mode, and whether its spending was solved for (so there is none to edit). */
+  const simType = $derived(r.simulation_type || (r.goal_seeking ? 'goal_seeking' : 'regular'));
+  const guardrailsSolved = $derived(guardrailSolves(r.plan_data_json));
+  const spendingSolved = $derived(simType === 'goal_seeking' || guardrailsSolved);
+  /** The plan's own desired spending (the results' is the solved one after a search). */
+  const planSpending = $derived(Number((r.original_plan_data_json ?? r.plan_data_json)?.desired_spending) || 0);
+
   // The form as the template rendered it.
   function initialValues(): Record<string, string> {
-    const currentSimType = r.simulation_type || (r.goal_seeking ? 'goal_seeking' : 'regular');
+    const currentSimType = simType;
     const v: Record<string, string> = {
       simulation_type: currentSimType,
       target_success_rate: percentText(floatformat(r.target_success_rate || 85.0, -2)),
@@ -54,7 +62,8 @@
     if (currentSimType === 'earliest_retirement') {
       v.earliest_retirement_strategy = (r.plan_data_json?.earliest_retirement_strategy as string) || (r as any).strategy || 'simultaneous';
     }
-    if (currentSimType !== 'goal_seeking') v.desired_spending = floatformat(r.desired_spending, 0);
+    if (currentSimType === GK_SIMULATION_TYPE) v.gk_spending_mode = guardrailsSolved ? 'solve' : 'specified';
+    if (!spendingSolved) v.desired_spending = floatformat(r.desired_spending, 0);
     if (r.is_married) v.spouse_age_death = pyStr(r.spouse_age_death);
     return v;
   }
@@ -79,7 +88,7 @@
   });
 
   const topSliders = $derived<Slider[]>([
-    ...((r.simulation_type ?? (r.goal_seeking ? 'goal_seeking' : 'regular')) !== 'goal_seeking'
+    ...(!spendingSolved
       ? [{ name: 'desired_spending', label: 'Desired Annual Recurring Spending', min: 0, max: 500000, step: 1000, width: 120, unit: '$' as const }]
       : []),
     { name: 'inflation_rate', label: 'Inflation Rate', min: 0, max: 15, step: 0.1, width: 90, unit: '%' },
@@ -118,7 +127,9 @@
         return;
       }
     }
-    onApply({ ...values });
+    // The guardrails option belongs to the guardrails mode only.
+    const { gk_spending_mode, ...rest } = values;
+    onApply(values.simulation_type === GK_SIMULATION_TYPE ? { ...rest, gk_spending_mode: gk_spending_mode || 'solve' } : rest);
   }
 </script>
 
@@ -179,6 +190,15 @@
           <small class="text-muted d-block">Solved dynamically for target {floatformat(r.target_success_rate || 85.0, 1)}% confidence.</small>
         </div>
       {/if}
+      {#if guardrailsSolved}
+        <div class="mb-3 p-2 bg-light rounded border border-success-subtle" id="results_solved_guardrails_display">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold text-success"><i class="fa-solid fa-road-barrier me-1"></i>Starting Annual Spending (Solved)</span>
+            <span class="badge bg-success fs-6">${djangoMoney(r.achieved_spending || r.desired_spending)}/yr</span>
+          </div>
+          <small class="text-muted d-block">Solved for {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% confidence under the guardrail rules, in today's dollars.</small>
+        </div>
+      {/if}
       {#if r.simulation_type === 'earliest_retirement' && r.achieved_user_ret_age}
         <div class="mb-3 p-2 bg-light rounded border border-primary-subtle" id="results_solved_earliest_ret_display">
           <div class="d-flex justify-content-between align-items-center mb-1">
@@ -232,7 +252,7 @@
         Maximum Spending Simulation <span class="text-muted fw-normal small">(Solves for Spending)</span>
       </label>
     </div>
-    <div class="form-check mb-3">
+    <div class="form-check mb-2">
       <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_earliest" value="earliest_retirement"
         checked={values.simulation_type === 'earliest_retirement'} onchange={(e) => {
           set('simulation_type')(e);
@@ -242,6 +262,41 @@
         Earliest Retirement Age Simulation <span class="text-secondary fw-normal small">(Solves for Retirement Age)</span>
       </label>
     </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="radio" name="simulation_type" id="results_sim_type_guardrails" value={GK_SIMULATION_TYPE}
+        checked={values.simulation_type === GK_SIMULATION_TYPE} onchange={(e) => {
+          set('simulation_type')(e);
+          if (!values.gk_spending_mode) values.gk_spending_mode = 'solve';
+        }} {disabled}>
+      <label class="form-check-label fw-semibold" for="results_sim_type_guardrails">
+        Guyton-Klinger Guardrails <span class="text-muted fw-normal small">(Spending Adjusts with the Portfolio)</span>
+      </label>
+    </div>
+    {#if values.simulation_type === GK_SIMULATION_TYPE}
+      <div class="mb-3 p-3 bg-light rounded border" id="results_guardrails_group">
+        <div class="fw-semibold mb-2">Starting Spending at Retirement</div>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="radio" name="gk_spending_mode" id="results_gk_solve" value="solve"
+            checked={values.gk_spending_mode !== 'specified'} onchange={set('gk_spending_mode')} {disabled}>
+          <label class="form-check-label" for="results_gk_solve">
+            Solve for the maximum <span class="text-muted small">({floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success rate)</span>
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="gk_spending_mode" id="results_gk_specified" value="specified"
+            checked={values.gk_spending_mode === 'specified'} onchange={set('gk_spending_mode')} {disabled}>
+          <label class="form-check-label" for="results_gk_specified">
+            Use my Desired Annual Recurring Spending
+            {#if spendingSolved}<span class="text-muted small">(${djangoMoney(planSpending)}/yr)</span>{/if}
+          </label>
+        </div>
+        <div class="form-text mt-2">
+          Each year after retirement begins, regular spending rises with inflation (skipped after a down year while withdrawals run
+          above their starting rate), is cut 10% if the withdrawal rate climbs more than 20% above its starting level (never in the
+          final 15 years), and is raised 10% if it falls more than 20% below.
+        </div>
+      </div>
+    {/if}
     <div class="mb-3" id="results_target_success_group" style="display: {values.simulation_type === 'goal_seeking' || values.simulation_type === 'earliest_retirement' ? 'block' : 'none'};">
       <label for="results_target_success_rate" class="form-label fw-semibold">Target Success Rate %</label>
       <input type="text" inputmode="decimal" class={['form-control percent-input', targetInvalid && 'is-invalid']} id="results_target_success_rate"
