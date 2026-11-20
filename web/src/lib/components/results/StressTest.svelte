@@ -78,6 +78,7 @@
     { label: 'Runs with at Least One 10% Cut', value: (g) => g.pct_runs_cut, money: false, moreIsBetter: false },
     { label: 'Runs with at Least One 10% Raise', value: (g) => g.pct_runs_raise, money: false, moreIsBetter: true },
     { label: 'Runs that Skipped an Inflation Raise', value: (g) => g.pct_runs_freeze, money: false, moreIsBetter: false },
+    { label: 'Runs that Made Every Allowed Cut', value: (g) => g.pct_runs_max_cuts, money: false, moreIsBetter: false },
     { label: 'Mean Lowest-Year Withdrawal (Real)', value: (g) => g.lowest_withdrawal_real.mean, money: true, moreIsBetter: true },
     { label: 'Mean Peak-Year Withdrawal (Real)', value: (g) => g.peak_withdrawal_real.mean, money: true, moreIsBetter: true },
     { label: 'Mean Final-Year Withdrawal (Real)', value: (g) => g.final_withdrawal_real.mean, money: true, moreIsBetter: true },

@@ -4,8 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { meanReturns, runDeterministic, runSimulationPath } from '../src/lib/engine/deterministic';
 import {
-  GK_EVENT_CUT, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START, GK_SIMULATION_TYPE, type GuardrailConfig,
-  guardrailConfig, guardrailSolves, guardrailYear, isGuardrailPlan, newGuardrailState,
+  addGuardrailPath, GK_EVENT_CUT, GK_EVENT_CUT_LIMITED, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START, GK_SIMULATION_TYPE,
+  type GuardrailConfig, guardrailConfig, guardrailMaxCuts, guardrailSolves, guardrailStats, guardrailYear, isGuardrailPlan,
+  newGuardrailState, newGuardrailTotals,
 } from '../src/lib/engine/guardrails';
 import { extractSimInputs, prepareNumbaInputs } from '../src/lib/engine/inputs';
 import { binarySearch, generateRuns, localRunner, type McJob, splitRanges, summarize } from '../src/lib/engine/mc';
@@ -16,12 +17,13 @@ import { deepClose, fixtureIndex, loadPlanFixture } from './fixtures';
 const SEED = fixtureIndex().generated_with.mc_seed;
 const INF = 1.03;
 
-/** A 30-year plan retiring in year 1 on $40,000 (today's dollars) with 3% inflation. */
+/** A 30-year plan retiring in year 1 on $40,000 (today's dollars) with 3% inflation: 29 retirement years, 2 cuts. */
 function config(over: Partial<GuardrailConfig> = {}): GuardrailConfig {
   const years = 30;
   return {
     startT: 1,
     noCutFromT: years - 15,
+    maxCuts: 2,
     baseSpending: 40000,
     tFirstDeath: Infinity,
     survivorScale: 1,
@@ -133,6 +135,39 @@ describe('guardrailYear', () => {
     expect(s.cuts).toBe(1);
   });
 
+  it('makes at most maxCuts cuts; after that the upper guardrail no longer cuts, but raises go on', () => {
+    const c = config();
+    const s = started(c);
+    expect(guardrailYear(c, s, 2, 500000, 1)).toBeCloseTo(41200 * INF * 0.9, 9);
+    expect(guardrailYear(c, s, 3, 400000, 1)).toBeCloseTo(41200 * INF ** 2 * 0.81, 9);
+    expect(s.cuts).toBe(2);
+    // A third breach: no cut, just the inflation raise.
+    expect(guardrailYear(c, s, 4, 300000, 1)).toBeCloseTo(41200 * INF ** 3 * 0.81, 9);
+    expect(s.event).toBe(GK_EVENT_CUT_LIMITED);
+    expect([s.cuts, s.limitedCuts]).toEqual([2, 1]);
+    // A raise still happens, and doesn't give a cut back.
+    expect(guardrailYear(c, s, 5, 1e7, 1)).toBeCloseTo(41200 * INF ** 4 * 0.81 * 1.1, 9);
+    expect(s.event).toBe(GK_EVENT_RAISE);
+    expect(guardrailYear(c, s, 6, 300000, 1)).toBeCloseTo(41200 * INF ** 5 * 0.81 * 1.1, 9);
+    expect(s.event).toBe(GK_EVENT_CUT_LIMITED);
+    expect([s.cuts, s.limitedCuts, s.raises]).toEqual([2, 2, 1]);
+  });
+
+  it('a breach in the final 15 years is neither a cut nor a limited cut', () => {
+    const c = config({ maxCuts: 0 });
+    const s = started(c);
+    expect(guardrailYear(c, s, 2, 500000, 1)).toBeCloseTo(41200 * INF, 9);
+    expect(s.event).toBe(GK_EVENT_CUT_LIMITED);
+    for (let t = 3; t < 15; t++) guardrailYear(c, s, t, 1e6 * INF ** (t - 1), 1);
+    guardrailYear(c, s, 15, 100000, 1);
+    expect(s.event).toBe(0);
+    expect([s.cuts, s.limitedCuts]).toEqual([0, 1]);
+  });
+
+  it('allows one cut for every 10 retirement years, rounded down', () => {
+    expect([0, 9, 10, 19, 29, 30, 34, 40, 41].map(guardrailMaxCuts)).toEqual([0, 0, 1, 1, 2, 3, 3, 4, 4]);
+  });
+
   it('with no portfolio in Retirement Year 0, the initial rate is set in the first year there is one', () => {
     const c = config();
     const s = newGuardrailState();
@@ -148,7 +183,7 @@ describe('guardrailYear', () => {
     expect(s.startPortfolio).toBe(0);
   });
 
-  it('an empty portfolio is an unbounded withdrawal rate: cuts until the final 15 years', () => {
+  it('an empty portfolio is an unbounded withdrawal rate: cuts (up to the limit) until the final 15 years', () => {
     const c = config();
     const s = started(c);
     expect(guardrailYear(c, s, 2, 0, 1)).toBeCloseTo(41200 * INF * 0.9, 9);
@@ -204,6 +239,7 @@ describe('guardrailConfig', () => {
   it('Retirement Year 0 is the first year of regular spending; the final 15 years end the plan', () => {
     expect(c.startT).toBe(Math.max(0, inputs.desired_spending_start_age - inputs.user_age));
     expect(c.noCutFromT).toBe(inputs.total_years - 15);
+    expect(c.maxCuts).toBe(Math.floor((inputs.total_years - c.startT) / 10));
     expect(c.baseSpending).toBe(inputs.desired_spending);
     expect(c.survivorScale).toBeCloseTo(inputs.survivor_spending / inputs.desired_spending, 12);
   });
@@ -258,6 +294,7 @@ function kernelVsProjection(plan: Record<string, any>, returns: (t: number) => n
   let cuts = 0;
   let raises = 0;
   let freezes = 0;
+  let limited = 0;
   path.forEach((step, t) => {
     const e = step.ending_assets.total - (t === years - 1 ? step.ending_assets.terminal_life_insurance ?? 0 : 0);
     const k = traj[t + 1] - (t === years - 1 ? step.ending_assets.terminal_life_insurance ?? 0 : 0);
@@ -267,9 +304,12 @@ function kernelVsProjection(plan: Record<string, any>, returns: (t: number) => n
     if (ev & GK_EVENT_CUT) cuts++;
     if (ev & GK_EVENT_RAISE) raises++;
     if (ev & GK_EVENT_FREEZE) freezes++;
+    if (ev & GK_EVENT_CUT_LIMITED) limited++;
   });
   // The kernel counted the same decisions.
-  expect([res.guardrails!.cuts, res.guardrails!.raises, res.guardrails!.freezes]).toEqual([cuts, raises, freezes]);
+  const g = res.guardrails!;
+  expect([g.cuts, g.raises, g.freezes, g.limitedCuts]).toEqual([cuts, raises, freezes, limited]);
+  expect(cuts).toBeLessThanOrEqual(guardrailConfig(inputs, prepareNumbaInputs(inputs)).maxCuts);
   return { worst, events };
 }
 
@@ -319,6 +359,8 @@ describe('deterministic projection under guardrails', () => {
       expect(rows[t].milestones.includes('Guardrails: Spending Cut 10%')).toBe(Boolean(ev & GK_EVENT_CUT));
       expect(rows[t].milestones.includes('Guardrails: Spending Raised 10%')).toBe(Boolean(ev & GK_EVENT_RAISE));
       expect(rows[t].milestones.includes('Guardrails: Inflation Raise Skipped')).toBe(Boolean(ev & GK_EVENT_FREEZE));
+      expect(rows[t].milestones.some((m: string) => /^Guardrails: Cut Not Made \(Limit of \d+ Cuts Reached\)$/.test(m)))
+        .toBe(Boolean(ev & GK_EVENT_CUT_LIMITED));
       if (ev & (GK_EVENT_CUT | GK_EVENT_RAISE)) seen++;
       // Mean returns are positive, so no raise is skipped; no cuts in the final 15 years.
       expect(ev & GK_EVENT_FREEZE).toBe(0);
@@ -411,7 +453,13 @@ describe('Monte Carlo under guardrails', () => {
     expect(g.starting_withdrawal_pct).toBeCloseTo(4, 12);
     expect(g.initial_withdrawal_rate).toBeCloseTo(4, 12);
     expect(g.lowest_withdrawal.max).toBe(40000);
-    expect(g.peak_withdrawal.min).toBe(40000);
+    expect(g.peak_withdrawal.min).toBeGreaterThanOrEqual(40000);
+    // 30 retirement years: at most 3 cuts on any path.
+    expect(g.max_cuts).toBe(3);
+    // Nominal spending falls only by a cut.
+    expect(g.lowest_withdrawal.min).toBeGreaterThanOrEqual(40000 * 0.9 ** 3 - 1e-6);
+    expect(g.pct_runs_max_cuts).toBeGreaterThan(0);
+    expect(g.pct_runs_max_cuts).toBeLessThan(g.pct_runs_cut);
     // Some paths are cut, some raised, but not all of either.
     for (const pct of [g.pct_runs_cut, g.pct_runs_raise]) {
       expect(pct).toBeGreaterThan(20);

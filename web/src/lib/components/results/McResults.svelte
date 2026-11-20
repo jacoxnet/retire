@@ -297,25 +297,36 @@
 
       <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
       <div class="row g-2 text-center mb-3" id="gkActivity">
-        <div class="col-sm-4">
+        <div class="col-sm-6 col-lg-3">
           <div class="p-2 bg-light rounded border h-100">
             <div class="fs-4 fw-bold text-danger" id="gkPctCut">{floatformat(g.pct_runs_cut, 1)}%</div>
             <div class="small text-secondary">of runs had at least one 10% cut</div>
           </div>
         </div>
-        <div class="col-sm-4">
+        <div class="col-sm-6 col-lg-3">
           <div class="p-2 bg-light rounded border h-100">
             <div class="fs-4 fw-bold text-success" id="gkPctRaise">{floatformat(g.pct_runs_raise, 1)}%</div>
             <div class="small text-secondary">of runs had at least one 10% raise</div>
           </div>
         </div>
-        <div class="col-sm-4">
+        <div class="col-sm-6 col-lg-3">
           <div class="p-2 bg-light rounded border h-100">
             <div class="fs-4 fw-bold text-secondary" id="gkPctFreeze">{floatformat(g.pct_runs_freeze, 1)}%</div>
             <div class="small text-secondary">of runs skipped at least one inflation raise</div>
           </div>
         </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="p-2 bg-light rounded border h-100">
+            <div class="fs-4 fw-bold text-warning-emphasis" id="gkPctMaxCuts">{floatformat(g.pct_runs_max_cuts, 1)}%</div>
+            <div class="small text-secondary">of runs made all {g.max_cuts} allowed cuts</div>
+          </div>
+        </div>
       </div>
+      <p class="small text-muted mb-3" id="gkCutLimit">
+        A run makes at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
+        after that the upper guardrail no longer cuts spending.
+        {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
+      </p>
 
       {@render endingWealth('mcEndingWealthTableGuardrails')}
     </div>

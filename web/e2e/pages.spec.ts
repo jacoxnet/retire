@@ -145,7 +145,7 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
   expect(rate).toBeGreaterThan(97); // solved on other random paths, so close to 99 rather than exactly
   await expect(page.locator('#gkStartingWithdrawal')).toContainText('Solved for a 99% success rate');
   await expect(page.locator('#gkWithdrawalTable tbody tr')).toHaveCount(7);
-  for (const id of ['#gkPctCut', '#gkPctRaise', '#gkPctFreeze']) {
+  for (const id of ['#gkPctCut', '#gkPctRaise', '#gkPctFreeze', '#gkPctMaxCuts']) {
     const pct = parseFloat((await page.textContent(id))!);
     expect(pct).toBeGreaterThan(0);
     expect(pct).toBeLessThanOrEqual(100);
@@ -158,10 +158,10 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
   await expect(page.locator('#projection tbody .badge', { hasText: 'Guardrails Set' })).toHaveCount(1);
   expect(await page.locator('#projection tbody .badge', { hasText: 'Guardrails: Spending' }).count()).toBeGreaterThan(0);
   await page.click('#stress-tab');
-  await expect(page.locator('#stressGuardrailsTable tbody tr')).toHaveCount(6);
+  await expect(page.locator('#stressGuardrailsTable tbody tr')).toHaveCount(7);
   await page.selectOption('#stressScenarioSelect', '1973_stagflation');
   await expect(page.locator('#stressScenarioTitle')).toContainText('Stagflation', { timeout: 60_000 });
-  await expect(page.locator('#stressGuardrailsTable tbody tr')).toHaveCount(6);
+  await expect(page.locator('#stressGuardrailsTable tbody tr')).toHaveCount(7);
 
   // The plan's own spending instead: no search, and the amount can be edited again.
   await page.click('#stats-tab');
