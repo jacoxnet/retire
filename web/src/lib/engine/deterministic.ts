@@ -3,7 +3,7 @@
 // tables. Shares the RMD/tax/withdrawal waterfall with the Monte Carlo kernel.
 import { FILING_STATUS_MAP } from './constants';
 import {
-  GK_EVENT_CUT, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START, guardrailConfig, guardrailYear, newGuardrailState,
+  GK_EVENT_CUT, GK_EVENT_CUT_LIMITED, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START, guardrailConfig, guardrailYear, newGuardrailState,
 } from './guardrails';
 import {
   INH_PRE_SPOUSE, INH_PRE_USER, INH_ROTH_SPOUSE, INH_ROTH_USER, inheritedLedger, ledgerRequired, ledgerSettle,
@@ -744,7 +744,7 @@ export function runSimulationPath(
       inh_roth_spouse_req: inhReq[INH_ROTH_SPOUSE],
     });
     if (gk !== null) {
-      res.guardrail = { event: gkState.event, initial_withdrawal_rate: gkState.iwr };
+      res.guardrail = { event: gkState.event, initial_withdrawal_rate: gkState.iwr, max_cuts: gk.maxCuts };
       priorGrowth = get(get(res, 'growth', {}), 'total', 0.0);
     }
     results.push(res);
@@ -869,6 +869,7 @@ export function runDeterministic(plan: Dict): Dict[] {
       if (event & GK_EVENT_START) milestones.push(`Guardrails Set (Initial Withdrawal Rate ${(guardrail.initial_withdrawal_rate * 100.0).toFixed(1)}%)`);
       if (event & GK_EVENT_FREEZE) milestones.push('Guardrails: Inflation Raise Skipped');
       if (event & GK_EVENT_CUT) milestones.push('Guardrails: Spending Cut 10%');
+      if (event & GK_EVENT_CUT_LIMITED) milestones.push(`Guardrails: Cut Not Made (Limit of ${guardrail.max_cuts} Cuts Reached)`);
       if (event & GK_EVENT_RAISE) milestones.push('Guardrails: Spending Raised 10%');
     }
 

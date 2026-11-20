@@ -398,6 +398,9 @@ describe('guardrails mode', () => {
     expect(text(c, '#gkPctCut')).toBe(`${g.pct_runs_cut.toFixed(1)}%`);
     expect(text(c, '#gkPctRaise')).toBe(`${g.pct_runs_raise.toFixed(1)}%`);
     expect(text(c, '#gkPctFreeze')).toBe(`${g.pct_runs_freeze.toFixed(1)}%`);
+    expect(text(c, '#gkPctMaxCuts')).toBe(`${g.pct_runs_max_cuts.toFixed(1)}%`);
+    expect(text(c, '#gkActivity')).toContain(`of runs made all ${g.max_cuts} allowed cuts`);
+    expect(text(c, '#gkCutLimit')).toContain(`A run makes at most ${g.max_cuts} cut`);
 
     // Ending wealth as in the other modes; no "adopt" card.
     expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1].slice(0, 2)).toEqual(['Median Ending Wealth', money(solved.run_median)]);
@@ -485,10 +488,12 @@ describe('guardrails mode', () => {
     const rows = rowsOf(c, '#stressGuardrailsTable');
     expect(rows.map((r) => r[0])).toEqual([
       'Runs with at Least One 10% Cut', 'Runs with at Least One 10% Raise', 'Runs that Skipped an Inflation Raise',
+      'Runs that Made Every Allowed Cut',
       'Mean Lowest-Year Withdrawal (Real)', 'Mean Peak-Year Withdrawal (Real)', 'Mean Final-Year Withdrawal (Real)',
     ]);
     expect(rows[0].slice(1, 3)).toEqual([`${reg.pct_runs_cut.toFixed(1)}%`, `${st.pct_runs_cut.toFixed(1)}%`]);
-    expect(rows[3].slice(1)).toEqual([
+    expect(rows[3].slice(1, 3)).toEqual([`${reg.pct_runs_max_cuts.toFixed(1)}%`, `${st.pct_runs_max_cuts.toFixed(1)}%`]);
+    expect(rows[4].slice(1)).toEqual([
       stressMoney(reg.lowest_withdrawal_real.mean), stressMoney(st.lowest_withdrawal_real.mean),
       stressDeltaMoney(st.lowest_withdrawal_real.mean - reg.lowest_withdrawal_real.mean),
     ]);

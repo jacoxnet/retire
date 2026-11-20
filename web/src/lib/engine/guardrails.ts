@@ -11,7 +11,8 @@
 //      only through their effect on the portfolio, so a lumpy expense, a one-time receipt,
 //      or the start or end of an income stream doesn't by itself trigger a cut or raise.
 //   3. Guardrails: above 120% of the initial rate, cut regular spending 10% (never in the
-//      final 15 years of the plan); below 80%, raise it 10%.
+//      final 15 years of the plan, and at most GK_MAX_CUT_FRACTION of the retirement years'
+//      worth of cuts per path); below 80%, raise it 10%.
 // Years before Retirement Year 0 run under the ordinary accumulation rules.
 //
 // guardrailYear is the single implementation of these rules; the Monte Carlo kernel
@@ -30,6 +31,17 @@ export const GK_CUT = 0.1;
 export const GK_RAISE = 0.1;
 /** No cuts in this many final years of the plan. */
 export const GK_NO_CUT_YEARS = 15;
+/**
+ * A path makes at most floor(this fraction x retirement years) cuts (3 in a 30-year
+ * retirement); once it has, the upper guardrail no longer cuts. Without a limit the solved
+ * starting spending is held back only by the cut-free final years, so it comes out high
+ * and the typical path then cuts again and again.
+ */
+export const GK_MAX_CUT_FRACTION = 0.1;
+
+/** The most cuts a path may make in a retirement of this many years. */
+export const guardrailMaxCuts = (retirementYears: number): number =>
+  Math.max(0, Math.floor(GK_MAX_CUT_FRACTION * retirementYears + 1e-9));
 
 // GuardrailState.event flags for a year
 /** The inflation raise was skipped. */
@@ -38,6 +50,8 @@ export const GK_EVENT_CUT = 2;
 export const GK_EVENT_RAISE = 4;
 /** The initial withdrawal rate was established this year. */
 export const GK_EVENT_START = 8;
+/** The upper guardrail called for a cut, but the path had already made its maximum number. */
+export const GK_EVENT_CUT_LIMITED = 16;
 
 /** True when the plan runs under the guardrail rules. */
 export const isGuardrailPlan = (plan: Record<string, any> | null | undefined): boolean =>
@@ -53,6 +67,8 @@ export interface GuardrailConfig {
   startT: number;
   /** Cuts apply only before this year index. */
   noCutFromT: number;
+  /** The most cuts a path may make. */
+  maxCuts: number;
   /** Regular spending in today's dollars (the plan's, or the candidate being tested). */
   baseSpending: number;
   /** Last year index with both spouses alive (Infinity when single). */
@@ -66,9 +82,12 @@ export interface GuardrailConfig {
 
 export function guardrailConfig(inputs: SimInputs, nb: NumbaInputs): GuardrailConfig {
   const years = inputs.total_years;
+  const startT = Math.max(0, inputs.desired_spending_start_age - inputs.user_age);
   return {
-    startT: Math.max(0, inputs.desired_spending_start_age - inputs.user_age),
+    startT,
     noCutFromT: years - GK_NO_CUT_YEARS,
+    // The retirement years run from Retirement Year 0 to the end of the plan.
+    maxCuts: guardrailMaxCuts(years - startT),
     baseSpending: nb.desired_spending,
     tFirstDeath: inputs.is_married
       ? Math.min(inputs.user_age_death - inputs.user_age, inputs.spouse_age_death - inputs.spouse_age)
@@ -101,6 +120,8 @@ export interface GuardrailState {
   cuts: number;
   raises: number;
   freezes: number;
+  /** Cuts the upper guardrail called for after the path had reached its maximum. */
+  limitedCuts: number;
 }
 
 export function newGuardrailState(): GuardrailState {
@@ -108,7 +129,7 @@ export function newGuardrailState(): GuardrailState {
     spending: 0.0, iwr: 0.0, event: 0, startPortfolio: 0.0,
     startNominal: 0.0, startReal: 0.0, finalNominal: 0.0, finalReal: 0.0,
     peakNominal: 0.0, peakReal: 0.0, lowNominal: 0.0, lowReal: 0.0,
-    cuts: 0, raises: 0, freezes: 0,
+    cuts: 0, raises: 0, freezes: 0, limitedCuts: 0,
   };
 }
 
@@ -116,7 +137,7 @@ export function resetGuardrailState(s: GuardrailState): void {
   s.spending = s.iwr = s.startPortfolio = 0.0;
   s.startNominal = s.startReal = s.finalNominal = s.finalReal = 0.0;
   s.peakNominal = s.peakReal = s.lowNominal = s.lowReal = 0.0;
-  s.event = s.cuts = s.raises = s.freezes = 0;
+  s.event = s.cuts = s.raises = s.freezes = s.limitedCuts = 0;
 }
 
 /** Withdrawal rate of regular spending on a portfolio (unbounded when the portfolio is gone). */
@@ -158,9 +179,14 @@ export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, 
     const cwr = withdrawalRate(s.spending * scale, portfolio);
     if (cwr > GK_UPPER_GUARDRAIL * s.iwr) {
       if (t < c.noCutFromT) {
-        s.spending *= 1.0 - GK_CUT;
-        s.event |= GK_EVENT_CUT;
-        s.cuts += 1;
+        if (s.cuts < c.maxCuts) {
+          s.spending *= 1.0 - GK_CUT;
+          s.event |= GK_EVENT_CUT;
+          s.cuts += 1;
+        } else {
+          s.event |= GK_EVENT_CUT_LIMITED;
+          s.limitedCuts += 1;
+        }
       }
     } else if (cwr < GK_LOWER_GUARDRAIL * s.iwr) {
       s.spending *= 1.0 + GK_RAISE;
@@ -224,6 +250,12 @@ export interface GuardrailStats {
   pct_runs_cut: number;
   pct_runs_raise: number;
   pct_runs_freeze: number;
+  /** The most cuts a path may make (the same on every path). */
+  max_cuts: number;
+  /** Percentage of paths that made their maximum number of cuts. */
+  pct_runs_max_cuts: number;
+  /** Percentage of paths whose upper guardrail called for a cut after the maximum was reached. */
+  pct_runs_cut_limited: number;
 }
 
 // A chunk's totals travel between threads as one Float64Array: a header, then
@@ -236,16 +268,20 @@ const H_FREEZE = 3;
 const H_IWR_SUM = 4;
 const H_IWR_PATHS = 5;
 const H_PORTFOLIO_SUM = 6;
-const COUNTS = 7;
-/** Year index of Retirement Year 0 (the same in every chunk). */
-const H_START_T = 7;
-const HEADER = 8;
+const H_MAX_CUTS = 7;
+const H_CUT_LIMITED = 8;
+const COUNTS = 9;
+/** Year index of Retirement Year 0 and the most cuts a path may make (the same in every chunk). */
+const H_START_T = 9;
+const H_CUT_LIMIT = 10;
+const HEADER = 11;
 const AMOUNTS = ['startNominal', 'startReal', 'finalNominal', 'finalReal', 'peakNominal', 'peakReal', 'lowNominal', 'lowReal'] as const;
 const TOTALS_LEN = HEADER + 3 * AMOUNTS.length;
 
-export function newGuardrailTotals(startT: number): Float64Array {
+export function newGuardrailTotals(startT: number, maxCuts: number): Float64Array {
   const a = new Float64Array(TOTALS_LEN);
   a[H_START_T] = startT;
+  a[H_CUT_LIMIT] = maxCuts;
   for (let i = 0; i < AMOUNTS.length; i++) {
     a[HEADER + 3 * i + 1] = Infinity;
     a[HEADER + 3 * i + 2] = -Infinity;
@@ -259,6 +295,8 @@ export function addGuardrailPath(totals: Float64Array, s: GuardrailState): void 
   if (s.cuts > 0) totals[H_CUT] += 1;
   if (s.raises > 0) totals[H_RAISE] += 1;
   if (s.freezes > 0) totals[H_FREEZE] += 1;
+  if (s.cuts > 0 && s.cuts >= totals[H_CUT_LIMIT]) totals[H_MAX_CUTS] += 1;
+  if (s.limitedCuts > 0) totals[H_CUT_LIMITED] += 1;
   if (s.iwr > 0.0) {
     totals[H_IWR_SUM] += s.iwr;
     totals[H_IWR_PATHS] += 1;
@@ -275,7 +313,9 @@ export function addGuardrailPath(totals: Float64Array, s: GuardrailState): void 
 
 /** Combine the chunks' totals (in the order given) into the run's statistics. */
 export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
-  const all = newGuardrailTotals(chunkTotals.length ? chunkTotals[0][H_START_T] : 0);
+  const all = chunkTotals.length
+    ? newGuardrailTotals(chunkTotals[0][H_START_T], chunkTotals[0][H_CUT_LIMIT])
+    : newGuardrailTotals(0, 0);
   for (const c of chunkTotals) {
     for (let i = 0; i < COUNTS; i++) all[i] += c[i];
     for (let i = 0; i < AMOUNTS.length; i++) {
@@ -310,5 +350,8 @@ export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
     pct_runs_cut: pct(all[H_CUT]),
     pct_runs_raise: pct(all[H_RAISE]),
     pct_runs_freeze: pct(all[H_FREEZE]),
+    max_cuts: all[H_CUT_LIMIT],
+    pct_runs_max_cuts: pct(all[H_MAX_CUTS]),
+    pct_runs_cut_limited: pct(all[H_CUT_LIMITED]),
   };
 }
