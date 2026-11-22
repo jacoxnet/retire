@@ -384,6 +384,7 @@ describe('guardrails mode', () => {
     expect(start).toContain(`Retirement Year 0 is ${solved.current_year + g.start_year_index}; $${djangoMoney(g.starting_withdrawal_real)}/yr in today's dollars.`);
     expect(start).toContain('Solved for a 99% success rate under the guardrail rules.');
     expect(text(c, '#gkInitialRate')).toContain(`${g.initial_withdrawal_rate.toFixed(1)}% on average`);
+    expect(text(c, '#gkInitialRate')).toContain('dividing the amount of the regular retirement spending in the first year of retirement by that year\'s amount in the Accounts for Retirement');
 
     const money = (v: number) => `$${djangoMoney(v)}`;
     expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([

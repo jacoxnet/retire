@@ -327,17 +327,18 @@
       <p class="mb-3 small text-secondary" id="gkInitialRate">
         <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
         {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
-        <span class="text-muted">(regular spending over the portfolio; other expenses and income count only through their effect on the portfolio).</span>
+        <span class="text-muted">(which is the percentage determined by dividing the amount of the regular retirement spending in the first year of retirement by that year's amount in the Accounts for Retirement; other expenses and income count only through their effect on the portfolio).</span>
       </p>
 
       <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
+      <p class="small text-muted mb-2">Percent of simulation runs where Regular Retirement Spending was adjusted by the guardrails:</p>
       <div id="gkActivity" class="table-responsive mb-3">
         <table class="table table-hover align-middle mb-0" id="gkActivityTable">
           <thead class="table-light">
             <tr>
               <th>Adjustment Type</th>
               {#each act.colCounts as k (k)}
-                <th class="text-end">≥ {k}</th>
+                <th class="text-end">{k === 1 ? '≥ 1 time' : `≥ ${k} times`}</th>
               {/each}
               <th class="text-end">Max in a Run</th>
             </tr>
