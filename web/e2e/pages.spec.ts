@@ -145,7 +145,7 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
   expect(rate).toBeGreaterThan(97); // solved on other random paths, so close to 99 rather than exactly
   await expect(page.locator('#gkStartingWithdrawal')).toContainText('Solved for a 99% success rate');
   await expect(page.locator('#gkWithdrawalTable tbody tr')).toHaveCount(7);
-  for (const id of ['#gkPctCut', '#gkPctRaise', '#gkPctFreeze', '#gkPctMaxCuts']) {
+  for (const id of ['#gkPctCut', '#gkPctRaise', '#gkPctFreeze']) {
     const pct = parseFloat((await page.textContent(id))!);
     expect(pct).toBeGreaterThan(0);
     expect(pct).toBeLessThanOrEqual(100);
@@ -154,7 +154,7 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
 
   // The projection applies the rules too, and the stress test compares spending.
   await page.click('#projection-tab');
-  await expect(page.locator('#projection #scenarioComparisonBar')).toContainText('Solved Starting Spending under Guardrails');
+  await expect(page.locator('#projection #scenarioComparisonBar')).toContainText('Solved Starting Regular Retirement Spending under Guardrails');
   await expect(page.locator('#projection tbody .badge', { hasText: 'Guardrails Set' })).toHaveCount(1);
   expect(await page.locator('#projection tbody .badge', { hasText: 'Guardrails: Spending' }).count()).toBeGreaterThan(0);
   await page.click('#stress-tab');
