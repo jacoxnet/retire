@@ -28,7 +28,7 @@ export const ALL_QUESTIONS: QuestionMeta[] = [
 
   // Stage 3
   { id: 'spending_start', stage: 3, title: 'Retirement Spending Start Age', defaultDescription: 'Starts at retirement' },
-  { id: 'spending_desired', stage: 3, title: 'Desired Annual Retirement Spending', defaultDescription: '$60,000 / year (inflation-adjusted)' },
+  { id: 'spending_desired', stage: 3, title: 'Desired Regular Retirement Spending', defaultDescription: '$60,000 / year (inflation-adjusted)' },
   { id: 'spending_survivor', stage: 3, title: 'Surviving Spouse Living Expenses', defaultDescription: '$50,000 / year' },
   { id: 'spending_milestones', stage: 3, title: 'Milestone & Irregular Expenses', defaultDescription: 'No milestone expenses added' },
 

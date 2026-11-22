@@ -207,9 +207,9 @@
               {#if results.simulation_type === 'earliest_retirement'}
                 Solved Earliest Retirement: <strong>Age {results.achieved_user_ret_age}{#if results.is_married && results.achieved_spouse_ret_age !== undefined} / {results.achieved_spouse_ret_age}{/if}</strong>
               {:else if isGuardrails}
-                Solved Starting Spending under Guardrails: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
+                Solved Starting Regular Retirement Spending under Guardrails: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
               {:else}
-                Solved Maximum Spending: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
+                Solved Maximum Regular Retirement Spending: <strong>${djangoMoney(results.achieved_spending)}/yr</strong>
               {/if}
             {:else}
               {#if results.simulation_type === 'earliest_retirement'}

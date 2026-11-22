@@ -227,6 +227,11 @@ export interface WithdrawalStat {
   max: number;
 }
 
+export interface GuardrailActivityBucket {
+  count: number;
+  pct: number;
+}
+
 /** What the Results card shows for a guardrails run. Amounts are regular spending per year. */
 export interface GuardrailStats {
   /** Year index of Retirement Year 0. */
@@ -256,11 +261,16 @@ export interface GuardrailStats {
   pct_runs_max_cuts: number;
   /** Percentage of paths whose upper guardrail called for a cut after the maximum was reached. */
   pct_runs_cut_limited: number;
+  /** Cumulative distribution of runs with at least 1, 2, ... cuts up to the max observed. */
+  cuts_distribution: GuardrailActivityBucket[];
+  /** Cumulative distribution of runs with at least 1, 2, ... raises up to the max observed. */
+  raises_distribution: GuardrailActivityBucket[];
+  /** Cumulative distribution of runs with at least 1, 2, ... inflation skips up to the max observed. */
+  freezes_distribution: GuardrailActivityBucket[];
 }
 
 // A chunk's totals travel between threads as one Float64Array: a header, then
-// (sum, min, max) for each tracked amount. Sums are added chunk by chunk, so the last
-// bits of a mean depend on how the runs were split (unlike the ending-wealth statistics).
+// (sum, min, max) for each tracked amount, followed by histograms for cuts, raises, and freezes.
 const H_PATHS = 0;
 const H_CUT = 1;
 const H_RAISE = 2;
@@ -276,7 +286,13 @@ const H_START_T = 9;
 const H_CUT_LIMIT = 10;
 const HEADER = 11;
 const AMOUNTS = ['startNominal', 'startReal', 'finalNominal', 'finalReal', 'peakNominal', 'peakReal', 'lowNominal', 'lowReal'] as const;
-const TOTALS_LEN = HEADER + 3 * AMOUNTS.length;
+const STATS_END = HEADER + 3 * AMOUNTS.length;
+
+export const MAX_ACTIVITY = 60;
+const OFF_CUTS = STATS_END;
+const OFF_RAISES = OFF_CUTS + (MAX_ACTIVITY + 1);
+const OFF_FREEZES = OFF_RAISES + (MAX_ACTIVITY + 1);
+const TOTALS_LEN = OFF_FREEZES + (MAX_ACTIVITY + 1);
 
 export function newGuardrailTotals(startT: number, maxCuts: number): Float64Array {
   const a = new Float64Array(TOTALS_LEN);
@@ -309,6 +325,9 @@ export function addGuardrailPath(totals: Float64Array, s: GuardrailState): void 
     if (v < totals[at + 1]) totals[at + 1] = v;
     if (v > totals[at + 2]) totals[at + 2] = v;
   }
+  totals[OFF_CUTS + Math.min(MAX_ACTIVITY, s.cuts)] += 1;
+  totals[OFF_RAISES + Math.min(MAX_ACTIVITY, s.raises)] += 1;
+  totals[OFF_FREEZES + Math.min(MAX_ACTIVITY, s.freezes)] += 1;
 }
 
 /** Combine the chunks' totals (in the order given) into the run's statistics. */
@@ -324,6 +343,9 @@ export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
       all[at + 1] = Math.min(all[at + 1], c[at + 1]);
       all[at + 2] = Math.max(all[at + 2], c[at + 2]);
     }
+    for (let i = STATS_END; i < TOTALS_LEN; i++) {
+      all[i] += c[i];
+    }
   }
   const n = all[H_PATHS];
   const stat = (name: (typeof AMOUNTS)[number]): WithdrawalStat => {
@@ -334,6 +356,29 @@ export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
   // Retirement Year 0 spending is the same on every path.
   const start = stat('startNominal').max;
   const portfolio = n > 0 ? all[H_PORTFOLIO_SUM] / n : 0.0;
+
+  function cumulativeDistribution(offset: number): GuardrailActivityBucket[] {
+    let maxK = 0;
+    for (let k = MAX_ACTIVITY; k >= 1; k--) {
+      if (all[offset + k] > 0) {
+        maxK = k;
+        break;
+      }
+    }
+    if (maxK === 0) {
+      return [{ count: 1, pct: 0.0 }];
+    }
+    const dist: GuardrailActivityBucket[] = [];
+    for (let k = 1; k <= maxK; k++) {
+      let countGeK = 0;
+      for (let j = k; j <= MAX_ACTIVITY; j++) {
+        countGeK += all[offset + j];
+      }
+      dist.push({ count: k, pct: pct(countGeK) });
+    }
+    return dist;
+  }
+
   return {
     start_year_index: all[H_START_T],
     starting_withdrawal: start,
@@ -353,5 +398,8 @@ export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
     max_cuts: all[H_CUT_LIMIT],
     pct_runs_max_cuts: pct(all[H_MAX_CUTS]),
     pct_runs_cut_limited: pct(all[H_CUT_LIMITED]),
+    cuts_distribution: cumulativeDistribution(OFF_CUTS),
+    raises_distribution: cumulativeDistribution(OFF_RAISES),
+    freezes_distribution: cumulativeDistribution(OFF_FREEZES),
   };
 }

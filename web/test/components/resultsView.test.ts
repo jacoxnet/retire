@@ -103,7 +103,7 @@ describe('ResultsView', () => {
     await fireEvent.submit(q('#resultsInputsForm')!);
     expect(store.plan.goal_seeking).toBe(true);
     expect(store.plan.target_success_rate).toBe(75);
-    await waitFor(() => expect(q('#mcResultsCard')?.textContent).toContain('Max Achieved Desired Spending'), { timeout: 30_000 });
+    await waitFor(() => expect(q('#mcResultsCard')?.textContent).toContain('Maximum Regular Retirement Spending'), { timeout: 30_000 });
     expect((store.cachedResults as Results).achieved_spending).toBeGreaterThan(0);
   }, 60_000);
 

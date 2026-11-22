@@ -79,9 +79,9 @@
     { label: 'Runs with at Least One 10% Raise', value: (g) => g.pct_runs_raise, money: false, moreIsBetter: true },
     { label: 'Runs that Skipped an Inflation Raise', value: (g) => g.pct_runs_freeze, money: false, moreIsBetter: false },
     { label: 'Runs that Made Every Allowed Cut', value: (g) => g.pct_runs_max_cuts, money: false, moreIsBetter: false },
-    { label: 'Mean Lowest-Year Withdrawal (Real)', value: (g) => g.lowest_withdrawal_real.mean, money: true, moreIsBetter: true },
-    { label: 'Mean Peak-Year Withdrawal (Real)', value: (g) => g.peak_withdrawal_real.mean, money: true, moreIsBetter: true },
-    { label: 'Mean Final-Year Withdrawal (Real)', value: (g) => g.final_withdrawal_real.mean, money: true, moreIsBetter: true },
+    { label: 'Mean Lowest-Year Regular Retirement Spending (Real)', value: (g) => g.lowest_withdrawal_real.mean, money: true, moreIsBetter: true },
+    { label: 'Mean Peak-Year Regular Retirement Spending (Real)', value: (g) => g.peak_withdrawal_real.mean, money: true, moreIsBetter: true },
+    { label: 'Mean Final-Year Regular Retirement Spending (Real)', value: (g) => g.final_withdrawal_real.mean, money: true, moreIsBetter: true },
   ];
 </script>
 
@@ -163,8 +163,8 @@
       </div>
 
       <div class="p-2 px-3 bg-light rounded border mb-3 d-flex justify-content-between align-items-center">
-        <strong>Desired Recurring Annual Spending:</strong>
-        <span class="fw-bold text-success fs-6" id="cmpDesiredSpending">{stressMoney(stress.desired_spending)}</span>
+        <strong>Desired Regular Retirement Spending:</strong>
+        <span class="fw-bold text-success fs-6" id="cmpDesiredSpending">{stressMoney(stress.desired_spending)}/yr</span>
       </div>
 
       <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles (Nominal)</h5>

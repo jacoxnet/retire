@@ -56,13 +56,19 @@
 
   <div class="row align-items-center">
     <div class="col-md-4 mb-3">
-      <label for="desired_spending" class="form-label">Desired Recurring Annual Spending in Today’s Dollars</label>
-      <MoneyInput id="desired_spending" class="form-control currency-input" dollarSign bind:value={plan.desired_spending} />
+      <label for="desired_spending" class="form-label">Desired Regular Retirement Spending in Today’s Dollars</label>
+      <div class="input-group">
+        <MoneyInput id="desired_spending" class="form-control currency-input" dollarSign bind:value={plan.desired_spending} />
+        <span class="input-group-text text-muted small">/yr</span>
+      </div>
     </div>
     {#if married}
       <div class="col-md-4 mb-3" id="survivor_spending_group">
         <label for="survivor_spending" class="form-label">Amount of Regular Retirement Spending After First Death</label>
-        <MoneyInput id="survivor_spending" class="form-control currency-input" dollarSign bind:value={plan.survivor_spending} />
+        <div class="input-group">
+          <MoneyInput id="survivor_spending" class="form-control currency-input" dollarSign bind:value={plan.survivor_spending} />
+          <span class="input-group-text text-muted small">/yr</span>
+        </div>
       </div>
     {/if}
     <div class="col-md-4 mb-3 d-flex align-items-center">

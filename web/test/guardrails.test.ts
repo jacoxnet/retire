@@ -465,6 +465,15 @@ describe('Monte Carlo under guardrails', () => {
       expect(pct).toBeGreaterThan(20);
       expect(pct).toBeLessThan(95);
     }
+    expect(g.cuts_distribution.length).toBeGreaterThanOrEqual(1);
+    expect(g.cuts_distribution[0].pct).toBe(g.pct_runs_cut);
+    if (g.cuts_distribution.length > 1) {
+      expect(g.cuts_distribution[1].pct).toBeLessThanOrEqual(g.cuts_distribution[0].pct);
+    }
+    expect(g.raises_distribution.length).toBeGreaterThanOrEqual(1);
+    expect(g.raises_distribution[0].pct).toBe(g.pct_runs_raise);
+    expect(g.freezes_distribution.length).toBeGreaterThanOrEqual(1);
+    expect(g.freezes_distribution[0].pct).toBe(g.pct_runs_freeze);
     // Adapting the spending rescues most of the paths that fixed spending would sink.
     const fixed = await generateRuns({ ...p, simulation_type: 'regular' }, { seed: SEED });
     expect(stats.run_success).toBeGreaterThan(fixed.run_success + 20);

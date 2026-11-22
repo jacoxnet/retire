@@ -89,7 +89,7 @@
 
   const topSliders = $derived<Slider[]>([
     ...(!spendingSolved
-      ? [{ name: 'desired_spending', label: 'Desired Annual Recurring Spending', min: 0, max: 500000, step: 1000, width: 120, unit: '$' as const }]
+      ? [{ name: 'desired_spending', label: 'Desired Regular Retirement Spending', min: 0, max: 500000, step: 1000, width: 145, unit: '$' as const }]
       : []),
     { name: 'inflation_rate', label: 'Inflation Rate', min: 0, max: 15, step: 0.1, width: 90, unit: '%' },
     { name: 'user_age_death', label: 'Your Age at Death', min: 60, max: 110, step: 1, width: 90, unit: 'yrs' },
@@ -163,6 +163,7 @@
         <input type="number" class="form-control text-center px-1 fw-bold num-sync" id="input_{s.name}" name={s.name}
           value={values[s.name]} min={s.min} max={s.max} step={s.step} oninput={set(s.name)} {disabled}>
         {#if s.unit !== '$'}<span class="input-group-text px-1">{s.unit}</span>{/if}
+        {#if s.name === 'desired_spending'}<span class="input-group-text px-1 text-secondary">/yr</span>{/if}
       </div>
     </div>
     <input type="range" class="form-range range-sync" id="range_{s.name}" aria-label={s.label}
@@ -249,7 +250,7 @@
           if (!values.target_success_rate) values.target_success_rate = '85%';
         }} {disabled}>
       <label class="form-check-label fw-semibold" for="results_sim_type_goal">
-        Maximum Spending Simulation <span class="text-muted fw-normal small">(Solves for Spending)</span>
+        Maximum Regular Retirement Spending Simulation <span class="text-muted fw-normal small">(Solves for Spending)</span>
       </label>
     </div>
     <div class="form-check mb-2">
@@ -269,7 +270,7 @@
           if (!values.gk_spending_mode) values.gk_spending_mode = 'solve';
         }} {disabled}>
       <label class="form-check-label fw-semibold" for="results_sim_type_guardrails">
-        Guyton-Klinger Guardrails <span class="text-muted fw-normal small">(Spending Adjusts with the Portfolio)</span>
+        Guardrails <span class="text-muted fw-normal small">(Spending Adjusts with the Portfolio)</span>
       </label>
     </div>
     {#if values.simulation_type === GK_SIMULATION_TYPE}
@@ -286,7 +287,7 @@
           <input class="form-check-input" type="radio" name="gk_spending_mode" id="results_gk_specified" value="specified"
             checked={values.gk_spending_mode === 'specified'} onchange={set('gk_spending_mode')} {disabled}>
           <label class="form-check-label" for="results_gk_specified">
-            Use my Desired Annual Recurring Spending
+            Use my Desired Regular Retirement Spending
             {#if spendingSolved}<span class="text-muted small">(${djangoMoney(planSpending)}/yr)</span>{/if}
           </label>
         </div>

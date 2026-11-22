@@ -61,17 +61,77 @@
   });
 
   const solvedGuardrails = $derived(guardrailSolves(r.plan_data_json));
-  /** The withdrawal table: each amount's statistics across runs, nominal and real. */
+
+  interface GuardrailActivityRow {
+    id: string;
+    label: string;
+    colorClass: string;
+    pctId?: string;
+    map: Record<number, number>;
+    maxCount: number;
+    maxText: string;
+  }
+
+  function guardrailActivityData(g: GuardrailStats) {
+    const cuts = g.cuts_distribution ?? [{ count: 1, pct: g.pct_runs_cut }];
+    const raises = g.raises_distribution ?? [{ count: 1, pct: g.pct_runs_raise }];
+    const freezes = g.freezes_distribution ?? [{ count: 1, pct: g.pct_runs_freeze }];
+
+    const cutsMap: Record<number, number> = Object.fromEntries(cuts.map((b) => [b.count, b.pct]));
+    const raisesMap: Record<number, number> = Object.fromEntries(raises.map((b) => [b.count, b.pct]));
+    const freezesMap: Record<number, number> = Object.fromEntries(freezes.map((b) => [b.count, b.pct]));
+
+    const maxCut = cuts.filter((b) => b.pct > 0).pop()?.count ?? 0;
+    const maxRaise = raises.filter((b) => b.pct > 0).pop()?.count ?? 0;
+    const maxFreeze = freezes.filter((b) => b.pct > 0).pop()?.count ?? 0;
+
+    const maxObserved = Math.max(maxCut, maxRaise, maxFreeze);
+    const numCols = Math.min(4, Math.max(1, maxObserved));
+    const colCounts = Array.from({ length: numCols }, (_, i) => i + 1);
+
+    const rows: GuardrailActivityRow[] = [
+      {
+        id: 'gkActivityCuts',
+        label: '10% Spending Cuts',
+        colorClass: 'text-danger',
+        pctId: 'gkPctCut',
+        map: cutsMap,
+        maxCount: maxCut,
+        maxText: `${maxCut} ${maxCut === 1 ? 'cut' : 'cuts'}`,
+      },
+      {
+        id: 'gkActivityRaises',
+        label: '10% Spending Raises',
+        colorClass: 'text-success',
+        pctId: 'gkPctRaise',
+        map: raisesMap,
+        maxCount: maxRaise,
+        maxText: `${maxRaise} ${maxRaise === 1 ? 'raise' : 'raises'}`,
+      },
+      {
+        id: 'gkActivityFreezes',
+        label: 'Inflation Skips',
+        colorClass: 'text-secondary',
+        pctId: 'gkPctFreeze',
+        map: freezesMap,
+        maxCount: maxFreeze,
+        maxText: `${maxFreeze} ${maxFreeze === 1 ? 'skip' : 'skips'}`,
+      },
+    ];
+
+    return { colCounts, rows };
+  }
+  /** The spending table: each amount's statistics across runs, nominal and real. */
   function withdrawalRows(g: GuardrailStats) {
     const row = (label: string, nominal: number, real: number, first = false, bold = false) => ({ label, nominal, real, first, bold });
     return [
-      row('Final-Year Withdrawal: Mean', g.final_withdrawal.mean, g.final_withdrawal_real.mean, true, true),
-      row('Final-Year Withdrawal: Maximum', g.final_withdrawal.max, g.final_withdrawal_real.max),
-      row('Final-Year Withdrawal: Minimum', g.final_withdrawal.min, g.final_withdrawal_real.min),
-      row('Peak-Year Withdrawal: Mean', g.peak_withdrawal.mean, g.peak_withdrawal_real.mean, true, true),
-      row('Peak-Year Withdrawal: Maximum', g.peak_withdrawal.max, g.peak_withdrawal_real.max),
-      row('Peak-Year Withdrawal: Minimum', g.peak_withdrawal.min, g.peak_withdrawal_real.min),
-      row('Lowest-Year Withdrawal: Mean', g.lowest_withdrawal.mean, g.lowest_withdrawal_real.mean, true, true),
+      row('Final-Year Regular Retirement Spending: Mean', g.final_withdrawal.mean, g.final_withdrawal_real.mean, true, true),
+      row('Final-Year Regular Retirement Spending: Maximum', g.final_withdrawal.max, g.final_withdrawal_real.max),
+      row('Final-Year Regular Retirement Spending: Minimum', g.final_withdrawal.min, g.final_withdrawal_real.min),
+      row('Peak-Year Regular Retirement Spending: Mean', g.peak_withdrawal.mean, g.peak_withdrawal_real.mean, true, true),
+      row('Peak-Year Regular Retirement Spending: Maximum', g.peak_withdrawal.max, g.peak_withdrawal_real.max),
+      row('Peak-Year Regular Retirement Spending: Minimum', g.peak_withdrawal.min, g.peak_withdrawal_real.min),
+      row('Lowest-Year Regular Retirement Spending: Mean', g.lowest_withdrawal.mean, g.lowest_withdrawal_real.mean, true, true),
     ];
   }
 </script>
@@ -197,7 +257,7 @@
         <div class="col-7 mb-2"><strong>Achieved Success Rate:</strong></div>
         <div class="col-5 text-end text-success font-weight-bold">{floatformat(r.achieved_success_rate, 1)}%</div>
 
-        <div class="col-7 mb-2"><strong>Desired Recurring Spending:</strong></div>
+        <div class="col-7 mb-2"><strong>Desired Regular Retirement Spending:</strong></div>
         <div class="col-5 text-end">${djangoMoney(r.desired_spending)}/yr</div>
       </div>
 
@@ -238,12 +298,13 @@
   {:else if r.simulation_type === GK_SIMULATION_TYPE && r.guardrails}
     {@const g = r.guardrails}
     {@const startYear = (r.current_year ?? 2026) + g.start_year_index}
+    {@const act = guardrailActivityData(g)}
     <h3 class="border-bottom pb-2 text-success">Results</h3>
     <div class="mt-3">
       {@render gauge()}
 
       <div class="alert alert-primary border text-center py-3 mb-3" id="gkStartingWithdrawal">
-        <h4 class="mb-1">Starting Regular Withdrawal</h4>
+        <h4 class="mb-1">Starting Regular Retirement Spending</h4>
         <span class="display-5 font-weight-bold">${djangoMoney(g.starting_withdrawal)}</span>
         <span class="fs-5 text-secondary">/yr</span>
         <p class="mb-0 mt-1">
@@ -258,18 +319,57 @@
           {#if solvedGuardrails}
             Solved for a {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success rate under the guardrail rules.
           {:else}
-            Your Desired Annual Recurring Spending, as entered.
+            Your Desired Regular Retirement Spending, as entered.
           {/if}
         </p>
       </div>
 
       <p class="mb-3 small text-secondary" id="gkInitialRate">
-        <strong>Initial withdrawal rate the guardrails are measured against:</strong>
+        <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
         {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
         <span class="text-muted">(regular spending over the portfolio; other expenses and income count only through their effect on the portfolio).</span>
       </p>
 
-      <h5 class="text-secondary mt-3 border-bottom pb-2">Regular Withdrawal Across Runs</h5>
+      <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
+      <div id="gkActivity" class="table-responsive mb-3">
+        <table class="table table-hover align-middle mb-0" id="gkActivityTable">
+          <thead class="table-light">
+            <tr>
+              <th>Adjustment Type</th>
+              {#each act.colCounts as k (k)}
+                <th class="text-end">≥ {k}</th>
+              {/each}
+              <th class="text-end">Max in a Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each act.rows as row (row.id)}
+              <tr id={row.id}>
+                <td><strong class={row.colorClass}>{row.label}</strong></td>
+                {#each act.colCounts as k (k)}
+                  <td class="text-end">
+                    {#if row.map[k] !== undefined && (row.map[k] > 0 || (k === 1 && row.maxCount === 0))}
+                      <span id={k === 1 ? row.pctId : undefined} class="fw-semibold {row.colorClass}">
+                        {floatformat(row.map[k], 1)}%
+                      </span>
+                    {:else}
+                      <span id={k === 1 ? row.pctId : undefined} class="text-muted">—</span>
+                    {/if}
+                  </td>
+                {/each}
+                <td class="text-end fw-semibold text-secondary">{row.maxText}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+      <p class="small text-muted mb-3" id="gkCutLimit">
+        This simulation is limited to making at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
+        after that the upper guardrail no longer cuts spending.
+        {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
+      </p>
+
+      <h5 class="text-secondary mt-3 border-bottom pb-2">Regular Retirement Spending Across Runs</h5>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="gkWithdrawalTable">
           <thead class="table-light">
@@ -295,39 +395,6 @@
         Real amounts are in today's dollars.
       </p>
 
-      <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
-      <div class="row g-2 text-center mb-3" id="gkActivity">
-        <div class="col-sm-6 col-lg-3">
-          <div class="p-2 bg-light rounded border h-100">
-            <div class="fs-4 fw-bold text-danger" id="gkPctCut">{floatformat(g.pct_runs_cut, 1)}%</div>
-            <div class="small text-secondary">of runs had at least one 10% cut</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-lg-3">
-          <div class="p-2 bg-light rounded border h-100">
-            <div class="fs-4 fw-bold text-success" id="gkPctRaise">{floatformat(g.pct_runs_raise, 1)}%</div>
-            <div class="small text-secondary">of runs had at least one 10% raise</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-lg-3">
-          <div class="p-2 bg-light rounded border h-100">
-            <div class="fs-4 fw-bold text-secondary" id="gkPctFreeze">{floatformat(g.pct_runs_freeze, 1)}%</div>
-            <div class="small text-secondary">of runs skipped at least one inflation raise</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-lg-3">
-          <div class="p-2 bg-light rounded border h-100">
-            <div class="fs-4 fw-bold text-warning-emphasis" id="gkPctMaxCuts">{floatformat(g.pct_runs_max_cuts, 1)}%</div>
-            <div class="small text-secondary">of runs made all {g.max_cuts} allowed cuts</div>
-          </div>
-        </div>
-      </div>
-      <p class="small text-muted mb-3" id="gkCutLimit">
-        A run makes at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
-        after that the upper guardrail no longer cuts spending.
-        {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
-      </p>
-
       {@render endingWealth('mcEndingWealthTableGuardrails')}
     </div>
   {:else if !r.goal_seeking}
@@ -335,15 +402,16 @@
     <div class="mt-3">
       {@render gauge()}
 
-      <p class="mb-2"><strong>Desired Recurring Annual Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span></p>
+      <p class="mb-2"><strong>Desired Regular Retirement Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span> <span class="text-secondary">/yr</span></p>
       {@render endingWealth('mcEndingWealthTable')}
     </div>
   {:else}
     <h3 class="border-bottom pb-2 text-primary">Results</h3>
     <div class="mt-3">
       <div class="alert alert-primary border text-center py-3 mb-4">
-        <h4 class="mb-1">Max Achieved Desired Spending</h4>
+        <h4 class="mb-1">Maximum Regular Retirement Spending</h4>
         <span class="display-5 font-weight-bold">${djangoMoney(r.achieved_spending)}</span>
+        <span class="fs-5 text-secondary">/yr</span>
         <p class="small text-muted mb-0">Initial annual value</p>
       </div>
 

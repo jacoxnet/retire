@@ -133,8 +133,8 @@ describe('Part 3: Sticky Summary Bar on EnterPage', () => {
     // Total assets for retirement: $1,000,000
     expect(healthBar?.textContent).toContain('Total Assets for Retirement');
     expect(healthBar?.textContent).toContain('$1,000,000');
-    // Desired recurring spending: $40,000
-    expect(healthBar?.textContent).toContain('Desired Recurring Spending');
+    // Desired regular retirement spending: $40,000
+    expect(healthBar?.textContent).toContain('Desired Regular Retirement Spending');
     expect(healthBar?.textContent).toContain('$40,000/yr');
     // Estimated withdrawal rate should not be displayed
     expect(healthBar?.textContent).not.toContain('EST. WITHDRAWAL RATE');
@@ -189,7 +189,7 @@ describe('Part 3: Sticky Summary Bar on EnterPage', () => {
 
     // Summary metrics should always be visible
     expect(healthBar?.textContent).toContain('Total Assets for Retirement');
-    expect(healthBar?.textContent).toContain('Desired Recurring Spending');
+    expect(healthBar?.textContent).toContain('Desired Regular Retirement Spending');
   });
 });
 

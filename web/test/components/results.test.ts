@@ -72,7 +72,7 @@ describe.each(plans)('%s', (name) => {
     expect(q('stressScenarioDurationBadge')).toBe(squash(`${s.crisis_length} Years Duration`));
     expect(q('cmpRegularSuccess')).toBe(`${s.regular_results.run_success.toFixed(1)}%`);
     expect(q('cmpStressSuccess')).toBe(`${s.stress_results.run_success.toFixed(1)}%`);
-    expect(q('cmpDesiredSpending')).toBe(stressMoney(s.desired_spending));
+    expect(q('cmpDesiredSpending')).toBe(`${stressMoney(s.desired_spending)}/yr`);
     expect(q('stressTimelineText')).toBe(squash(`${s.crisis_start_year}–${s.crisis_end_year} (${s.crisis_length} years)`));
     const rows = cellTexts(page.container, '#stressComparisonTable');
     expect(rows[1]).toEqual(['MedianEndingWealth', stressMoney(s.regular_results.run_median), stressMoney(s.stress_results.run_median),
@@ -177,7 +177,7 @@ describe('interactions', () => {
     const goal = plans.map(fixtureResults).find((x) => x.goal_seeking);
     expect(goal).toBeDefined();
     const page = show(goal!);
-    expect(page.container.querySelector('#mcResultsCard')?.textContent).toContain('Max Achieved Desired Spending');
+    expect(page.container.querySelector('#mcResultsCard')?.textContent).toContain('Maximum Regular Retirement Spending');
     expect(page.container.querySelector('#input_desired_spending')).toBeNull();
   });
 
@@ -387,20 +387,24 @@ describe('guardrails mode', () => {
 
     const money = (v: number) => `$${djangoMoney(v)}`;
     expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([
-      ['Final-Year Withdrawal: Mean', money(g.final_withdrawal.mean), money(g.final_withdrawal_real.mean)],
-      ['Final-Year Withdrawal: Maximum', money(g.final_withdrawal.max), money(g.final_withdrawal_real.max)],
-      ['Final-Year Withdrawal: Minimum', money(g.final_withdrawal.min), money(g.final_withdrawal_real.min)],
-      ['Peak-Year Withdrawal: Mean', money(g.peak_withdrawal.mean), money(g.peak_withdrawal_real.mean)],
-      ['Peak-Year Withdrawal: Maximum', money(g.peak_withdrawal.max), money(g.peak_withdrawal_real.max)],
-      ['Peak-Year Withdrawal: Minimum', money(g.peak_withdrawal.min), money(g.peak_withdrawal_real.min)],
-      ['Lowest-Year Withdrawal: Mean', money(g.lowest_withdrawal.mean), money(g.lowest_withdrawal_real.mean)],
+      ['Final-Year Regular Retirement Spending: Mean', money(g.final_withdrawal.mean), money(g.final_withdrawal_real.mean)],
+      ['Final-Year Regular Retirement Spending: Maximum', money(g.final_withdrawal.max), money(g.final_withdrawal_real.max)],
+      ['Final-Year Regular Retirement Spending: Minimum', money(g.final_withdrawal.min), money(g.final_withdrawal_real.min)],
+      ['Peak-Year Regular Retirement Spending: Mean', money(g.peak_withdrawal.mean), money(g.peak_withdrawal_real.mean)],
+      ['Peak-Year Regular Retirement Spending: Maximum', money(g.peak_withdrawal.max), money(g.peak_withdrawal_real.max)],
+      ['Peak-Year Regular Retirement Spending: Minimum', money(g.peak_withdrawal.min), money(g.peak_withdrawal_real.min)],
+      ['Lowest-Year Regular Retirement Spending: Mean', money(g.lowest_withdrawal.mean), money(g.lowest_withdrawal_real.mean)],
     ]);
     expect(text(c, '#gkPctCut')).toBe(`${g.pct_runs_cut.toFixed(1)}%`);
     expect(text(c, '#gkPctRaise')).toBe(`${g.pct_runs_raise.toFixed(1)}%`);
     expect(text(c, '#gkPctFreeze')).toBe(`${g.pct_runs_freeze.toFixed(1)}%`);
-    expect(text(c, '#gkPctMaxCuts')).toBe(`${g.pct_runs_max_cuts.toFixed(1)}%`);
-    expect(text(c, '#gkActivity')).toContain(`of runs made all ${g.max_cuts} allowed cuts`);
-    expect(text(c, '#gkCutLimit')).toContain(`A run makes at most ${g.max_cuts} cut`);
+    expect(text(c, '#gkActivityCuts')).toContain('10% Spending Cuts');
+    expect(text(c, '#gkActivityRaises')).toContain('10% Spending Raises');
+    expect(text(c, '#gkActivityFreezes')).toContain('Inflation Skips');
+    expect(c.querySelector('#gkActivityTable')).not.toBeNull();
+    expect(text(c, '#gkCutLimit')).toContain(`This simulation is limited to making at most ${g.max_cuts} cut`);
+    const cardHtml = c.querySelector('#mcResultsCard')!.innerHTML;
+    expect(cardHtml.indexOf('id="gkActivity"')).toBeLessThan(cardHtml.indexOf('id="gkWithdrawalTable"'));
 
     // Ending wealth as in the other modes; no "adopt" card.
     expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1].slice(0, 2)).toEqual(['Median Ending Wealth', money(solved.run_median)]);
@@ -419,7 +423,7 @@ describe('guardrails mode', () => {
     // The mode has a fixed target, so the target field is hidden.
     expect((c.querySelector('#results_target_success_group') as HTMLElement).style.display).toBe('none');
 
-    expect(text(c, '#projection #scenarioComparisonBar')).toContain(`Solved Starting Spending under Guardrails: $${djangoMoney(solved.achieved_spending)}/yr`);
+    expect(text(c, '#projection #scenarioComparisonBar')).toContain(`Solved Starting Regular Retirement Spending under Guardrails: $${djangoMoney(solved.achieved_spending)}/yr`);
     const startRow = solved.guardrails!.start_year_index;
     const spendingCell = () => text(c, `#projection tbody tr:nth-child(${startRow + 1}) td:nth-child(9)`);
     expect(spendingCell()).toBe(`$${djangoMoney(solved.det_rows[startRow].desired_spending)}`);
@@ -442,7 +446,7 @@ describe('guardrails mode', () => {
     const onApply = vi.fn();
     const page = render(ResultsPage, { results: specified, onApply });
     const c = page.container;
-    expect(text(c, '#gkStartingWithdrawal')).toContain('Your Desired Annual Recurring Spending, as entered.');
+    expect(text(c, '#gkStartingWithdrawal')).toContain('Your Desired Regular Retirement Spending, as entered.');
     expect(c.querySelector('#results_solved_guardrails_display')).toBeNull();
     expect(c.querySelector('#scenarioComparisonBar')).toBeNull();
     expect((c.querySelector('#results_gk_specified') as HTMLInputElement).checked).toBe(true);
@@ -489,7 +493,7 @@ describe('guardrails mode', () => {
     expect(rows.map((r) => r[0])).toEqual([
       'Runs with at Least One 10% Cut', 'Runs with at Least One 10% Raise', 'Runs that Skipped an Inflation Raise',
       'Runs that Made Every Allowed Cut',
-      'Mean Lowest-Year Withdrawal (Real)', 'Mean Peak-Year Withdrawal (Real)', 'Mean Final-Year Withdrawal (Real)',
+      'Mean Lowest-Year Regular Retirement Spending (Real)', 'Mean Peak-Year Regular Retirement Spending (Real)', 'Mean Final-Year Regular Retirement Spending (Real)',
     ]);
     expect(rows[0].slice(1, 3)).toEqual([`${reg.pct_runs_cut.toFixed(1)}%`, `${st.pct_runs_cut.toFixed(1)}%`]);
     expect(rows[3].slice(1, 3)).toEqual([`${reg.pct_runs_max_cuts.toFixed(1)}%`, `${st.pct_runs_max_cuts.toFixed(1)}%`]);

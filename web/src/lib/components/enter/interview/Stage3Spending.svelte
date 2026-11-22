@@ -167,7 +167,7 @@
       </div>
 
       <div class="mb-4" style="max-width: 320px;">
-        <label for="int_desired_spending" class="form-label fw-semibold">Desired Annual Living Expenses</label>
+        <label for="int_desired_spending" class="form-label fw-semibold">Desired Regular Retirement Spending</label>
         <div class="input-group input-group-lg">
           <span class="input-group-text">$</span>
           <MoneyInput id="int_desired_spending" class="form-control fw-bold" bind:value={plan.desired_spending} />
