@@ -176,8 +176,8 @@
       <thead class="table-light">
         <tr>
           <th>Metric</th>
-          <th class="text-end">Nominal</th>
-          <th class="text-end">Real</th>
+          <th class="text-end">Nominal Dollars</th>
+          <th class="text-end">Real Dollars</th>
         </tr>
       </thead>
       <tbody>
@@ -376,8 +376,8 @@
           <thead class="table-light">
             <tr>
               <th>Metric</th>
-              <th class="text-end">Nominal</th>
-              <th class="text-end">Real</th>
+              <th class="text-end">Nominal Dollars</th>
+              <th class="text-end">Real Dollars</th>
             </tr>
           </thead>
           <tbody>

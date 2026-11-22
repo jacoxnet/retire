@@ -186,7 +186,7 @@ describe('interactions', () => {
     const table = page.container.querySelector('#mcEndingWealthTable');
     expect(table).not.toBeNull();
     const headers = [...table!.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
-    expect(headers).toEqual(['Metric', 'Nominal', 'Real']);
+    expect(headers).toEqual(['Metric', 'Nominal Dollars', 'Real Dollars']);
 
     const rows = [...table!.querySelectorAll('tbody tr')].map((tr) =>
       [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()),
