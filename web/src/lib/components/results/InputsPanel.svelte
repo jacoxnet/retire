@@ -79,6 +79,7 @@
   let runsInvalid = $state(false);
   let targetInvalid = $state(false);
   let essentialInvalid = $state(false);
+  let essentialError = $state('Annual Non-Discretionary Living Expenses must be a valid non-negative number.');
   let essentialModalOpen = $state(false);
 
   // Results for a new plan (after a re-run) reset the form; a new stress test doesn't.
@@ -88,6 +89,7 @@
       shownFor = r.plan_data_json;
       values = { ...initialValues() };
       runsInvalid = targetInvalid = essentialInvalid = false;
+      essentialError = 'Annual Non-Discretionary Living Expenses must be a valid non-negative number.';
     }
   });
 
@@ -141,12 +143,19 @@
       const ess = Number(rawEssential.replace(/[$,\s]/g, ''));
       essentialInvalid = Number.isNaN(ess) || ess < 0;
       if (essentialInvalid) {
+        essentialError = 'Annual Non-Discretionary Living Expenses must be a valid non-negative number.';
         document.getElementById('input_essential_spending')?.focus();
         return;
       }
       hasPositiveEssential = ess > 0;
     } else {
       essentialInvalid = false;
+    }
+    if (values.simulation_type === GK_SIMULATION_TYPE && values.gk_protect_essential_floor === 'true' && !hasPositiveEssential) {
+      essentialInvalid = true;
+      essentialError = 'Please enter a positive Annual Non-Discretionary Living Expenses amount to protect, or turn off Protect Non-Discretionary Spending.';
+      document.getElementById('input_essential_spending')?.focus();
+      return;
     }
     // The guardrails options belong to the guardrails mode only.
     const { gk_spending_mode, essential_spending, gk_protect_essential_floor, ...rest } = values;
@@ -312,8 +321,6 @@
       </label>
     </div>
     {#if values.simulation_type === GK_SIMULATION_TYPE}
-      {@const parsedEssential = parseFloat(String(values.essential_spending ?? '').replace(/[$,\s]/g, ''))}
-      {@const hasEssential = Number.isFinite(parsedEssential) && parsedEssential > 0}
       <div class="mb-3 p-3 bg-light rounded border" id="results_guardrails_group">
         <div class="fw-semibold mb-2">Starting Spending at Retirement</div>
         <div class="form-check mb-1">
@@ -339,16 +346,39 @@
 
         <hr class="my-3">
 
+        <div class="small fw-bold mb-2" id="gkNonDiscretionaryPrompt">
+          Would you like this simulation to prohibit spending cuts or skipping inflation raises if that would reduce your Regular Retirement Spending below your non-discretionary expenses?
+        </div>
+
+        <div class="form-check form-switch mb-2">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="results_gk_protect_floor"
+            name="gk_protect_essential_floor"
+            checked={values.gk_protect_essential_floor === 'true'}
+            {disabled}
+            onchange={(e) => {
+              values.gk_protect_essential_floor = e.currentTarget.checked ? 'true' : 'false';
+              if (!e.currentTarget.checked) essentialInvalid = false;
+            }}
+          >
+          <label class="form-check-label small fw-normal" for="results_gk_protect_floor">
+            Protect Non-Discretionary Spending
+          </label>
+        </div>
+
         <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
-          <label for="input_essential_spending" class="form-label small fw-semibold mb-0">
-            Minimum Essential Annual Living Expenses (in today's dollars)
+          <label for="input_essential_spending" class="form-label small fw-normal mb-0">
+            Annual Non-Discretionary Living Expenses (in today's dollars)
           </label>
           <button
             type="button"
             class="btn btn-link p-0 text-primary text-decoration-none flex-shrink-0"
             id="btnEssentialSpendingHelp"
             title="What expenses to include and exclude"
-            aria-label="What counts as Minimum Essential Annual Living Expenses?"
+            aria-label="What counts as Annual Non-Discretionary Living Expenses?"
             onclick={() => (essentialModalOpen = true)}
           >
             <i class="fa-solid fa-circle-question fs-6"></i>
@@ -366,45 +396,15 @@
             placeholder="Optional"
             value={values.essential_spending ?? ''}
             oninput={(e) => {
-              const val = e.currentTarget.value;
-              values.essential_spending = val;
+              values.essential_spending = e.currentTarget.value;
               essentialInvalid = false;
-              const num = parseFloat(val.replace(/[$,\s]/g, ''));
-              if (!(Number.isFinite(num) && num > 0)) {
-                values.gk_protect_essential_floor = 'false';
-              }
             }}
             {disabled}
           >
           <span class="input-group-text text-secondary">/yr</span>
         </div>
         <div class={['invalid-feedback', essentialInvalid && 'd-block']} id="input_essential_spending_feedback">
-          Minimum Essential Annual Living Expenses must be a valid non-negative number.
-        </div>
-
-        <div class="form-check form-switch mt-2">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            role="switch"
-            id="results_gk_protect_floor"
-            name="gk_protect_essential_floor"
-            checked={hasEssential && values.gk_protect_essential_floor === 'true'}
-            disabled={disabled || !hasEssential}
-            onchange={(e) => {
-              values.gk_protect_essential_floor = e.currentTarget.checked ? 'true' : 'false';
-            }}
-          >
-          <label class="form-check-label small fw-semibold" for="results_gk_protect_floor">
-            Protect Essential Floor
-          </label>
-        </div>
-        <div class="form-text mt-1">
-          {#if hasEssential}
-            Opt-in: never cut spending or skip inflation raises below your essential floor. Severe downturns will instead lower Probability of Plan Success.
-          {:else}
-            Optional: enter your essential floor above to see how often Guardrails drops below it, or to opt in to protecting it from cuts.
-          {/if}
+          {essentialError}
         </div>
       </div>
     {/if}

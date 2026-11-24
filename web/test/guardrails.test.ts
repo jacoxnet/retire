@@ -421,6 +421,7 @@ describe('deterministic projection under guardrails', () => {
       expect(rows[t].milestones.includes('Guardrails: Inflation Raise Skipped')).toBe(Boolean(ev & GK_EVENT_FREEZE));
       expect(rows[t].milestones.some((m: string) => /^Guardrails: Cut Not Made \(Limit of \d+ Cuts Reached\)$/.test(m)))
         .toBe(Boolean(ev & GK_EVENT_CUT_LIMITED));
+      expect(rows[t].milestones.includes('Guardrails: Non-Discretionary Floor Applied')).toBe(Boolean(ev & GK_EVENT_FLOOR));
       if (ev & (GK_EVENT_CUT | GK_EVENT_RAISE)) seen++;
       // Mean returns are positive, so no raise is skipped; no cuts in the final 15 years.
       expect(ev & GK_EVENT_FREEZE).toBe(0);
@@ -597,7 +598,14 @@ describe('Monte Carlo under guardrails', () => {
     expect(prot.guardrails?.lowest_withdrawal_real.min).toBeGreaterThanOrEqual(45000 - 1e-6);
     expect(prot.run_success).toBeLessThanOrEqual(plain.run_success);
 
-    // MC kernel == deterministic projection under protectFloor
+    // MC kernel == deterministic projection under protectFloor, and floor milestone uses updated copy
+    const detProtRows = runDeterministic({
+      ...protPlan,
+      pretax_assets: { ...protPlan.pretax_assets, return_mean: -5 },
+      roth_assets: { ...protPlan.roth_assets, return_mean: -5 },
+      taxable_assets: { ...protPlan.taxable_assets, return_mean: -5 },
+    });
+    expect(detProtRows.some((r) => (r.milestones ?? []).includes('Guardrails: Non-Discretionary Floor Applied'))).toBe(true);
     const { worst } = kernelVsProjection(protPlan, (t) => (t % 3 === 0 ? -0.25 : 0.08));
     expect(worst).toBeLessThan(1e-12);
 

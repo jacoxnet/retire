@@ -229,7 +229,7 @@ export function planErrors(data: Plan | Obj): string[] {
   if (se) errors.push(se);
 
   if (getFloat(data.desired_spending, 0.0) < 0) errors.push('Desired Annual Spending must be a valid non-negative number.');
-  if (getFloat(data.essential_spending, 0.0) < 0) errors.push('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+  if (getFloat(data.essential_spending, 0.0) < 0) errors.push('Annual Non-Discretionary Living Expenses must be a valid non-negative number.');
 
   const stateTaxRate = getFloat(data.state_tax_rate, 0.0);
   if (stateTaxRate < 0.0 || stateTaxRate > 100.0) errors.push('State Income Tax Rate must be between 0% and 100%.');

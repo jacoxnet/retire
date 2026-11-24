@@ -55,7 +55,7 @@ export function applyModeChange(plan: Plan, input: ModeChangeInput): ModeChangeM
       const ess = getFloat(rawEss, null);
       if (ess !== null) {
         if (ess < 0) {
-          error('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+          error('Annual Non-Discretionary Living Expenses must be a valid non-negative number.');
           data.essential_spending = 0;
         } else if (ess === 0) {
           if ('essential_spending' in data && pyRound(getFloat(data.essential_spending, 0) as number, 0) !== 0) {

@@ -9,7 +9,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Results } from '../../src/lib/app/results';
 import { computeResults } from '../../src/lib/app/runResults';
 import { localRunner } from '../../src/lib/engine/mc';
-import { djangoMoney, realValue, stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
+import { djangoMoney, milestoneBadge, realValue, stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
 import ResultsPage from '../../src/lib/components/results/ResultsPage.svelte';
 import { fixtureResults } from '../resultsFixture';
 import { expectPlanFixture, fixtureIndex, loadPlanFixture } from '../fixtures';
@@ -507,7 +507,7 @@ describe('guardrails mode', () => {
     expect(show(fixtureResults('sept27')).container.querySelector('#stressGuardrailsTable')).toBeNull();
   });
 
-  it('shows the essential floor input, opt-in protection toggle, help modal, diagnostic warning, and stress rows in guardrails mode', async () => {
+  it('shows the non-discretionary expenses opt-in in 4-3-1-2 order, help modal, diagnostic warning, and stress rows in guardrails mode', async () => {
     const diagResults = await computeResults(
       { ...base, gk_spending_mode: 'specified', desired_spending: 144000, essential_spending: 105000 },
       { runner: localRunner, chunks: 1, seed: 11 },
@@ -516,36 +516,67 @@ describe('guardrails mode', () => {
     const page = render(ResultsPage, { results: diagResults, onApply });
     const c = page.container;
 
-    // Input label matches exact required wording and Protect Essential Floor defaults off in diagnostic mode
-    expect(c.querySelector('label[for="input_essential_spending"]')?.textContent?.trim())
-      .toBe("Minimum Essential Annual Living Expenses (in today's dollars)");
-    expect((c.querySelector('#input_essential_spending') as HTMLInputElement).value).toBe('105000');
+    // 4-3-1-2 ordering, exact wording, and bold/non-bold classes inside Guardrails Simulation Mode box
+    const promptEl = c.querySelector('#gkNonDiscretionaryPrompt')!;
     const protectSwitch = c.querySelector('#results_gk_protect_floor') as HTMLInputElement;
+    const protectLabel = c.querySelector('label[for="results_gk_protect_floor"]')!;
+    const expenseLabel = c.querySelector('label[for="input_essential_spending"]')!;
+    const expenseInput = c.querySelector('#input_essential_spending') as HTMLInputElement;
+
+    expect(promptEl.classList.contains('fw-bold')).toBe(true);
+    expect(promptEl.textContent?.trim()).toBe(
+      'Would you like this simulation to prohibit spending cuts or skipping inflation raises if that would reduce your Regular Retirement Spending below your non-discretionary expenses?',
+    );
+    expect(protectLabel.classList.contains('fw-normal')).toBe(true);
+    expect(protectLabel.classList.contains('fw-bold') || protectLabel.classList.contains('fw-semibold')).toBe(false);
+    expect(protectLabel.textContent?.trim()).toBe('Protect Non-Discretionary Spending');
+    expect(expenseLabel.classList.contains('fw-normal')).toBe(true);
+    expect(expenseLabel.classList.contains('fw-bold') || expenseLabel.classList.contains('fw-semibold')).toBe(false);
+    expect(expenseLabel.textContent?.trim()).toBe("Annual Non-Discretionary Living Expenses (in today's dollars)");
+    expect(expenseInput.value).toBe('105000');
     expect(protectSwitch.checked).toBe(false);
     expect(protectSwitch.disabled).toBe(false);
 
-    // Essential Spending Floor Warning card and Guaranteed Income coverage
-    const floorCard = text(c, '#gkEssentialFloorCard');
-    expect(floorCard).toContain('Essential Spending Floor Warning');
-    expect(floorCard).toContain('$105,000/yr');
-    expect(floorCard).toContain('Guaranteed Income vs. Essential Floor');
+    expect(promptEl.compareDocumentPosition(protectSwitch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(protectSwitch.compareDocumentPosition(expenseLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(expenseLabel.compareDocumentPosition(expenseInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    // Stress test appends essential floor row
+    // Turning protection ON with an empty expense input blocks submit with inline validation
+    await fireEvent.input(expenseInput, { target: { value: '' } });
+    await fireEvent.click(protectSwitch);
+    expect(protectSwitch.checked).toBe(true);
+    await fireEvent.submit(c.querySelector('#resultsInputsForm')!);
+    expect(onApply).not.toHaveBeenCalled();
+    expect(c.querySelector('#input_essential_spending_feedback')?.classList.contains('d-block')).toBe(true);
+    await fireEvent.click(protectSwitch);
+    expect(c.querySelector('#input_essential_spending_feedback')?.classList.contains('d-block')).toBe(false);
+    await fireEvent.input(expenseInput, { target: { value: '105000' } });
+
+    // Non-Discretionary Spending Warning card and Guaranteed Income coverage
+    const floorCard = text(c, '#gkEssentialFloorCard');
+    expect(floorCard).toContain('Non-Discretionary Spending Warning');
+    expect(floorCard).toContain('$105,000/yr');
+    expect(floorCard).toContain('Protect Non-Discretionary Spending');
+    expect(floorCard).toContain('Guaranteed Income vs. Non-Discretionary Expenses');
+
+    // Stress test appends non-discretionary expenses row
     const stressRows = rowsOf(c, '#stressGuardrailsTable');
     expect(stressRows).toHaveLength(8);
-    expect(stressRows[7][0]).toBe('Runs Below Essential Floor ($105,000/yr)');
+    expect(stressRows[7][0]).toBe('Runs Below Non-Discretionary Expenses ($105,000/yr)');
 
-    // Popup modal lists all required included and excluded expense categories
+    // Popup modal uses non-discretionary terminology and lists included/excluded categories
     await fireEvent.click(c.querySelector('#btnEssentialSpendingHelp')!);
     const modal = document.querySelector('#essentialSpendingModal')!;
     expect(modal).not.toBeNull();
     const modalText = modal.textContent!;
+    expect(modalText).toContain('What Counts as Annual Non-Discretionary Living Expenses?');
+    expect(modalText).toContain('Non-Discretionary Core Household Expenses');
     for (const phrase of ['Housing', 'Utilities', 'Food & Everyday Basics', 'Transportation', 'Healthcare & Insurance', 'Fixed Debt Obligations',
       'Income Taxes', 'IRMAA', 'NIIT', 'Other Taxes', 'Additional Taxes', 'Additional Spending']) {
       expect(modalText).toContain(phrase);
     }
 
-    // Opting in to Protect Essential Floor updates stale state and submits true
+    // Opting in to Protect Non-Discretionary Spending updates stale state and submits true
     await fireEvent.click(protectSwitch);
     expect(c.querySelector('#staleResultsBanner')).not.toBeNull();
     await fireEvent.submit(c.querySelector('#resultsInputsForm')!);
@@ -555,7 +586,7 @@ describe('guardrails mode', () => {
       gk_protect_essential_floor: 'true',
     });
 
-    // Protected mode renders Essential Floor Protection Active card, 0% floor breach, and 9 stress rows
+    // Protected mode renders Non-Discretionary Spending Protection Active card, 0% floor breach, and 9 stress rows
     cleanup();
     const protResults = await computeResults(
       { ...base, gk_spending_mode: 'specified', desired_spending: 144000, essential_spending: 105000, gk_protect_essential_floor: true },
@@ -563,7 +594,10 @@ describe('guardrails mode', () => {
     );
     expect(protResults.guardrails?.pct_runs_below_floor).toBe(0);
     const protPage = show(protResults);
-    expect(text(protPage.container, '#gkEssentialFloorCard')).toContain('Essential Floor Protection Active');
-    expect(rowsOf(protPage.container, '#stressGuardrailsTable')).toHaveLength(9);
+    expect(text(protPage.container, '#gkEssentialFloorCard')).toContain('Non-Discretionary Spending Protection Active');
+    const protStressRows = rowsOf(protPage.container, '#stressGuardrailsTable');
+    expect(protStressRows).toHaveLength(9);
+    expect(protStressRows[8][0]).toBe('Runs Where Non-Discretionary Protection Stopped Cuts/Freezes');
+    expect(milestoneBadge('Guardrails: Non-Discretionary Floor Applied')).toContain('bg-warning-subtle');
   }, 60_000);
 });

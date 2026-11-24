@@ -87,7 +87,7 @@
     if (!gkReg || !(gkReg.essential_floor > 0)) return GK_ROWS;
     const extra: typeof GK_ROWS = [
       {
-        label: `Runs Below Essential Floor ($${djangoMoney(gkReg.essential_floor)}/yr)`,
+        label: `Runs Below Non-Discretionary Expenses ($${djangoMoney(gkReg.essential_floor)}/yr)`,
         value: (g) => g.pct_runs_below_floor,
         money: false,
         moreIsBetter: false,
@@ -95,7 +95,7 @@
     ];
     if (gkReg.protect_floor) {
       extra.push({
-        label: 'Runs Where Essential Floor Stopped Cuts/Freezes',
+        label: 'Runs Where Non-Discretionary Protection Stopped Cuts/Freezes',
         value: (g) => g.pct_runs_floor_protected,
         money: false,
         moreIsBetter: false,

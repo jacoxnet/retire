@@ -51,6 +51,6 @@ describe('validator cases', () => {
 
   it('rejects negative essential_spending', () => {
     const plan = { ...getDefaultData(), simulation_type: 'guyton_klinger', essential_spending: -100 };
-    expect(planErrors(plan)).toContain('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+    expect(planErrors(plan)).toContain('Annual Non-Discretionary Living Expenses must be a valid non-negative number.');
   });
 });

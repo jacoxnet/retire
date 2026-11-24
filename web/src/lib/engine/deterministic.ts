@@ -872,7 +872,7 @@ export function runDeterministic(plan: Dict): Dict[] {
       if (event & GK_EVENT_CUT) milestones.push('Guardrails: Spending Cut 10%');
       if (event & GK_EVENT_CUT_LIMITED) milestones.push(`Guardrails: Cut Not Made (Limit of ${guardrail.max_cuts} Cuts Reached)`);
       if (event & GK_EVENT_RAISE) milestones.push('Guardrails: Spending Raised 10%');
-      if (event & GK_EVENT_FLOOR) milestones.push('Guardrails: Essential Floor Applied');
+      if (event & GK_EVENT_FLOOR) milestones.push('Guardrails: Non-Discretionary Floor Applied');
     }
 
     rows.push({

@@ -110,7 +110,7 @@ describe('change_mode tests', () => {
     const errNotes = applyModeChange(plan, {
       simulation_type: 'guyton_klinger', gk_spending_mode: 'solve', essential_spending: '-200', gk_protect_essential_floor: 'false',
     });
-    expect(errNotes.map((n) => n.message)).toContain('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+    expect(errNotes.map((n) => n.message)).toContain('Annual Non-Discretionary Living Expenses must be a valid non-negative number.');
     expect(plan.essential_spending).toBe(0);
     expect(plan.gk_protect_essential_floor).toBe(false);
   });

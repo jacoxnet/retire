@@ -113,7 +113,7 @@ describe('ResultsView', () => {
     const entered = store.plan.desired_spending;
     await fireEvent.click(q('#results_sim_type_guardrails')!);
     expect((q('#results_gk_protect_floor') as HTMLInputElement).checked).toBe(false);
-    expect((q('#results_gk_protect_floor') as HTMLInputElement).disabled).toBe(true);
+    expect((q('#results_gk_protect_floor') as HTMLInputElement).disabled).toBe(false);
     await fireEvent.submit(q('#resultsInputsForm')!);
     expect(store.plan.simulation_type).toBe('guyton_klinger');
     expect(store.plan.gk_spending_mode).toBe('solve');
@@ -128,7 +128,7 @@ describe('ResultsView', () => {
     expect(store.plan.desired_spending).toBe(entered);
     expect(q('#input_desired_spending')).toBeNull();
 
-    // Enter an essential floor without opting into protection -> diagnostic warning appears
+    // Enter non-discretionary expenses without opting into protection -> diagnostic warning appears
     await fireEvent.input(q('#input_essential_spending')!, { target: { value: '120000' } });
     expect((q('#results_gk_protect_floor') as HTMLInputElement).checked).toBe(false);
     expect((q('#results_gk_protect_floor') as HTMLInputElement).disabled).toBe(false);
@@ -138,13 +138,13 @@ describe('ResultsView', () => {
     expect((store.cachedResults as Results).guardrails?.essential_floor).toBe(120000);
     expect((store.cachedResults as Results).guardrails?.protect_floor).toBe(false);
 
-    // Opt in to Protect Essential Floor -> re-runs with protection active
+    // Opt in to Protect Non-Discretionary Spending -> re-runs with protection active
     // Note: syn_spouse_first sets starting survivor_spending at 27.8% of desired_spending (< $120k),
     // so the protected floor caps at starting survivor_spending after the spouse's death and explains why.
     await fireEvent.click(q('#results_gk_protect_floor')!);
     await fireEvent.submit(q('#resultsInputsForm')!);
     expect(store.plan.gk_protect_essential_floor).toBe(true);
-    await waitFor(() => expect(q('#gkEssentialFloorCard')?.textContent).toContain('Essential Floor Protection Active'), { timeout: 30_000 });
+    await waitFor(() => expect(q('#gkEssentialFloorCard')?.textContent).toContain('Non-Discretionary Spending Protection Active'), { timeout: 30_000 });
     expect((store.cachedResults as Results).guardrails?.protect_floor).toBe(true);
     expect(q('#gkEssentialFloorCard')?.textContent).toContain("starting surviving-spouse spending was set lower than $120,000/yr");
 
