@@ -92,4 +92,26 @@ describe('change_mode tests', () => {
     expect(notes.map((n) => n.message)).toContain('Target Success Rate must be between 1% and 99% for Earliest Retirement Age simulation.');
     expect(plan.target_success_rate).toBe(1.0);
   });
+
+  it('applies essential_spending and opt-in gk_protect_essential_floor in guardrails mode', () => {
+    const plan = getDefaultData();
+    expect(applyModeChange(plan, {
+      simulation_type: 'guyton_klinger', gk_spending_mode: 'solve', essential_spending: '', gk_protect_essential_floor: 'false',
+    })).toEqual([]);
+    expect('essential_spending' in plan).toBe(false);
+    expect('gk_protect_essential_floor' in plan).toBe(false);
+
+    expect(applyModeChange(plan, {
+      simulation_type: 'guyton_klinger', gk_spending_mode: 'solve', essential_spending: '55000', gk_protect_essential_floor: 'true',
+    })).toEqual([]);
+    expect(plan.essential_spending).toBe(55000);
+    expect(plan.gk_protect_essential_floor).toBe(true);
+
+    const errNotes = applyModeChange(plan, {
+      simulation_type: 'guyton_klinger', gk_spending_mode: 'solve', essential_spending: '-200', gk_protect_essential_floor: 'false',
+    });
+    expect(errNotes.map((n) => n.message)).toContain('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+    expect(plan.essential_spending).toBe(0);
+    expect(plan.gk_protect_essential_floor).toBe(false);
+  });
 });

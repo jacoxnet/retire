@@ -52,6 +52,8 @@ export const GK_EVENT_RAISE = 4;
 export const GK_EVENT_START = 8;
 /** The upper guardrail called for a cut, but the path had already made its maximum number. */
 export const GK_EVENT_CUT_LIMITED = 16;
+/** The essential spending floor prevented or capped an inflation skip or cut. */
+export const GK_EVENT_FLOOR = 32;
 
 /** True when the plan runs under the guardrail rules. */
 export const isGuardrailPlan = (plan: Record<string, any> | null | undefined): boolean =>
@@ -78,11 +80,16 @@ export interface GuardrailConfig {
   adjustInflation: boolean;
   /** Cumulative inflation factor of each year. */
   infFactors: Float64Array;
+  /** Minimum essential annual living expenses in today's dollars (0 when unset). */
+  essentialFloor: number;
+  /** When true, guardrails do not skip inflation raises or cut spending below essentialFloor. */
+  protectFloor: boolean;
 }
 
 export function guardrailConfig(inputs: SimInputs, nb: NumbaInputs): GuardrailConfig {
   const years = inputs.total_years;
   const startT = Math.max(0, inputs.desired_spending_start_age - inputs.user_age);
+  const essentialFloor = Math.max(0.0, Number(inputs.essential_spending) || 0.0);
   return {
     startT,
     noCutFromT: years - GK_NO_CUT_YEARS,
@@ -95,6 +102,8 @@ export function guardrailConfig(inputs: SimInputs, nb: NumbaInputs): GuardrailCo
     survivorScale: nb.desired_spending > 0.0 ? nb.survivor_spending / nb.desired_spending : 1.0,
     adjustInflation: inputs.adjust_spending_inflation,
     infFactors: nb.inf_factors,
+    essentialFloor,
+    protectFloor: Boolean(inputs.gk_protect_essential_floor) && essentialFloor > 0.0,
   };
 }
 
@@ -122,6 +131,10 @@ export interface GuardrailState {
   freezes: number;
   /** Cuts the upper guardrail called for after the path had reached its maximum. */
   limitedCuts: number;
+  /** Number of retirement years where real spending fell below essentialFloor. */
+  floorBreachYears: number;
+  /** True when the essential floor prevented or capped a cut or inflation skip on this path. */
+  floorHit: boolean;
 }
 
 export function newGuardrailState(): GuardrailState {
@@ -129,7 +142,7 @@ export function newGuardrailState(): GuardrailState {
     spending: 0.0, iwr: 0.0, event: 0, startPortfolio: 0.0,
     startNominal: 0.0, startReal: 0.0, finalNominal: 0.0, finalReal: 0.0,
     peakNominal: 0.0, peakReal: 0.0, lowNominal: 0.0, lowReal: 0.0,
-    cuts: 0, raises: 0, freezes: 0, limitedCuts: 0,
+    cuts: 0, raises: 0, freezes: 0, limitedCuts: 0, floorBreachYears: 0, floorHit: false,
   };
 }
 
@@ -137,7 +150,8 @@ export function resetGuardrailState(s: GuardrailState): void {
   s.spending = s.iwr = s.startPortfolio = 0.0;
   s.startNominal = s.startReal = s.finalNominal = s.finalReal = 0.0;
   s.peakNominal = s.peakReal = s.lowNominal = s.lowReal = 0.0;
-  s.event = s.cuts = s.raises = s.freezes = s.limitedCuts = 0;
+  s.event = s.cuts = s.raises = s.freezes = s.limitedCuts = s.floorBreachYears = 0;
+  s.floorHit = false;
 }
 
 /** Withdrawal rate of regular spending on a portfolio (unbounded when the portfolio is gone). */
@@ -161,17 +175,47 @@ export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, 
   if (t < c.startT) return 0.0;
   const scale = t > c.tFirstDeath ? c.survivorScale : 1.0;
 
+  // Protected essential floor (nominal in year t), unscaled after first death unless
+  // starting survivor spending was explicitly set lower than the floor.
+  const infT = c.adjustInflation ? c.infFactors[t] : 1.0;
+  const protectedNominal = c.protectFloor && c.essentialFloor > 0.0 && scale > 0.0
+    ? Math.min(c.essentialFloor, c.baseSpending * scale) * infT
+    : 0.0;
+  const floorSpending = protectedNominal > 0.0 ? protectedNominal / scale : 0.0;
+
   if (t === c.startT) {
-    s.spending = c.baseSpending * (c.adjustInflation ? c.infFactors[t] : 1.0);
+    s.spending = c.baseSpending * infT;
     s.startPortfolio = portfolio;
   } else if (c.adjustInflation) {
     // Step 1: the inflation rule
+    const inflated = s.spending * (c.infFactors[t] / c.infFactors[t - 1]);
     if (s.iwr > 0.0 && priorGrowth < 0.0 && withdrawalRate(s.spending * scale, portfolio) > s.iwr) {
-      s.event |= GK_EVENT_FREEZE;
-      s.freezes += 1;
+      if (floorSpending > 0.0 && s.spending < floorSpending - 1e-9) {
+        const next = Math.max(s.spending, floorSpending);
+        if (next < inflated - 1e-9) {
+          s.event |= GK_EVENT_FREEZE | GK_EVENT_FLOOR;
+          s.freezes += 1;
+        } else {
+          s.event |= GK_EVENT_FLOOR;
+        }
+        s.spending = next;
+        s.floorHit = true;
+      } else {
+        s.event |= GK_EVENT_FREEZE;
+        s.freezes += 1;
+      }
     } else {
-      s.spending *= c.infFactors[t] / c.infFactors[t - 1];
+      s.spending = inflated;
+      if (floorSpending > 0.0 && s.spending < floorSpending - 1e-9) {
+        s.spending = floorSpending;
+        s.event |= GK_EVENT_FLOOR;
+        s.floorHit = true;
+      }
     }
+  } else if (floorSpending > 0.0 && s.spending < floorSpending - 1e-9) {
+    s.spending = floorSpending;
+    s.event |= GK_EVENT_FLOOR;
+    s.floorHit = true;
   }
 
   if (s.iwr > 0.0) {
@@ -180,9 +224,21 @@ export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, 
     if (cwr > GK_UPPER_GUARDRAIL * s.iwr) {
       if (t < c.noCutFromT) {
         if (s.cuts < c.maxCuts) {
-          s.spending *= 1.0 - GK_CUT;
-          s.event |= GK_EVENT_CUT;
-          s.cuts += 1;
+          const cut = s.spending * (1.0 - GK_CUT);
+          if (floorSpending > 0.0 && s.spending <= floorSpending + 1e-9) {
+            // Already at the essential floor: skip cut without burning maxCuts
+            s.event |= GK_EVENT_FLOOR;
+            s.floorHit = true;
+          } else if (floorSpending > 0.0 && cut < floorSpending - 1e-9) {
+            s.spending = floorSpending;
+            s.event |= GK_EVENT_CUT | GK_EVENT_FLOOR;
+            s.cuts += 1;
+            s.floorHit = true;
+          } else {
+            s.spending = cut;
+            s.event |= GK_EVENT_CUT;
+            s.cuts += 1;
+          }
         } else {
           s.event |= GK_EVENT_CUT_LIMITED;
           s.limitedCuts += 1;
@@ -203,6 +259,9 @@ export function guardrailYear(c: GuardrailConfig, s: GuardrailState, t: number, 
 
   const nominal = s.spending * scale;
   const real = nominal / c.infFactors[t];
+  if (c.essentialFloor > 0.0 && real < c.essentialFloor - 1e-6) {
+    s.floorBreachYears += 1;
+  }
   if (t === c.startT) {
     s.startNominal = s.peakNominal = s.lowNominal = nominal;
     s.startReal = s.peakReal = s.lowReal = real;
@@ -267,6 +326,16 @@ export interface GuardrailStats {
   raises_distribution: GuardrailActivityBucket[];
   /** Cumulative distribution of runs with at least 1, 2, ... inflation skips up to the max observed. */
   freezes_distribution: GuardrailActivityBucket[];
+  /** Configured minimum essential annual living expenses in today's dollars (0 when unset). */
+  essential_floor: number;
+  /** True when the opt-in hard floor protection is enabled. */
+  protect_floor: boolean;
+  /** Percentage of paths where real regular spending dropped below essential_floor in at least one year. */
+  pct_runs_below_floor: number;
+  /** Average number of years below essential_floor across breaching paths. */
+  mean_years_below_floor: number;
+  /** Percentage of paths where essential floor protection prevented or capped a cut or inflation skip. */
+  pct_runs_floor_protected: number;
 }
 
 // A chunk's totals travel between threads as one Float64Array: a header, then
@@ -280,11 +349,16 @@ const H_IWR_PATHS = 5;
 const H_PORTFOLIO_SUM = 6;
 const H_MAX_CUTS = 7;
 const H_CUT_LIMITED = 8;
-const COUNTS = 9;
-/** Year index of Retirement Year 0 and the most cuts a path may make (the same in every chunk). */
-const H_START_T = 9;
-const H_CUT_LIMIT = 10;
-const HEADER = 11;
+const H_FLOOR_BREACH_RUNS = 9;
+const H_FLOOR_BREACH_YEARS = 10;
+const H_FLOOR_PROTECTED = 11;
+const COUNTS = 12;
+/** Fixed per-run metadata (the same in every chunk). */
+const H_START_T = 12;
+const H_CUT_LIMIT = 13;
+const H_ESSENTIAL_FLOOR = 14;
+const H_PROTECT_FLOOR = 15;
+const HEADER = 16;
 const AMOUNTS = ['startNominal', 'startReal', 'finalNominal', 'finalReal', 'peakNominal', 'peakReal', 'lowNominal', 'lowReal'] as const;
 const STATS_END = HEADER + 3 * AMOUNTS.length;
 
@@ -294,10 +368,14 @@ const OFF_RAISES = OFF_CUTS + (MAX_ACTIVITY + 1);
 const OFF_FREEZES = OFF_RAISES + (MAX_ACTIVITY + 1);
 const TOTALS_LEN = OFF_FREEZES + (MAX_ACTIVITY + 1);
 
-export function newGuardrailTotals(startT: number, maxCuts: number): Float64Array {
+export function newGuardrailTotals(
+  startT: number, maxCuts: number, essentialFloor = 0.0, protectFloor = false,
+): Float64Array {
   const a = new Float64Array(TOTALS_LEN);
   a[H_START_T] = startT;
   a[H_CUT_LIMIT] = maxCuts;
+  a[H_ESSENTIAL_FLOOR] = essentialFloor;
+  a[H_PROTECT_FLOOR] = protectFloor ? 1 : 0;
   for (let i = 0; i < AMOUNTS.length; i++) {
     a[HEADER + 3 * i + 1] = Infinity;
     a[HEADER + 3 * i + 2] = -Infinity;
@@ -313,6 +391,11 @@ export function addGuardrailPath(totals: Float64Array, s: GuardrailState): void 
   if (s.freezes > 0) totals[H_FREEZE] += 1;
   if (s.cuts > 0 && s.cuts >= totals[H_CUT_LIMIT]) totals[H_MAX_CUTS] += 1;
   if (s.limitedCuts > 0) totals[H_CUT_LIMITED] += 1;
+  if (s.floorBreachYears > 0) {
+    totals[H_FLOOR_BREACH_RUNS] += 1;
+    totals[H_FLOOR_BREACH_YEARS] += s.floorBreachYears;
+  }
+  if (s.floorHit) totals[H_FLOOR_PROTECTED] += 1;
   if (s.iwr > 0.0) {
     totals[H_IWR_SUM] += s.iwr;
     totals[H_IWR_PATHS] += 1;
@@ -333,7 +416,12 @@ export function addGuardrailPath(totals: Float64Array, s: GuardrailState): void 
 /** Combine the chunks' totals (in the order given) into the run's statistics. */
 export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
   const all = chunkTotals.length
-    ? newGuardrailTotals(chunkTotals[0][H_START_T], chunkTotals[0][H_CUT_LIMIT])
+    ? newGuardrailTotals(
+        chunkTotals[0][H_START_T],
+        chunkTotals[0][H_CUT_LIMIT],
+        chunkTotals[0][H_ESSENTIAL_FLOOR],
+        chunkTotals[0][H_PROTECT_FLOOR] > 0,
+      )
     : newGuardrailTotals(0, 0);
   for (const c of chunkTotals) {
     for (let i = 0; i < COUNTS; i++) all[i] += c[i];
@@ -401,5 +489,10 @@ export function guardrailStats(chunkTotals: Float64Array[]): GuardrailStats {
     cuts_distribution: cumulativeDistribution(OFF_CUTS),
     raises_distribution: cumulativeDistribution(OFF_RAISES),
     freezes_distribution: cumulativeDistribution(OFF_FREEZES),
+    essential_floor: all[H_ESSENTIAL_FLOOR],
+    protect_floor: all[H_PROTECT_FLOOR] > 0,
+    pct_runs_below_floor: pct(all[H_FLOOR_BREACH_RUNS]),
+    mean_years_below_floor: all[H_FLOOR_BREACH_RUNS] > 0 ? all[H_FLOOR_BREACH_YEARS] / all[H_FLOOR_BREACH_RUNS] : 0.0,
+    pct_runs_floor_protected: pct(all[H_FLOOR_PROTECTED]),
   };
 }

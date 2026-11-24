@@ -81,7 +81,9 @@ export function runChunk(
   const rowBuf = new Float64Array(width);
   const buf = pathBuffers(years);
   const rng = new Rng();
-  const guardrails = params.gk ? newGuardrailTotals(params.gk.startT, params.gk.maxCuts) : null;
+  const guardrails = params.gk
+    ? newGuardrailTotals(params.gk.startT, params.gk.maxCuts, params.gk.essentialFloor, params.gk.protectFloor)
+    : null;
   let successes = 0;
   const progressEvery = 2000;
 

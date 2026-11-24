@@ -32,7 +32,10 @@ describe('McPool', () => {
 
   it('a guardrails plan: the workers apply the rules and their spending totals survive the trip back', async () => {
     const { plan } = loadPlanFixture('sept27', 'imported');
-    const small = { ...plan, runs: 3000, goal_seeking: false, simulation_type: 'guyton_klinger', gk_spending_mode: 'specified' };
+    const small = {
+      ...plan, runs: 3000, goal_seeking: false, simulation_type: 'guyton_klinger', gk_spending_mode: 'specified',
+      essential_spending: 110000, gk_protect_essential_floor: true,
+    };
     // Results are cloned on the way back too, as postMessage does.
     const cloningWorker = (): WorkerLike => {
       const w: WorkerLike = {
@@ -49,6 +52,8 @@ describe('McPool', () => {
     const viaPool = await generateRuns(small, { seed: 5, runner: pool.runner, chunks: pool.chunks });
     const local = await generateRuns(small, { seed: 5, runner: localRunner, chunks: pool.chunks });
     expect(viaPool.guardrails?.pct_runs_cut).toBeGreaterThan(0);
+    expect(viaPool.guardrails?.essential_floor).toBe(110000);
+    expect(viaPool.guardrails?.protect_floor).toBe(true);
     expect(deepClose(viaPool, local, 0)).toBeNull();
     pool.terminate();
   }, 60_000);

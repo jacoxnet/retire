@@ -3,7 +3,7 @@
 import { GK_SIMULATION_TYPE } from '../engine/guardrails';
 import { pyRound } from '../engine/py';
 import { syncAccountsToBalanceSheet } from './balanceSheet';
-import { getFloat, getInt } from './coerce';
+import { getBool, getFloat, getInt } from './coerce';
 import type { Plan } from './types';
 import { deathAgeErrors } from './validate';
 
@@ -44,6 +44,34 @@ export function applyModeChange(plan: Plan, input: ModeChangeInput): ModeChangeM
     data.gk_spending_mode = input.gk_spending_mode === 'specified' ? 'specified' : 'solve';
   } else if (isGuardrails && data.gk_spending_mode !== 'specified') {
     data.gk_spending_mode = 'solve';
+  }
+  if (isGuardrails && has('essential_spending')) {
+    const rawEss = String(input.essential_spending ?? '').trim();
+    if (rawEss === '') {
+      if ('essential_spending' in data && getFloat(data.essential_spending, 0) !== 0) {
+        delete data.essential_spending;
+      }
+    } else {
+      const ess = getFloat(rawEss, null);
+      if (ess !== null) {
+        if (ess < 0) {
+          error('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+          data.essential_spending = 0;
+        } else if (ess === 0) {
+          if ('essential_spending' in data && pyRound(getFloat(data.essential_spending, 0) as number, 0) !== 0) {
+            data.essential_spending = 0;
+          }
+        } else if (pyRound(ess, 0) !== pyRound(getFloat(data.essential_spending, 0) as number, 0)) {
+          data.essential_spending = ess;
+        }
+      }
+    }
+  }
+  if (isGuardrails && has('gk_protect_essential_floor')) {
+    const wantProtect = getBool(input.gk_protect_essential_floor);
+    if (wantProtect || 'gk_protect_essential_floor' in data) {
+      data.gk_protect_essential_floor = wantProtect;
+    }
   }
 
   if (isGoal || isEarliestRet) {

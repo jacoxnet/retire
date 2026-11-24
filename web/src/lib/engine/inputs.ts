@@ -411,6 +411,10 @@ export interface SimInputs {
   life_insurance_policies?: Dict[];
   /** Present (true) when regular spending follows the Guyton-Klinger guardrails (guardrails.ts). */
   guardrails?: boolean;
+  /** Optional minimum essential annual living expenses in today's dollars (guardrails diagnostic / floor). */
+  essential_spending?: number;
+  /** When true (opt-in), guardrails never freeze or cut regular spending below essential_spending. */
+  gk_protect_essential_floor?: boolean;
 }
 
 /**
@@ -520,6 +524,9 @@ export function extractSimInputs(plan: Dict | null | undefined): SimInputs {
 
   const married = (k: string, dflt: any, conv: (v: any) => any, single: any) => (isMarried ? conv(get(raw, k, dflt)) : single);
 
+  const essentialSpending = Math.max(0.0, pyFloat(get(raw, 'essential_spending', 0.0)));
+  const protectEssentialFloor = pyBool(get(raw, 'gk_protect_essential_floor', false));
+
   return {
     user_age: userAge,
     user_ret_age: userRetAge,
@@ -570,6 +577,8 @@ export function extractSimInputs(plan: Dict | null | undefined): SimInputs {
       ? { life_insurance_policies: raw.life_insurance_policies }
       : {}),
     ...(isGuardrailPlan(raw) ? { guardrails: true } : {}),
+    ...(isGuardrailPlan(raw) && essentialSpending > 0.0 ? { essential_spending: essentialSpending } : {}),
+    ...(isGuardrailPlan(raw) && essentialSpending > 0.0 && protectEssentialFloor ? { gk_protect_essential_floor: true } : {}),
   };
 }
 

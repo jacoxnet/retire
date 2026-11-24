@@ -134,6 +134,20 @@
       row('Lowest-Year Regular Retirement Spending: Mean', g.lowest_withdrawal.mean, g.lowest_withdrawal_real.mean, true, true),
     ];
   }
+  /** Guaranteed non-portfolio income in real (today's) dollars at retirement start and peak. */
+  function essentialCoverage(g: GuardrailStats) {
+    const inf = r.inflation_rate ?? 0;
+    const retRows = (r.det_rows ?? []).slice(g.start_year_index);
+    const realIncomes = retRows.map((row, idx) => realValue(Number(row.income) || 0, g.start_year_index + idx, inf));
+    const startIncome = realIncomes[0] ?? 0;
+    const peakIncome = realIncomes.length ? Math.max(...realIncomes) : 0;
+    return {
+      startIncome,
+      peakIncome,
+      startGap: Math.max(0, g.essential_floor - startIncome),
+      peakGap: Math.max(0, g.essential_floor - peakIncome),
+    };
+  }
 </script>
 
 {#snippet gauge()}
@@ -323,6 +337,68 @@
           {/if}
         </p>
       </div>
+
+      {#if g.essential_floor > 0}
+        {@const cov = essentialCoverage(g)}
+        {@const floorAlertClass = g.protect_floor
+          ? (g.starting_withdrawal_real < g.essential_floor - 1 ? 'alert-danger' : r.run_success < 85 ? 'alert-warning' : 'alert-info')
+          : (g.pct_runs_below_floor === 0 ? 'alert-success' : g.pct_runs_below_floor >= 25 ? 'alert-danger' : 'alert-warning')}
+        <div class="alert {floorAlertClass} border mb-3" id="gkEssentialFloorCard">
+          <div class="fw-bold mb-1">
+            {#if g.protect_floor}
+              {#if g.starting_withdrawal_real < g.essential_floor - 1}
+                <i class="fa-solid fa-triangle-exclamation me-1"></i> Essential Floor Exceeds Starting Spending
+              {:else}
+                <i class="fa-solid fa-shield-halved me-1"></i> Essential Floor Protection Active
+              {/if}
+            {:else if g.pct_runs_below_floor > 0}
+              <i class="fa-solid fa-triangle-exclamation me-1"></i> Essential Spending Floor Warning
+            {:else}
+              <i class="fa-solid fa-circle-check me-1"></i> Essential Spending Floor Check Passed
+            {/if}
+          </div>
+          <p class="small mb-2">
+            {#if g.protect_floor}
+              {#if g.starting_withdrawal_real < g.essential_floor - 1}
+                Your starting regular retirement spending (<strong>${djangoMoney(g.starting_withdrawal_real)}/yr</strong> in today's dollars) is below your
+                <strong>${djangoMoney(g.essential_floor)}/yr</strong> (${djangoMoney(g.essential_floor / 12)}/mo) Minimum Essential Annual Living Expenses
+                (<strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs fell below the floor).
+              {:else}
+                Guardrails did not cut regular spending or skip inflation raises below your <strong>${djangoMoney(g.essential_floor)}/yr</strong>
+                (${djangoMoney(g.essential_floor / 12)}/mo) essential floor (protection activated in <strong>{floatformat(g.pct_runs_floor_protected, 1)}%</strong> of runs).
+                Because spending cannot drop below this floor, severe downturn shortfalls appear directly in your Probability of Plan Success
+                (<strong>{floatformat(r.run_success, 1)}%</strong>).
+                {#if r.is_married && g.pct_runs_below_floor > 0}
+                  In <strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs, spending fell below the floor after a first death because your plan's starting surviving-spouse spending was set lower than ${djangoMoney(g.essential_floor)}/yr.
+                {/if}
+              {/if}
+            {:else if g.pct_runs_below_floor > 0}
+              Although your portfolio survives <strong>{floatformat(r.run_success, 1)}%</strong> of simulations,
+              <strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs cut regular spending below your
+              <strong>${djangoMoney(g.essential_floor)}/yr</strong> (${djangoMoney(g.essential_floor / 12)}/mo) Minimum Essential Annual Living Expenses—for an average of
+              <strong>{floatformat(g.mean_years_below_floor, 1)} {Math.abs(g.mean_years_below_floor - 1) < 0.05 ? 'year' : 'years'}</strong> in those runs,
+              dropping as low as <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong> (${djangoMoney(g.lowest_withdrawal_real.min / 12)}/mo) in today's dollars.
+              To prevent cuts below this baseline, enable <strong>Protect Essential Floor</strong> in Simulation Mode or lower your starting spending.
+            {:else}
+              <strong>0.0%</strong> of simulation runs dropped below your <strong>${djangoMoney(g.essential_floor)}/yr</strong>
+              (${djangoMoney(g.essential_floor / 12)}/mo) Minimum Essential Annual Living Expenses
+              (lowest simulated year: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong> in today's dollars).
+            {/if}
+          </p>
+          <div class="small border-top pt-2 mb-0" id="gkEssentialIncomeCoverage">
+            <strong>Guaranteed Income vs. Essential Floor (today's dollars):</strong>
+            Non-portfolio income (Social Security, pensions) provides <strong>${djangoMoney(cov.startIncome)}/yr</strong> at retirement start,
+            leaving <strong>${djangoMoney(cov.startGap)}/yr</strong> of essentials to be covered by your portfolio.
+            {#if cov.peakIncome > cov.startIncome + 100}
+              Once later income/Social Security starts, guaranteed income reaches <strong>${djangoMoney(cov.peakIncome)}/yr</strong>
+              (leaving <strong>${djangoMoney(cov.peakGap)}/yr</strong> from your portfolio).
+            {/if}
+            <span class="d-block text-muted mt-1">
+              Note: Guardrail cuts and inflation skips adjust total Regular Retirement Spending rather than only the portfolio withdrawal portion.
+            </span>
+          </div>
+        </div>
+      {/if}
 
       <p class="mb-3 small text-secondary" id="gkInitialRate">
         <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>

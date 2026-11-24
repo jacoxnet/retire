@@ -47,6 +47,14 @@ describe('the guardrails mode in an imported plan', () => {
     expect(data.goal_seeking).toBe(true);
     expect('gk_spending_mode' in data).toBe(false);
   });
+
+  it('preserves and coerces essential_spending and gk_protect_essential_floor', () => {
+    const data: any = {
+      simulation_type: 'guyton_klinger', essential_spending: '$55,000', gk_protect_essential_floor: 'true',
+    };
+    expect(normalizePlanFields(data)).toEqual([]);
+    expect(data).toMatchObject({ essential_spending: 55000, gk_protect_essential_floor: true });
+  });
 });
 
 // Input-validation cases

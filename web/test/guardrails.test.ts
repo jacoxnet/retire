@@ -4,9 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { meanReturns, runDeterministic, runSimulationPath } from '../src/lib/engine/deterministic';
 import {
-  addGuardrailPath, GK_EVENT_CUT, GK_EVENT_CUT_LIMITED, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START, GK_SIMULATION_TYPE,
-  type GuardrailConfig, guardrailConfig, guardrailMaxCuts, guardrailSolves, guardrailStats, guardrailYear, isGuardrailPlan,
-  newGuardrailState, newGuardrailTotals,
+  addGuardrailPath, GK_EVENT_CUT, GK_EVENT_CUT_LIMITED, GK_EVENT_FLOOR, GK_EVENT_FREEZE, GK_EVENT_RAISE, GK_EVENT_START,
+  GK_SIMULATION_TYPE, type GuardrailConfig, guardrailConfig, guardrailMaxCuts, guardrailSolves, guardrailStats, guardrailYear,
+  isGuardrailPlan, newGuardrailState, newGuardrailTotals,
 } from '../src/lib/engine/guardrails';
 import { extractSimInputs, prepareNumbaInputs } from '../src/lib/engine/inputs';
 import { binarySearch, generateRuns, localRunner, type McJob, splitRanges, summarize } from '../src/lib/engine/mc';
@@ -29,6 +29,8 @@ function config(over: Partial<GuardrailConfig> = {}): GuardrailConfig {
     survivorScale: 1,
     adjustInflation: true,
     infFactors: Float64Array.from({ length: years }, (_, t) => INF ** t),
+    essentialFloor: 0,
+    protectFloor: false,
     ...over,
   };
 }
@@ -227,6 +229,64 @@ describe('guardrailYear', () => {
     expect(s.lowNominal).toBeCloseTo(y[1], 9);
     expect(s.lowReal).toBeCloseTo(36000, 9);
     expect([s.cuts, s.raises, s.freezes]).toEqual([1, 1, 0]);
+  });
+
+  it('tracks floor breach years in diagnostic mode without altering spending', () => {
+    const c = config({ essentialFloor: 38000, protectFloor: false });
+    const s = started(c);
+    // Start at $40,000 real (no breach)
+    expect(s.floorBreachYears).toBe(0);
+    // Cut 10% -> $36,000 real (< $38,000 floor)
+    expect(guardrailYear(c, s, 2, 700000, 1)).toBeCloseTo(41200 * INF * 0.9, 9);
+    expect(s.floorBreachYears).toBe(1);
+    // Next year still $36,000 real (< $38,000)
+    expect(guardrailYear(c, s, 3, 1000000, 1)).toBeCloseTo(41200 * INF * INF * 0.9, 9);
+    expect(s.floorBreachYears).toBe(2);
+    expect(s.floorHit).toBe(false);
+  });
+
+  it('when protectFloor is enabled, stops partial/full cuts and inflation freezes at the essential floor without burning maxCuts', () => {
+    const c = config({ essentialFloor: 38000, protectFloor: true, maxCuts: 2 });
+    const s = started(c);
+    // Year 2: 10% cut would give $36,000 real, so partial cut stops at $38,000 real
+    expect(guardrailYear(c, s, 2, 500000, 1)).toBeCloseTo(38000 * INF * INF, 9);
+    expect(s.event).toBe(GK_EVENT_CUT | GK_EVENT_FLOOR);
+    expect(s.cuts).toBe(1);
+    expect(s.floorHit).toBe(true);
+    expect(s.floorBreachYears).toBe(0);
+
+    // Year 3: negative prior growth + high WR wants an inflation freeze AND another cut; floor blocks both and preserves remaining cut
+    expect(guardrailYear(c, s, 3, 400000, -100000)).toBeCloseTo(38000 * INF ** 3, 9);
+    expect(s.event).toBe(GK_EVENT_FLOOR);
+    expect(s.freezes).toBe(0);
+    expect(s.cuts).toBe(1);
+
+    // Year 4: strong portfolio growth triggers a 10% raise above the floor -> $41,800 real
+    expect(guardrailYear(c, s, 4, 2000000, 1500000)).toBeCloseTo(38000 * INF ** 4 * 1.1, 9);
+    expect(s.event).toBe(GK_EVENT_RAISE);
+
+    // Year 5: later crash still has the unspent 2nd cut available -> partial cut back to floor $38,000 real
+    expect(guardrailYear(c, s, 5, 400000, 1)).toBeCloseTo(38000 * INF ** 5, 9);
+    expect(s.event).toBe(GK_EVENT_CUT | GK_EVENT_FLOOR);
+    expect(s.cuts).toBe(2);
+  });
+
+  it('keeps the protected floor unscaled after first death unless starting survivor spending is lower', () => {
+    // Desired $40k, survivor $36k (scale 0.9), floor $35k -> Year 2 cuts 10% to $36k; Year 3 post-death scale 0.9 would drop to $32.4k, so floor holds $35k
+    const c1 = config({ tFirstDeath: 2, survivorScale: 0.9, essentialFloor: 35000, protectFloor: true });
+    const s1 = started(c1);
+    expect(guardrailYear(c1, s1, 2, 500000, 1)).toBeCloseTo(36000 * INF ** 2, 9);
+    expect(guardrailYear(c1, s1, 3, 1000000, 1)).toBeCloseTo(35000 * INF ** 3, 9);
+    expect(s1.event & GK_EVENT_FLOOR).toBe(GK_EVENT_FLOOR);
+    expect(s1.floorBreachYears).toBe(0);
+
+    // Desired $40k, survivor $30k (scale 0.75 < floor $35k) -> survivor is capped at its starting $30k
+    const c2 = config({ tFirstDeath: 2, survivorScale: 0.75, essentialFloor: 35000, protectFloor: true });
+    const s2 = started(c2);
+    expect(guardrailYear(c2, s2, 2, 500000, 1)).toBeCloseTo(36000 * INF ** 2, 9);
+    // Portfolio $900k keeps withdrawal rate (3.64%) inside guardrails so no lower-guardrail raise fires
+    expect(guardrailYear(c2, s2, 3, 900000, 1)).toBeCloseTo(30000 * INF ** 3, 9);
+    expect(s2.floorBreachYears).toBe(1);
   });
 });
 
@@ -515,4 +575,36 @@ describe('Monte Carlo under guardrails', () => {
     expect(stress.final_withdrawal.mean / stress.final_withdrawal_real.mean)
       .toBeGreaterThan(regular.final_withdrawal.mean / regular.final_withdrawal_real.mean);
   }, 60_000);
+
+  it('essential floor diagnostics and opt-in hard floor protection match MC and deterministic projections', async () => {
+    // Diagnostic mode: floor breaches are counted without changing success rate or cuts
+    const base = simplePlan({ desired_spending: 55000, runs: 500 });
+    const plain = await generateRuns(base, { seed: SEED });
+    const diag = await generateRuns({ ...base, essential_spending: 45000 }, { seed: SEED });
+    expect(diag.run_success).toBe(plain.run_success);
+    expect(diag.guardrails?.essential_floor).toBe(45000);
+    expect(diag.guardrails?.protect_floor).toBe(false);
+    expect(diag.guardrails?.pct_runs_below_floor).toBeGreaterThan(0);
+    expect(diag.guardrails?.mean_years_below_floor).toBeGreaterThan(0);
+    expect(diag.guardrails?.pct_runs_floor_protected).toBe(0);
+
+    // Opt-in protection: never cuts below $45,000 real, so 0% of runs breach and shortfalls lower success rate
+    const protPlan = { ...base, essential_spending: 45000, gk_protect_essential_floor: true };
+    const prot = await generateRuns(protPlan, { seed: SEED });
+    expect(prot.guardrails?.protect_floor).toBe(true);
+    expect(prot.guardrails?.pct_runs_below_floor).toBe(0);
+    expect(prot.guardrails?.pct_runs_floor_protected).toBeGreaterThan(0);
+    expect(prot.guardrails?.lowest_withdrawal_real.min).toBeGreaterThanOrEqual(45000 - 1e-6);
+    expect(prot.run_success).toBeLessThanOrEqual(plain.run_success);
+
+    // MC kernel == deterministic projection under protectFloor
+    const { worst } = kernelVsProjection(protPlan, (t) => (t % 3 === 0 ? -0.25 : 0.08));
+    expect(worst).toBeLessThan(1e-12);
+
+    // Binary search with protectFloor converges cleanly and keeps solved spending lower than unprotected solve
+    const solvedPlain = await binarySearch({ ...base, gk_spending_mode: 'solve' }, { seed: SEED, targetSuccessRate: 99 });
+    const solvedProt = await binarySearch({ ...protPlan, gk_spending_mode: 'solve' }, { seed: SEED, targetSuccessRate: 99 });
+    expect(solvedProt.achieved_success_rate).toBeGreaterThanOrEqual(99);
+    expect(solvedProt.achieved_spending).toBeLessThanOrEqual(solvedPlain.achieved_spending + 1);
+  }, 120_000);
 });

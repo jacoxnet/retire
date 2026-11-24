@@ -506,4 +506,64 @@ describe('guardrails mode', () => {
     cleanup();
     expect(show(fixtureResults('sept27')).container.querySelector('#stressGuardrailsTable')).toBeNull();
   });
+
+  it('shows the essential floor input, opt-in protection toggle, help modal, diagnostic warning, and stress rows in guardrails mode', async () => {
+    const diagResults = await computeResults(
+      { ...base, gk_spending_mode: 'specified', desired_spending: 144000, essential_spending: 105000 },
+      { runner: localRunner, chunks: 1, seed: 11 },
+    );
+    const onApply = vi.fn();
+    const page = render(ResultsPage, { results: diagResults, onApply });
+    const c = page.container;
+
+    // Input label matches exact required wording and Protect Essential Floor defaults off in diagnostic mode
+    expect(c.querySelector('label[for="input_essential_spending"]')?.textContent?.trim())
+      .toBe("Minimum Essential Annual Living Expenses (in today's dollars)");
+    expect((c.querySelector('#input_essential_spending') as HTMLInputElement).value).toBe('105000');
+    const protectSwitch = c.querySelector('#results_gk_protect_floor') as HTMLInputElement;
+    expect(protectSwitch.checked).toBe(false);
+    expect(protectSwitch.disabled).toBe(false);
+
+    // Essential Spending Floor Warning card and Guaranteed Income coverage
+    const floorCard = text(c, '#gkEssentialFloorCard');
+    expect(floorCard).toContain('Essential Spending Floor Warning');
+    expect(floorCard).toContain('$105,000/yr');
+    expect(floorCard).toContain('Guaranteed Income vs. Essential Floor');
+
+    // Stress test appends essential floor row
+    const stressRows = rowsOf(c, '#stressGuardrailsTable');
+    expect(stressRows).toHaveLength(8);
+    expect(stressRows[7][0]).toBe('Runs Below Essential Floor ($105,000/yr)');
+
+    // Popup modal lists all required included and excluded expense categories
+    await fireEvent.click(c.querySelector('#btnEssentialSpendingHelp')!);
+    const modal = document.querySelector('#essentialSpendingModal')!;
+    expect(modal).not.toBeNull();
+    const modalText = modal.textContent!;
+    for (const phrase of ['Housing', 'Utilities', 'Food & Everyday Basics', 'Transportation', 'Healthcare & Insurance', 'Fixed Debt Obligations',
+      'Income Taxes', 'IRMAA', 'NIIT', 'Other Taxes', 'Additional Taxes', 'Additional Spending']) {
+      expect(modalText).toContain(phrase);
+    }
+
+    // Opting in to Protect Essential Floor updates stale state and submits true
+    await fireEvent.click(protectSwitch);
+    expect(c.querySelector('#staleResultsBanner')).not.toBeNull();
+    await fireEvent.submit(c.querySelector('#resultsInputsForm')!);
+    expect(onApply.mock.calls[0][0]).toMatchObject({
+      simulation_type: 'guyton_klinger',
+      essential_spending: '105000',
+      gk_protect_essential_floor: 'true',
+    });
+
+    // Protected mode renders Essential Floor Protection Active card, 0% floor breach, and 9 stress rows
+    cleanup();
+    const protResults = await computeResults(
+      { ...base, gk_spending_mode: 'specified', desired_spending: 144000, essential_spending: 105000, gk_protect_essential_floor: true },
+      { runner: localRunner, chunks: 1, seed: 11 },
+    );
+    expect(protResults.guardrails?.pct_runs_below_floor).toBe(0);
+    const protPage = show(protResults);
+    expect(text(protPage.container, '#gkEssentialFloorCard')).toContain('Essential Floor Protection Active');
+    expect(rowsOf(protPage.container, '#stressGuardrailsTable')).toHaveLength(9);
+  }, 60_000);
 });

@@ -161,6 +161,8 @@ export interface Plan {
   simulation_type?: SimulationType | string;
   earliest_retirement_strategy?: EarliestRetirementStrategy | string;
   gk_spending_mode?: GuardrailSpendingMode | string;
+  essential_spending?: number;
+  gk_protect_essential_floor?: boolean;
   user_name?: string;
   user_age?: number;
   user_retirement_age?: number;

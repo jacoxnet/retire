@@ -83,6 +83,26 @@
     { label: 'Mean Peak-Year Regular Retirement Spending (Real)', value: (g) => g.peak_withdrawal_real.mean, money: true, moreIsBetter: true },
     { label: 'Mean Final-Year Regular Retirement Spending (Real)', value: (g) => g.final_withdrawal_real.mean, money: true, moreIsBetter: true },
   ];
+  const stressGkRows = $derived.by(() => {
+    if (!gkReg || !(gkReg.essential_floor > 0)) return GK_ROWS;
+    const extra: typeof GK_ROWS = [
+      {
+        label: `Runs Below Essential Floor ($${djangoMoney(gkReg.essential_floor)}/yr)`,
+        value: (g) => g.pct_runs_below_floor,
+        money: false,
+        moreIsBetter: false,
+      },
+    ];
+    if (gkReg.protect_floor) {
+      extra.push({
+        label: 'Runs Where Essential Floor Stopped Cuts/Freezes',
+        value: (g) => g.pct_runs_floor_protected,
+        money: false,
+        moreIsBetter: false,
+      });
+    }
+    return [...GK_ROWS, ...extra];
+  });
 </script>
 
 {#snippet select(id: string, label: string, options: [string, string][], value: string, field: keyof StressSpec)}
@@ -211,7 +231,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each GK_ROWS as row (row.label)}
+              {#each stressGkRows as row (row.label)}
                 {@const a = row.value(gkReg)}
                 {@const b = row.value(gkStress)}
                 <tr>

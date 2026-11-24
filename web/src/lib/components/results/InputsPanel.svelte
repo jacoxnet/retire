@@ -8,6 +8,7 @@
   import { GK_SIMULATION_TYPE, GK_TARGET_SUCCESS_RATE, guardrailSolves } from '../../engine/guardrails';
   import { pyStr } from '../../plan/coerce';
   import type { ModeChangeInput } from '../../plan/modeChange';
+  import EssentialSpendingModal from './EssentialSpendingModal.svelte';
 
   interface Props {
     results: Results;
@@ -62,7 +63,12 @@
     if (currentSimType === 'earliest_retirement') {
       v.earliest_retirement_strategy = (r.plan_data_json?.earliest_retirement_strategy as string) || (r as any).strategy || 'simultaneous';
     }
-    if (currentSimType === GK_SIMULATION_TYPE) v.gk_spending_mode = guardrailsSolved ? 'solve' : 'specified';
+    if (currentSimType === GK_SIMULATION_TYPE) {
+      v.gk_spending_mode = guardrailsSolved ? 'solve' : 'specified';
+      const ess = Number(r.plan_data_json?.essential_spending);
+      v.essential_spending = ess > 0 ? floatformat(ess, 0) : '';
+      v.gk_protect_essential_floor = ess > 0 && r.plan_data_json?.gk_protect_essential_floor ? 'true' : 'false';
+    }
     if (!spendingSolved) v.desired_spending = floatformat(r.desired_spending, 0);
     if (r.is_married) v.spouse_age_death = pyStr(r.spouse_age_death);
     return v;
@@ -72,6 +78,8 @@
   let values: Record<string, string> = $state(untrack(() => ({ ...initialValues() })));
   let runsInvalid = $state(false);
   let targetInvalid = $state(false);
+  let essentialInvalid = $state(false);
+  let essentialModalOpen = $state(false);
 
   // Results for a new plan (after a re-run) reset the form; a new stress test doesn't.
   let shownFor = untrack(() => r.plan_data_json);
@@ -79,7 +87,7 @@
     if (r.plan_data_json !== shownFor) {
       shownFor = r.plan_data_json;
       values = { ...initialValues() };
-      runsInvalid = targetInvalid = false;
+      runsInvalid = targetInvalid = essentialInvalid = false;
     }
   });
 
@@ -127,9 +135,31 @@
         return;
       }
     }
-    // The guardrails option belongs to the guardrails mode only.
-    const { gk_spending_mode, ...rest } = values;
-    onApply(values.simulation_type === GK_SIMULATION_TYPE ? { ...rest, gk_spending_mode: gk_spending_mode || 'solve' } : rest);
+    const rawEssential = (values.essential_spending ?? '').trim();
+    let hasPositiveEssential = false;
+    if (values.simulation_type === GK_SIMULATION_TYPE && rawEssential !== '') {
+      const ess = Number(rawEssential.replace(/[$,\s]/g, ''));
+      essentialInvalid = Number.isNaN(ess) || ess < 0;
+      if (essentialInvalid) {
+        document.getElementById('input_essential_spending')?.focus();
+        return;
+      }
+      hasPositiveEssential = ess > 0;
+    } else {
+      essentialInvalid = false;
+    }
+    // The guardrails options belong to the guardrails mode only.
+    const { gk_spending_mode, essential_spending, gk_protect_essential_floor, ...rest } = values;
+    onApply(
+      values.simulation_type === GK_SIMULATION_TYPE
+        ? {
+            ...rest,
+            gk_spending_mode: gk_spending_mode || 'solve',
+            essential_spending: essential_spending ?? '',
+            gk_protect_essential_floor: hasPositiveEssential && gk_protect_essential_floor === 'true' ? 'true' : 'false',
+          }
+        : rest,
+    );
   }
 </script>
 
@@ -268,12 +298,22 @@
         checked={values.simulation_type === GK_SIMULATION_TYPE} onchange={(e) => {
           set('simulation_type')(e);
           if (!values.gk_spending_mode) values.gk_spending_mode = 'solve';
+          if (values.essential_spending === undefined) {
+            const ess = Number(r.plan_data_json?.essential_spending);
+            values.essential_spending = ess > 0 ? floatformat(ess, 0) : '';
+          }
+          if (values.gk_protect_essential_floor === undefined) {
+            const ess = Number(r.plan_data_json?.essential_spending);
+            values.gk_protect_essential_floor = ess > 0 && r.plan_data_json?.gk_protect_essential_floor ? 'true' : 'false';
+          }
         }} {disabled}>
       <label class="form-check-label fw-semibold" for="results_sim_type_guardrails">
         Guardrails <span class="text-muted fw-normal small">(Spending Adjusts with the Portfolio)</span>
       </label>
     </div>
     {#if values.simulation_type === GK_SIMULATION_TYPE}
+      {@const parsedEssential = parseFloat(String(values.essential_spending ?? '').replace(/[$,\s]/g, ''))}
+      {@const hasEssential = Number.isFinite(parsedEssential) && parsedEssential > 0}
       <div class="mb-3 p-3 bg-light rounded border" id="results_guardrails_group">
         <div class="fw-semibold mb-2">Starting Spending at Retirement</div>
         <div class="form-check mb-1">
@@ -295,6 +335,76 @@
           Each year after retirement begins, regular spending rises with inflation (skipped after a down year while withdrawals run
           above their starting rate), is cut 10% if the withdrawal rate climbs more than 20% above its starting level (never in the
           final 15 years), and is raised 10% if it falls more than 20% below.
+        </div>
+
+        <hr class="my-3">
+
+        <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
+          <label for="input_essential_spending" class="form-label small fw-semibold mb-0">
+            Minimum Essential Annual Living Expenses (in today's dollars)
+          </label>
+          <button
+            type="button"
+            class="btn btn-link p-0 text-primary text-decoration-none flex-shrink-0"
+            id="btnEssentialSpendingHelp"
+            title="What expenses to include and exclude"
+            aria-label="What counts as Minimum Essential Annual Living Expenses?"
+            onclick={() => (essentialModalOpen = true)}
+          >
+            <i class="fa-solid fa-circle-question fs-6"></i>
+          </button>
+        </div>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">$</span>
+          <input
+            type="number"
+            class={['form-control fw-semibold', essentialInvalid && 'is-invalid']}
+            id="input_essential_spending"
+            name="essential_spending"
+            min="0"
+            step="1000"
+            placeholder="Optional"
+            value={values.essential_spending ?? ''}
+            oninput={(e) => {
+              const val = e.currentTarget.value;
+              values.essential_spending = val;
+              essentialInvalid = false;
+              const num = parseFloat(val.replace(/[$,\s]/g, ''));
+              if (!(Number.isFinite(num) && num > 0)) {
+                values.gk_protect_essential_floor = 'false';
+              }
+            }}
+            {disabled}
+          >
+          <span class="input-group-text text-secondary">/yr</span>
+        </div>
+        <div class={['invalid-feedback', essentialInvalid && 'd-block']} id="input_essential_spending_feedback">
+          Minimum Essential Annual Living Expenses must be a valid non-negative number.
+        </div>
+
+        <div class="form-check form-switch mt-2">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="results_gk_protect_floor"
+            name="gk_protect_essential_floor"
+            checked={hasEssential && values.gk_protect_essential_floor === 'true'}
+            disabled={disabled || !hasEssential}
+            onchange={(e) => {
+              values.gk_protect_essential_floor = e.currentTarget.checked ? 'true' : 'false';
+            }}
+          >
+          <label class="form-check-label small fw-semibold" for="results_gk_protect_floor">
+            Protect Essential Floor
+          </label>
+        </div>
+        <div class="form-text mt-1">
+          {#if hasEssential}
+            Opt-in: never cut spending or skip inflation raises below your essential floor. Severe downturns will instead lower Probability of Plan Success.
+          {:else}
+            Optional: enter your essential floor above to see how often Guardrails drops below it, or to opt in to protecting it from cuts.
+          {/if}
         </div>
       </div>
     {/if}
@@ -328,3 +438,5 @@
     </button>
   </div>
 </form>
+
+<EssentialSpendingModal bind:open={essentialModalOpen} />

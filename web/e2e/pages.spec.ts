@@ -171,6 +171,25 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
   await expect(page.locator('#input_desired_spending')).toHaveValue('144000');
   await expect(page.locator('#scenarioComparisonBar')).toHaveCount(0);
   expect((await savedPlan(page)).gk_spending_mode).toBe('specified');
+
+  // Essential spending floor: popup modal, diagnostic warning, and opt-in protection on worker pool.
+  await expect(page.locator('#results_gk_protect_floor')).not.toBeChecked();
+  await expect(page.locator('#results_gk_protect_floor')).toBeDisabled();
+  await page.click('#btnEssentialSpendingHelp');
+  await expect(page.locator('#essentialSpendingModal')).toBeVisible();
+  await expect(page.locator('#essentialSpendingModal')).toContainText('Additional Taxes');
+  await page.click('#essentialSpendingModal .btn-close');
+
+  await page.fill('#input_essential_spending', '105000');
+  await expect(page.locator('#results_gk_protect_floor')).toBeEnabled();
+  await page.click('#btnStaleReRun');
+  await expect(page.locator('#gkEssentialFloorCard')).toContainText('Essential Spending Floor Warning', { timeout: 60_000 });
+
+  await page.check('#results_gk_protect_floor');
+  await page.click('#btnStaleReRun');
+  await expect(page.locator('#gkEssentialFloorCard')).toContainText('Essential Floor Protection Active', { timeout: 60_000 });
+  expect((await savedPlan(page)).essential_spending).toBe(105000);
+  expect((await savedPlan(page)).gk_protect_essential_floor).toBe(true);
 });
 
 test('Results lists the errors of an invalid plan instead of running', async ({ page }) => {

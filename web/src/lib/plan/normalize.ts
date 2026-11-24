@@ -14,6 +14,8 @@ export const PLAN_SCALAR_KINDS: Kinds = {
   goal_seeking: 'bool',
   simulation_type: 'str',
   gk_spending_mode: 'str',
+  essential_spending: 'float',
+  gk_protect_essential_floor: 'bool',
   user_name: 'str',
   user_age: 'int',
   user_retirement_age: 'int',

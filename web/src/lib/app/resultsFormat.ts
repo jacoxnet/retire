@@ -109,6 +109,7 @@ export function milestoneBadge(m: string): string {
   if (m.includes('RMDs')) return 'badge bg-warning text-dark me-1';
   if (m.includes('Spending Cut')) return 'badge bg-danger-subtle text-danger-emphasis border border-danger-subtle me-1';
   if (m.includes('Spending Raised')) return 'badge bg-success-subtle text-success-emphasis border border-success-subtle me-1';
+  if (m.includes('Essential Floor')) return 'badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1';
   if (m.startsWith('Guardrails')) return 'badge bg-primary-subtle text-primary-emphasis border border-primary-subtle me-1';
   return 'badge bg-light text-dark border me-1';
 }

@@ -48,4 +48,9 @@ describe('validator cases', () => {
     const plan = { ...getDefaultData(), simulation_type: 'earliest_retirement', target_success_rate: 150 };
     expect(planErrors(plan)).toContain('Target Success Rate must be between 1% and 99% for Earliest Retirement Age simulation.');
   });
+
+  it('rejects negative essential_spending', () => {
+    const plan = { ...getDefaultData(), simulation_type: 'guyton_klinger', essential_spending: -100 };
+    expect(planErrors(plan)).toContain('Minimum Essential Annual Living Expenses must be a valid non-negative number.');
+  });
 });
