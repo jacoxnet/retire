@@ -145,7 +145,10 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
   expect(rate).toBeGreaterThan(97); // solved on other random paths, so close to 99 rather than exactly
   await expect(page.locator('#mc_real')).toBeChecked();
   await expect(page.locator('#gkStartingWithdrawal')).toContainText('Solved for 99% success');
+  await expect(page.locator('#gkActivityTable thead')).toContainText('≥ 1 time');
+  await expect(page.locator('#gkActivityTable thead')).toContainText('Max in a Run');
   await expect(page.locator('#gkWithdrawalTable tbody tr')).toHaveCount(3);
+  await expect(page.locator('#mcEndingWealthTableGuardrails')).toHaveCount(0);
   for (const id of ['#gkPctCut', '#gkPctRaise', '#gkPctFreeze']) {
     const pct = parseFloat((await page.textContent(id))!);
     expect(pct).toBeGreaterThan(0);
@@ -165,9 +168,10 @@ test('Guardrails mode: solves the starting spending on the workers, then runs fr
   await page.click('label[for="mc_real"]');
   await expect(page.locator('#gkStartingWithdrawal')).toContainText("In today's dollars");
 
-  // Further Detail expand/collapse
+  // Further Detail expand/collapse (Ending Wealth Percentiles at top + 7-row spending range)
   await expect(page.locator('#mcFurtherDetail')).toHaveCount(0);
   await page.click('#btnFurtherDetail');
+  await expect(page.locator('#mcEndingWealthTableGuardrails')).toBeVisible();
   await expect(page.locator('#gkWithdrawalDetailTable tbody tr')).toHaveCount(7);
   await page.click('#btnFurtherDetail');
   await expect(page.locator('#mcFurtherDetail')).toHaveCount(0);

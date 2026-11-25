@@ -220,15 +220,14 @@
 
 {#snippet endingWealth(id: string)}
   {@const lifeInsShown = activeMode === 'real' ? realValue(r.terminal_life_insurance, r.years ?? 0, r.inflation_rate ?? 0) : r.terminal_life_insurance}
-  <hr>
-  <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
+  <h5 class="text-secondary mt-0 border-bottom pb-2">Ending Wealth Percentiles</h5>
   {#if r.terminal_life_insurance > 0}
     <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
       <i class="fa-solid fa-shield-halved me-2 text-info"></i>
       <span>Includes <strong>${djangoMoney(lifeInsShown)}</strong> life insurance death benefit paid to estate/heirs{activeMode === 'real' && (r.years ?? 0) > 0 ? " (in today's dollars)" : ''}.</span>
     </div>
   {/if}
-  <div class="table-responsive">
+  <div class="table-responsive mb-3">
     <table class="table table-hover align-middle mb-0" {id}>
       <thead class="table-light">
         <tr>
@@ -364,8 +363,6 @@
         </div>
       {/if}
 
-      {@render endingWealth('mcEndingWealthTableEarliest')}
-
       {#if r.is_married && r.frontier && r.frontier.length > 0}
         <RetirementFrontierExplorer
           frontier={r.frontier}
@@ -450,12 +447,15 @@
       {/if}
 
       <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
+      <p class="small text-muted mb-2">Percent of simulation runs where Regular Retirement Spending was adjusted by the guardrails:</p>
       <div id="gkActivity" class="table-responsive mb-3">
         <table class="table table-hover align-middle mb-0" id="gkActivityTable">
           <thead class="table-light">
             <tr>
               <th>Adjustment Type</th>
-              <th class="text-end">% of Runs</th>
+              {#each act.colCounts as k (k)}
+                <th class="text-end">{k === 1 ? '≥ 1 time' : `≥ ${k} times`}</th>
+              {/each}
               <th class="text-end">Max in a Run</th>
             </tr>
           </thead>
@@ -463,11 +463,17 @@
             {#each act.rows as row (row.id)}
               <tr id={row.id}>
                 <td><strong class={row.colorClass}>{row.label}</strong></td>
-                <td class="text-end">
-                  <span id={row.pctId} class="fw-semibold {row.colorClass}">
-                    {floatformat(row.map[1] ?? 0, 1)}%
-                  </span>
-                </td>
+                {#each act.colCounts as k (k)}
+                  <td class="text-end">
+                    {#if row.map[k] !== undefined && (row.map[k] > 0 || (k === 1 && row.maxCount === 0))}
+                      <span id={k === 1 ? row.pctId : undefined} class="fw-semibold {row.colorClass}">
+                        {floatformat(row.map[k], 1)}%
+                      </span>
+                    {:else}
+                      <span id={k === 1 ? row.pctId : undefined} class="text-muted">—</span>
+                    {/if}
+                  </td>
+                {/each}
                 <td class="text-end fw-semibold text-secondary">{row.maxText}</td>
               </tr>
             {/each}
@@ -494,8 +500,6 @@
           </tbody>
         </table>
       </div>
-
-      {@render endingWealth('mcEndingWealthTableGuardrails')}
     </div>
   {:else if !r.goal_seeking}
     <div class="mt-3">
@@ -507,7 +511,6 @@
         <span class="text-secondary">/yr</span>
         {#if spendingNote}<small class="text-muted ms-1">({spendingNote})</small>{/if}
       </p>
-      {@render endingWealth('mcEndingWealthTable')}
     </div>
   {:else}
     <div class="mt-3">
@@ -565,9 +568,16 @@
 
   {#if showFurtherDetail}
     <div class="mt-3 p-3 bg-light-subtle rounded border" id="mcFurtherDetail">
+      {#if r.simulation_type === 'earliest_retirement'}
+        {@render endingWealth('mcEndingWealthTableEarliest')}
+      {:else if r.simulation_type === GK_SIMULATION_TYPE && r.guardrails}
+        {@render endingWealth('mcEndingWealthTableGuardrails')}
+      {:else if !r.goal_seeking && r.simulation_type !== 'goal_seeking'}
+        {@render endingWealth('mcEndingWealthTable')}
+      {/if}
+
       {#if r.simulation_type === GK_SIMULATION_TYPE && r.guardrails}
         {@const g = r.guardrails}
-        {@const act = guardrailActivityData(g)}
         <h6 class="text-secondary border-bottom pb-1 mb-2">Guardrail Mechanics &amp; Withdrawal Rate</h6>
         <p class="small text-secondary mb-2" id="gkInitialRate">
           <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
@@ -579,41 +589,6 @@
           after that the upper guardrail no longer cuts spending.
           {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
         </p>
-
-        <h6 class="text-secondary border-bottom pb-1 mb-2">Full Guardrail Activity Distribution</h6>
-        <p class="small text-muted mb-2">Percent of simulation runs where Regular Retirement Spending was adjusted by the guardrails:</p>
-        <div class="table-responsive mb-3">
-          <table class="table table-hover align-middle mb-0" id="gkActivityDetailTable">
-            <thead class="table-light">
-              <tr>
-                <th>Adjustment Type</th>
-                {#each act.colCounts as k (k)}
-                  <th class="text-end">{k === 1 ? '≥ 1 time' : `≥ ${k} times`}</th>
-                {/each}
-                <th class="text-end">Max in a Run</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each act.rows as row (row.id)}
-                <tr>
-                  <td><strong class={row.colorClass}>{row.label}</strong></td>
-                  {#each act.colCounts as k (k)}
-                    <td class="text-end">
-                      {#if row.map[k] !== undefined && (row.map[k] > 0 || (k === 1 && row.maxCount === 0))}
-                        <span class="fw-semibold {row.colorClass}">
-                          {floatformat(row.map[k], 1)}%
-                        </span>
-                      {:else}
-                        <span class="text-muted">—</span>
-                      {/if}
-                    </td>
-                  {/each}
-                  <td class="text-end fw-semibold text-secondary">{row.maxText}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
 
         <h6 class="text-secondary border-bottom pb-1 mb-2">Full Regular Retirement Spending Range (Real &amp; Nominal)</h6>
         <div class="table-responsive">

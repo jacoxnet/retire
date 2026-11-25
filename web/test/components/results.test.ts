@@ -198,8 +198,12 @@ describe('interactions', () => {
     expect(page.container.querySelector('#input_desired_spending')).toBeNull();
   });
 
-  it('renders Ending Wealth percentiles defaulting to Real Dollars and switching to Nominal Dollars', async () => {
+  it('renders Ending Wealth percentiles inside Further Detail, defaulting to Real Dollars and switching to Nominal Dollars', async () => {
     const page = show(r);
+    expect(page.container.querySelector('#mcEndingWealthTable')).toBeNull();
+    await fireEvent.click(page.container.querySelector('#btnFurtherDetail')!);
+    flushSync();
+
     const table = page.container.querySelector('#mcEndingWealthTable')!;
     expect(table).not.toBeNull();
     expect([...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual(['Metric', 'Real Dollars']);
@@ -394,7 +398,7 @@ describe('guardrails mode', () => {
   const rowsOf = (root: ParentNode, sel: string) =>
     [...root.querySelectorAll(`${sel} tbody tr`)].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()));
 
-  it('shows the success rate, streamlined summary in Real/Nominal Dollars, and expandable Further Detail', async () => {
+  it('shows the success rate, full Guardrail Activity on main card in Real/Nominal Dollars, and Further Detail with Ending Wealth at top', async () => {
     const page = show(solved);
     const c = page.container;
     const g = solved.guardrails!;
@@ -411,7 +415,12 @@ describe('guardrails mode', () => {
     expect(startReal).toContain("In today's dollars");
     expect(startReal).toContain('Solved for 99% success');
 
-    // Compact Guardrail Activity (3 rows x 3 columns) and compact Regular Spending (3 rows x 2 columns)
+    // Full Guardrail Activity distribution on main card (≥ 1 time, ..., Max in a Run)
+    const actHeaders = [...c.querySelectorAll('#gkActivityTable thead th')].map((th) => th.textContent?.trim());
+    expect(actHeaders[0]).toBe('Adjustment Type');
+    expect(actHeaders[1]).toBe('≥ 1 time');
+    expect(actHeaders.at(-1)).toBe('Max in a Run');
+    expect(actHeaders.length).toBeGreaterThanOrEqual(4);
     expect(rowsOf(c, '#gkActivityTable')).toHaveLength(3);
     expect(text(c, '#gkPctCut')).toBe(`${g.pct_runs_cut.toFixed(1)}%`);
     expect(text(c, '#gkPctRaise')).toBe(`${g.pct_runs_raise.toFixed(1)}%`);
@@ -426,9 +435,8 @@ describe('guardrails mode', () => {
       ['Final-Year Spending (Mean)', money(g.final_withdrawal_real.mean)],
       ['Peak-Year Spending (Mean)', money(g.peak_withdrawal_real.mean)],
     ]);
-    expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1]).toEqual([
-      'Median Ending Wealth', money(realValue(solved.run_median, solved.years, solved.inflation_rate)),
-    ]);
+    // Ending Wealth Percentiles is inside Further Detail (hidden until expanded)
+    expect(c.querySelector('#mcEndingWealthTableGuardrails')).toBeNull();
     expect(c.querySelector('#mcFurtherDetail')).toBeNull();
 
     // Toggling to Nominal Dollars updates the main card
@@ -442,17 +450,22 @@ describe('guardrails mode', () => {
       ['Final-Year Spending (Mean)', money(g.final_withdrawal.mean)],
       ['Peak-Year Spending (Mean)', money(g.peak_withdrawal.mean)],
     ]);
-    expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1]).toEqual(['Median Ending Wealth', money(solved.run_median)]);
 
-    // Expanding Further Detail reveals the full distributions, 7-row spending table, definitions, and withdrawal ordering note
+    // Expanding Further Detail reveals Ending Wealth Percentiles at the top, followed by rules, 7-row spending table, and withdrawal ordering note
     await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
     flushSync();
     const detail = c.querySelector('#mcFurtherDetail')!;
     expect(detail).not.toBeNull();
+    expect(rowsOf(detail, '#mcEndingWealthTableGuardrails')[1]).toEqual(['Median Ending Wealth', money(solved.run_median)]);
+    const detailHtml = detail.innerHTML;
+    expect(detailHtml.indexOf('id="mcEndingWealthTableGuardrails"')).toBeLessThan(detailHtml.indexOf('id="gkInitialRate"'));
+    expect(detailHtml.indexOf('id="gkInitialRate"')).toBeLessThan(detailHtml.indexOf('id="gkWithdrawalDetailTable"'));
+    expect(detailHtml.indexOf('id="gkWithdrawalDetailTable"')).toBeLessThan(detailHtml.indexOf('id="portfolioWithdrawalOrderingNote"'));
+
     expect(text(detail, '#gkInitialRate')).toContain(`${g.initial_withdrawal_rate.toFixed(1)}% on average`);
     expect(text(detail, '#gkInitialRate')).toContain('dividing the amount of the regular retirement spending in the first year of retirement by that year\'s amount in the Accounts for Retirement');
     expect(text(detail, '#gkCutLimit')).toContain(`This simulation is limited to making at most ${g.max_cuts} cut`);
-    expect(detail.querySelector('#gkActivityDetailTable')).not.toBeNull();
+    expect(detail.querySelector('#gkActivityDetailTable')).toBeNull();
     expect(rowsOf(detail, '#gkWithdrawalDetailTable')).toEqual([
       ['Final-Year Regular Retirement Spending: Mean', money(g.final_withdrawal_real.mean), money(g.final_withdrawal.mean)],
       ['Final-Year Regular Retirement Spending: Maximum', money(g.final_withdrawal_real.max), money(g.final_withdrawal.max)],
@@ -463,6 +476,13 @@ describe('guardrails mode', () => {
       ['Lowest-Year Regular Retirement Spending: Mean', money(g.lowest_withdrawal_real.mean), money(g.lowest_withdrawal.mean)],
     ]);
     expect(detail.querySelector('#portfolioWithdrawalOrderingNote')).not.toBeNull();
+
+    // Toggling back to Real Dollars updates Ending Wealth inside Further Detail too
+    await fireEvent.click(c.querySelector('#mc_real')!);
+    flushSync();
+    expect(rowsOf(detail, '#mcEndingWealthTableGuardrails')[1]).toEqual([
+      'Median Ending Wealth', money(realValue(solved.run_median, solved.years, solved.inflation_rate)),
+    ]);
 
     // Collapsing hides Further Detail again
     await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
