@@ -6,10 +6,11 @@
   interface Props {
     taxesOpen: boolean;
     withdrawalsOpen: boolean;
+    dollarModeOpen?: boolean;
     /** Start age for retirement spending, named in the taxes explanation. */
     startAge: number | null | undefined;
   }
-  let { taxesOpen = $bindable(), withdrawalsOpen = $bindable(), startAge }: Props = $props();
+  let { taxesOpen = $bindable(), withdrawalsOpen = $bindable(), dollarModeOpen = $bindable(false), startAge }: Props = $props();
 </script>
 
 <Modal bind:open={withdrawalsOpen} id="portfolioWithdrawalsModal" size="lg">
@@ -95,4 +96,43 @@
     </div>
   </div>
   {#snippet footer()}<button type="button" class="btn btn-secondary btn-sm" onclick={() => (taxesOpen = false)}>Close</button>{/snippet}
+</Modal>
+
+<Modal bind:open={dollarModeOpen} id="dollarModeModal" size="lg">
+  {#snippet title()}<i class="fa-solid fa-circle-info me-2"></i>Real Dollars vs. Nominal Dollars{/snippet}
+  <p class="mb-3 text-secondary">
+    Both views display the exact same underlying simulation—only whether future amounts are adjusted for inflation changes:
+  </p>
+
+  <div class="card mb-3 border-primary-subtle bg-light">
+    <div class="card-body py-3">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge bg-primary">Default</span>
+        <strong class="text-dark">Real Dollars (Today's Dollars)</strong>
+      </div>
+      <p class="small text-secondary mb-0">
+        Removes projected inflation so every future balance, income stream, tax, and spending amount is expressed in <strong>today's purchasing power</strong>.
+        This makes it easy to compare future retirement spending and ending wealth directly against what a dollar buys today.
+      </p>
+    </div>
+  </div>
+
+  <div class="card mb-3 border-secondary-subtle bg-light">
+    <div class="card-body py-3">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge bg-secondary">Future Dollars</span>
+        <strong class="text-dark">Nominal Dollars (Actual Future-Year Dollars)</strong>
+      </div>
+      <p class="small text-secondary mb-0">
+        Shows the actual unadjusted dollar figures expected to be paid, withdrawn, or held in each future year—including accumulated inflation over time.
+        Use this view when checking raw future account balances, cash flows, and tax figures in the year they occur.
+      </p>
+    </div>
+  </div>
+
+  <p class="small text-muted mb-0">
+    <strong>Note:</strong> Toggling between Real Dollars and Nominal Dollars updates the Monte Carlo Results card, Deterministic tables, and Charts together.
+    On the Historical Stress Test tab, Ending Wealth percentiles are shown in Nominal Dollars and Guardrail spending averages are shown in Real Dollars.
+  </p>
+  {#snippet footer()}<button type="button" class="btn btn-secondary btn-sm" onclick={() => (dollarModeOpen = false)}>Close</button>{/snippet}
 </Modal>

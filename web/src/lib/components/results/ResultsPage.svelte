@@ -60,12 +60,13 @@
   ];
 
   let active: TabId = $state('stats');
-  let mode: DollarMode = $state('nominal');
+  let mode: DollarMode = $state('real');
   let viewScenario = $state<'solved' | 'baseline'>('solved');
   let stale = $state(false);
   let printing = $state(false);
   let taxesOpen = $state(false);
   let withdrawalsOpen = $state(false);
+  let dollarModeOpen = $state(false);
   let inputs: ReturnType<typeof InputsPanel> | undefined = $state();
 
   const isGuardrails = $derived(results.simulation_type === GK_SIMULATION_TYPE && Boolean(results.guardrails));
@@ -190,7 +191,7 @@
         <InputsPanel bind:this={inputs} {results} {onApply} bind:stale disabled={busy} />
       </div>
       <div class="col-md-7 mb-4">
-        <McResults {results} {onAdopt} />
+        <McResults {results} {onAdopt} {mode} onModeChange={setMode} onDollarModeHelp={() => (dollarModeOpen = true)} />
       </div>
     </div>
   </div>
@@ -233,18 +234,18 @@
   <div class={paneClass('projection')} id="projection" role="tabpanel" aria-labelledby="projection-tab">
     {@render scenarioToggle()}
     <DetTable kind="projection" rows={activeRows} inflationRate={results.inflation_rate} {mode} onModeChange={setMode}
-      onTaxesHelp={() => (taxesOpen = true)} />
+      onTaxesHelp={() => (taxesOpen = true)} onDollarModeHelp={() => (dollarModeOpen = true)} />
   </div>
 
   <div class={paneClass('cashflow')} id="cashflow" role="tabpanel" aria-labelledby="cashflow-tab">
     {@render scenarioToggle()}
     <DetTable kind="cashflow" rows={activeRows} inflationRate={results.inflation_rate} {mode} onModeChange={setMode}
-      onTaxesHelp={() => (taxesOpen = true)} onWithdrawalsHelp={() => (withdrawalsOpen = true)} />
+      onTaxesHelp={() => (taxesOpen = true)} onWithdrawalsHelp={() => (withdrawalsOpen = true)} onDollarModeHelp={() => (dollarModeOpen = true)} />
   </div>
 
   <div class={paneClass('charts')} id="charts" role="tabpanel" aria-labelledby="charts-tab">
     {@render scenarioToggle()}
-    <ChartsTab results={chartResults} {mode} onModeChange={setMode} />
+    <ChartsTab results={chartResults} {mode} onModeChange={setMode} onDollarModeHelp={() => (dollarModeOpen = true)} />
   </div>
 
   <div class={paneClass('stresstest')} id="stresstest" role="tabpanel" aria-labelledby="stress-tab">
@@ -253,4 +254,4 @@
   </div>
 </div>
 
-<HelpModals bind:taxesOpen bind:withdrawalsOpen startAge={results.desired_spending_start_age} />
+<HelpModals bind:taxesOpen bind:withdrawalsOpen bind:dollarModeOpen startAge={results.desired_spending_start_age} />

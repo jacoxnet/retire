@@ -16,8 +16,9 @@
     onModeChange: (mode: DollarMode) => void;
     onTaxesHelp: () => void;
     onWithdrawalsHelp?: () => void;
+    onDollarModeHelp?: () => void;
   }
-  let { kind, rows, inflationRate, mode, onModeChange, onTaxesHelp, onWithdrawalsHelp }: Props = $props();
+  let { kind, rows, inflationRate, mode, onModeChange, onTaxesHelp, onWithdrawalsHelp, onDollarModeHelp }: Props = $props();
 
   // results.js took each row's year index from its Year cell.
   const startYear = $derived(rows[0]?.year ?? 2026);
@@ -153,11 +154,22 @@
         <p class="text-secondary small mb-0">Shows the year-by-year cash inflow, outflow, and net withdrawals from the portfolio.</p>
       {/if}
     </div>
-    <div class="btn-group" role="group" aria-label="Nominal/Real dollar toggle">
-      <input type="radio" class="btn-check" name="{prefix}_dollar_mode" id="{prefix}_nominal" autocomplete="off" checked={mode === 'nominal'} onclick={() => onModeChange('nominal')}>
-      <label class="btn btn-outline-secondary btn-sm" for="{prefix}_nominal">Nominal Dollars</label>
-      <input type="radio" class="btn-check" name="{prefix}_dollar_mode" id="{prefix}_real" autocomplete="off" checked={mode === 'real'} onclick={() => onModeChange('real')}>
-      <label class="btn btn-outline-secondary btn-sm" for="{prefix}_real">Real Dollars</label>
+    <div class="d-flex align-items-center gap-2">
+      <div class="btn-group" role="group" aria-label="Real/Nominal dollar toggle">
+        <input type="radio" class="btn-check" name="{prefix}_dollar_mode" id="{prefix}_real" autocomplete="off" checked={mode === 'real'} onclick={() => onModeChange('real')}>
+        <label class="btn btn-outline-secondary btn-sm" for="{prefix}_real">Real Dollars</label>
+        <input type="radio" class="btn-check" name="{prefix}_dollar_mode" id="{prefix}_nominal" autocomplete="off" checked={mode === 'nominal'} onclick={() => onModeChange('nominal')}>
+        <label class="btn btn-outline-secondary btn-sm" for="{prefix}_nominal">Nominal Dollars</label>
+      </div>
+      {#if onDollarModeHelp}
+        <button type="button" class="btn btn-link p-0 text-primary text-decoration-none d-print-none"
+          id="{prefix}_dollar_mode_help"
+          title="Difference between Real Dollars and Nominal Dollars"
+          aria-label="Real Dollars vs. Nominal Dollars Information"
+          onclick={onDollarModeHelp}>
+          <i class="fa-solid fa-circle-question fs-6"></i>
+        </button>
+      {/if}
     </div>
   </div>
 

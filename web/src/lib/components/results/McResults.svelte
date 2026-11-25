@@ -2,6 +2,7 @@
      percentiles, the solved maximum spending for a goal-seeking run, the solved
      retirement age, or the spending statistics of a run under the guardrail rules. -->
 <script lang="ts">
+  import type { DollarMode } from '../../app/resultCharts';
   import type { Results } from '../../app/results';
   import { djangoMoney, floatformat, realValue } from '../../app/resultsFormat';
   import { GK_SIMULATION_TYPE, GK_TARGET_SUCCESS_RATE, guardrailSolves, type GuardrailStats } from '../../engine/guardrails';
@@ -10,8 +11,18 @@
   interface Props {
     results: Results;
     onAdopt?: (type: 'spending' | 'retirement_age', value: any) => void;
+    mode?: DollarMode;
+    onModeChange?: (mode: DollarMode) => void;
+    onDollarModeHelp?: () => void;
   }
-  let { results: r, onAdopt }: Props = $props();
+  let { results: r, onAdopt, mode, onModeChange, onDollarModeHelp }: Props = $props();
+  let localMode = $state<DollarMode>('real');
+  const activeMode = $derived<DollarMode>(mode ?? localMode);
+  const setMode = (m: DollarMode) => {
+    if (onModeChange) onModeChange(m);
+    else localMode = m;
+  };
+  let showFurtherDetail = $state(false);
   const sign = (v: number) => (v >= 0 ? 'text-success' : 'text-danger');
   const rows = $derived([
     { label: 'Mean Ending Wealth', value: r.run_mean, bold: false },
@@ -61,6 +72,29 @@
   });
 
   const solvedGuardrails = $derived(guardrailSolves(r.plan_data_json));
+  const spendingStartT = $derived(Math.max(0, (r.desired_spending_start_age ?? r.user_retirement_age ?? 65) - (r.user_age ?? 60)));
+  const spendingStartYear = $derived((r.current_year ?? 2026) + spendingStartT);
+  const adjustSpendingInflation = $derived(r.plan_data_json?.adjust_spending_inflation ?? true);
+  function spendingAmount(enteredAmount: number): number {
+    if (adjustSpendingInflation) {
+      return activeMode === 'real'
+        ? enteredAmount
+        : enteredAmount * Math.pow(1.0 + (r.inflation_rate ?? 0) / 100.0, spendingStartT);
+    }
+    return activeMode === 'real'
+      ? realValue(enteredAmount, spendingStartT, r.inflation_rate ?? 0)
+      : enteredAmount;
+  }
+  const spendingNote = $derived(
+    spendingStartT > 0
+      ? (activeMode === 'real' ? "in today's dollars" : `in ${spendingStartYear} dollars`)
+      : null,
+  );
+  const headerColor = $derived(
+    r.simulation_type === 'earliest_retirement' || (r.goal_seeking && r.simulation_type !== GK_SIMULATION_TYPE)
+      ? 'text-primary'
+      : 'text-success',
+  );
 
   interface GuardrailActivityRow {
     id: string;
@@ -121,7 +155,15 @@
 
     return { colCounts, rows };
   }
-  /** The spending table: each amount's statistics across runs, nominal and real. */
+  /** The compact spending table on the main card: mean values in the active dollar mode. */
+  function summaryWithdrawalRows(g: GuardrailStats) {
+    return [
+      { label: 'Lowest-Year Spending (Mean)', nominal: g.lowest_withdrawal.mean, real: g.lowest_withdrawal_real.mean },
+      { label: 'Final-Year Spending (Mean)', nominal: g.final_withdrawal.mean, real: g.final_withdrawal_real.mean },
+      { label: 'Peak-Year Spending (Mean)', nominal: g.peak_withdrawal.mean, real: g.peak_withdrawal_real.mean },
+    ];
+  }
+  /** The full spending table inside Further Detail: all statistics, nominal and real. */
   function withdrawalRows(g: GuardrailStats) {
     const row = (label: string, nominal: number, real: number, first = false, bold = false) => ({ label, nominal, real, first, bold });
     return [
@@ -177,12 +219,13 @@
 {/snippet}
 
 {#snippet endingWealth(id: string)}
+  {@const lifeInsShown = activeMode === 'real' ? realValue(r.terminal_life_insurance, r.years ?? 0, r.inflation_rate ?? 0) : r.terminal_life_insurance}
   <hr>
   <h5 class="text-secondary mt-3 border-bottom pb-2">Ending Wealth Percentiles</h5>
   {#if r.terminal_life_insurance > 0}
     <div class="alert alert-info py-1 px-2 small mb-2 d-flex align-items-center">
       <i class="fa-solid fa-shield-halved me-2 text-info"></i>
-      <span>Includes <strong>${djangoMoney(r.terminal_life_insurance)}</strong> life insurance death benefit paid to estate/heirs.</span>
+      <span>Includes <strong>${djangoMoney(lifeInsShown)}</strong> life insurance death benefit paid to estate/heirs{activeMode === 'real' && (r.years ?? 0) > 0 ? " (in today's dollars)" : ''}.</span>
     </div>
   {/if}
   <div class="table-responsive">
@@ -190,17 +233,15 @@
       <thead class="table-light">
         <tr>
           <th>Metric</th>
-          <th class="text-end">Nominal Dollars</th>
-          <th class="text-end">Real Dollars</th>
+          <th class="text-end">{activeMode === 'real' ? 'Real Dollars' : 'Nominal Dollars'}</th>
         </tr>
       </thead>
       <tbody>
         {#each rows as row (row.label)}
-          {@const real = realValue(row.value, r.years ?? 0, r.inflation_rate ?? 0)}
+          {@const val = activeMode === 'real' ? realValue(row.value, r.years ?? 0, r.inflation_rate ?? 0) : row.value}
           <tr>
             <td><strong>{row.label}</strong></td>
-            <td class={['text-end', row.bold && 'font-weight-bold', sign(row.value)]}>${djangoMoney(row.value)}</td>
-            <td class={['text-end', row.bold && 'font-weight-bold', sign(real)]}>${djangoMoney(real)}</td>
+            <td class={['text-end', row.bold && 'font-weight-bold', sign(val)]}>${djangoMoney(val)}</td>
           </tr>
         {/each}
       </tbody>
@@ -209,8 +250,32 @@
 {/snippet}
 
 <div class="card p-4 h-100" id="mcResultsCard">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom pb-2">
+    <h3 class="mb-0 {headerColor}">Results</h3>
+    <div class="d-flex align-items-center gap-2">
+      <div class="btn-group btn-group-sm" role="group" aria-label="Real/Nominal dollar toggle">
+        <input type="radio" class="btn-check" name="mc_dollar_mode" id="mc_real" autocomplete="off"
+          checked={activeMode === 'real'} onclick={() => setMode('real')}>
+        <label class="btn btn-outline-secondary" for="mc_real">Real Dollars</label>
+        <input type="radio" class="btn-check" name="mc_dollar_mode" id="mc_nominal" autocomplete="off"
+          checked={activeMode === 'nominal'} onclick={() => setMode('nominal')}>
+        <label class="btn btn-outline-secondary" for="mc_nominal">Nominal Dollars</label>
+      </div>
+      {#if onDollarModeHelp}
+        <button
+          type="button"
+          class="btn btn-link p-0 text-primary text-decoration-none d-print-none"
+          id="mc_dollar_mode_help"
+          title="Difference between Real Dollars and Nominal Dollars"
+          aria-label="Real Dollars vs. Nominal Dollars Information"
+          onclick={onDollarModeHelp}
+        >
+          <i class="fa-solid fa-circle-question fs-6"></i>
+        </button>
+      {/if}
+    </div>
+  </div>
   {#if r.simulation_type === 'earliest_retirement'}
-    <h3 class="border-bottom pb-2 text-primary">Results</h3>
     <div class="mt-3">
       {#if r.unreachable}
         <div class="alert alert-warning border text-center py-3 mb-4">
@@ -272,7 +337,10 @@
         <div class="col-5 text-end text-success font-weight-bold">{floatformat(r.achieved_success_rate, 1)}%</div>
 
         <div class="col-7 mb-2"><strong>Desired Regular Retirement Spending:</strong></div>
-        <div class="col-5 text-end">${djangoMoney(r.desired_spending)}/yr</div>
+        <div class="col-5 text-end">
+          ${djangoMoney(spendingAmount(r.desired_spending))}/yr
+          {#if spendingNote}<small class="text-muted d-block">{spendingNote}</small>{/if}
+        </div>
       </div>
 
       {#if !r.unreachable && r.achieved_user_ret_age}
@@ -313,28 +381,22 @@
     {@const g = r.guardrails}
     {@const startYear = (r.current_year ?? 2026) + g.start_year_index}
     {@const act = guardrailActivityData(g)}
-    <h3 class="border-bottom pb-2 text-success">Results</h3>
+    {@const shownStartSpending = activeMode === 'real' ? g.starting_withdrawal_real : g.starting_withdrawal}
+    {@const shownStartPortfolio = activeMode === 'real' ? realValue(g.starting_portfolio, g.start_year_index, r.inflation_rate ?? 0) : g.starting_portfolio}
     <div class="mt-3">
       {@render gauge()}
 
       <div class="alert alert-primary border text-center py-3 mb-3" id="gkStartingWithdrawal">
         <h4 class="mb-1">Starting Regular Retirement Spending</h4>
-        <span class="display-5 font-weight-bold">${djangoMoney(g.starting_withdrawal)}</span>
+        <span class="display-5 font-weight-bold">${djangoMoney(shownStartSpending)}</span>
         <span class="fs-5 text-secondary">/yr</span>
         <p class="mb-0 mt-1">
           <strong id="gkStartingPct">{floatformat(g.starting_withdrawal_pct, 1)}%</strong> of the
           {#if g.start_year_index > 0}portfolio at retirement{:else}initial portfolio{/if}
-          (${djangoMoney(g.starting_portfolio)}{g.start_year_index > 0 ? ', the average across runs' : ''})
+          (${djangoMoney(shownStartPortfolio)}{g.start_year_index > 0 ? ', the average across runs' : ''})
         </p>
         <p class="small text-muted mb-0 mt-1">
-          {#if g.start_year_index > 0}
-            Retirement Year 0 is {startYear}; ${djangoMoney(g.starting_withdrawal_real)}/yr in today's dollars.
-          {/if}
-          {#if solvedGuardrails}
-            Solved for a {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success rate under the guardrail rules.
-          {:else}
-            Your Desired Regular Retirement Spending, as entered.
-          {/if}
+          {#if g.start_year_index > 0}In {startYear} (Retirement Year 0) &middot; {/if}{#if activeMode === 'real'}In today's dollars{:else}In {startYear} dollars{/if} &middot; {#if solvedGuardrails}Solved for {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success{:else}Desired spending, as entered{/if}
         </p>
       </div>
 
@@ -360,62 +422,40 @@
           <p class="small mb-2">
             {#if g.protect_floor}
               {#if g.starting_withdrawal_real < g.essential_floor - 1}
-                Your starting regular retirement spending (<strong>${djangoMoney(g.starting_withdrawal_real)}/yr</strong> in today's dollars) is below your
-                <strong>${djangoMoney(g.essential_floor)}/yr</strong> (${djangoMoney(g.essential_floor / 12)}/mo) Annual Non-Discretionary Living Expenses
-                (<strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs fell below that level).
+                Starting spending (<strong>${djangoMoney(g.starting_withdrawal_real)}/yr</strong>) is below your
+                <strong>${djangoMoney(g.essential_floor)}/yr</strong> floor in today's dollars
+                (<strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs fell below).
               {:else}
-                Guardrails did not cut regular spending or skip inflation raises below your <strong>${djangoMoney(g.essential_floor)}/yr</strong>
-                (${djangoMoney(g.essential_floor / 12)}/mo) non-discretionary living expenses (protection activated in <strong>{floatformat(g.pct_runs_floor_protected, 1)}%</strong> of runs).
-                Because spending cannot drop below your non-discretionary expenses, severe downturn shortfalls appear directly in your Probability of Plan Success
-                (<strong>{floatformat(r.run_success, 1)}%</strong>).
+                Floor held at <strong>${djangoMoney(g.essential_floor)}/yr</strong> in today's dollars
+                (protection activated in <strong>{floatformat(g.pct_runs_floor_protected, 1)}%</strong> of runs).
                 {#if r.is_married && g.pct_runs_below_floor > 0}
-                  In <strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs, spending fell below your non-discretionary expenses after a first death because your plan's starting surviving-spouse spending was set lower than ${djangoMoney(g.essential_floor)}/yr.
+                  In <strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs, spending fell below after a first death because your plan's starting surviving-spouse spending was set lower than ${djangoMoney(g.essential_floor)}/yr.
                 {/if}
               {/if}
             {:else if g.pct_runs_below_floor > 0}
-              Although your portfolio survives <strong>{floatformat(r.run_success, 1)}%</strong> of simulations,
-              <strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs cut regular spending below your
-              <strong>${djangoMoney(g.essential_floor)}/yr</strong> (${djangoMoney(g.essential_floor / 12)}/mo) Annual Non-Discretionary Living Expenses—for an average of
-              <strong>{floatformat(g.mean_years_below_floor, 1)} {Math.abs(g.mean_years_below_floor - 1) < 0.05 ? 'year' : 'years'}</strong> in those runs,
-              dropping as low as <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong> (${djangoMoney(g.lowest_withdrawal_real.min / 12)}/mo) in today's dollars.
-              To prevent cuts below this baseline, enable <strong>Protect Non-Discretionary Spending</strong> in Simulation Mode or lower your starting spending.
+              <strong>{floatformat(g.pct_runs_below_floor, 1)}%</strong> of runs dropped below
+              <strong>${djangoMoney(g.essential_floor)}/yr</strong> in today's dollars
+              (lowest: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong>).
+              Enable <strong>Protect Non-Discretionary Spending</strong> in Simulation Mode to prevent cuts below this floor.
             {:else}
-              <strong>0.0%</strong> of simulation runs dropped below your <strong>${djangoMoney(g.essential_floor)}/yr</strong>
-              (${djangoMoney(g.essential_floor / 12)}/mo) Annual Non-Discretionary Living Expenses
-              (lowest simulated year: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong> in today's dollars).
+              <strong>0.0%</strong> of runs dropped below <strong>${djangoMoney(g.essential_floor)}/yr</strong> in today's dollars
+              (lowest: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong>).
             {/if}
           </p>
           <div class="small border-top pt-2 mb-0" id="gkEssentialIncomeCoverage">
-            <strong>Guaranteed Income vs. Non-Discretionary Expenses (today's dollars):</strong>
-            Non-portfolio income (Social Security, pensions) provides <strong>${djangoMoney(cov.startIncome)}/yr</strong> at retirement start,
-            leaving <strong>${djangoMoney(cov.startGap)}/yr</strong> of non-discretionary expenses to be covered by your portfolio.
-            {#if cov.peakIncome > cov.startIncome + 100}
-              Once later income/Social Security starts, guaranteed income reaches <strong>${djangoMoney(cov.peakIncome)}/yr</strong>
-              (leaving <strong>${djangoMoney(cov.peakGap)}/yr</strong> from your portfolio).
-            {/if}
-            <span class="d-block text-muted mt-1">
-              Note: Guardrail cuts and inflation skips adjust total Regular Retirement Spending rather than only the portfolio withdrawal portion.
-            </span>
+            <strong>Guaranteed Income (today's dollars):</strong>
+            Covers <strong>${djangoMoney(cov.startIncome)}/yr</strong> at start (portfolio gap: <strong>${djangoMoney(cov.startGap)}/yr</strong>){#if cov.peakIncome > cov.startIncome + 100}; rises to <strong>${djangoMoney(cov.peakIncome)}/yr</strong> later (gap: <strong>${djangoMoney(cov.peakGap)}/yr</strong>){/if}.
           </div>
         </div>
       {/if}
 
-      <p class="mb-3 small text-secondary" id="gkInitialRate">
-        <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
-        {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
-        <span class="text-muted">(which is the percentage determined by dividing the amount of the regular retirement spending in the first year of retirement by that year's amount in the Accounts for Retirement; other expenses and income count only through their effect on the portfolio).</span>
-      </p>
-
       <h5 class="text-secondary mt-3 border-bottom pb-2">Guardrail Activity</h5>
-      <p class="small text-muted mb-2">Percent of simulation runs where Regular Retirement Spending was adjusted by the guardrails:</p>
       <div id="gkActivity" class="table-responsive mb-3">
         <table class="table table-hover align-middle mb-0" id="gkActivityTable">
           <thead class="table-light">
             <tr>
               <th>Adjustment Type</th>
-              {#each act.colCounts as k (k)}
-                <th class="text-end">{k === 1 ? '≥ 1 time' : `≥ ${k} times`}</th>
-              {/each}
+              <th class="text-end">% of Runs</th>
               <th class="text-end">Max in a Run</th>
             </tr>
           </thead>
@@ -423,73 +463,59 @@
             {#each act.rows as row (row.id)}
               <tr id={row.id}>
                 <td><strong class={row.colorClass}>{row.label}</strong></td>
-                {#each act.colCounts as k (k)}
-                  <td class="text-end">
-                    {#if row.map[k] !== undefined && (row.map[k] > 0 || (k === 1 && row.maxCount === 0))}
-                      <span id={k === 1 ? row.pctId : undefined} class="fw-semibold {row.colorClass}">
-                        {floatformat(row.map[k], 1)}%
-                      </span>
-                    {:else}
-                      <span id={k === 1 ? row.pctId : undefined} class="text-muted">—</span>
-                    {/if}
-                  </td>
-                {/each}
+                <td class="text-end">
+                  <span id={row.pctId} class="fw-semibold {row.colorClass}">
+                    {floatformat(row.map[1] ?? 0, 1)}%
+                  </span>
+                </td>
                 <td class="text-end fw-semibold text-secondary">{row.maxText}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
-      <p class="small text-muted mb-3" id="gkCutLimit">
-        This simulation is limited to making at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
-        after that the upper guardrail no longer cuts spending.
-        {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
-      </p>
 
       <h5 class="text-secondary mt-3 border-bottom pb-2">Regular Retirement Spending Across Runs</h5>
-      <div class="table-responsive">
+      <div class="table-responsive mb-3">
         <table class="table table-hover align-middle mb-0" id="gkWithdrawalTable">
           <thead class="table-light">
             <tr>
               <th>Metric</th>
-              <th class="text-end">Nominal Dollars</th>
-              <th class="text-end">Real Dollars</th>
+              <th class="text-end">{activeMode === 'real' ? 'Real Dollars' : 'Nominal Dollars'}</th>
             </tr>
           </thead>
           <tbody>
-            {#each withdrawalRows(g) as row (row.label)}
-              <tr class={[row.first && 'table-group-divider']}>
+            {#each summaryWithdrawalRows(g) as row (row.label)}
+              <tr>
                 <td><strong>{row.label}</strong></td>
-                <td class={['text-end', row.bold && 'font-weight-bold']}>${djangoMoney(row.nominal)}</td>
-                <td class={['text-end', row.bold && 'font-weight-bold']}>${djangoMoney(row.real)}</td>
+                <td class="text-end font-weight-bold">${djangoMoney(activeMode === 'real' ? row.real : row.nominal)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
-      <p class="small text-muted mt-2 mb-3">
-        Regular retirement spending per year, from Retirement Year 0 to the plan's final year{r.is_married ? " (the surviving spouse's spending after a first death)" : ''}.
-        Real amounts are in today's dollars.
-      </p>
 
       {@render endingWealth('mcEndingWealthTableGuardrails')}
     </div>
   {:else if !r.goal_seeking}
-    <h3 class="border-bottom pb-2 text-success">Results</h3>
     <div class="mt-3">
       {@render gauge()}
 
-      <p class="mb-2"><strong>Desired Regular Retirement Spending:</strong> <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(r.desired_spending)}</span> <span class="text-secondary">/yr</span></p>
+      <p class="mb-2">
+        <strong>Desired Regular Retirement Spending:</strong>
+        <span class="dollar-amount-static {sign(r.desired_spending)}">${djangoMoney(spendingAmount(r.desired_spending))}</span>
+        <span class="text-secondary">/yr</span>
+        {#if spendingNote}<small class="text-muted ms-1">({spendingNote})</small>{/if}
+      </p>
       {@render endingWealth('mcEndingWealthTable')}
     </div>
   {:else}
-    <h3 class="border-bottom pb-2 text-primary">Results</h3>
     <div class="mt-3">
       <div class="alert alert-primary border text-center py-3 mb-4">
         <h4 class="mb-1">Maximum Regular Retirement Spending</h4>
-        <span class="display-5 font-weight-bold">${djangoMoney(r.achieved_spending)}</span>
+        <span class="display-5 font-weight-bold">${djangoMoney(spendingAmount(r.achieved_spending ?? 0))}</span>
         <span class="fs-5 text-secondary">/yr</span>
-        <p class="small text-muted mb-0">Initial annual value</p>
+        <p class="small text-muted mb-0">Initial annual value{spendingNote ? ` (${spendingNote})` : ''}</p>
       </div>
 
       <div class="row">
@@ -523,18 +549,131 @@
     </div>
   {/if}
 
-  <div class="alert alert-light border p-3 mt-4 mb-0">
-    <p class="mb-0 text-secondary small">
-      <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
-      1) Non-portfolio income, regular RMDs, and mandatory Inherited IRA distributions (inherited pre-tax RMDs and inherited Roth scheduled distributions);
-      2) Taxable accounts (with capital gains tax gross-up);
-      3) Inherited Pre-tax IRAs (penalty-free ordinary income gross-up);
-      4) Own Pre-tax accounts (for owner age 59&frac12; or older, penalty-free);
-      5) Inherited Roth IRAs (tax-free);
-      6) Own Roth accounts (tax-free);
-      7) Health Savings Accounts (HSA).
-      <strong>Early-withdrawal and inherited IRA exceptions:</strong> Inherited Pre-tax IRAs are exempt from the 10% early withdrawal penalty regardless of age (IRC § 72(t)(2)(A)(ii)) and are drawn before own pre-tax accounts to satisfy their 10-year expiration clock. If an account owner is under age 59&frac12;, discretionary withdrawals from that owner's own Pretax accounts would incur a 10% penalty and are deferred until after Roth accounts and penalty-free HSAs, but ahead of penalized non-medical HSA withdrawals (20% penalty under age 65).
-      Pretax accounts of an owner age 59&frac12; or older remain at step 4.
-    </p>
+  <div class="mt-4 d-print-none">
+    <button
+      type="button"
+      class="btn btn-outline-secondary btn-sm w-100 d-flex justify-content-between align-items-center"
+      id="btnFurtherDetail"
+      aria-expanded={showFurtherDetail}
+      aria-controls="mcFurtherDetail"
+      onclick={() => (showFurtherDetail = !showFurtherDetail)}
+    >
+      <span><i class="fa-solid fa-circle-info me-2"></i>{showFurtherDetail ? 'Hide Further Detail' : 'Show Further Detail'}</span>
+      <i class={['fa-solid', showFurtherDetail ? 'fa-chevron-up' : 'fa-chevron-down']}></i>
+    </button>
   </div>
+
+  {#if showFurtherDetail}
+    <div class="mt-3 p-3 bg-light-subtle rounded border" id="mcFurtherDetail">
+      {#if r.simulation_type === GK_SIMULATION_TYPE && r.guardrails}
+        {@const g = r.guardrails}
+        {@const act = guardrailActivityData(g)}
+        <h6 class="text-secondary border-bottom pb-1 mb-2">Guardrail Mechanics &amp; Withdrawal Rate</h6>
+        <p class="small text-secondary mb-2" id="gkInitialRate">
+          <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
+          {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
+          <span class="text-muted">(which is the percentage determined by dividing the amount of the regular retirement spending in the first year of retirement by that year's amount in the Accounts for Retirement; other expenses and income count only through their effect on the portfolio).</span>
+        </p>
+        <p class="small text-muted mb-3" id="gkCutLimit">
+          This simulation is limited to making at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
+          after that the upper guardrail no longer cuts spending.
+          {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
+        </p>
+
+        <h6 class="text-secondary border-bottom pb-1 mb-2">Full Guardrail Activity Distribution</h6>
+        <p class="small text-muted mb-2">Percent of simulation runs where Regular Retirement Spending was adjusted by the guardrails:</p>
+        <div class="table-responsive mb-3">
+          <table class="table table-hover align-middle mb-0" id="gkActivityDetailTable">
+            <thead class="table-light">
+              <tr>
+                <th>Adjustment Type</th>
+                {#each act.colCounts as k (k)}
+                  <th class="text-end">{k === 1 ? '≥ 1 time' : `≥ ${k} times`}</th>
+                {/each}
+                <th class="text-end">Max in a Run</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each act.rows as row (row.id)}
+                <tr>
+                  <td><strong class={row.colorClass}>{row.label}</strong></td>
+                  {#each act.colCounts as k (k)}
+                    <td class="text-end">
+                      {#if row.map[k] !== undefined && (row.map[k] > 0 || (k === 1 && row.maxCount === 0))}
+                        <span class="fw-semibold {row.colorClass}">
+                          {floatformat(row.map[k], 1)}%
+                        </span>
+                      {:else}
+                        <span class="text-muted">—</span>
+                      {/if}
+                    </td>
+                  {/each}
+                  <td class="text-end fw-semibold text-secondary">{row.maxText}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+
+        <h6 class="text-secondary border-bottom pb-1 mb-2">Full Regular Retirement Spending Range (Real &amp; Nominal)</h6>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="gkWithdrawalDetailTable">
+            <thead class="table-light">
+              <tr>
+                <th>Metric</th>
+                <th class="text-end">Real Dollars</th>
+                <th class="text-end">Nominal Dollars</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each withdrawalRows(g) as row (row.label)}
+                <tr class={[row.first && 'table-group-divider']}>
+                  <td><strong>{row.label}</strong></td>
+                  <td class={['text-end', row.bold && 'font-weight-bold']}>${djangoMoney(row.real)}</td>
+                  <td class={['text-end', row.bold && 'font-weight-bold']}>${djangoMoney(row.nominal)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="small text-muted mt-2 mb-3">
+          Regular retirement spending per year, from Retirement Year 0 to the plan's final year{r.is_married ? " (the surviving spouse's spending after a first death)" : ''}.
+          Real amounts are in today's dollars.
+        </p>
+
+        {#if g.essential_floor > 0}
+          <h6 class="text-secondary border-bottom pb-1 mb-2">Non-Discretionary Expenses Details</h6>
+          <p class="small text-secondary mb-3" id="gkNonDiscretionaryDetail">
+            Configured floor: <strong>${djangoMoney(g.essential_floor)}/yr</strong> (<strong>${djangoMoney(g.essential_floor / 12)}/mo</strong> in today's dollars).
+            {#if !g.protect_floor && g.pct_runs_below_floor > 0}
+              Across breaching runs, regular spending dipped below this level for an average of
+              <strong>{floatformat(g.mean_years_below_floor, 1)} {Math.abs(g.mean_years_below_floor - 1) < 0.05 ? 'year' : 'years'}</strong>
+              (lowest simulated year: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong>, or <strong>${djangoMoney(g.lowest_withdrawal_real.min / 12)}/mo</strong>).
+            {:else if g.protect_floor}
+              Because protected spending cannot drop below this floor, severe downturn shortfalls appear directly in your Probability of Plan Success
+              (<strong>{floatformat(r.run_success, 1)}%</strong>).
+            {/if}
+            <span class="d-block text-muted mt-1">
+              Note: Guardrail cuts and inflation skips adjust total Regular Retirement Spending rather than only the portfolio withdrawal portion.
+            </span>
+          </p>
+        {/if}
+      {/if}
+
+      <div class="alert alert-light border p-3 mb-0" id="portfolioWithdrawalOrderingNote">
+        <p class="mb-0 text-secondary small">
+          <strong>Portfolio Withdrawal Ordering Note:</strong> Annual cash deficit is withdrawn in the following sequence:
+          1) Non-portfolio income, regular RMDs, and mandatory Inherited IRA distributions (inherited pre-tax RMDs and inherited Roth scheduled distributions);
+          2) Taxable accounts (with capital gains tax gross-up);
+          3) Inherited Pre-tax IRAs (penalty-free ordinary income gross-up);
+          4) Own Pre-tax accounts (for owner age 59&frac12; or older, penalty-free);
+          5) Inherited Roth IRAs (tax-free);
+          6) Own Roth accounts (tax-free);
+          7) Health Savings Accounts (HSA).
+          <strong>Early-withdrawal and inherited IRA exceptions:</strong> Inherited Pre-tax IRAs are exempt from the 10% early withdrawal penalty regardless of age (IRC &sect; 72(t)(2)(A)(ii)) and are drawn before own pre-tax accounts to satisfy their 10-year expiration clock. If an account owner is under age 59&frac12;, discretionary withdrawals from that owner's own Pretax accounts would incur a 10% penalty and are deferred until after Roth accounts and penalty-free HSAs, but ahead of penalized non-medical HSA withdrawals (20% penalty under age 65).
+          Pretax accounts of an owner age 59&frac12; or older remain at step 4.
+        </p>
+      </div>
+    </div>
+  {/if}
 </div>

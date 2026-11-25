@@ -9,7 +9,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Results } from '../../src/lib/app/results';
 import { computeResults } from '../../src/lib/app/runResults';
 import { localRunner } from '../../src/lib/engine/mc';
-import { djangoMoney, milestoneBadge, realValue, stressDeltaMoney, stressMoney } from '../../src/lib/app/resultsFormat';
+import { djangoMoney, milestoneBadge, realValue, stressDeltaMoney, stressMoney, usd } from '../../src/lib/app/resultsFormat';
 import ResultsPage from '../../src/lib/components/results/ResultsPage.svelte';
 import { fixtureResults } from '../resultsFixture';
 import { expectPlanFixture, fixtureIndex, loadPlanFixture } from '../fixtures';
@@ -40,6 +40,12 @@ describe.each(plans)('%s', (name) => {
     const page = show(r);
     const c = page.container;
     stressMatches(c);
+    // All Real/Nominal dollar toggles default to Real Dollars and synchronize across tabs.
+    expect((c.querySelector('#mc_real') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#proj_real') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#cf_real') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#chart_real') as HTMLInputElement).checked).toBe(true);
+
     const shown: Record<string, unknown> = {
       results_card: squash(c.querySelector('#mcResultsCard')?.textContent),
       print_header: squash(c.querySelector('.print-only-header')?.textContent),
@@ -49,17 +55,17 @@ describe.each(plans)('%s', (name) => {
       inputs: Object.fromEntries([...c.querySelectorAll<HTMLInputElement>('#resultsInputsForm input[id]')]
         .map((i) => [i.id, i.type === 'radio' ? i.checked : i.value])),
       balances: [...c.querySelectorAll('#resultsInputsForm .small.text-muted')].map((e) => squash(e.textContent)),
-      nominal: tables(c),
     };
     expect(Object.keys(shown.inputs as object).length).toBeGreaterThan(10);
     if (REAL_PLANS.includes(name)) {
-      await fireEvent.click(c.querySelector('#proj_real')!);
-      flushSync();
       shown.real = tables(c);
-      // One toggle sets every table (and the charts).
-      expect((c.querySelector('#cf_real') as HTMLInputElement).checked).toBe(true);
-      expect((c.querySelector('#chart_real') as HTMLInputElement).checked).toBe(true);
     }
+    await fireEvent.click(c.querySelector('#proj_nominal')!);
+    flushSync();
+    expect((c.querySelector('#mc_nominal') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#cf_nominal') as HTMLInputElement).checked).toBe(true);
+    expect((c.querySelector('#chart_nominal') as HTMLInputElement).checked).toBe(true);
+    shown.nominal = tables(c);
     expectPlanFixture(shown, name, 'results-page', 0);
   });
 
@@ -105,6 +111,17 @@ describe('interactions', () => {
     await fireEvent.click(page.container.querySelector('[aria-label="Enlarge 4. Deterministic Annual Income vs. Spending Sources"]')!);
     expect(document.querySelector('#chartModalLabel')?.textContent).toBe('4. Deterministic Annual Income vs. Spending Sources');
     expect(document.querySelector('#modalChartCanvas')).not.toBeNull();
+    await fireEvent.click(document.querySelector('#chartModal .btn-close')!);
+
+    // Every Real/Nominal dollar toggle has a ? button opening the shared explanation modal.
+    for (const btnSel of ['#mc_dollar_mode_help', '#proj_dollar_mode_help', '#cf_dollar_mode_help', '#chart_dollar_mode_help']) {
+      await fireEvent.click(page.container.querySelector(btnSel)!);
+      const dmModal = document.querySelector('#dollarModeModal')!;
+      expect(dmModal).not.toBeNull();
+      expect(dmModal.textContent).toContain('Real Dollars vs. Nominal Dollars');
+      expect(dmModal.textContent).toContain("Today's Dollars");
+      await fireEvent.click(dmModal.querySelector('.btn-close')!);
+    }
   });
 
   it('flags edited inputs, validates them and applies them as the form posted', async () => {
@@ -181,23 +198,30 @@ describe('interactions', () => {
     expect(page.container.querySelector('#input_desired_spending')).toBeNull();
   });
 
-  it('renders Ending Wealth percentiles with both nominal and real dollar columns', () => {
+  it('renders Ending Wealth percentiles defaulting to Real Dollars and switching to Nominal Dollars', async () => {
     const page = show(r);
-    const table = page.container.querySelector('#mcEndingWealthTable');
+    const table = page.container.querySelector('#mcEndingWealthTable')!;
     expect(table).not.toBeNull();
-    const headers = [...table!.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
-    expect(headers).toEqual(['Metric', 'Nominal Dollars', 'Real Dollars']);
+    expect([...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual(['Metric', 'Real Dollars']);
 
-    const rows = [...table!.querySelectorAll('tbody tr')].map((tr) =>
+    const realRows = [...table.querySelectorAll('tbody tr')].map((tr) =>
       [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()),
     );
-    expect(rows.length).toBe(6);
-    expect(rows[0][0]).toBe('Mean Ending Wealth');
-    expect(rows[0][1]).toBe(`$${djangoMoney(r.run_mean)}`);
-    expect(rows[0][2]).toBe(`$${djangoMoney(realValue(r.run_mean, r.years, r.inflation_rate))}`);
-    expect(rows[1][0]).toBe('Median Ending Wealth');
-    expect(rows[1][1]).toBe(`$${djangoMoney(r.run_median)}`);
-    expect(rows[1][2]).toBe(`$${djangoMoney(realValue(r.run_median, r.years, r.inflation_rate))}`);
+    expect(realRows.length).toBe(6);
+    expect(realRows[0]).toEqual(['Mean Ending Wealth', `$${djangoMoney(realValue(r.run_mean, r.years, r.inflation_rate))}`]);
+    expect(realRows[1]).toEqual(['Median Ending Wealth', `$${djangoMoney(realValue(r.run_median, r.years, r.inflation_rate))}`]);
+
+    // Toggling to Nominal Dollars switches the table and synchronizes the other tabs
+    await fireEvent.click(page.container.querySelector('#mc_nominal')!);
+    flushSync();
+    expect([...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual(['Metric', 'Nominal Dollars']);
+    const nomRows = [...table.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()),
+    );
+    expect(nomRows[0]).toEqual(['Mean Ending Wealth', `$${djangoMoney(r.run_mean)}`]);
+    expect(nomRows[1]).toEqual(['Median Ending Wealth', `$${djangoMoney(r.run_median)}`]);
+    expect((page.container.querySelector('#proj_nominal') as HTMLInputElement).checked).toBe(true);
+    expect((page.container.querySelector('#chart_nominal') as HTMLInputElement).checked).toBe(true);
   });
 
   it('renders Earliest Retirement Age card with simultaneous strategy showing user and spouse on separate lines', () => {
@@ -370,7 +394,7 @@ describe('guardrails mode', () => {
   const rowsOf = (root: ParentNode, sel: string) =>
     [...root.querySelectorAll(`${sel} tbody tr`)].map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim()));
 
-  it('shows the success rate, the starting withdrawal and the withdrawal statistics', () => {
+  it('shows the success rate, streamlined summary in Real/Nominal Dollars, and expandable Further Detail', async () => {
     const page = show(solved);
     const c = page.container;
     const g = solved.guardrails!;
@@ -378,37 +402,73 @@ describe('guardrails mode', () => {
     expect(card.querySelector('.radial-gauge-center')?.textContent).toContain(`${solved.run_success.toFixed(1)}%`);
     expect(card.textContent).toContain('Probability of Plan Success');
 
-    const start = text(c, '#gkStartingWithdrawal');
-    expect(start).toContain(`$${djangoMoney(g.starting_withdrawal)} /yr`);
-    expect(start).toContain(`${g.starting_withdrawal_pct.toFixed(1)}% of the portfolio at retirement ($${djangoMoney(g.starting_portfolio)}, the average across runs)`);
-    expect(start).toContain(`Retirement Year 0 is ${solved.current_year + g.start_year_index}; $${djangoMoney(g.starting_withdrawal_real)}/yr in today's dollars.`);
-    expect(start).toContain('Solved for a 99% success rate under the guardrail rules.');
-    expect(text(c, '#gkInitialRate')).toContain(`${g.initial_withdrawal_rate.toFixed(1)}% on average`);
-    expect(text(c, '#gkInitialRate')).toContain('dividing the amount of the regular retirement spending in the first year of retirement by that year\'s amount in the Accounts for Retirement');
+    // Default view: Real Dollars
+    const realPortfolio = realValue(g.starting_portfolio, g.start_year_index, solved.inflation_rate ?? 0);
+    const startReal = text(c, '#gkStartingWithdrawal');
+    expect(startReal).toContain(`$${djangoMoney(g.starting_withdrawal_real)} /yr`);
+    expect(startReal).toContain(`${g.starting_withdrawal_pct.toFixed(1)}% of the portfolio at retirement ($${djangoMoney(realPortfolio)}, the average across runs)`);
+    expect(startReal).toContain(`In ${solved.current_year + g.start_year_index} (Retirement Year 0)`);
+    expect(startReal).toContain("In today's dollars");
+    expect(startReal).toContain('Solved for 99% success');
 
-    const money = (v: number) => `$${djangoMoney(v)}`;
-    expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([
-      ['Final-Year Regular Retirement Spending: Mean', money(g.final_withdrawal.mean), money(g.final_withdrawal_real.mean)],
-      ['Final-Year Regular Retirement Spending: Maximum', money(g.final_withdrawal.max), money(g.final_withdrawal_real.max)],
-      ['Final-Year Regular Retirement Spending: Minimum', money(g.final_withdrawal.min), money(g.final_withdrawal_real.min)],
-      ['Peak-Year Regular Retirement Spending: Mean', money(g.peak_withdrawal.mean), money(g.peak_withdrawal_real.mean)],
-      ['Peak-Year Regular Retirement Spending: Maximum', money(g.peak_withdrawal.max), money(g.peak_withdrawal_real.max)],
-      ['Peak-Year Regular Retirement Spending: Minimum', money(g.peak_withdrawal.min), money(g.peak_withdrawal_real.min)],
-      ['Lowest-Year Regular Retirement Spending: Mean', money(g.lowest_withdrawal.mean), money(g.lowest_withdrawal_real.mean)],
-    ]);
+    // Compact Guardrail Activity (3 rows x 3 columns) and compact Regular Spending (3 rows x 2 columns)
+    expect(rowsOf(c, '#gkActivityTable')).toHaveLength(3);
     expect(text(c, '#gkPctCut')).toBe(`${g.pct_runs_cut.toFixed(1)}%`);
     expect(text(c, '#gkPctRaise')).toBe(`${g.pct_runs_raise.toFixed(1)}%`);
     expect(text(c, '#gkPctFreeze')).toBe(`${g.pct_runs_freeze.toFixed(1)}%`);
     expect(text(c, '#gkActivityCuts')).toContain('10% Spending Cuts');
     expect(text(c, '#gkActivityRaises')).toContain('10% Spending Raises');
     expect(text(c, '#gkActivityFreezes')).toContain('Inflation Skips');
-    expect(c.querySelector('#gkActivityTable')).not.toBeNull();
-    expect(text(c, '#gkCutLimit')).toContain(`This simulation is limited to making at most ${g.max_cuts} cut`);
-    const cardHtml = c.querySelector('#mcResultsCard')!.innerHTML;
-    expect(cardHtml.indexOf('id="gkActivity"')).toBeLessThan(cardHtml.indexOf('id="gkWithdrawalTable"'));
 
-    // Ending wealth as in the other modes; no "adopt" card.
-    expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1].slice(0, 2)).toEqual(['Median Ending Wealth', money(solved.run_median)]);
+    const money = (v: number) => `$${djangoMoney(v)}`;
+    expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([
+      ['Lowest-Year Spending (Mean)', money(g.lowest_withdrawal_real.mean)],
+      ['Final-Year Spending (Mean)', money(g.final_withdrawal_real.mean)],
+      ['Peak-Year Spending (Mean)', money(g.peak_withdrawal_real.mean)],
+    ]);
+    expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1]).toEqual([
+      'Median Ending Wealth', money(realValue(solved.run_median, solved.years, solved.inflation_rate)),
+    ]);
+    expect(c.querySelector('#mcFurtherDetail')).toBeNull();
+
+    // Toggling to Nominal Dollars updates the main card
+    await fireEvent.click(c.querySelector('#mc_nominal')!);
+    flushSync();
+    const startNom = text(c, '#gkStartingWithdrawal');
+    expect(startNom).toContain(`$${djangoMoney(g.starting_withdrawal)} /yr`);
+    expect(startNom).toContain(`$${djangoMoney(g.starting_portfolio)}`);
+    expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([
+      ['Lowest-Year Spending (Mean)', money(g.lowest_withdrawal.mean)],
+      ['Final-Year Spending (Mean)', money(g.final_withdrawal.mean)],
+      ['Peak-Year Spending (Mean)', money(g.peak_withdrawal.mean)],
+    ]);
+    expect(rowsOf(c, '#mcEndingWealthTableGuardrails')[1]).toEqual(['Median Ending Wealth', money(solved.run_median)]);
+
+    // Expanding Further Detail reveals the full distributions, 7-row spending table, definitions, and withdrawal ordering note
+    await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
+    flushSync();
+    const detail = c.querySelector('#mcFurtherDetail')!;
+    expect(detail).not.toBeNull();
+    expect(text(detail, '#gkInitialRate')).toContain(`${g.initial_withdrawal_rate.toFixed(1)}% on average`);
+    expect(text(detail, '#gkInitialRate')).toContain('dividing the amount of the regular retirement spending in the first year of retirement by that year\'s amount in the Accounts for Retirement');
+    expect(text(detail, '#gkCutLimit')).toContain(`This simulation is limited to making at most ${g.max_cuts} cut`);
+    expect(detail.querySelector('#gkActivityDetailTable')).not.toBeNull();
+    expect(rowsOf(detail, '#gkWithdrawalDetailTable')).toEqual([
+      ['Final-Year Regular Retirement Spending: Mean', money(g.final_withdrawal_real.mean), money(g.final_withdrawal.mean)],
+      ['Final-Year Regular Retirement Spending: Maximum', money(g.final_withdrawal_real.max), money(g.final_withdrawal.max)],
+      ['Final-Year Regular Retirement Spending: Minimum', money(g.final_withdrawal_real.min), money(g.final_withdrawal.min)],
+      ['Peak-Year Regular Retirement Spending: Mean', money(g.peak_withdrawal_real.mean), money(g.peak_withdrawal.mean)],
+      ['Peak-Year Regular Retirement Spending: Maximum', money(g.peak_withdrawal_real.max), money(g.peak_withdrawal.max)],
+      ['Peak-Year Regular Retirement Spending: Minimum', money(g.peak_withdrawal_real.min), money(g.peak_withdrawal.min)],
+      ['Lowest-Year Regular Retirement Spending: Mean', money(g.lowest_withdrawal_real.mean), money(g.lowest_withdrawal.mean)],
+    ]);
+    expect(detail.querySelector('#portfolioWithdrawalOrderingNote')).not.toBeNull();
+
+    // Collapsing hides Further Detail again
+    await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
+    flushSync();
+    expect(c.querySelector('#mcFurtherDetail')).toBeNull();
+
     expect(c.querySelector('#btnAdoptMaxSpending')).toBeNull();
     expect(text(c, '.print-only-header .badge')).toBe(`Guardrails: $${djangoMoney(g.starting_withdrawal)}/yr to start, ${solved.run_success.toFixed(1)}% success`);
   });
@@ -427,11 +487,11 @@ describe('guardrails mode', () => {
     expect(text(c, '#projection #scenarioComparisonBar')).toContain(`Solved Starting Regular Retirement Spending under Guardrails: $${djangoMoney(solved.achieved_spending)}/yr`);
     const startRow = solved.guardrails!.start_year_index;
     const spendingCell = () => text(c, `#projection tbody tr:nth-child(${startRow + 1}) td:nth-child(9)`);
-    expect(spendingCell()).toBe(`$${djangoMoney(solved.det_rows[startRow].desired_spending)}`);
+    expect(spendingCell()).toBe(usd(realValue(solved.det_rows[startRow].desired_spending, startRow, solved.inflation_rate)));
     await fireEvent.click(c.querySelector('#projection #scenario_view_baseline')!);
     flushSync();
     expect(text(c, '#projection #scenarioComparisonBar')).toContain(`Original Baseline Plan under Guardrails: $${djangoMoney(plan.desired_spending)}/yr`);
-    expect(spendingCell()).toBe(`$${djangoMoney(solved.baseline_det_rows![startRow].desired_spending)}`);
+    expect(spendingCell()).toBe(usd(realValue(solved.baseline_det_rows![startRow].desired_spending, startRow, solved.inflation_rate)));
   });
 
   it('the projection marks the years the guardrails acted', () => {
@@ -447,7 +507,7 @@ describe('guardrails mode', () => {
     const onApply = vi.fn();
     const page = render(ResultsPage, { results: specified, onApply });
     const c = page.container;
-    expect(text(c, '#gkStartingWithdrawal')).toContain('Your Desired Regular Retirement Spending, as entered.');
+    expect(text(c, '#gkStartingWithdrawal')).toContain('Desired spending, as entered');
     expect(c.querySelector('#results_solved_guardrails_display')).toBeNull();
     expect(c.querySelector('#scenarioComparisonBar')).toBeNull();
     expect((c.querySelector('#results_gk_specified') as HTMLInputElement).checked).toBe(true);
@@ -557,7 +617,15 @@ describe('guardrails mode', () => {
     expect(floorCard).toContain('Non-Discretionary Spending Warning');
     expect(floorCard).toContain('$105,000/yr');
     expect(floorCard).toContain('Protect Non-Discretionary Spending');
-    expect(floorCard).toContain('Guaranteed Income vs. Non-Discretionary Expenses');
+    expect(floorCard).toContain('Guaranteed Income (today\'s dollars):');
+
+    // Expanding Further Detail shows monthly/duration breakdown for Non-Discretionary Expenses
+    await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
+    flushSync();
+    expect(text(c, '#gkNonDiscretionaryDetail')).toContain('$8,750/mo');
+    expect(text(c, '#gkNonDiscretionaryDetail')).toContain('adjust total Regular Retirement Spending rather than only the portfolio withdrawal portion');
+    await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
+    flushSync();
 
     // Stress test appends non-discretionary expenses row
     const stressRows = rowsOf(c, '#stressGuardrailsTable');

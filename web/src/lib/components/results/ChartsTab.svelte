@@ -10,8 +10,9 @@
     results: Results;
     mode: DollarMode;
     onModeChange: (mode: DollarMode) => void;
+    onDollarModeHelp?: () => void;
   }
-  let { results, mode, onModeChange }: Props = $props();
+  let { results, mode, onModeChange, onDollarModeHelp }: Props = $props();
 
   let pathCount = $state(100);
   let expanded: ChartKind | null = $state(null);
@@ -56,14 +57,23 @@
       <i class="fa fa-chart-pie text-primary fs-5"></i>
       <h4 class="mb-0 text-dark fw-bold">Interactive Financial Visualizations</h4>
     </div>
-    <div class="d-flex align-items-center gap-3">
+    <div class="d-flex align-items-center gap-2">
       <span class="text-secondary small fw-bold">Display Mode:</span>
       <div class="btn-group btn-group-sm" role="group" aria-label="Chart Dollar Mode">
-        <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_nominal" value="nominal" checked={mode === 'nominal'} onclick={() => onModeChange('nominal')}>
-        <label class="btn btn-outline-primary" for="chart_nominal"><i class="fa fa-dollar-sign me-1"></i>Nominal</label>
         <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_real" value="real" checked={mode === 'real'} onclick={() => onModeChange('real')}>
-        <label class="btn btn-outline-primary" for="chart_real"><i class="fa fa-filter me-1"></i>Real (Inflation-Adjusted)</label>
+        <label class="btn btn-outline-primary" for="chart_real">Real Dollars</label>
+        <input type="radio" class="btn-check" name="chart_dollar_mode" id="chart_nominal" value="nominal" checked={mode === 'nominal'} onclick={() => onModeChange('nominal')}>
+        <label class="btn btn-outline-primary" for="chart_nominal">Nominal Dollars</label>
       </div>
+      {#if onDollarModeHelp}
+        <button type="button" class="btn btn-link p-0 text-primary text-decoration-none d-print-none"
+          id="chart_dollar_mode_help"
+          title="Difference between Real Dollars and Nominal Dollars"
+          aria-label="Real Dollars vs. Nominal Dollars Information"
+          onclick={onDollarModeHelp}>
+          <i class="fa-solid fa-circle-question fs-6"></i>
+        </button>
+      {/if}
     </div>
   </div>
 </div>
