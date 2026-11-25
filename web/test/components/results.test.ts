@@ -458,9 +458,9 @@ describe('guardrails mode', () => {
     expect(detail).not.toBeNull();
     expect(rowsOf(detail, '#mcEndingWealthTableGuardrails')[1]).toEqual(['Median Ending Wealth', money(solved.run_median)]);
     const detailHtml = detail.innerHTML;
-    expect(detailHtml.indexOf('id="mcEndingWealthTableGuardrails"')).toBeLessThan(detailHtml.indexOf('id="gkInitialRate"'));
-    expect(detailHtml.indexOf('id="gkInitialRate"')).toBeLessThan(detailHtml.indexOf('id="gkWithdrawalDetailTable"'));
-    expect(detailHtml.indexOf('id="gkWithdrawalDetailTable"')).toBeLessThan(detailHtml.indexOf('id="portfolioWithdrawalOrderingNote"'));
+    expect(detailHtml.indexOf('id="mcEndingWealthTableGuardrails"')).toBeLessThan(detailHtml.indexOf('id="gkWithdrawalDetailTable"'));
+    expect(detailHtml.indexOf('id="gkWithdrawalDetailTable"')).toBeLessThan(detailHtml.indexOf('id="gkInitialRate"'));
+    expect(detailHtml.indexOf('id="gkInitialRate"')).toBeLessThan(detailHtml.indexOf('id="portfolioWithdrawalOrderingNote"'));
 
     expect(text(detail, '#gkInitialRate')).toContain(`${g.initial_withdrawal_rate.toFixed(1)}% on average`);
     expect(text(detail, '#gkInitialRate')).toContain('dividing the amount of the regular retirement spending in the first year of retirement by that year\'s amount in the Accounts for Retirement');
@@ -639,11 +639,14 @@ describe('guardrails mode', () => {
     expect(floorCard).toContain('Protect Non-Discretionary Spending');
     expect(floorCard).toContain('Guaranteed Income (today\'s dollars):');
 
-    // Expanding Further Detail shows monthly/duration breakdown for Non-Discretionary Expenses
+    // Expanding Further Detail shows monthly/duration breakdown, numerical example, and Guardrail Mechanics after Non-Discretionary Details
     await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
     flushSync();
     expect(text(c, '#gkNonDiscretionaryDetail')).toContain('$8,750/mo');
     expect(text(c, '#gkNonDiscretionaryDetail')).toContain('adjust total Regular Retirement Spending rather than only the portfolio withdrawal portion');
+    expect(text(c, '#gkNonDiscretionaryDetail')).toContain('For example, suppose Regular Retirement Spending is $100,000/yr');
+    const ndHtml = c.querySelector('#mcFurtherDetail')!.innerHTML;
+    expect(ndHtml.indexOf('id="gkNonDiscretionaryDetail"')).toBeLessThan(ndHtml.indexOf('id="gkInitialRate"'));
     await fireEvent.click(c.querySelector('#btnFurtherDetail')!);
     flushSync();
 

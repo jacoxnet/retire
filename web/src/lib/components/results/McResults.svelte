@@ -578,18 +578,6 @@
 
       {#if r.simulation_type === GK_SIMULATION_TYPE && r.guardrails}
         {@const g = r.guardrails}
-        <h6 class="text-secondary border-bottom pb-1 mb-2">Guardrail Mechanics &amp; Withdrawal Rate</h6>
-        <p class="small text-secondary mb-2" id="gkInitialRate">
-          <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
-          {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
-          <span class="text-muted">(which is the percentage determined by dividing the amount of the regular retirement spending in the first year of retirement by that year's amount in the Accounts for Retirement; other expenses and income count only through their effect on the portfolio).</span>
-        </p>
-        <p class="small text-muted mb-3" id="gkCutLimit">
-          This simulation is limited to making at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
-          after that the upper guardrail no longer cuts spending.
-          {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
-        </p>
-
         <h6 class="text-secondary border-bottom pb-1 mb-2">Full Regular Retirement Spending Range (Real &amp; Nominal)</h6>
         <div class="table-responsive">
           <table class="table table-hover align-middle mb-0" id="gkWithdrawalDetailTable">
@@ -618,21 +606,38 @@
 
         {#if g.essential_floor > 0}
           <h6 class="text-secondary border-bottom pb-1 mb-2">Non-Discretionary Expenses Details</h6>
-          <p class="small text-secondary mb-3" id="gkNonDiscretionaryDetail">
-            Configured floor: <strong>${djangoMoney(g.essential_floor)}/yr</strong> (<strong>${djangoMoney(g.essential_floor / 12)}/mo</strong> in today's dollars).
-            {#if !g.protect_floor && g.pct_runs_below_floor > 0}
-              Across breaching runs, regular spending dipped below this level for an average of
-              <strong>{floatformat(g.mean_years_below_floor, 1)} {Math.abs(g.mean_years_below_floor - 1) < 0.05 ? 'year' : 'years'}</strong>
-              (lowest simulated year: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong>, or <strong>${djangoMoney(g.lowest_withdrawal_real.min / 12)}/mo</strong>).
-            {:else if g.protect_floor}
-              Because protected spending cannot drop below this floor, severe downturn shortfalls appear directly in your Probability of Plan Success
-              (<strong>{floatformat(r.run_success, 1)}%</strong>).
-            {/if}
-            <span class="d-block text-muted mt-1">
+          <div class="small text-secondary mb-3" id="gkNonDiscretionaryDetail">
+            <p class="mb-2">
+              Configured floor: <strong>${djangoMoney(g.essential_floor)}/yr</strong> (<strong>${djangoMoney(g.essential_floor / 12)}/mo</strong> in today's dollars).
+              {#if !g.protect_floor && g.pct_runs_below_floor > 0}
+                Across breaching runs, regular spending dipped below this level for an average of
+                <strong>{floatformat(g.mean_years_below_floor, 1)} {Math.abs(g.mean_years_below_floor - 1) < 0.05 ? 'year' : 'years'}</strong>
+                (lowest simulated year: <strong>${djangoMoney(g.lowest_withdrawal_real.min)}/yr</strong>, or <strong>${djangoMoney(g.lowest_withdrawal_real.min / 12)}/mo</strong>).
+              {:else if g.protect_floor}
+                Because protected spending cannot drop below this floor, severe downturn shortfalls appear directly in your Probability of Plan Success
+                (<strong>{floatformat(r.run_success, 1)}%</strong>).
+              {/if}
+            </p>
+            <p class="text-muted mb-0">
               Note: Guardrail cuts and inflation skips adjust total Regular Retirement Spending rather than only the portfolio withdrawal portion.
-            </span>
-          </p>
+              For example, suppose Regular Retirement Spending is $100,000/yr ($40,000/yr from Social Security or a pension and $60,000/yr from portfolio withdrawals, ignoring taxes).
+              A 10% guardrail cut reduces total Regular Retirement Spending by $10,000 to $90,000/yr—lowering the portfolio withdrawal to $50,000/yr (a 16.7% drop)
+              rather than cutting only the $60,000 withdrawal by 10% ($6,000, to $54,000/yr and $94,000/yr total).
+            </p>
+          </div>
         {/if}
+
+        <h6 class="text-secondary border-bottom pb-1 mb-2">Guardrail Mechanics &amp; Withdrawal Rate</h6>
+        <p class="small text-secondary mb-2" id="gkInitialRate">
+          <strong>Initial regular retirement spending rate the guardrails are measured against:</strong>
+          {floatformat(g.initial_withdrawal_rate, 1)}%{g.start_year_index > 0 ? ' on average' : ''}
+          <span class="text-muted">(which is the percentage determined by dividing the amount of the regular retirement spending in the first year of retirement by that year's amount in the Accounts for Retirement; other expenses and income count only through their effect on the portfolio).</span>
+        </p>
+        <p class="small text-muted mb-3" id="gkCutLimit">
+          This simulation is limited to making at most {g.max_cuts} {g.max_cuts === 1 ? 'cut' : 'cuts'} (one for every 10 retirement years, rounded down);
+          after that the upper guardrail no longer cuts spending.
+          {#if g.pct_runs_cut_limited > 0}In {floatformat(g.pct_runs_cut_limited, 1)}% of runs the guardrail called for a further cut that wasn't made.{/if}
+        </p>
       {/if}
 
       <div class="alert alert-light border p-3 mb-0" id="portfolioWithdrawalOrderingNote">
