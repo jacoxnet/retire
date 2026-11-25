@@ -409,11 +409,16 @@ describe('guardrails mode', () => {
     // Default view: Real Dollars
     const realPortfolio = realValue(g.starting_portfolio, g.start_year_index, solved.inflation_rate ?? 0);
     const startReal = text(c, '#gkStartingWithdrawal');
-    expect(startReal).toContain(`$${djangoMoney(g.starting_withdrawal_real)} /yr`);
+    expect(startReal).toContain(`$${djangoMoney(g.starting_withdrawal_real)} /yr*`);
     expect(startReal).toContain(`${g.starting_withdrawal_pct.toFixed(1)}% of the portfolio at retirement ($${djangoMoney(realPortfolio)}, the average across runs)`);
-    expect(startReal).toContain(`In ${solved.current_year + g.start_year_index} (Retirement Year 0)`);
-    expect(startReal).toContain("In today's dollars");
-    expect(startReal).toContain('Solved for 99% success');
+    expect(startReal).toContain(`Retirement spending starts in ${solved.current_year + g.start_year_index} (shown in today's dollars)`);
+    expect(startReal).toContain('Solved for a 99% success rate');
+    const warn = c.querySelector('#gkStartingVarianceWarning')!;
+    expect(warn.classList.contains('text-danger')).toBe(true);
+    expect(warn.classList.contains('fw-bold')).toBe(true);
+    expect(warn.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      '*Warning: This spending amount can be expected to vary--perhaps materially--over time. Carefully read the description of the Guardrails simulation mode contained herein.',
+    );
 
     // Full Guardrail Activity distribution on main card (≥ 1 time, ..., Max in a Run)
     const actHeaders = [...c.querySelectorAll('#gkActivityTable thead th')].map((th) => th.textContent?.trim());
@@ -445,6 +450,7 @@ describe('guardrails mode', () => {
     const startNom = text(c, '#gkStartingWithdrawal');
     expect(startNom).toContain(`$${djangoMoney(g.starting_withdrawal)} /yr`);
     expect(startNom).toContain(`$${djangoMoney(g.starting_portfolio)}`);
+    expect(startNom).toContain(`Retirement spending starts in ${solved.current_year + g.start_year_index} (shown in future ${solved.current_year + g.start_year_index} dollars)`);
     expect(rowsOf(c, '#gkWithdrawalTable')).toEqual([
       ['Lowest-Year Spending (Mean)', money(g.lowest_withdrawal.mean)],
       ['Final-Year Spending (Mean)', money(g.final_withdrawal.mean)],
@@ -527,7 +533,7 @@ describe('guardrails mode', () => {
     const onApply = vi.fn();
     const page = render(ResultsPage, { results: specified, onApply });
     const c = page.container;
-    expect(text(c, '#gkStartingWithdrawal')).toContain('Desired spending, as entered');
+    expect(text(c, '#gkStartingWithdrawal')).toContain('Using your Desired Regular Retirement Spending');
     expect(c.querySelector('#results_solved_guardrails_display')).toBeNull();
     expect(c.querySelector('#scenarioComparisonBar')).toBeNull();
     expect((c.querySelector('#results_gk_specified') as HTMLInputElement).checked).toBe(true);

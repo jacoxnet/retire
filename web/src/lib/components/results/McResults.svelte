@@ -386,14 +386,20 @@
       <div class="alert alert-primary border text-center py-3 mb-3" id="gkStartingWithdrawal">
         <h4 class="mb-1">Starting Regular Retirement Spending</h4>
         <span class="display-5 font-weight-bold">${djangoMoney(shownStartSpending)}</span>
-        <span class="fs-5 text-secondary">/yr</span>
+        <span class="fs-5 text-secondary">/yr<span class="text-danger fw-bold">*</span></span>
         <p class="mb-0 mt-1">
           <strong id="gkStartingPct">{floatformat(g.starting_withdrawal_pct, 1)}%</strong> of the
           {#if g.start_year_index > 0}portfolio at retirement{:else}initial portfolio{/if}
           (${djangoMoney(shownStartPortfolio)}{g.start_year_index > 0 ? ', the average across runs' : ''})
         </p>
         <p class="small text-muted mb-0 mt-1">
-          {#if g.start_year_index > 0}In {startYear} (Retirement Year 0) &middot; {/if}{#if activeMode === 'real'}In today's dollars{:else}In {startYear} dollars{/if} &middot; {#if solvedGuardrails}Solved for {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success{:else}Desired spending, as entered{/if}
+          Retirement spending starts in {startYear} (shown in {#if activeMode === 'real'}today's dollars{:else if g.start_year_index > 0}future {startYear} dollars{:else}{startYear} dollars{/if})
+        </p>
+        <p class="small text-muted mb-0">
+          {#if solvedGuardrails}Solved for a {floatformat(GK_TARGET_SUCCESS_RATE, 0)}% success rate{:else}Using your Desired Regular Retirement Spending{/if}
+        </p>
+        <p class="small text-danger fw-bold mb-0 mt-2" id="gkStartingVarianceWarning">
+          *Warning: This spending amount can be expected to vary--perhaps materially--over time. Carefully read the description of the Guardrails simulation mode contained herein.
         </p>
       </div>
 

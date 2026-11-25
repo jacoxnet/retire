@@ -152,7 +152,7 @@ describe('ResultsView', () => {
     await fireEvent.submit(q('#resultsInputsForm')!);
     expect(store.plan.gk_spending_mode).toBe('specified');
     expect(q('#runProgressCard')?.textContent).not.toContain('solving for the target goal');
-    await waitFor(() => expect(q('#gkStartingWithdrawal')?.textContent).toContain('as entered'), { timeout: 30_000 });
+    await waitFor(() => expect(q('#gkStartingWithdrawal')?.textContent).toContain('Using your Desired Regular Retirement Spending'), { timeout: 30_000 });
     const own = store.cachedResults as Results;
     expect(own.achieved_spending).toBeUndefined();
     expect(own.guardrails?.starting_withdrawal_real).toBeCloseTo(entered!, 6);
